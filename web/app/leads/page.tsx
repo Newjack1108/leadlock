@@ -7,20 +7,29 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Lock, Unlock, Clock, Search } from 'lucide-react';
+import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Lock, Unlock, Clock, Search, Plus } from 'lucide-react';
 import api from '@/lib/api';
 import { Lead, LeadStatus } from '@/lib/types';
 import { toast } from 'sonner';
 import Link from 'next/link';
 
 const statusColors: Record<LeadStatus, string> = {
-  NEW: 'bg-blue-500/20 text-blue-300',
-  CONTACT_ATTEMPTED: 'bg-yellow-500/20 text-yellow-300',
-  ENGAGED: 'bg-purple-500/20 text-purple-300',
-  QUALIFIED: 'bg-primary/20 text-primary',
-  QUOTED: 'bg-secondary/20 text-secondary',
-  WON: 'bg-success/20 text-success',
-  LOST: 'bg-destructive/20 text-destructive',
+  NEW: 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300',
+  CONTACT_ATTEMPTED: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-300',
+  ENGAGED: 'bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300',
+  QUALIFIED: 'bg-primary/10 text-primary',
+  QUOTED: 'bg-secondary/10 text-secondary',
+  WON: 'bg-success/10 text-success',
+  LOST: 'bg-destructive/10 text-destructive',
 };
 
 function formatTimeAgo(dateString: string): string {
@@ -44,6 +53,14 @@ export default function LeadsPage() {
   const [search, setSearch] = useState('');
   const [searchDebounced, setSearchDebounced] = useState('');
   const [myLeadsOnly, setMyLeadsOnly] = useState(false);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [newLead, setNewLead] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    postcode: '',
+  });
 
   // Debounce search input
   useEffect(() => {
@@ -83,6 +100,32 @@ export default function LeadsPage() {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCreateLead = async () => {
+    if (!newLead.name.trim()) {
+      toast.error('Name is required');
+      return;
+    }
+
+    try {
+      setCreating(true);
+      await api.post('/api/leads', {
+        name: newLead.name.trim(),
+        email: newLead.email.trim() || undefined,
+        phone: newLead.phone.trim() || undefined,
+        postcode: newLead.postcode.trim() || undefined,
+      });
+      
+      toast.success('Lead created successfully');
+      setCreateDialogOpen(false);
+      setNewLead({ name: '', email: '', phone: '', postcode: '' });
+      fetchLeads();
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || 'Failed to create lead');
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -180,6 +223,78 @@ export default function LeadsPage() {
             ))}
           </div>
         )}
+
+        {/* Create Lead Dialog */}
+        <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Create New Lead</DialogTitle>
+              <DialogDescription>
+                Add a new lead to the system. Name is required.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">
+                  Name <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="name"
+                  value={newLead.name}
+                  onChange={(e) => setNewLead({ ...newLead, name: e.target.value })}
+                  placeholder="John Doe"
+                  disabled={creating}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={newLead.email}
+                  onChange={(e) => setNewLead({ ...newLead, email: e.target.value })}
+                  placeholder="john@example.com"
+                  disabled={creating}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="phone">Phone</Label>
+                <Input
+                  id="phone"
+                  value={newLead.phone}
+                  onChange={(e) => setNewLead({ ...newLead, phone: e.target.value })}
+                  placeholder="+44 1234 567890"
+                  disabled={creating}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="postcode">Postcode</Label>
+                <Input
+                  id="postcode"
+                  value={newLead.postcode}
+                  onChange={(e) => setNewLead({ ...newLead, postcode: e.target.value })}
+                  placeholder="CW1 2AB"
+                  disabled={creating}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setCreateDialogOpen(false);
+                  setNewLead({ name: '', email: '', phone: '', postcode: '' });
+                }}
+                disabled={creating}
+              >
+                Cancel
+              </Button>
+              <Button onClick={handleCreateLead} disabled={creating || !newLead.name.trim()}>
+                {creating ? 'Creating...' : 'Create Lead'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </main>
     </div>
   );
