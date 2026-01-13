@@ -1,19 +1,17 @@
+'use client';
+
 import React from 'react';
-import Image from 'next/image';
 
 export default function Logo() {
   return (
     <div className="flex items-center">
-      {/* Logo Image - larger size since it includes text */}
+      {/* Logo Image - using regular img tag for reliability */}
       <div className="relative h-16 w-auto flex-shrink-0">
-        <Image
+        <img
           src="/logo.png"
           alt="LeadLock Logo"
-          width={200}
-          height={64}
-          className="object-contain h-full w-auto"
-          priority
-          unoptimized={true}
+          className="h-16 w-auto object-contain"
+          style={{ maxWidth: '300px' }}
         />
       </div>
     </div>
