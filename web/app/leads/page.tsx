@@ -155,6 +155,13 @@ export default function LeadsPage() {
             >
               My Leads
             </Button>
+            <Button
+              onClick={() => setCreateDialogOpen(true)}
+              className="bg-primary hover:bg-primary/90"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Create Lead
+            </Button>
           </div>
 
           {/* Status Tabs */}
