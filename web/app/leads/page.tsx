@@ -42,11 +42,22 @@ export default function LeadsPage() {
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<LeadStatus | 'ALL'>('ALL');
   const [search, setSearch] = useState('');
+  const [searchDebounced, setSearchDebounced] = useState('');
   const [myLeadsOnly, setMyLeadsOnly] = useState(false);
 
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearchDebounced(search);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // Fetch leads when filters change
   useEffect(() => {
     fetchLeads();
-  }, [statusFilter, search, myLeadsOnly]);
+  }, [statusFilter, searchDebounced, myLeadsOnly]);
 
   const fetchLeads = async () => {
     try {
@@ -55,8 +66,8 @@ export default function LeadsPage() {
       if (statusFilter !== 'ALL') {
         params.status = statusFilter;
       }
-      if (search) {
-        params.search = search;
+      if (searchDebounced) {
+        params.search = searchDebounced;
       }
       if (myLeadsOnly) {
         params.myLeads = true;

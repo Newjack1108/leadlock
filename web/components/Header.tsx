@@ -11,8 +11,14 @@ export default function Header() {
   const pathname = usePathname();
 
   const handleLogout = () => {
+    // Clear token from localStorage
     localStorage.removeItem('token');
+    // Clear token cookie
+    document.cookie = 'token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    // Redirect to login
     router.push('/login');
+    // Force a hard reload to clear any cached state
+    window.location.href = '/login';
   };
 
   return (
