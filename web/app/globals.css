@@ -48,40 +48,40 @@
 
 :root {
   --radius: 0.5rem;
-  /* Cheshire Stables Brand Colors */
-  --background: #0F2E1E;
-  --foreground: #FFFFFF;
-  --card: #163F2A;
-  --card-foreground: #FFFFFF;
-  --popover: #163F2A;
-  --popover-foreground: #FFFFFF;
+  /* Modern Light Theme with Green Accents */
+  --background: #FAFAFA;
+  --foreground: #1A1A1A;
+  --card: #FFFFFF;
+  --card-foreground: #1A1A1A;
+  --popover: #FFFFFF;
+  --popover-foreground: #1A1A1A;
   --primary: #1F6B3A;
   --primary-foreground: #FFFFFF;
   --secondary: #3FA86B;
   --secondary-foreground: #FFFFFF;
-  --muted: #163F2A;
-  --muted-foreground: #9DA7A0;
+  --muted: #F5F5F5;
+  --muted-foreground: #6B7280;
   --accent: #1F6B3A;
   --accent-foreground: #FFFFFF;
   --destructive: #dc2626;
   --destructive-foreground: #FFFFFF;
-  --border: #163F2A;
-  --input: #163F2A;
+  --border: #E5E7EB;
+  --input: #FFFFFF;
   --ring: #1F6B3A;
   --success: #3FA86B;
   --success-foreground: #FFFFFF;
   --chart-1: #1F6B3A;
   --chart-2: #3FA86B;
-  --chart-3: #163F2A;
-  --chart-4: #9DA7A0;
-  --chart-5: #C8C9C7;
-  --sidebar: #163F2A;
-  --sidebar-foreground: #FFFFFF;
+  --chart-3: #10B981;
+  --chart-4: #6B7280;
+  --chart-5: #9CA3AF;
+  --sidebar: #FFFFFF;
+  --sidebar-foreground: #1A1A1A;
   --sidebar-primary: #1F6B3A;
   --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #163F2A;
-  --sidebar-accent-foreground: #C8C9C7;
-  --sidebar-border: #1F6B3A;
+  --sidebar-accent: #F5F5F5;
+  --sidebar-accent-foreground: #6B7280;
+  --sidebar-border: #E5E7EB;
   --sidebar-ring: #1F6B3A;
 }
 
