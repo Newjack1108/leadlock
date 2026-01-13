@@ -40,14 +40,16 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-6">
       <Card className="w-full max-w-md">
-        <CardHeader className="space-y-4">
-          <div className="flex justify-center mb-4">
+        <CardHeader className="space-y-6">
+          <div className="flex justify-center mb-2">
             <Logo />
           </div>
-          <CardTitle className="text-2xl text-center">Welcome</CardTitle>
-          <CardDescription className="text-center">
-            Sign in to access LeadLock
-          </CardDescription>
+          <div className="space-y-2">
+            <CardTitle className="text-2xl text-center">Welcome</CardTitle>
+            <CardDescription className="text-center">
+              Sign in to access LeadLock
+            </CardDescription>
+          </div>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
