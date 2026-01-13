@@ -1,0 +1,504 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useRouter, useParams } from 'next/navigation';
+import Header from '@/components/Header';
+import QuoteLockCard from '@/components/QuoteLockCard';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Phone,
+  Mail,
+  MessageSquare,
+  PhoneCall,
+  Clock,
+  ArrowRight,
+  Lock,
+} from 'lucide-react';
+import api from '@/lib/api';
+import { Lead, Activity, ActivityType, LeadStatus, Timeframe } from '@/lib/types';
+import { toast } from 'sonner';
+
+const activityIcons: Record<ActivityType, any> = {
+  SMS_SENT: MessageSquare,
+  SMS_RECEIVED: MessageSquare,
+  EMAIL_SENT: Mail,
+  EMAIL_RECEIVED: Mail,
+  CALL_ATTEMPTED: Phone,
+  LIVE_CALL: PhoneCall,
+  WHATSAPP_SENT: MessageSquare,
+  WHATSAPP_RECEIVED: MessageSquare,
+  NOTE: MessageSquare,
+};
+
+const activityColors: Record<ActivityType, string> = {
+  SMS_SENT: 'text-blue-400',
+  SMS_RECEIVED: 'text-green-400',
+  EMAIL_SENT: 'text-blue-400',
+  EMAIL_RECEIVED: 'text-green-400',
+  CALL_ATTEMPTED: 'text-yellow-400',
+  LIVE_CALL: 'text-green-400',
+  WHATSAPP_SENT: 'text-blue-400',
+  WHATSAPP_RECEIVED: 'text-green-400',
+  NOTE: 'text-muted-foreground',
+};
+
+export default function LeadDetailPage() {
+  const router = useRouter();
+  const params = useParams();
+  const leadId = parseInt(params.id as string);
+
+  const [lead, setLead] = useState<Lead | null>(null);
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [allowedTransitions, setAllowedTransitions] = useState<string[]>([]);
+  const [canOverride, setCanOverride] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [transitionDialogOpen, setTransitionDialogOpen] = useState(false);
+  const [selectedNewStatus, setSelectedNewStatus] = useState<LeadStatus | ''>('');
+  const [overrideReason, setOverrideReason] = useState('');
+  const [updating, setUpdating] = useState(false);
+
+  useEffect(() => {
+    if (leadId) {
+      fetchLead();
+      fetchActivities();
+      fetchAllowedTransitions();
+    }
+  }, [leadId]);
+
+  const fetchLead = async () => {
+    try {
+      const response = await api.get(`/api/leads/${leadId}`);
+      setLead(response.data);
+    } catch (error: any) {
+      toast.error('Failed to load lead');
+      if (error.response?.status === 401) {
+        router.push('/login');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchActivities = async () => {
+    try {
+      const response = await api.get(`/api/leads/${leadId}/activities`);
+      setActivities(response.data);
+    } catch (error: any) {
+      console.error('Failed to load activities');
+    }
+  };
+
+  const fetchAllowedTransitions = async () => {
+    try {
+      const response = await api.get(`/api/leads/${leadId}/allowed-transitions`);
+      setAllowedTransitions(response.data.allowed_transitions);
+      setCanOverride(response.data.can_override);
+    } catch (error: any) {
+      console.error('Failed to load transitions');
+    }
+  };
+
+  const handleQuickLog = async (activityType: ActivityType) => {
+    try {
+      await api.post(`/api/leads/${leadId}/activities`, {
+        activity_type: activityType,
+      });
+      toast.success('Activity logged');
+      fetchLead();
+      fetchActivities();
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || 'Failed to log activity');
+    }
+  };
+
+  const handleStatusTransition = async () => {
+    if (!selectedNewStatus) return;
+
+    try {
+      setUpdating(true);
+      await api.post(`/api/leads/${leadId}/transition`, {
+        new_status: selectedNewStatus,
+        override_reason: overrideReason || undefined,
+      });
+      toast.success('Status updated');
+      setTransitionDialogOpen(false);
+      setSelectedNewStatus('');
+      setOverrideReason('');
+      fetchLead();
+      fetchAllowedTransitions();
+    } catch (error: any) {
+      const detail = error.response?.data?.detail;
+      if (typeof detail === 'object' && detail.error) {
+        if (detail.error === 'QUOTE_PREREQS_MISSING') {
+          toast.error(`Missing: ${detail.missing?.join(', ')}`);
+        } else if (detail.error === 'NO_ENGAGEMENT_PROOF') {
+          toast.error('Engagement proof required');
+        } else {
+          toast.error(detail.message || 'Transition failed');
+        }
+      } else {
+        toast.error(detail || 'Failed to update status');
+      }
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handleUpdateLead = async (field: string, value: any) => {
+    try {
+      await api.patch(`/api/leads/${leadId}`, {
+        [field]: value,
+      });
+      fetchLead();
+    } catch (error: any) {
+      toast.error('Failed to update');
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <div className="container mx-auto px-6 py-8">
+          <div className="text-center py-12 text-muted-foreground">Loading...</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!lead) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <div className="container mx-auto px-6 py-8">
+          <div className="text-center py-12 text-muted-foreground">Lead not found</div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-background">
+      <Header />
+      <main className="container mx-auto px-6 py-8">
+        <div className="mb-6">
+          <Button variant="ghost" onClick={() => router.push('/leads')} className="mb-4">
+            ← Back to Leads
+          </Button>
+          <h1 className="text-3xl font-semibold">{lead.name}</h1>
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-3">
+          {/* Main Content */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Header Card */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Lead Information</CardTitle>
+                  <Badge className="bg-primary/20 text-primary">
+                    {lead.status.replace('_', ' ')}
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Email</Label>
+                    <Input
+                      value={lead.email || ''}
+                      onChange={(e) => handleUpdateLead('email', e.target.value)}
+                      onBlur={(e) => handleUpdateLead('email', e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <Label>Phone</Label>
+                    <Input
+                      value={lead.phone || ''}
+                      onChange={(e) => handleUpdateLead('phone', e.target.value)}
+                      onBlur={(e) => handleUpdateLead('phone', e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <Label>Postcode</Label>
+                    <Input
+                      value={lead.postcode || ''}
+                      onChange={(e) => handleUpdateLead('postcode', e.target.value)}
+                      onBlur={(e) => handleUpdateLead('postcode', e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <Label>Timeframe</Label>
+                    <Select
+                      value={lead.timeframe}
+                      onValueChange={(value) => handleUpdateLead('timeframe', value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.values(Timeframe).map((tf) => (
+                          <SelectItem key={tf} value={tf}>
+                            {tf.replace('_', ' ')}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div>
+                  <Label>Scope Notes</Label>
+                  <Textarea
+                    value={lead.scope_notes || ''}
+                    onChange={(e) => handleUpdateLead('scope_notes', e.target.value)}
+                    onBlur={(e) => handleUpdateLead('scope_notes', e.target.value)}
+                    rows={3}
+                  />
+                </div>
+                <div>
+                  <Label>Product Interest</Label>
+                  <Textarea
+                    value={lead.product_interest || ''}
+                    onChange={(e) => handleUpdateLead('product_interest', e.target.value)}
+                    onBlur={(e) => handleUpdateLead('product_interest', e.target.value)}
+                    rows={2}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Quote Lock Card */}
+            {lead.status === LeadStatus.QUALIFIED && <QuoteLockCard lead={lead} />}
+
+            {/* Activity Timeline */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Activity Timeline</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {activities.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No activities yet</p>
+                  ) : (
+                    activities.map((activity) => {
+                      const Icon = activityIcons[activity.activity_type];
+                      return (
+                        <div key={activity.id} className="flex gap-4">
+                          <div className={`${activityColors[activity.activity_type]}`}>
+                            <Icon className="h-5 w-5" />
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">
+                                {activity.activity_type.replace('_', ' ')}
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                {new Date(activity.created_at).toLocaleString()}
+                              </span>
+                            </div>
+                            {activity.notes && (
+                              <p className="text-sm text-muted-foreground mt-1">
+                                {activity.notes}
+                              </p>
+                            )}
+                            {activity.created_by_name && (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                by {activity.created_by_name}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Sidebar */}
+          <div className="space-y-6">
+            {/* Quick Log */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Quick Log</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <Button
+                  variant="outline"
+                  className="w-full justify-start"
+                  onClick={() => handleQuickLog(ActivityType.CALL_ATTEMPTED)}
+                >
+                  <Phone className="h-4 w-4 mr-2" />
+                  Call Attempted
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full justify-start"
+                  onClick={() => handleQuickLog(ActivityType.SMS_SENT)}
+                >
+                  <MessageSquare className="h-4 w-4 mr-2" />
+                  SMS Sent
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full justify-start"
+                  onClick={() => handleQuickLog(ActivityType.SMS_RECEIVED)}
+                >
+                  <MessageSquare className="h-4 w-4 mr-2" />
+                  SMS Received
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full justify-start"
+                  onClick={() => handleQuickLog(ActivityType.LIVE_CALL)}
+                >
+                  <PhoneCall className="h-4 w-4 mr-2" />
+                  Live Call
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Workflow Actions */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Workflow Actions</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {allowedTransitions.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No transitions available
+                  </p>
+                ) : (
+                  allowedTransitions.map((status) => (
+                    <Button
+                      key={status}
+                      variant="outline"
+                      className="w-full justify-between"
+                      onClick={() => {
+                        setSelectedNewStatus(status as LeadStatus);
+                        setTransitionDialogOpen(true);
+                      }}
+                      disabled={
+                        status === LeadStatus.QUOTED && lead.quote_locked
+                      }
+                    >
+                      <span>Move to {status.replace('_', ' ')}</span>
+                      <ArrowRight className="h-4 w-4" />
+                    </Button>
+                  ))
+                )}
+                {canOverride && (
+                  <Button
+                    variant="outline"
+                    className="w-full justify-between mt-4"
+                    onClick={() => {
+                      setSelectedNewStatus('');
+                      setTransitionDialogOpen(true);
+                    }}
+                  >
+                    <span>Override Transition</span>
+                    <Lock className="h-4 w-4" />
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+
+        {/* Transition Dialog */}
+        <Dialog open={transitionDialogOpen} onOpenChange={setTransitionDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Change Status</DialogTitle>
+              <DialogDescription>
+                {canOverride && !selectedNewStatus
+                  ? 'Override workflow transition (reason required)'
+                  : 'Move lead to new status'}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              {canOverride && !selectedNewStatus && (
+                <div>
+                  <Label>New Status</Label>
+                  <Select
+                    value={selectedNewStatus}
+                    onValueChange={(value) =>
+                      setSelectedNewStatus(value as LeadStatus)
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.values(LeadStatus)
+                        .filter((s) => s !== lead.status)
+                        .map((status) => (
+                          <SelectItem key={status} value={status}>
+                            {status.replace('_', ' ')}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              {canOverride && (
+                <div>
+                  <Label>Override Reason (Required)</Label>
+                  <Textarea
+                    value={overrideReason}
+                    onChange={(e) => setOverrideReason(e.target.value)}
+                    placeholder="Explain why this transition is being overridden..."
+                    rows={3}
+                  />
+                </div>
+              )}
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setTransitionDialogOpen(false);
+                  setSelectedNewStatus('');
+                  setOverrideReason('');
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleStatusTransition}
+                disabled={
+                  updating ||
+                  (canOverride && !selectedNewStatus) ||
+                  (canOverride && !overrideReason.trim())
+                }
+              >
+                {updating ? 'Updating...' : 'Confirm'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </main>
+    </div>
+  );
+}
