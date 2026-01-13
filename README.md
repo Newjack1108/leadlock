@@ -254,13 +254,23 @@ Colors are defined in `web/app/globals.css`.
 ### Backend (Railway)
 
 1. Connect your GitHub repository to Railway
-2. Add a PostgreSQL service (Railway will automatically set `DATABASE_URL`)
-3. Set these environment variables in Railway dashboard:
+2. **Important**: Do NOT set a Root Directory in Railway settings - keep it as the repository root
+   - Railway will use the root-level `Procfile`, `railway.json`, and `nixpacks.toml` which reference the `api/` directory
+3. Add a PostgreSQL service (Railway will automatically set `DATABASE_URL`)
+4. Set these environment variables in Railway dashboard:
    - `SECRET_KEY` - Generate a strong random string (e.g., `openssl rand -hex 32`)
    - `ALGORITHM` - `HS256` (default)
    - `ACCESS_TOKEN_EXPIRE_MINUTES` - `1440` (default, 24 hours)
-4. Railway will auto-detect FastAPI and deploy
-5. The API will be available at your Railway-provided URL
+5. Railway will auto-detect Python via Nixpacks and deploy using the root-level `Procfile`
+6. After deployment, run the seed script to create initial users:
+   ```bash
+   railway run cd api && python seed.py
+   ```
+   Or use Railway's CLI from your local machine:
+   ```bash
+   railway run --service <your-service-name> sh -c "cd api && python seed.py"
+   ```
+7. The API will be available at your Railway-provided URL
 
 ### Frontend (Vercel/Netlify)
 
@@ -312,5 +322,6 @@ SQLModel creates tables automatically on first run. For production, consider usi
 ## License
 
 Proprietary - Cheshire Stables
-#   l e a d l o c k  
+#   l e a d l o c k 
+ 
  

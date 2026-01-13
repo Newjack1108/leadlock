@@ -1,0 +1,2 @@
+# This file helps Railway detect Python
+# Actual requirements are in api/requirements.txt
