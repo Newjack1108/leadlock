@@ -1,8 +1,9 @@
 {
   "$schema": "https://railway.app/railway.schema.json",
+  "$comment": "Backend API configuration. Root directory should NOT be set (use repo root).",
   "build": {
     "builder": "NIXPACKS",
-    "nixpacksConfigPath": "nixpacks.toml"
+    "nixpacksConfigPath": "api/nixpacks.toml"
   },
   "deploy": {
     "startCommand": "cd api && source venv/bin/activate && uvicorn app.main:app --host 0.0.0.0 --port $PORT",
