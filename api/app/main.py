@@ -15,10 +15,8 @@ app.add_middleware(
         "http://localhost:3000",
         "http://localhost:3001",
         "https://leadlock-frontend-production.up.railway.app",  # Production frontend
-        "https://*.vercel.app",  # Vercel preview deployments
-        "https://*.netlify.app",  # Netlify deployments
     ],
-    allow_origin_regex=r"https://.*\.up\.railway\.app",  # Allow all Railway subdomains
+    allow_origin_regex=r"https://.*\.(up\.railway\.app|vercel\.app|netlify\.app)",  # Allow Railway, Vercel, and Netlify subdomains
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
