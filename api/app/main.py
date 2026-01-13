@@ -16,7 +16,6 @@ app.add_middleware(
         "http://localhost:3001",
         "https://leadlock-frontend-production.up.railway.app",
     ],
-    allow_origin_regex=r"https://.*\.up\.railway\.app",  # Allow all Railway subdomains
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
