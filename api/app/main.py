@@ -34,6 +34,7 @@ async def root():
 
 
 @app.post("/api/seed")
+@app.get("/api/seed")
 async def seed_database():
     """Seed the database with initial users. Only works if no users exist."""
     # Check if users already exist
