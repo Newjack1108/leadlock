@@ -7,7 +7,7 @@ export default function Logo() {
       {/* Logo Image */}
       <div className="relative h-12 w-12 flex-shrink-0">
         <Image
-          src="/logo.svg"
+          src="/logo.png"
           alt="LeadLock Logo"
           fill
           className="object-contain"
