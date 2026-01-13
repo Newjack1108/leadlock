@@ -9,10 +9,14 @@ import os
 app = FastAPI(title="LeadLock API", version="1.0.0")
 
 # CORS middleware
-# Allow all origins for now - can be restricted later if needed
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "https://leadlock-frontend-production.up.railway.app",
+    ],
+    allow_origin_regex=r"https://.*\.up\.railway\.app",  # Allow all Railway subdomains
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
