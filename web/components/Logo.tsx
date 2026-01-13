@@ -13,6 +13,7 @@ export default function Logo() {
           height={64}
           className="object-contain h-full w-auto"
           priority
+          unoptimized={true}
         />
       </div>
     </div>
