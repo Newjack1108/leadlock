@@ -22,8 +22,8 @@ export default function Header() {
   };
 
   return (
-    <header className="border-b border-border bg-card">
-      <div className="container mx-auto px-6 py-4 flex items-center justify-between">
+    <header className="border-b border-border bg-card shadow-sm">
+      <div className="container mx-auto px-6 py-0 flex items-center justify-between">
         <Logo />
         <nav className="flex items-center gap-4">
           <Link href="/dashboard">
