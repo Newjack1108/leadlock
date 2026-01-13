@@ -1,0 +1,9 @@
+# Ignore root-level configs when building from subdirectories
+# This file is at the repo root to help Railway ignore root configs
+# when Root Directory is set to a subdirectory like 'web'
+
+railway.json
+nixpacks.toml
+Procfile
+requirements.txt
+main.py

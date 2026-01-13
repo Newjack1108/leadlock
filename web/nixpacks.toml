@@ -1,5 +1,6 @@
 # Next.js Frontend Build Configuration
 # This file is for the web frontend only. Root directory must be set to 'web' in Railway.
+# Railway should detect Node.js from package.json, but this config ensures correct build.
 
 [phases.setup]
 nixPkgs = ["nodejs-20_x"]
