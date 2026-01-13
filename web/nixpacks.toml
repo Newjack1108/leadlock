@@ -1,8 +1,11 @@
+# Next.js Frontend Build Configuration
+# This file is for the web frontend only. Root directory must be set to 'web' in Railway.
+
 [phases.setup]
 nixPkgs = ["nodejs-20_x"]
 
 [phases.install]
-cmds = ["npm install --production=false"]
+cmds = ["npm ci"]
 
 [phases.build]
 cmds = ["npm run build"]

@@ -1,8 +1,9 @@
 {
   "$schema": "https://railway.app/railway.schema.json",
+  "$comment": "This is the Next.js frontend configuration. Root directory must be set to 'web' in Railway.",
   "build": {
     "builder": "NIXPACKS",
-    "nixpacksConfigPath": "./nixpacks.toml"
+    "nixpacksConfigPath": "nixpacks.toml"
   },
   "deploy": {
     "startCommand": "next start -p $PORT",

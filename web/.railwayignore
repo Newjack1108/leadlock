@@ -1,0 +1,6 @@
+# Ignore root-level configs when building from web directory
+../railway.json
+../nixpacks.toml
+../Procfile
+../requirements.txt
+../main.py
