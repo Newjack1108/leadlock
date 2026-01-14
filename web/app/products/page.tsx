@@ -278,7 +278,7 @@ export default function ProductsPage() {
                   <div className="space-y-1 text-sm">
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Price:</span>
-                      <span className="font-semibold">£{product.base_price.toFixed(2)}</span>
+                      <span className="font-semibold">£{Number(product.base_price).toFixed(2)}</span>
                     </div>
                     {product.unit && (
                       <div className="flex justify-between">

@@ -15,6 +15,7 @@ app.add_middleware(
         "http://localhost:3000",
         "http://localhost:3001",
         "https://leadlock-frontend-production.up.railway.app",
+        "https://leadlock-production.up.railway.app",  # Backend URL (if needed)
     ],
     allow_credentials=True,
     allow_methods=["*"],
