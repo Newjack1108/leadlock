@@ -1,27 +1,65 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from app.database import create_db_and_tables, engine
 from sqlmodel import Session
 from app.routers import auth, leads, dashboard, webhooks, products, settings, quotes, customers, emails, email_templates
 from sqlmodel import Session, select
 from app.models import User
 import os
+import traceback
 
 app = FastAPI(title="LeadLock API", version="1.0.0")
 
-# CORS middleware
+# Get allowed origins from environment or use defaults
+allowed_origins_str = os.getenv(
+    "CORS_ORIGINS",
+    "http://localhost:3000,http://localhost:3001,https://leadlock-frontend-production.up.railway.app,https://leadlock-production.up.railway.app"
+)
+allowed_origins = [origin.strip() for origin in allowed_origins_str.split(",") if origin.strip()]
+
+# CORS middleware - must be added before routers
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://localhost:3001",
-        "https://leadlock-frontend-production.up.railway.app",
-        "https://leadlock-production.up.railway.app",  # Backend URL (if needed)
-    ],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
+
+# Global exception handler to ensure CORS headers are always present on errors
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Global exception handler that ensures CORS headers are always present."""
+    import sys
+    
+    # Don't handle HTTPException - let FastAPI handle it (it already has CORS support)
+    if isinstance(exc, HTTPException):
+        raise exc
+    
+    # Log the error
+    error_msg = f"Unhandled exception: {str(exc)}"
+    print(error_msg, file=sys.stderr, flush=True)
+    print(traceback.format_exc(), file=sys.stderr, flush=True)
+    
+    # Get the origin from request headers
+    origin = request.headers.get("origin")
+    
+    # Create response with error details
+    response = JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"detail": "Internal server error", "error": str(exc) if os.getenv("DEBUG", "false").lower() == "true" else "An error occurred"}
+    )
+    
+    # Add CORS headers manually if origin is allowed
+    if origin and origin in allowed_origins:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Allow-Methods"] = "*"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+    
+    return response
 
 # Include routers
 app.include_router(auth.router)
