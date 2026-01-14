@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { sendEmail, getEmailTemplates, previewEmailTemplate } from '@/lib/api';
 import { Customer, EmailTemplate } from '@/lib/types';
 import { toast } from 'sonner';
+import api from '@/lib/api';
 
 interface ComposeEmailDialogProps {
   open: boolean;
@@ -35,28 +36,42 @@ export default function ComposeEmailDialog({
   const [templates, setTemplates] = useState<EmailTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | undefined>(undefined);
   const [loadingTemplate, setLoadingTemplate] = useState(false);
+  const [signature, setSignature] = useState('');
   const [formData, setFormData] = useState({
     to_email: customer.email || '',
     cc: '',
-    bcc: '',
     subject: '',
     body: '',
   });
 
-  // Fetch templates when dialog opens
+  // Fetch templates and user signature when dialog opens
   useEffect(() => {
     if (open) {
       fetchTemplates();
+      fetchUserSignature();
       setFormData({
         to_email: customer.email || '',
         cc: '',
-        bcc: '',
         subject: '',
         body: '',
       });
       setSelectedTemplateId(undefined);
     }
   }, [open, customer]);
+
+  const fetchUserSignature = async () => {
+    try {
+      // Try to get user info - we'll add signature to user model later
+      // For now, use a default signature or empty
+      const response = await api.get('/api/auth/me');
+      // TODO: Add signature field to User model and fetch it here
+      // For now, set a default signature
+      setSignature(''); // Will be editable
+    } catch (error) {
+      // User not authenticated or error - use empty signature
+      setSignature('');
+    }
+  };
 
   const fetchTemplates = async () => {
     try {
@@ -138,21 +153,20 @@ export default function ComposeEmailDialog({
       return;
     }
 
-    if (formData.bcc && !validateEmailList(formData.bcc)) {
-      toast.error('Please enter valid email addresses for BCC (comma-separated)');
-      return;
-    }
-
     setLoading(true);
     try {
+      // Combine body and signature
+      const bodyWithSignature = signature 
+        ? `${formData.body}\n\n${signature}`
+        : formData.body;
+
       await sendEmail({
         customer_id: customer.id,
         to_email: formData.to_email,
         cc: formData.cc || undefined,
-        bcc: formData.bcc || undefined,
         subject: formData.subject,
-        body_html: formData.body,
-        body_text: formData.body, // Use same content for plain text fallback
+        body_html: bodyWithSignature,
+        body_text: bodyWithSignature, // Use same content for plain text fallback
         template_id: selectedTemplateId,
       });
 
@@ -168,122 +182,135 @@ export default function ComposeEmailDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Compose Email</DialogTitle>
+      <DialogContent className="max-w-5xl w-[95vw] h-[90vh] max-h-[90vh] flex flex-col p-0">
+        <DialogHeader className="px-6 pt-6 pb-4 border-b">
+          <DialogTitle className="text-xl">New Message</DialogTitle>
           <DialogDescription>
-            Send an email to {customer.name}. When they reply, it will create engagement proof to unlock quote creation.
+            Send an email to {customer.name}
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="template">Email Template (Optional)</Label>
-            <Select
-              value={selectedTemplateId?.toString() || 'none'}
-              onValueChange={handleTemplateChange}
-              disabled={loadingTemplate}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select a template or start from scratch" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">No Template (Start from scratch)</SelectItem>
-                {templates.map((template) => (
-                  <SelectItem key={template.id} value={template.id.toString()}>
-                    {template.name} {template.is_default && '(Default)'}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {loadingTemplate && (
-              <p className="text-xs text-muted-foreground">Loading template...</p>
-            )}
-            <p className="text-xs text-muted-foreground">
-              Available variables: {'{{ customer.name }}'}, {'{{ customer.email }}'}, {'{{ customer.phone }}'}, etc.
-            </p>
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
+          <div className="px-6 py-4 space-y-3 border-b flex-shrink-0">
+            {/* Template Selector */}
+            <div className="space-y-1">
+              <Label htmlFor="template" className="text-xs text-muted-foreground">Template (Optional)</Label>
+              <Select
+                value={selectedTemplateId?.toString() || 'none'}
+                onValueChange={handleTemplateChange}
+                disabled={loadingTemplate}
+              >
+                <SelectTrigger className="h-8">
+                  <SelectValue placeholder="Select a template or start from scratch" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No Template (Start from scratch)</SelectItem>
+                  {templates.map((template) => (
+                    <SelectItem key={template.id} value={template.id.toString()}>
+                      {template.name} {template.is_default && '(Default)'}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {loadingTemplate && (
+                <p className="text-xs text-muted-foreground">Loading template...</p>
+              )}
+            </div>
+
+            {/* To and CC */}
+            <div className="grid grid-cols-12 gap-2 items-center">
+              <Label htmlFor="to_email" className="text-xs text-muted-foreground col-span-1">
+                To:
+              </Label>
+              <Input
+                id="to_email"
+                type="email"
+                value={formData.to_email}
+                onChange={(e) => setFormData({ ...formData, to_email: e.target.value })}
+                required
+                placeholder="customer@example.com"
+                className="col-span-11 h-8"
+              />
+            </div>
+
+            <div className="grid grid-cols-12 gap-2 items-center">
+              <Label htmlFor="cc" className="text-xs text-muted-foreground col-span-1">
+                Cc:
+              </Label>
+              <Input
+                id="cc"
+                type="text"
+                value={formData.cc}
+                onChange={(e) => setFormData({ ...formData, cc: e.target.value })}
+                placeholder="cc1@example.com, cc2@example.com"
+                className="col-span-11 h-8"
+              />
+            </div>
+
+            {/* Subject */}
+            <div className="grid grid-cols-12 gap-2 items-center">
+              <Label htmlFor="subject" className="text-xs text-muted-foreground col-span-1">
+                Subject:
+              </Label>
+              <Input
+                id="subject"
+                type="text"
+                value={formData.subject}
+                onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
+                required
+                placeholder="Email subject"
+                className="col-span-11 h-8"
+              />
+            </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="to_email">
-              To Email <span className="text-destructive">*</span>
-            </Label>
-            <Input
-              id="to_email"
-              type="email"
-              value={formData.to_email}
-              onChange={(e) => setFormData({ ...formData, to_email: e.target.value })}
-              required
-              placeholder="customer@example.com"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="cc">CC (Optional)</Label>
-            <Input
-              id="cc"
-              type="text"
-              value={formData.cc}
-              onChange={(e) => setFormData({ ...formData, cc: e.target.value })}
-              placeholder="cc1@example.com, cc2@example.com"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="bcc">BCC (Optional)</Label>
-            <Input
-              id="bcc"
-              type="text"
-              value={formData.bcc}
-              onChange={(e) => setFormData({ ...formData, bcc: e.target.value })}
-              placeholder="bcc@example.com"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="subject">
-              Subject <span className="text-destructive">*</span>
-            </Label>
-            <Input
-              id="subject"
-              type="text"
-              value={formData.subject}
-              onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
-              required
-              placeholder="Email subject"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="body">
-              Message <span className="text-destructive">*</span>
-            </Label>
+          {/* Message Body - Takes up remaining space */}
+          <div className="flex-1 flex flex-col overflow-hidden px-6 py-4">
             <Textarea
               id="body"
               value={formData.body}
               onChange={(e) => setFormData({ ...formData, body: e.target.value })}
               required
               placeholder="Type your message here. HTML is supported."
-              rows={10}
-              className="font-mono text-sm"
+              className="flex-1 min-h-[300px] resize-none font-sans text-sm"
             />
-            <p className="text-xs text-muted-foreground">
-              You can use HTML formatting in your message.
-            </p>
+            
+            {/* Signature */}
+            <div className="mt-4 pt-4 border-t">
+              <Label htmlFor="signature" className="text-xs text-muted-foreground mb-2 block">
+                Signature (Optional)
+              </Label>
+              <Textarea
+                id="signature"
+                value={signature}
+                onChange={(e) => setSignature(e.target.value)}
+                placeholder="Your signature will be appended to the email"
+                rows={3}
+                className="font-sans text-sm"
+              />
+            </div>
           </div>
 
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={loading}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={loading || !formData.to_email || !formData.subject || !formData.body}>
-              {loading ? 'Sending...' : 'Send Email'}
-            </Button>
+          {/* Footer */}
+          <DialogFooter className="px-6 py-4 border-t flex-shrink-0">
+            <div className="flex items-center justify-between w-full">
+              <p className="text-xs text-muted-foreground">
+                Available variables: {'{{ customer.name }}'}, {'{{ customer.email }}'}, {'{{ customer.phone }}'}, etc.
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => onOpenChange(false)}
+                  disabled={loading}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={loading || !formData.to_email || !formData.subject || !formData.body}>
+                  {loading ? 'Sending...' : 'Send'}
+                </Button>
+              </div>
+            </div>
           </DialogFooter>
         </form>
       </DialogContent>
