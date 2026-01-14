@@ -35,6 +35,26 @@ export enum ProductCategory {
   CABINS = "CABINS",
 }
 
+export enum LeadType {
+  UNKNOWN = "UNKNOWN",
+  STABLES = "STABLES",
+  SHEDS = "SHEDS",
+  CABINS = "CABINS",
+}
+
+export enum LeadSource {
+  UNKNOWN = "UNKNOWN",
+  FACEBOOK = "FACEBOOK",
+  INSTAGRAM = "INSTAGRAM",
+  WEBSITE = "WEBSITE",
+  MANUAL_ENTRY = "MANUAL_ENTRY",
+  SMS = "SMS",
+  EMAIL = "EMAIL",
+  PHONE = "PHONE",
+  REFERRAL = "REFERRAL",
+  OTHER = "OTHER",
+}
+
 export interface User {
   id: number;
   email: string;
@@ -53,6 +73,8 @@ export interface Lead {
   timeframe: Timeframe;
   scope_notes?: string;
   product_interest?: string;
+  lead_type: LeadType;
+  lead_source: LeadSource;
   assigned_to_id?: number;
   created_at: string;
   updated_at: string;

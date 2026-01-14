@@ -19,9 +19,16 @@ import {
 } from '@/components/ui/dialog';
 import { Lock, Unlock, Clock, Search, Plus } from 'lucide-react';
 import api from '@/lib/api';
-import { Lead, LeadStatus } from '@/lib/types';
+import { Lead, LeadStatus, LeadType, LeadSource } from '@/lib/types';
 import { toast } from 'sonner';
 import Link from 'next/link';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 const statusColors: Record<LeadStatus, string> = {
   NEW: 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300',
@@ -51,6 +58,8 @@ export default function LeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<LeadStatus | 'ALL'>('ALL');
+  const [leadTypeFilter, setLeadTypeFilter] = useState<LeadType | 'ALL'>('ALL');
+  const [leadSourceFilter, setLeadSourceFilter] = useState<LeadSource | 'ALL'>('ALL');
   const [search, setSearch] = useState('');
   const [searchDebounced, setSearchDebounced] = useState('');
   const [myLeadsOnly, setMyLeadsOnly] = useState(false);
@@ -62,6 +71,8 @@ export default function LeadsPage() {
     phone: '',
     postcode: '',
     description: '',
+    lead_type: LeadType.UNKNOWN,
+    lead_source: LeadSource.MANUAL_ENTRY,
   });
 
   // Debounce search input
@@ -76,7 +87,7 @@ export default function LeadsPage() {
   // Fetch leads when filters change
   useEffect(() => {
     fetchLeads();
-  }, [statusFilter, searchDebounced, myLeadsOnly]);
+  }, [statusFilter, leadTypeFilter, leadSourceFilter, searchDebounced, myLeadsOnly]);
 
   const fetchLeads = async () => {
     try {
@@ -84,6 +95,12 @@ export default function LeadsPage() {
       const params: any = {};
       if (statusFilter !== 'ALL') {
         params.status = statusFilter;
+      }
+      if (leadTypeFilter !== 'ALL') {
+        params.lead_type = leadTypeFilter;
+      }
+      if (leadSourceFilter !== 'ALL') {
+        params.lead_source = leadSourceFilter;
       }
       if (searchDebounced) {
         params.search = searchDebounced;
@@ -119,11 +136,13 @@ export default function LeadsPage() {
         phone: newLead.phone.trim() || undefined,
         postcode: newLead.postcode.trim() || undefined,
         description: newLead.description.trim() || undefined,
+        lead_type: newLead.lead_type,
+        lead_source: newLead.lead_source,
       });
       
       toast.success('Lead created successfully');
       setCreateDialogOpen(false);
-      setNewLead({ name: '', email: '', phone: '', postcode: '', description: '' });
+      setNewLead({ name: '', email: '', phone: '', postcode: '', description: '', lead_type: LeadType.UNKNOWN, lead_source: LeadSource.MANUAL_ENTRY });
       fetchLeads();
     } catch (error: any) {
       toast.error(error.response?.data?.detail || 'Failed to create lead');
@@ -152,6 +171,28 @@ export default function LeadsPage() {
                 className="pl-10"
               />
             </div>
+            <Select value={leadTypeFilter} onValueChange={(value) => setLeadTypeFilter(value as LeadType | 'ALL')}>
+              <SelectTrigger className="w-[150px]">
+                <SelectValue placeholder="Lead Type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All Types</SelectItem>
+                {Object.values(LeadType).map((type) => (
+                  <SelectItem key={type} value={type}>{type}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={leadSourceFilter} onValueChange={(value) => setLeadSourceFilter(value as LeadSource | 'ALL')}>
+              <SelectTrigger className="w-[150px]">
+                <SelectValue placeholder="Lead Source" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All Sources</SelectItem>
+                {Object.values(LeadSource).map((source) => (
+                  <SelectItem key={source} value={source}>{source.replace('_', ' ')}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Button
               variant={myLeadsOnly ? 'default' : 'outline'}
               onClick={() => setMyLeadsOnly(!myLeadsOnly)}
@@ -199,6 +240,12 @@ export default function LeadsPage() {
                           <h3 className="text-lg font-semibold">{lead.name}</h3>
                           <Badge className={statusColors[lead.status]}>
                             {lead.status.replace('_', ' ')}
+                          </Badge>
+                          <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                            {lead.lead_type}
+                          </Badge>
+                          <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                            {lead.lead_source.replace('_', ' ')}
                           </Badge>
                           {lead.quote_locked && lead.status === LeadStatus.QUALIFIED && (
                             <Lock className="h-4 w-4 text-destructive" />
@@ -298,13 +345,47 @@ export default function LeadsPage() {
                   rows={4}
                 />
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="lead_type">Lead Type</Label>
+                <Select
+                  value={newLead.lead_type}
+                  onValueChange={(value) => setNewLead({ ...newLead, lead_type: value as LeadType })}
+                  disabled={creating}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.values(LeadType).map((type) => (
+                      <SelectItem key={type} value={type}>{type}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="lead_source">Lead Source</Label>
+                <Select
+                  value={newLead.lead_source}
+                  onValueChange={(value) => setNewLead({ ...newLead, lead_source: value as LeadSource })}
+                  disabled={creating}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.values(LeadSource).map((source) => (
+                      <SelectItem key={source} value={source}>{source.replace('_', ' ')}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <DialogFooter>
               <Button
                 variant="outline"
                 onClick={() => {
                   setCreateDialogOpen(false);
-                  setNewLead({ name: '', email: '', phone: '', postcode: '', description: '' });
+                  setNewLead({ name: '', email: '', phone: '', postcode: '', description: '', lead_type: LeadType.UNKNOWN, lead_source: LeadSource.MANUAL_ENTRY });
                 }}
                 disabled={creating}
               >

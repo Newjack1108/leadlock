@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 from app.database import get_session
-from app.models import Lead, User, StatusHistory, LeadStatus
+from app.models import Lead, User, StatusHistory, LeadStatus, LeadType, LeadSource
 from app.schemas import LeadCreate, LeadResponse
 from app.auth import get_webhook_api_key
 from app.workflow import check_sla_overdue, check_quote_prerequisites
@@ -93,6 +93,8 @@ async def create_lead_webhook(
             timeframe=lead.timeframe,
             scope_notes=lead.scope_notes,
             product_interest=lead.product_interest,
+            lead_type=getattr(lead, 'lead_type', LeadType.UNKNOWN),
+            lead_source=getattr(lead, 'lead_source', LeadSource.UNKNOWN),
             assigned_to_id=lead.assigned_to_id,
             created_at=lead.created_at,
             updated_at=lead.updated_at,

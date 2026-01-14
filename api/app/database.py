@@ -48,6 +48,10 @@ def create_db_and_tables():
                 columns_to_add.append("customer_since TIMESTAMP")
             if "customer_number" not in columns:
                 columns_to_add.append("customer_number VARCHAR")
+            if "lead_type" not in columns:
+                columns_to_add.append("lead_type VARCHAR DEFAULT 'UNKNOWN'")
+            if "lead_source" not in columns:
+                columns_to_add.append("lead_source VARCHAR DEFAULT 'UNKNOWN'")
             
             if columns_to_add:
                 print(f"Adding {len(columns_to_add)} columns to lead table...", file=sys.stderr, flush=True)

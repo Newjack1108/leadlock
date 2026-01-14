@@ -49,6 +49,26 @@ class ProductCategory(str, Enum):
     CABINS = "CABINS"
 
 
+class LeadType(str, Enum):
+    UNKNOWN = "UNKNOWN"
+    STABLES = "STABLES"
+    SHEDS = "SHEDS"
+    CABINS = "CABINS"
+
+
+class LeadSource(str, Enum):
+    UNKNOWN = "UNKNOWN"
+    FACEBOOK = "FACEBOOK"
+    INSTAGRAM = "INSTAGRAM"
+    WEBSITE = "WEBSITE"
+    MANUAL_ENTRY = "MANUAL_ENTRY"
+    SMS = "SMS"
+    EMAIL = "EMAIL"
+    PHONE = "PHONE"
+    REFERRAL = "REFERRAL"
+    OTHER = "OTHER"
+
+
 class User(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     email: str = Field(unique=True, index=True)
@@ -82,6 +102,8 @@ class Lead(SQLModel, table=True):
     timeframe: Timeframe = Field(default=Timeframe.UNKNOWN)
     scope_notes: Optional[str] = None
     product_interest: Optional[str] = None
+    lead_type: LeadType = Field(default=LeadType.UNKNOWN)
+    lead_source: LeadSource = Field(default=LeadSource.UNKNOWN)
     assigned_to_id: Optional[int] = Field(default=None, foreign_key="user.id")
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)

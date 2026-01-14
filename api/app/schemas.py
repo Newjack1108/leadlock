@@ -4,7 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 from app.models import (
     LeadStatus, ActivityType, Timeframe, UserRole, ProductCategory,
-    QuoteStatus, DiscountType, DiscountScope
+    QuoteStatus, DiscountType, DiscountScope, LeadType, LeadSource
 )
 
 
@@ -37,6 +37,8 @@ class LeadCreate(BaseModel):
     city: Optional[str] = None
     county: Optional[str] = None
     country: Optional[str] = "United Kingdom"
+    lead_type: Optional[LeadType] = None
+    lead_source: Optional[LeadSource] = None
 
 
 class LeadUpdate(BaseModel):
@@ -54,6 +56,8 @@ class LeadUpdate(BaseModel):
     timeframe: Optional[Timeframe] = None
     scope_notes: Optional[str] = None
     product_interest: Optional[str] = None
+    lead_type: Optional[LeadType] = None
+    lead_source: Optional[LeadSource] = None
     assigned_to_id: Optional[int] = None
 
 
@@ -68,6 +72,8 @@ class LeadResponse(BaseModel):
     timeframe: Timeframe
     scope_notes: Optional[str]
     product_interest: Optional[str]
+    lead_type: LeadType
+    lead_source: LeadSource
     assigned_to_id: Optional[int]
     created_at: datetime
     updated_at: datetime

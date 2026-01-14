@@ -35,7 +35,7 @@ import {
   Lock,
 } from 'lucide-react';
 import api from '@/lib/api';
-import { Lead, Activity, ActivityType, LeadStatus, Timeframe } from '@/lib/types';
+import { Lead, Activity, ActivityType, LeadStatus, Timeframe, LeadType, LeadSource } from '@/lib/types';
 import { toast } from 'sonner';
 
 const activityIcons: Record<ActivityType, any> = {
@@ -260,6 +260,42 @@ export default function LeadDetailPage() {
                         {Object.values(Timeframe).map((tf) => (
                           <SelectItem key={tf} value={tf}>
                             {tf.replace('_', ' ')}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Lead Type</Label>
+                    <Select
+                      value={lead.lead_type}
+                      onValueChange={(value) => handleUpdateLead('lead_type', value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.values(LeadType).map((type) => (
+                          <SelectItem key={type} value={type}>
+                            {type}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Lead Source</Label>
+                    <Select
+                      value={lead.lead_source}
+                      onValueChange={(value) => handleUpdateLead('lead_source', value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.values(LeadSource).map((source) => (
+                          <SelectItem key={source} value={source}>
+                            {source.replace('_', ' ')}
                           </SelectItem>
                         ))}
                       </SelectContent>

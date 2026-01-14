@@ -26,6 +26,8 @@ def enrich_lead_response(lead: Lead, session: Session, current_user: User) -> Le
             quote_locked = True
             quote_lock_reason = error
     
+    from app.models import LeadType, LeadSource
+    
     return LeadResponse(
         id=lead.id,
         name=lead.name,
@@ -45,6 +47,8 @@ def enrich_lead_response(lead: Lead, session: Session, current_user: User) -> Le
         timeframe=lead.timeframe,
         scope_notes=lead.scope_notes,
         product_interest=lead.product_interest,
+        lead_type=getattr(lead, 'lead_type', LeadType.UNKNOWN),
+        lead_source=getattr(lead, 'lead_source', LeadSource.UNKNOWN),
         assigned_to_id=lead.assigned_to_id,
         created_at=lead.created_at,
         updated_at=lead.updated_at,
@@ -57,20 +61,30 @@ def enrich_lead_response(lead: Lead, session: Session, current_user: User) -> Le
 @router.get("", response_model=List[LeadResponse])
 async def get_leads(
     status_filter: Optional[LeadStatus] = Query(None, alias="status"),
+    lead_type: Optional["LeadType"] = Query(None, alias="lead_type"),
+    lead_source: Optional["LeadSource"] = Query(None, alias="lead_source"),
     search: Optional[str] = Query(None),
     my_leads_only: bool = Query(False, alias="myLeads"),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
     try:
-        statement = select(Lead)
+        from app.models import LeadType, LeadSource
         
+        statement = select(Lead)
+
         if status_filter:
             statement = statement.where(Lead.status == status_filter)
-        
+
+        if lead_type:
+            statement = statement.where(Lead.lead_type == lead_type)
+
+        if lead_source:
+            statement = statement.where(Lead.lead_source == lead_source)
+
         if my_leads_only:
             statement = statement.where(Lead.assigned_to_id == current_user.id)
-        
+
         if search:
             search_term = f"%{search}%"
             statement = statement.where(
