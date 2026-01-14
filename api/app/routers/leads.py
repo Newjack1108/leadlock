@@ -62,29 +62,36 @@ async def get_leads(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
-    statement = select(Lead)
-    
-    if status_filter:
-        statement = statement.where(Lead.status == status_filter)
-    
-    if my_leads_only:
-        statement = statement.where(Lead.assigned_to_id == current_user.id)
-    
-    if search:
-        search_term = f"%{search}%"
-        statement = statement.where(
-            or_(
-                Lead.name.ilike(search_term),
-                Lead.email.ilike(search_term),
-                Lead.phone.ilike(search_term),
-                Lead.postcode.ilike(search_term)
+    try:
+        statement = select(Lead)
+        
+        if status_filter:
+            statement = statement.where(Lead.status == status_filter)
+        
+        if my_leads_only:
+            statement = statement.where(Lead.assigned_to_id == current_user.id)
+        
+        if search:
+            search_term = f"%{search}%"
+            statement = statement.where(
+                or_(
+                    Lead.name.ilike(search_term),
+                    Lead.email.ilike(search_term),
+                    Lead.phone.ilike(search_term),
+                    Lead.postcode.ilike(search_term)
+                )
             )
-        )
-    
-    statement = statement.order_by(Lead.created_at.desc())
-    leads = session.exec(statement).all()
-    
-    return [enrich_lead_response(lead, session, current_user) for lead in leads]
+        
+        statement = statement.order_by(Lead.created_at.desc())
+        leads = session.exec(statement).all()
+        
+        return [enrich_lead_response(lead, session, current_user) for lead in leads]
+    except Exception as e:
+        import traceback
+        error_msg = f"Error fetching leads: {str(e)}"
+        print(error_msg, file=__import__('sys').stderr, flush=True)
+        print(traceback.format_exc(), file=__import__('sys').stderr, flush=True)
+        raise HTTPException(status_code=500, detail=error_msg)
 
 
 @router.get("/{lead_id}", response_model=LeadResponse)
@@ -108,22 +115,29 @@ async def create_lead(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
-    lead = Lead(**lead_data.dict())
-    lead.assigned_to_id = current_user.id
-    session.add(lead)
-    session.commit()
-    session.refresh(lead)
-    
-    # Create initial status history
-    status_history = StatusHistory(
-        lead_id=lead.id,
-        new_status=lead.status,
-        changed_by_id=current_user.id
-    )
-    session.add(status_history)
-    session.commit()
-    
-    return enrich_lead_response(lead, session, current_user)
+    try:
+        lead = Lead(**lead_data.dict())
+        lead.assigned_to_id = current_user.id
+        session.add(lead)
+        session.commit()
+        session.refresh(lead)
+        
+        # Create initial status history
+        status_history = StatusHistory(
+            lead_id=lead.id,
+            new_status=lead.status,
+            changed_by_id=current_user.id
+        )
+        session.add(status_history)
+        session.commit()
+        
+        return enrich_lead_response(lead, session, current_user)
+    except Exception as e:
+        import traceback
+        error_msg = f"Error creating lead: {str(e)}"
+        print(error_msg, file=__import__('sys').stderr, flush=True)
+        print(traceback.format_exc(), file=__import__('sys').stderr, flush=True)
+        raise HTTPException(status_code=500, detail=error_msg)
 
 
 @router.patch("/{lead_id}", response_model=LeadResponse)
