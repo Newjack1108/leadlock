@@ -51,14 +51,14 @@ const activityIcons: Record<ActivityType, any> = {
 };
 
 const activityColors: Record<ActivityType, string> = {
-  SMS_SENT: 'text-blue-400',
-  SMS_RECEIVED: 'text-green-400',
-  EMAIL_SENT: 'text-blue-400',
-  EMAIL_RECEIVED: 'text-green-400',
-  CALL_ATTEMPTED: 'text-yellow-400',
-  LIVE_CALL: 'text-green-400',
-  WHATSAPP_SENT: 'text-blue-400',
-  WHATSAPP_RECEIVED: 'text-green-400',
+  SMS_SENT: 'text-blue-600',
+  SMS_RECEIVED: 'text-green-600',
+  EMAIL_SENT: 'text-blue-600',
+  EMAIL_RECEIVED: 'text-green-600',
+  CALL_ATTEMPTED: 'text-yellow-600',
+  LIVE_CALL: 'text-green-600',
+  WHATSAPP_SENT: 'text-blue-600',
+  WHATSAPP_RECEIVED: 'text-green-600',
   NOTE: 'text-muted-foreground',
 };
 
@@ -265,6 +265,16 @@ export default function LeadDetailPage() {
                       </SelectContent>
                     </Select>
                   </div>
+                </div>
+                <div>
+                  <Label>Description</Label>
+                  <Textarea
+                    value={lead.description || ''}
+                    onChange={(e) => handleUpdateLead('description', e.target.value)}
+                    onBlur={(e) => handleUpdateLead('description', e.target.value)}
+                    rows={3}
+                    placeholder="Additional information about the lead..."
+                  />
                 </div>
                 <div>
                   <Label>Scope Notes</Label>

@@ -42,6 +42,7 @@ export interface Lead {
   email?: string;
   phone?: string;
   postcode?: string;
+  description?: string;
   status: LeadStatus;
   timeframe: Timeframe;
   scope_notes?: string;
@@ -89,4 +90,39 @@ export interface DashboardStats {
   lost_count: number;
   engaged_percentage: number;
   qualified_percentage: number;
+}
+
+export interface Product {
+  id: number;
+  name: string;
+  description?: string;
+  category: ProductCategory;
+  subcategory?: string;
+  is_extra: boolean;
+  base_price: number;
+  unit: string;
+  sku?: string;
+  is_active: boolean;
+  image_url?: string;
+  specifications?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CompanySettings {
+  id: number;
+  company_name: string;
+  company_registration_number?: string;
+  vat_number?: string;
+  address_line1?: string;
+  address_line2?: string;
+  city?: string;
+  county?: string;
+  postcode?: string;
+  country: string;
+  phone?: string;
+  email?: string;
+  website?: string;
+  logo_filename: string;
+  updated_at: string;
 }

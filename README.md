@@ -123,6 +123,8 @@ The app will be available at `http://localhost:3000`
 - `SECRET_KEY`: JWT secret key (use a strong random string in production)
 - `ALGORITHM`: JWT algorithm (default: HS256)
 - `ACCESS_TOKEN_EXPIRE_MINUTES`: Token expiration time (default: 1440 = 24 hours)
+- `WEBHOOK_API_KEY`: Secret API key for webhook authentication (required for Make.com integration)
+- `WEBHOOK_DEFAULT_USER_ID`: (Optional) User ID to assign webhook-created leads to. If not set, leads will be unassigned.
 
 ### Frontend (`web/.env.local`)
 
@@ -189,24 +191,36 @@ or
 
 ## Make.com Webhook Integration
 
-To create leads from Make.com webhooks, POST to `/api/leads`:
+To create leads from Make.com webhooks, use the dedicated webhook endpoint `/api/webhooks/leads`:
 
+**Endpoint:** `POST /api/webhooks/leads`
+
+**Headers:**
+```
+X-API-Key: <your-webhook-api-key>
+Content-Type: application/json
+```
+
+**Request Body:**
 ```json
 {
   "name": "John Doe",
   "email": "john@example.com",
   "phone": "+44 1234 567890",
-  "postcode": "CW1 2AB"
+  "postcode": "CW1 2AB",
+  "description": "Interested in custom stable design for 4 horses"
 }
 ```
 
-**Headers:**
-```
-Authorization: Bearer <your-jwt-token>
-Content-Type: application/json
-```
+**Setup:**
+1. Set `WEBHOOK_API_KEY` environment variable in your backend (generate a strong random string)
+2. Optionally set `WEBHOOK_DEFAULT_USER_ID` to automatically assign webhook-created leads to a specific user
+3. Configure Make.com to send POST requests to `https://your-api-url/api/webhooks/leads` with the `X-API-Key` header
 
-The lead will be automatically assigned to the user who created it.
+**Response:**
+The endpoint returns the created lead with status `NEW`. If `WEBHOOK_DEFAULT_USER_ID` is set, the lead will be assigned to that user; otherwise, it will be unassigned.
+
+**Note:** All fields except `name` are optional. The `description` field can be used to store additional information about the lead.
 
 ## Replacing the Logo
 
@@ -287,13 +301,16 @@ Colors are defined in `web/app/globals.css`.
 ### Leads
 - `GET /api/leads` - List leads (with filters)
 - `GET /api/leads/{id}` - Get lead details
-- `POST /api/leads` - Create lead
+- `POST /api/leads` - Create lead (requires JWT authentication)
 - `PATCH /api/leads/{id}` - Update lead
 - `POST /api/leads/{id}/transition` - Change lead status
 - `GET /api/leads/{id}/allowed-transitions` - Get allowed transitions
 - `POST /api/leads/{id}/activities` - Log activity
 - `GET /api/leads/{id}/activities` - Get activity timeline
 - `GET /api/leads/{id}/status-history` - Get status change history
+
+### Webhooks
+- `POST /api/webhooks/leads` - Create lead via webhook (API key authentication)
 
 ### Dashboard
 - `GET /api/dashboard/stats` - Get dashboard statistics

@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Dialog,
   DialogContent,
@@ -60,6 +61,7 @@ export default function LeadsPage() {
     email: '',
     phone: '',
     postcode: '',
+    description: '',
   });
 
   // Debounce search input
@@ -116,11 +118,12 @@ export default function LeadsPage() {
         email: newLead.email.trim() || undefined,
         phone: newLead.phone.trim() || undefined,
         postcode: newLead.postcode.trim() || undefined,
+        description: newLead.description.trim() || undefined,
       });
       
       toast.success('Lead created successfully');
       setCreateDialogOpen(false);
-      setNewLead({ name: '', email: '', phone: '', postcode: '' });
+      setNewLead({ name: '', email: '', phone: '', postcode: '', description: '' });
       fetchLeads();
     } catch (error: any) {
       toast.error(error.response?.data?.detail || 'Failed to create lead');
@@ -284,13 +287,24 @@ export default function LeadsPage() {
                   disabled={creating}
                 />
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="description">Description</Label>
+                <Textarea
+                  id="description"
+                  value={newLead.description}
+                  onChange={(e) => setNewLead({ ...newLead, description: e.target.value })}
+                  placeholder="Additional information about the lead..."
+                  disabled={creating}
+                  rows={4}
+                />
+              </div>
             </div>
             <DialogFooter>
               <Button
                 variant="outline"
                 onClick={() => {
                   setCreateDialogOpen(false);
-                  setNewLead({ name: '', email: '', phone: '', postcode: '' });
+                  setNewLead({ name: '', email: '', phone: '', postcode: '', description: '' });
                 }}
                 disabled={creating}
               >

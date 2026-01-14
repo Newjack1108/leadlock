@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Header
 from fastapi.security import OAuth2PasswordBearer
 from sqlmodel import Session, select
 from app.database import get_session
@@ -69,3 +69,19 @@ def require_role(allowed_roles: list[UserRole]):
             )
         return current_user
     return role_checker
+
+
+def get_webhook_api_key(api_key: str = Header(None, alias="X-API-Key")) -> str:
+    """Validate webhook API key from header."""
+    expected_key = os.getenv("WEBHOOK_API_KEY")
+    if not expected_key:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Webhook API key not configured"
+        )
+    if api_key != expected_key:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid API key"
+        )
+    return api_key

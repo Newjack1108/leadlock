@@ -1,14 +1,30 @@
 'use client';
 
 import { useRouter, usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Logo from './Logo';
 import { Button } from '@/components/ui/button';
-import { LogOut, LayoutDashboard, Users } from 'lucide-react';
+import { LogOut, LayoutDashboard, Users, Settings, Package } from 'lucide-react';
+import api from '@/lib/api';
 
 export default function Header() {
   const router = useRouter();
   const pathname = usePathname();
+  const [userRole, setUserRole] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const response = await api.get('/api/auth/me');
+        setUserRole(response.data.role);
+      } catch (error) {
+        // User not authenticated or error fetching user
+        setUserRole(null);
+      }
+    };
+    fetchUser();
+  }, []);
 
   const handleLogout = () => {
     // Clear token from localStorage
@@ -20,6 +36,8 @@ export default function Header() {
     // Force a hard reload to clear any cached state
     window.location.href = '/login';
   };
+
+  const isDirector = userRole === 'DIRECTOR';
 
   return (
     <header className="border-b border-border bg-card shadow-sm">
@@ -46,6 +64,30 @@ export default function Header() {
               Leads
             </Button>
           </Link>
+          {isDirector && (
+            <>
+              <Link href="/products">
+                <Button
+                  variant={pathname?.startsWith('/products') ? 'default' : 'ghost'}
+                  size="sm"
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <Package className="h-4 w-4 mr-2" />
+                  Products
+                </Button>
+              </Link>
+              <Link href="/settings/company">
+                <Button
+                  variant={pathname?.startsWith('/settings') ? 'default' : 'ghost'}
+                  size="sm"
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <Settings className="h-4 w-4 mr-2" />
+                  Settings
+                </Button>
+              </Link>
+            </>
+          )}
           <Button
             variant="ghost"
             size="sm"
