@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Logo from './Logo';
 import { Button } from '@/components/ui/button';
-import { LogOut, LayoutDashboard, Users, Settings, Package } from 'lucide-react';
+import { LogOut, LayoutDashboard, Users, Settings, Package, User } from 'lucide-react';
 import api from '@/lib/api';
 
 export default function Header() {
@@ -88,16 +88,26 @@ export default function Header() {
               </Link>
               <Link href="/settings/company">
                 <Button
-                  variant={pathname?.startsWith('/settings') ? 'default' : 'ghost'}
+                  variant={pathname === '/settings/company' ? 'default' : 'ghost'}
                   size="sm"
                   className="text-muted-foreground hover:text-foreground"
                 >
                   <Settings className="h-4 w-4 mr-2" />
-                  Settings
+                  Company Settings
                 </Button>
               </Link>
             </>
           )}
+          <Link href="/settings/user">
+            <Button
+              variant={pathname === '/settings/user' ? 'default' : 'ghost'}
+              size="sm"
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <User className="h-4 w-4 mr-2" />
+              My Settings
+            </Button>
+          </Link>
           <Button
             variant="ghost"
             size="sm"

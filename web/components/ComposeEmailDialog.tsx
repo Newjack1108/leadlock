@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { sendEmail, getEmailTemplates, previewEmailTemplate } from '@/lib/api';
+import { sendEmail, getEmailTemplates, previewEmailTemplate, getUserEmailSettings } from '@/lib/api';
 import { Customer, EmailTemplate } from '@/lib/types';
 import { toast } from 'sonner';
 import api from '@/lib/api';
@@ -61,12 +61,8 @@ export default function ComposeEmailDialog({
 
   const fetchUserSignature = async () => {
     try {
-      // Try to get user info - we'll add signature to user model later
-      // For now, use a default signature or empty
-      const response = await api.get('/api/auth/me');
-      // TODO: Add signature field to User model and fetch it here
-      // For now, set a default signature
-      setSignature(''); // Will be editable
+      const emailSettings = await getUserEmailSettings();
+      setSignature(emailSettings.email_signature || '');
     } catch (error) {
       // User not authenticated or error - use empty signature
       setSignature('');
@@ -155,10 +151,16 @@ export default function ComposeEmailDialog({
 
     setLoading(true);
     try {
-      // Combine body and signature
-      const bodyWithSignature = signature 
-        ? `${formData.body}\n\n${signature}`
-        : formData.body;
+      // Combine body and signature (signature is HTML, so append properly)
+      let bodyWithSignature = formData.body;
+      if (signature) {
+        // If body ends with HTML, append signature. Otherwise add line break.
+        if (formData.body.trim().endsWith('</p>') || formData.body.trim().endsWith('</div>')) {
+          bodyWithSignature = `${formData.body}\n${signature}`;
+        } else {
+          bodyWithSignature = `${formData.body}\n\n${signature}`;
+        }
+      }
 
       await sendEmail({
         customer_id: customer.id,
@@ -182,7 +184,7 @@ export default function ComposeEmailDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl w-[95vw] h-[90vh] max-h-[90vh] flex flex-col p-0">
+      <DialogContent className="max-w-full w-[98vw] h-[90vh] max-h-[90vh] flex flex-col p-0">
         <DialogHeader className="px-6 pt-6 pb-4 border-b">
           <DialogTitle className="text-xl">New Message</DialogTitle>
           <DialogDescription>
@@ -275,20 +277,24 @@ export default function ComposeEmailDialog({
               className="flex-1 min-h-[300px] resize-none font-sans text-sm"
             />
             
-            {/* Signature */}
-            <div className="mt-4 pt-4 border-t">
-              <Label htmlFor="signature" className="text-xs text-muted-foreground mb-2 block">
-                Signature (Optional)
-              </Label>
-              <Textarea
-                id="signature"
-                value={signature}
-                onChange={(e) => setSignature(e.target.value)}
-                placeholder="Your signature will be appended to the email"
-                rows={3}
-                className="font-sans text-sm"
-              />
-            </div>
+            {/* Signature Preview */}
+            {signature && (
+              <div className="mt-4 pt-4 border-t">
+                <Label className="text-xs text-muted-foreground mb-2 block">
+                  Signature (from your settings)
+                </Label>
+                <div
+                  className="p-3 bg-muted rounded-md border text-sm"
+                  dangerouslySetInnerHTML={{ __html: signature }}
+                />
+                <p className="text-xs text-muted-foreground mt-2">
+                  This signature will be automatically appended to your email. Edit it in{' '}
+                  <a href="/settings/user" className="text-primary hover:underline" target="_blank">
+                    My Settings
+                  </a>
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Footer */}

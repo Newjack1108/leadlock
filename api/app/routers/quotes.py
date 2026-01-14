@@ -250,7 +250,8 @@ async def send_quote_email_endpoint(
         template_id=email_data.template_id,
         cc=email_data.cc,
         bcc=email_data.bcc,
-        custom_message=email_data.custom_message
+        custom_message=email_data.custom_message,
+        user_id=current_user.id
     )
     
     if not success:

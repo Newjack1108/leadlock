@@ -77,6 +77,22 @@ class User(SQLModel, table=True):
     role: UserRole
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
+    # Email Settings (per-user)
+    smtp_host: Optional[str] = None
+    smtp_port: Optional[int] = None
+    smtp_user: Optional[str] = None
+    smtp_password: Optional[str] = None
+    smtp_use_tls: bool = Field(default=True)
+    smtp_from_email: Optional[str] = None
+    smtp_from_name: Optional[str] = None
+    imap_host: Optional[str] = None
+    imap_port: Optional[int] = None
+    imap_user: Optional[str] = None
+    imap_password: Optional[str] = None
+    imap_use_ssl: bool = Field(default=True)
+    email_signature: Optional[str] = None  # HTML signature with logo support
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    
     # Relationships
     assigned_leads: List["Lead"] = Relationship(back_populates="assigned_to_user")
 

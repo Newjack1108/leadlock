@@ -18,8 +18,30 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-def get_smtp_config() -> Dict:
-    """Get SMTP configuration from environment variables."""
+def get_smtp_config(user_id: Optional[int] = None) -> Dict:
+    """Get SMTP configuration from user settings or environment variables."""
+    # Try user's database settings first
+    if user_id:
+        from sqlmodel import Session, select
+        from app.database import engine
+        from app.models import User
+        
+        with Session(engine) as session:
+            statement = select(User).where(User.id == user_id)
+            user = session.exec(statement).first()
+            
+            if user and user.smtp_host:
+                return {
+                    "host": user.smtp_host,
+                    "port": user.smtp_port or 587,
+                    "user": user.smtp_user,
+                    "password": user.smtp_password,
+                    "use_tls": user.smtp_use_tls,
+                    "from_email": user.smtp_from_email or user.smtp_user or user.email,
+                    "from_name": user.smtp_from_name or user.full_name or "LeadLock CRM"
+                }
+    
+    # Fallback to environment variables
     return {
         "host": os.getenv("SMTP_HOST", "smtp.gmail.com"),
         "port": int(os.getenv("SMTP_PORT", "587")),
@@ -31,8 +53,28 @@ def get_smtp_config() -> Dict:
     }
 
 
-def get_imap_config() -> Dict:
-    """Get IMAP configuration from environment variables."""
+def get_imap_config(user_id: Optional[int] = None) -> Dict:
+    """Get IMAP configuration from user settings or environment variables."""
+    # Try user's database settings first
+    if user_id:
+        from sqlmodel import Session, select
+        from app.database import engine
+        from app.models import User
+        
+        with Session(engine) as session:
+            statement = select(User).where(User.id == user_id)
+            user = session.exec(statement).first()
+            
+            if user and user.imap_host:
+                return {
+                    "host": user.imap_host,
+                    "port": user.imap_port or 993,
+                    "user": user.imap_user,
+                    "password": user.imap_password,
+                    "use_ssl": user.imap_use_ssl
+                }
+    
+    # Fallback to environment variables
     return {
         "host": os.getenv("IMAP_HOST", "imap.gmail.com"),
         "port": int(os.getenv("IMAP_PORT", "993")),
@@ -57,7 +99,8 @@ def send_email(
     bcc: Optional[str] = None,
     attachments: Optional[List[Dict]] = None,
     in_reply_to: Optional[str] = None,
-    references: Optional[str] = None
+    references: Optional[str] = None,
+    user_id: Optional[int] = None
 ) -> Tuple[bool, Optional[str], Optional[str]]:
     """
     Send an email via SMTP.
@@ -72,11 +115,12 @@ def send_email(
         attachments: List of attachment dicts with 'filename' and 'content' (bytes)
         in_reply_to: Message-ID of email being replied to
         references: References header for threading
+        user_id: Optional user ID to use their SMTP settings
     
     Returns:
         Tuple of (success, message_id, error_message)
     """
-    config = get_smtp_config()
+    config = get_smtp_config(user_id)
     
     if not config["user"] or not config["password"]:
         return False, None, "SMTP credentials not configured"

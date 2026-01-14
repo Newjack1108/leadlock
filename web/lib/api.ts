@@ -131,3 +131,28 @@ export const previewEmailTemplate = async (templateId: number, previewData?: {
   const response = await api.post(`/api/email-templates/${templateId}/preview`, previewData || {});
   return response.data;
 };
+
+// User Email Settings API functions
+export const getUserEmailSettings = async () => {
+  const response = await api.get('/api/settings/user/email');
+  return response.data;
+};
+
+export const updateUserEmailSettings = async (settingsData: {
+  smtp_host?: string;
+  smtp_port?: number;
+  smtp_user?: string;
+  smtp_password?: string;
+  smtp_use_tls?: boolean;
+  smtp_from_email?: string;
+  smtp_from_name?: string;
+  imap_host?: string;
+  imap_port?: number;
+  imap_user?: string;
+  imap_password?: string;
+  imap_use_ssl?: boolean;
+  email_signature?: string;
+}) => {
+  const response = await api.put('/api/settings/user/email', settingsData);
+  return response.data;
+};

@@ -64,7 +64,8 @@ def send_quote_email(
     template_id: Optional[int] = None,
     cc: Optional[str] = None,
     bcc: Optional[str] = None,
-    custom_message: Optional[str] = None
+    custom_message: Optional[str] = None,
+    user_id: Optional[int] = None
 ) -> Tuple[bool, Optional[str], Optional[str], Optional[BytesIO]]:
     """
     Send a quote as an email with PDF attachment.
@@ -125,7 +126,8 @@ def send_quote_email(
             attachments=[{
                 "filename": pdf_filename,
                 "content": pdf_buffer.read()
-            }]
+            }],
+            user_id=user_id
         )
         
         if success:

@@ -64,7 +64,8 @@ async def send_email_to_customer(
         body_html=body_html,
         body_text=body_text,
         cc=email_data.cc,
-        bcc=email_data.bcc
+        bcc=email_data.bcc,
+        user_id=current_user.id
     )
     
     if not success:
@@ -248,7 +249,8 @@ async def reply_to_email(
         cc=reply_data.cc,
         bcc=reply_data.bcc,
         in_reply_to=original_email.message_id,
-        references=original_email.message_id
+        references=original_email.message_id,
+        user_id=current_user.id
     )
     
     if not success:

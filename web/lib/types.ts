@@ -62,6 +62,38 @@ export interface User {
   role: string;
 }
 
+export interface UserEmailSettings {
+  smtp_host?: string;
+  smtp_port?: number;
+  smtp_user?: string;
+  smtp_password?: string;
+  smtp_use_tls: boolean;
+  smtp_from_email?: string;
+  smtp_from_name?: string;
+  imap_host?: string;
+  imap_port?: number;
+  imap_user?: string;
+  imap_password?: string;
+  imap_use_ssl: boolean;
+  email_signature?: string;  // HTML signature
+}
+
+export interface UserEmailSettingsUpdate {
+  smtp_host?: string;
+  smtp_port?: number;
+  smtp_user?: string;
+  smtp_password?: string;
+  smtp_use_tls?: boolean;
+  smtp_from_email?: string;
+  smtp_from_name?: string;
+  imap_host?: string;
+  imap_port?: number;
+  imap_user?: string;
+  imap_password?: string;
+  imap_use_ssl?: boolean;
+  email_signature?: string;
+}
+
 export interface Customer {
   id: number;
   customer_number: string;

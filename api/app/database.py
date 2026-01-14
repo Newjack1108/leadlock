@@ -277,6 +277,45 @@ def create_db_and_tables():
                     import traceback
                     print(traceback.format_exc(), file=sys.stderr, flush=True)
         
+        # Step 6: Add email settings columns to User table
+        has_user_table = inspector.has_table("user")
+        if has_user_table:
+            user_columns = [col['name'] for col in inspector.get_columns("user")]
+            email_settings_columns = [
+                "smtp_host", "smtp_port", "smtp_user", "smtp_password", "smtp_use_tls",
+                "smtp_from_email", "smtp_from_name", "imap_host", "imap_port", "imap_user",
+                "imap_password", "imap_use_ssl", "email_signature", "updated_at"
+            ]
+            
+            columns_to_add = [col for col in email_settings_columns if col not in user_columns]
+            
+            if columns_to_add:
+                print("Adding email settings columns to user table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        for col in columns_to_add:
+                            try:
+                                if col == "smtp_port" or col == "imap_port":
+                                    conn.execute(text(f'ALTER TABLE "user" ADD COLUMN {col} INTEGER'))
+                                elif col == "smtp_use_tls" or col == "imap_use_ssl":
+                                    conn.execute(text(f'ALTER TABLE "user" ADD COLUMN {col} BOOLEAN DEFAULT TRUE'))
+                                elif col == "updated_at":
+                                    conn.execute(text(f'ALTER TABLE "user" ADD COLUMN {col} TIMESTAMP DEFAULT CURRENT_TIMESTAMP'))
+                                elif col == "email_signature":
+                                    conn.execute(text(f'ALTER TABLE "user" ADD COLUMN {col} TEXT'))
+                                else:
+                                    conn.execute(text(f'ALTER TABLE "user" ADD COLUMN {col} VARCHAR(255)'))
+                                print(f"Added {col} column to user table", file=sys.stderr, flush=True)
+                            except Exception as col_error:
+                                # Column might already exist
+                                if "already exists" not in str(col_error).lower() and "duplicate" not in str(col_error).lower():
+                                    print(f"Error adding {col}: {col_error}", file=sys.stderr, flush=True)
+                    print("Email settings columns migration completed", file=sys.stderr, flush=True)
+                except Exception as e:
+                    print(f"Error migrating user email settings columns: {e}", file=sys.stderr, flush=True)
+                    import traceback
+                    print(traceback.format_exc(), file=sys.stderr, flush=True)
+        
         print("Migration check completed", file=sys.stderr, flush=True)
     except Exception as e:
         # Log error but don't crash - migration might have already run
