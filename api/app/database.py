@@ -284,7 +284,7 @@ def create_db_and_tables():
             email_settings_columns = [
                 "smtp_host", "smtp_port", "smtp_user", "smtp_password", "smtp_use_tls",
                 "smtp_from_email", "smtp_from_name", "imap_host", "imap_port", "imap_user",
-                "imap_password", "imap_use_ssl", "email_signature", "updated_at"
+                "imap_password", "imap_use_ssl", "email_signature", "email_test_mode", "updated_at"
             ]
             
             columns_to_add = [col for col in email_settings_columns if col not in user_columns]
@@ -297,8 +297,8 @@ def create_db_and_tables():
                             try:
                                 if col == "smtp_port" or col == "imap_port":
                                     conn.execute(text(f'ALTER TABLE "user" ADD COLUMN {col} INTEGER'))
-                                elif col == "smtp_use_tls" or col == "imap_use_ssl":
-                                    conn.execute(text(f'ALTER TABLE "user" ADD COLUMN {col} BOOLEAN DEFAULT TRUE'))
+                                elif col == "smtp_use_tls" or col == "imap_use_ssl" or col == "email_test_mode":
+                                    conn.execute(text(f'ALTER TABLE "user" ADD COLUMN {col} BOOLEAN DEFAULT FALSE'))
                                 elif col == "updated_at":
                                     conn.execute(text(f'ALTER TABLE "user" ADD COLUMN {col} TIMESTAMP DEFAULT CURRENT_TIMESTAMP'))
                                 elif col == "email_signature":
