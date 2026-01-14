@@ -342,7 +342,7 @@ export default function UserSettingsPage() {
                   id="signature"
                   value={signature}
                   onChange={(e) => setSignature(e.target.value)}
-                  placeholder="<p>Best regards,<br>Your Name<br>Your Title</p><img src=\"/logo1.png\" alt=\"Company Logo\" style=\"max-height: 60px; margin: 10px 0;\" />"
+                  placeholder='Enter your HTML signature here. Use the "Insert Logo" button to add the company logo.'
                   rows={12}
                   className="font-mono text-sm"
                   disabled={saving}
