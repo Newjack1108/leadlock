@@ -40,6 +40,7 @@ class UserEmailSettingsUpdate(BaseModel):
     imap_password: Optional[str] = None
     imap_use_ssl: Optional[bool] = None
     email_signature: Optional[str] = None
+    email_test_mode: Optional[bool] = None
 
 
 class UserEmailSettingsResponse(BaseModel):
@@ -54,6 +55,7 @@ class UserEmailSettingsResponse(BaseModel):
     imap_user: Optional[str] = None
     imap_use_ssl: bool = True
     email_signature: Optional[str] = None
+    email_test_mode: bool = False
     # Note: Passwords are excluded from response for security
 
 

@@ -91,6 +91,7 @@ class User(SQLModel, table=True):
     imap_password: Optional[str] = None
     imap_use_ssl: bool = Field(default=True)
     email_signature: Optional[str] = None  # HTML signature with logo support
+    email_test_mode: bool = Field(default=False)  # When enabled, emails are saved but not sent via SMTP
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     
     # Relationships

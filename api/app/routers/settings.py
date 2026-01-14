@@ -95,7 +95,8 @@ async def get_user_email_settings(
         imap_port=current_user.imap_port,
         imap_user=current_user.imap_user,
         imap_use_ssl=current_user.imap_use_ssl,
-        email_signature=current_user.email_signature
+        email_signature=current_user.email_signature,
+        email_test_mode=getattr(current_user, 'email_test_mode', False)
     )
 
 
@@ -129,5 +130,6 @@ async def update_user_email_settings(
         imap_port=current_user.imap_port,
         imap_user=current_user.imap_user,
         imap_use_ssl=current_user.imap_use_ssl,
-        email_signature=current_user.email_signature
+        email_signature=current_user.email_signature,
+        email_test_mode=getattr(current_user, 'email_test_mode', False)
     )

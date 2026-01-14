@@ -46,7 +46,20 @@ def get_smtp_config(user_id: Optional[int] = None) -> Dict:
                             "password": smtp_password,
                             "use_tls": getattr(user, 'smtp_use_tls', True),
                             "from_email": getattr(user, 'smtp_from_email', None) or smtp_user or user.email,
-                            "from_name": getattr(user, 'smtp_from_name', None) or user.full_name or "LeadLock CRM"
+                            "from_name": getattr(user, 'smtp_from_name', None) or user.full_name or "LeadLock CRM",
+                            "test_mode": getattr(user, 'email_test_mode', False)
+                        }
+                    else:
+                        # Return test_mode even if SMTP not fully configured
+                        return {
+                            "host": os.getenv("SMTP_HOST", "smtp.gmail.com"),
+                            "port": int(os.getenv("SMTP_PORT", "587")),
+                            "user": os.getenv("SMTP_USER"),
+                            "password": os.getenv("SMTP_PASSWORD"),
+                            "use_tls": os.getenv("SMTP_USE_TLS", "true").lower() == "true",
+                            "from_email": os.getenv("SMTP_FROM_EMAIL", os.getenv("SMTP_USER")),
+                            "from_name": os.getenv("SMTP_FROM_NAME", "LeadLock CRM"),
+                            "test_mode": getattr(user, 'email_test_mode', False)
                         }
         except Exception as e:
             # Log error but fall back to env vars
@@ -61,7 +74,8 @@ def get_smtp_config(user_id: Optional[int] = None) -> Dict:
         "password": os.getenv("SMTP_PASSWORD"),
         "use_tls": os.getenv("SMTP_USE_TLS", "true").lower() == "true",
         "from_email": os.getenv("SMTP_FROM_EMAIL", os.getenv("SMTP_USER")),
-        "from_name": os.getenv("SMTP_FROM_NAME", "LeadLock CRM")
+        "from_name": os.getenv("SMTP_FROM_NAME", "LeadLock CRM"),
+        "test_mode": os.getenv("EMAIL_TEST_MODE", "false").lower() == "true"
     }
 
 
@@ -146,6 +160,30 @@ def send_email(
     """
     config = get_smtp_config(user_id)
     
+    # Generate message ID (needed for both test mode and real sending)
+    message_id = generate_message_id()
+    
+    # Check if test mode is enabled
+    test_mode = config.get("test_mode", False)
+    
+    if test_mode:
+        # Test mode: Log email details but don't send via SMTP
+        import sys
+        print(f"[EMAIL TEST MODE] Email would be sent:", file=sys.stderr, flush=True)
+        print(f"  From: {config.get('from_name', 'N/A')} <{config.get('from_email', 'N/A')}>", file=sys.stderr, flush=True)
+        print(f"  To: {to_email}", file=sys.stderr, flush=True)
+        if cc:
+            print(f"  CC: {cc}", file=sys.stderr, flush=True)
+        if bcc:
+            print(f"  BCC: {bcc}", file=sys.stderr, flush=True)
+        print(f"  Subject: {subject}", file=sys.stderr, flush=True)
+        print(f"  Message-ID: {message_id}", file=sys.stderr, flush=True)
+        if attachments:
+            print(f"  Attachments: {[a.get('filename', 'unknown') for a in attachments]}", file=sys.stderr, flush=True)
+        print(f"[EMAIL TEST MODE] Email saved to database but NOT sent via SMTP", file=sys.stderr, flush=True)
+        return True, message_id, None
+    
+    # Normal mode: Send via SMTP
     if not config["user"] or not config["password"]:
         return False, None, "SMTP credentials not configured"
     
@@ -161,8 +199,7 @@ def send_email(
         if bcc:
             msg["Bcc"] = bcc
         
-        # Generate message ID
-        message_id = generate_message_id()
+        # Set message ID
         msg["Message-ID"] = message_id
         
         if in_reply_to:
