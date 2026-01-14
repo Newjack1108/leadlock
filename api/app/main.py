@@ -34,7 +34,13 @@ app.include_router(quotes.router)
 
 @app.on_event("startup")
 def on_startup():
+    print("=" * 50)
+    print("Starting database initialization...")
+    print("=" * 50)
     create_db_and_tables()
+    print("=" * 50)
+    print("Database initialization complete")
+    print("=" * 50)
 
 
 @app.get("/")
