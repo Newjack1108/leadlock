@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import create_db_and_tables, engine
-from app.routers import auth, leads, dashboard, webhooks, products, settings, quotes
+from app.routers import auth, leads, dashboard, webhooks, products, settings, quotes, customers
 from sqlmodel import Session, select
 from app.models import User
 import os
@@ -30,6 +30,7 @@ app.include_router(webhooks.router)
 app.include_router(products.router)
 app.include_router(settings.router)
 app.include_router(quotes.router)
+app.include_router(customers.router)
 
 
 @app.on_event("startup")

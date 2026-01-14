@@ -62,6 +62,24 @@ export interface User {
   role: string;
 }
 
+export interface Customer {
+  id: number;
+  customer_number: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  company_name?: string;
+  address_line1?: string;
+  address_line2?: string;
+  city?: string;
+  county?: string;
+  postcode?: string;
+  country?: string;
+  customer_since: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Lead {
   id: number;
   name: string;
@@ -69,14 +87,6 @@ export interface Lead {
   phone?: string;
   postcode?: string;
   description?: string;
-  company_name?: string;
-  address_line1?: string;
-  address_line2?: string;
-  city?: string;
-  county?: string;
-  country?: string;
-  customer_since?: string;
-  customer_number?: string;
   status: LeadStatus;
   timeframe: Timeframe;
   scope_notes?: string;
@@ -84,6 +94,7 @@ export interface Lead {
   lead_type: LeadType;
   lead_source: LeadSource;
   assigned_to_id?: number;
+  customer_id?: number;
   created_at: string;
   updated_at: string;
   sla_badge?: string;
@@ -93,11 +104,12 @@ export interface Lead {
     missing?: string[];
     message?: string;
   };
+  customer?: Customer;
 }
 
 export interface Activity {
   id: number;
-  lead_id: number;
+  customer_id: number;
   activity_type: ActivityType;
   notes?: string;
   created_by_id: number;

@@ -1,5 +1,5 @@
 from typing import Optional
-from app.models import LeadStatus, UserRole, ActivityType, Timeframe, Lead, Activity
+from app.models import LeadStatus, UserRole, ActivityType, Timeframe, Lead, Activity, Customer
 from sqlmodel import Session, select
 from datetime import datetime, timedelta
 
@@ -44,40 +44,30 @@ def get_allowed_transitions(user_role: UserRole, current_status: LeadStatus) -> 
     return transitions.get(current_status, [])
 
 
-def check_quote_prerequisites(lead: Lead, session: Session) -> tuple[bool, Optional[dict]]:
+def check_quote_prerequisites(customer: Customer, session: Session) -> tuple[bool, Optional[dict]]:
     """
-    Check if lead can move to QUOTED status.
+    Check if customer profile is complete for quote creation.
     Returns (can_quote, error_dict)
     """
-    if lead.status != LeadStatus.QUALIFIED:
-        return False, {"error": "INVALID_STATUS", "message": "Lead must be QUALIFIED to quote"}
-    
     missing = []
     
-    # Basic lead requirements
-    if not lead.postcode:
-        missing.append("postcode")
-    
-    if lead.timeframe == Timeframe.UNKNOWN:
-        missing.append("timeframe")
-    
-    if not lead.scope_notes and not lead.product_interest:
-        missing.append("scope_notes or product_interest")
-    
     # Customer profile requirements
-    if not lead.address_line1:
+    if not customer.address_line1:
         missing.append("address_line1")
     
-    if not lead.city:
+    if not customer.city:
         missing.append("city")
     
-    if not lead.county:
+    if not customer.county:
         missing.append("county")
     
-    if not lead.email:
+    if not customer.postcode:
+        missing.append("postcode")
+    
+    if not customer.email:
         missing.append("email")
     
-    if not lead.phone:
+    if not customer.phone:
         missing.append("phone")
     
     if missing:
@@ -86,9 +76,9 @@ def check_quote_prerequisites(lead: Lead, session: Session) -> tuple[bool, Optio
             "missing": missing
         }
     
-    # Check for engagement proof
+    # Check for engagement proof (activities linked to customer)
     statement = select(Activity).where(
-        Activity.lead_id == lead.id,
+        Activity.customer_id == customer.id,
         Activity.activity_type.in_(list(ENGAGEMENT_PROOF_TYPES))
     )
     engagement_activities = session.exec(statement).all()
@@ -116,11 +106,16 @@ def can_transition(
     """
     # Director can override with reason
     if user_role == UserRole.DIRECTOR and is_override:
-        # Still check quote prerequisites if moving to QUOTED
+        # Still check quote prerequisites if moving to QUOTED (requires customer)
         if new_status == LeadStatus.QUOTED:
-            can_quote, error = check_quote_prerequisites(lead, session)
-            if not can_quote:
-                return False, error
+            if not lead.customer_id:
+                return False, {"error": "NO_CUSTOMER", "message": "Lead must have a customer profile to quote"}
+            statement = select(Customer).where(Customer.id == lead.customer_id)
+            customer = session.exec(statement).first()
+            if customer:
+                can_quote, error = check_quote_prerequisites(customer, session)
+                if not can_quote:
+                    return False, error
         return True, None
     
     # Check if transition is in allowed list
@@ -131,11 +126,16 @@ def can_transition(
             "message": f"Cannot transition from {current_status} to {new_status} with role {user_role}"
         }
     
-    # Special check for QUOTED status
+    # Special check for QUOTED status (requires customer)
     if new_status == LeadStatus.QUOTED:
-        can_quote, error = check_quote_prerequisites(lead, session)
-        if not can_quote:
-            return False, error
+        if not lead.customer_id:
+            return False, {"error": "NO_CUSTOMER", "message": "Lead must have a customer profile to quote"}
+        statement = select(Customer).where(Customer.id == lead.customer_id)
+        customer = session.exec(statement).first()
+        if customer:
+            can_quote, error = check_quote_prerequisites(customer, session)
+            if not can_quote:
+                return False, error
     
     return True, None
 
@@ -147,22 +147,26 @@ def check_sla_overdue(lead: Lead, session: Session) -> Optional[str]:
     """
     now = datetime.utcnow()
     
-    # NEW + no activity >15 mins
+    # NEW + no activity >15 mins (check customer activities if lead has customer)
     if lead.status == LeadStatus.NEW:
-        statement = select(Activity).where(Activity.lead_id == lead.id)
-        activities = session.exec(statement).all()
+        activities = []
+        if lead.customer_id:
+            statement = select(Activity).where(Activity.customer_id == lead.customer_id)
+            activities = session.exec(statement).all()
         if not activities:
             time_since_created = now - lead.created_at
             if time_since_created > timedelta(minutes=15):
                 return "red"
     
-    # CONTACT_ATTEMPTED + no engagement >48h
+    # CONTACT_ATTEMPTED + no engagement >48h (check customer activities if lead has customer)
     if lead.status == LeadStatus.CONTACT_ATTEMPTED:
-        statement = select(Activity).where(
-            Activity.lead_id == lead.id,
-            Activity.activity_type.in_(list(ENGAGEMENT_PROOF_TYPES))
-        )
-        engagement = session.exec(statement).all()
+        engagement = []
+        if lead.customer_id:
+            statement = select(Activity).where(
+                Activity.customer_id == lead.customer_id,
+                Activity.activity_type.in_(list(ENGAGEMENT_PROOF_TYPES))
+            )
+            engagement = session.exec(statement).all()
         if not engagement:
             time_since_created = now - lead.created_at
             if time_since_created > timedelta(hours=48):

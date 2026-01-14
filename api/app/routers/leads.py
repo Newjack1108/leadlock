@@ -2,13 +2,13 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlmodel import Session, select, or_
 from typing import Optional, List
 from app.database import get_session
-from app.models import Lead, User, Activity, StatusHistory, LeadStatus, ActivityType
+from app.models import Lead, User, Activity, StatusHistory, LeadStatus, ActivityType, Customer
 from app.auth import get_current_user
 from app.schemas import (
     LeadCreate, LeadUpdate, LeadResponse, StatusTransitionRequest,
-    ActivityCreate, ActivityResponse, StatusHistoryResponse
+    ActivityCreate, ActivityResponse, StatusHistoryResponse, CustomerResponse
 )
-from app.workflow import can_transition, check_quote_prerequisites, check_sla_overdue
+from app.workflow import can_transition, check_sla_overdue, check_quote_prerequisites
 from datetime import datetime
 
 router = APIRouter(prefix="/api/leads", tags=["leads"])
@@ -19,19 +19,19 @@ def generate_customer_number(session: Session) -> str:
     from datetime import date
     year = date.today().year
     
-    # Find all leads with customer numbers for this year
-    statement = select(Lead).where(Lead.customer_number.like(f"CUST-{year}-%"))
-    leads = session.exec(statement).all()
+    # Find all customers with customer numbers for this year
+    statement = select(Customer).where(Customer.customer_number.like(f"CUST-{year}-%"))
+    customers = session.exec(statement).all()
     
-    if not leads:
+    if not customers:
         return f"CUST-{year}-001"
     
     # Extract numbers and find max
     numbers = []
-    for lead in leads:
-        if lead.customer_number:
+    for customer in customers:
+        if customer.customer_number:
             try:
-                num = int(lead.customer_number.split('-')[-1])
+                num = int(customer.customer_number.split('-')[-1])
                 numbers.append(num)
             except (ValueError, IndexError):
                 continue
@@ -43,19 +43,79 @@ def generate_customer_number(session: Session) -> str:
     return f"CUST-{year}-{next_num:03d}"
 
 
+def find_or_create_customer(lead: Lead, session: Session) -> Customer:
+    """
+    Find existing customer by email or phone, or create new customer from lead.
+    Returns the Customer instance.
+    """
+    # Try to find existing customer by email
+    if lead.email:
+        statement = select(Customer).where(Customer.email == lead.email)
+        customer = session.exec(statement).first()
+        if customer:
+            return customer
+    
+    # Try to find existing customer by phone
+    if lead.phone:
+        statement = select(Customer).where(Customer.phone == lead.phone)
+        customer = session.exec(statement).first()
+        if customer:
+            return customer
+    
+    # Create new customer from lead data
+    customer = Customer(
+        customer_number=generate_customer_number(session),
+        name=lead.name,
+        email=lead.email,
+        phone=lead.phone,
+        postcode=lead.postcode,
+        customer_since=datetime.utcnow()
+    )
+    session.add(customer)
+    session.commit()
+    session.refresh(customer)
+    return customer
+
+
 def enrich_lead_response(lead: Lead, session: Session, current_user: User) -> LeadResponse:
     """Enrich lead with SLA badge and quote lock info."""
     sla_badge = check_sla_overdue(lead, session)
     
     quote_locked = False
     quote_lock_reason = None
-    if lead.status == LeadStatus.QUALIFIED:
-        can_quote, error = check_quote_prerequisites(lead, session)
-        if not can_quote:
-            quote_locked = True
-            quote_lock_reason = error
+    customer = None
+    
+    if lead.customer_id:
+        statement = select(Customer).where(Customer.id == lead.customer_id)
+        customer = session.exec(statement).first()
+        
+        if lead.status == LeadStatus.QUALIFIED and customer:
+            can_quote, error = check_quote_prerequisites(customer, session)
+            if not can_quote:
+                quote_locked = True
+                quote_lock_reason = error
     
     from app.models import LeadType, LeadSource
+    
+    customer_response = None
+    if customer:
+        customer_response = CustomerResponse(
+            id=customer.id,
+            customer_number=customer.customer_number,
+            name=customer.name,
+            email=customer.email,
+            phone=customer.phone,
+            company_name=customer.company_name,
+            address_line1=customer.address_line1,
+            address_line2=customer.address_line2,
+            city=customer.city,
+            county=customer.county,
+            postcode=customer.postcode,
+            country=customer.country,
+            customer_since=customer.customer_since,
+            created_at=customer.created_at,
+            updated_at=customer.updated_at
+        )
     
     return LeadResponse(
         id=lead.id,
@@ -64,14 +124,6 @@ def enrich_lead_response(lead: Lead, session: Session, current_user: User) -> Le
         phone=lead.phone,
         postcode=lead.postcode,
         description=lead.description,
-        company_name=getattr(lead, 'company_name', None),
-        address_line1=getattr(lead, 'address_line1', None),
-        address_line2=getattr(lead, 'address_line2', None),
-        city=getattr(lead, 'city', None),
-        county=getattr(lead, 'county', None),
-        country=getattr(lead, 'country', 'United Kingdom'),
-        customer_since=getattr(lead, 'customer_since', None),
-        customer_number=getattr(lead, 'customer_number', None),
         status=lead.status,
         timeframe=lead.timeframe,
         scope_notes=lead.scope_notes,
@@ -79,11 +131,13 @@ def enrich_lead_response(lead: Lead, session: Session, current_user: User) -> Le
         lead_type=getattr(lead, 'lead_type', LeadType.UNKNOWN),
         lead_source=getattr(lead, 'lead_source', LeadSource.UNKNOWN),
         assigned_to_id=lead.assigned_to_id,
+        customer_id=lead.customer_id,
         created_at=lead.created_at,
         updated_at=lead.updated_at,
         sla_badge=sla_badge,
         quote_locked=quote_locked,
         quote_lock_reason=quote_lock_reason,
+        customer=customer_response
     )
 
 
@@ -241,9 +295,10 @@ async def transition_lead_status(
     lead.status = transition.new_status
     lead.updated_at = datetime.utcnow()
     
-    # Auto-generate customer number when transitioning to QUALIFIED
-    if transition.new_status == LeadStatus.QUALIFIED and not lead.customer_number:
-        lead.customer_number = generate_customer_number(session)
+    # Create or link customer when transitioning to QUALIFIED
+    if transition.new_status == LeadStatus.QUALIFIED and not lead.customer_id:
+        customer = find_or_create_customer(lead, session)
+        lead.customer_id = customer.id
     
     session.add(lead)
     
@@ -299,8 +354,26 @@ async def create_activity(
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
     
+    # Get or create customer for activity
+    customer_id = lead.customer_id
+    if not customer_id:
+        # Create customer if lead is qualified, otherwise create temporary customer
+        if lead.status == LeadStatus.QUALIFIED:
+            customer = find_or_create_customer(lead, session)
+            lead.customer_id = customer.id
+            customer_id = customer.id
+            session.add(lead)
+            session.commit()
+        else:
+            # For non-qualified leads, create a temporary customer for activity tracking
+            customer = find_or_create_customer(lead, session)
+            lead.customer_id = customer.id
+            customer_id = customer.id
+            session.add(lead)
+            session.commit()
+    
     activity = Activity(
-        lead_id=lead_id,
+        customer_id=customer_id,
         activity_type=activity_data.activity_type,
         notes=activity_data.notes,
         created_by_id=current_user.id
@@ -337,7 +410,7 @@ async def create_activity(
     
     return ActivityResponse(
         id=activity.id,
-        lead_id=activity.lead_id,
+        customer_id=activity.customer_id,
         activity_type=activity.activity_type,
         notes=activity.notes,
         created_by_id=activity.created_by_id,
@@ -352,8 +425,17 @@ async def get_lead_activities(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
+    statement = select(Lead).where(Lead.id == lead_id)
+    lead = session.exec(statement).first()
+    
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    if not lead.customer_id:
+        return []
+    
     statement = select(Activity, User).join(User, Activity.created_by_id == User.id).where(
-        Activity.lead_id == lead_id
+        Activity.customer_id == lead.customer_id
     ).order_by(Activity.created_at.desc())
     
     results = session.exec(statement).all()
@@ -361,7 +443,7 @@ async def get_lead_activities(
     for activity, user in results:
         activities.append(ActivityResponse(
             id=activity.id,
-            lead_id=activity.lead_id,
+            customer_id=activity.customer_id,
             activity_type=activity.activity_type,
             notes=activity.notes,
             created_by_id=activity.created_by_id,
@@ -397,3 +479,44 @@ async def get_status_history(
         ))
     
     return history
+
+
+@router.get("/{lead_id}/customer", response_model=CustomerResponse)
+async def get_lead_customer(
+    lead_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    """Get the customer associated with a lead."""
+    statement = select(Lead).where(Lead.id == lead_id)
+    lead = session.exec(statement).first()
+    
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    if not lead.customer_id:
+        raise HTTPException(status_code=404, detail="Lead has no associated customer")
+    
+    statement = select(Customer).where(Customer.id == lead.customer_id)
+    customer = session.exec(statement).first()
+    
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    
+    return CustomerResponse(
+        id=customer.id,
+        customer_number=customer.customer_number,
+        name=customer.name,
+        email=customer.email,
+        phone=customer.phone,
+        company_name=customer.company_name,
+        address_line1=customer.address_line1,
+        address_line2=customer.address_line2,
+        city=customer.city,
+        county=customer.county,
+        postcode=customer.postcode,
+        country=customer.country,
+        customer_since=customer.customer_since,
+        created_at=customer.created_at,
+        updated_at=customer.updated_at
+    )

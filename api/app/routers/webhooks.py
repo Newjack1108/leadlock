@@ -4,7 +4,7 @@ from app.database import get_session
 from app.models import Lead, User, StatusHistory, LeadStatus, LeadType, LeadSource
 from app.schemas import LeadCreate, LeadResponse
 from app.auth import get_webhook_api_key
-from app.workflow import check_sla_overdue, check_quote_prerequisites
+from app.workflow import check_sla_overdue
 from app.routers.leads import enrich_lead_response
 import os
 
@@ -72,15 +72,47 @@ async def create_lead_webhook(
         return enrich_lead_response(lead, session, current_user)
     else:
         # Return basic response without enrichment if no user assigned
-        # Still check SLA and quote lock status
+        # Still check SLA
         sla_badge = check_sla_overdue(lead, session)
         quote_locked = False
         quote_lock_reason = None
-        if lead.status == LeadStatus.QUALIFIED:
-            can_quote, error = check_quote_prerequisites(lead, session)
-            if not can_quote:
-                quote_locked = True
-                quote_lock_reason = error
+        
+        # Check quote prerequisites if lead has customer
+        if lead.status == LeadStatus.QUALIFIED and lead.customer_id:
+            from app.models import Customer
+            from app.workflow import check_quote_prerequisites
+            statement = select(Customer).where(Customer.id == lead.customer_id)
+            customer = session.exec(statement).first()
+            if customer:
+                can_quote, error = check_quote_prerequisites(customer, session)
+                if not can_quote:
+                    quote_locked = True
+                    quote_lock_reason = error
+        
+        from app.schemas import CustomerResponse
+        customer_response = None
+        if lead.customer_id:
+            from app.models import Customer
+            statement = select(Customer).where(Customer.id == lead.customer_id)
+            customer = session.exec(statement).first()
+            if customer:
+                customer_response = CustomerResponse(
+                    id=customer.id,
+                    customer_number=customer.customer_number,
+                    name=customer.name,
+                    email=customer.email,
+                    phone=customer.phone,
+                    company_name=customer.company_name,
+                    address_line1=customer.address_line1,
+                    address_line2=customer.address_line2,
+                    city=customer.city,
+                    county=customer.county,
+                    postcode=customer.postcode,
+                    country=customer.country,
+                    customer_since=customer.customer_since,
+                    created_at=customer.created_at,
+                    updated_at=customer.updated_at
+                )
         
         return LeadResponse(
             id=lead.id,
@@ -96,9 +128,11 @@ async def create_lead_webhook(
             lead_type=getattr(lead, 'lead_type', LeadType.UNKNOWN),
             lead_source=getattr(lead, 'lead_source', LeadSource.UNKNOWN),
             assigned_to_id=lead.assigned_to_id,
+            customer_id=lead.customer_id,
             created_at=lead.created_at,
             updated_at=lead.updated_at,
             sla_badge=sla_badge,
             quote_locked=quote_locked,
             quote_lock_reason=quote_lock_reason,
+            customer=customer_response
         )

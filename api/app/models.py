@@ -81,6 +81,29 @@ class User(SQLModel, table=True):
     assigned_leads: List["Lead"] = Relationship(back_populates="assigned_to_user")
 
 
+class Customer(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    customer_number: str = Field(unique=True, index=True)  # Auto-generated unique identifier
+    name: str
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    company_name: Optional[str] = None  # For B2B customers
+    address_line1: Optional[str] = None
+    address_line2: Optional[str] = None
+    city: Optional[str] = None
+    county: Optional[str] = None
+    postcode: Optional[str] = None
+    country: Optional[str] = Field(default="United Kingdom")
+    customer_since: datetime = Field(default_factory=datetime.utcnow)  # When first qualified
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    
+    # Relationships
+    leads: List["Lead"] = Relationship(back_populates="customer")
+    quotes: List["Quote"] = Relationship(back_populates="customer")
+    activities: List["Activity"] = Relationship(back_populates="customer")
+
+
 class Lead(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str
@@ -88,16 +111,7 @@ class Lead(SQLModel, table=True):
     phone: Optional[str] = None
     postcode: Optional[str] = None
     description: Optional[str] = None
-    # Customer fields
-    company_name: Optional[str] = None  # For B2B customers
-    address_line1: Optional[str] = None
-    address_line2: Optional[str] = None
-    city: Optional[str] = None
-    county: Optional[str] = None
-    country: Optional[str] = Field(default="United Kingdom")
-    customer_since: Optional[datetime] = None  # Set when status becomes WON
-    customer_number: Optional[str] = None  # Auto-generated unique identifier
-    # Lead fields
+    # Lead-specific fields
     status: LeadStatus = Field(default=LeadStatus.NEW)
     timeframe: Timeframe = Field(default=Timeframe.UNKNOWN)
     scope_notes: Optional[str] = None
@@ -105,26 +119,26 @@ class Lead(SQLModel, table=True):
     lead_type: LeadType = Field(default=LeadType.UNKNOWN)
     lead_source: LeadSource = Field(default=LeadSource.UNKNOWN)
     assigned_to_id: Optional[int] = Field(default=None, foreign_key="user.id")
+    customer_id: Optional[int] = Field(default=None, foreign_key="customer.id")  # Link to Customer when qualified
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     
     # Relationships
     assigned_to_user: Optional[User] = Relationship(back_populates="assigned_leads")
-    activities: List["Activity"] = Relationship(back_populates="lead")
+    customer: Optional["Customer"] = Relationship(back_populates="leads")
     status_history: List["StatusHistory"] = Relationship(back_populates="lead")
-    quotes: List["Quote"] = Relationship(back_populates="lead")
 
 
 class Activity(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    lead_id: int = Field(foreign_key="lead.id")
+    customer_id: int = Field(foreign_key="customer.id")
     activity_type: ActivityType
     notes: Optional[str] = None
     created_by_id: int = Field(foreign_key="user.id")
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
     # Relationships
-    lead: Lead = Relationship(back_populates="activities")
+    customer: "Customer" = Relationship(back_populates="activities")
     created_by: "User" = Relationship()
 
 
@@ -205,7 +219,7 @@ class DiscountScope(str, Enum):
 
 class Quote(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    lead_id: int = Field(foreign_key="lead.id")
+    customer_id: int = Field(foreign_key="customer.id")
     quote_number: str = Field(unique=True, index=True)  # e.g., "QT-2024-001"
     version: int = Field(default=1)  # For quote revisions
     status: QuoteStatus = Field(default=QuoteStatus.DRAFT)
@@ -224,7 +238,7 @@ class Quote(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     
     # Relationships
-    lead: Lead = Relationship(back_populates="quotes")
+    customer: "Customer" = Relationship(back_populates="quotes")
     items: List["QuoteItem"] = Relationship(back_populates="quote")
     discounts: List["QuoteDiscount"] = Relationship(back_populates="quote")
     created_by: User = Relationship()

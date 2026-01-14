@@ -3,29 +3,29 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { CheckCircle2, XCircle, Lock, Unlock } from 'lucide-react';
-import { Lead, Timeframe } from '@/lib/types';
+import { Customer } from '@/lib/types';
 
 interface QuoteLockCardProps {
-  lead: Lead;
+  customer: Customer;
+  quoteLocked?: boolean;
+  quoteLockReason?: {
+    error: string;
+    missing?: string[];
+    message?: string;
+  };
 }
 
-export default function QuoteLockCard({ lead }: QuoteLockCardProps) {
-  const isLocked = lead.quote_locked;
-  const reason = lead.quote_lock_reason;
-
-  if (lead.status !== 'QUALIFIED') {
-    return null;
-  }
+export default function QuoteLockCard({ customer, quoteLocked = false, quoteLockReason }: QuoteLockCardProps) {
+  const isLocked = quoteLocked;
+  const reason = quoteLockReason;
 
   const missingItems = reason?.missing || [];
-  const hasPostcode = !!lead.postcode;
-  const hasTimeframe = lead.timeframe !== Timeframe.UNKNOWN;
-  const hasScopeOrInterest = !!(lead.scope_notes || lead.product_interest);
-  const hasAddressLine1 = !!lead.address_line1;
-  const hasCity = !!lead.city;
-  const hasCounty = !!lead.county;
-  const hasEmail = !!lead.email;
-  const hasPhone = !!lead.phone;
+  const hasAddressLine1 = !!customer.address_line1;
+  const hasCity = !!customer.city;
+  const hasCounty = !!customer.county;
+  const hasPostcode = !!customer.postcode;
+  const hasEmail = !!customer.email;
+  const hasPhone = !!customer.phone;
 
   return (
     <Card className={`${isLocked ? 'border-destructive/50' : 'border-success/50'}`}>
@@ -52,39 +52,6 @@ export default function QuoteLockCard({ lead }: QuoteLockCardProps) {
             </p>
             <div className="space-y-2">
               <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                Lead Information
-              </div>
-              <div className="flex items-center gap-2">
-                {hasPostcode ? (
-                  <CheckCircle2 className="h-4 w-4 text-success" />
-                ) : (
-                  <XCircle className="h-4 w-4 text-muted-foreground" />
-                )}
-                <span className={hasPostcode ? 'text-foreground' : 'text-muted-foreground'}>
-                  Postcode
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                {hasTimeframe ? (
-                  <CheckCircle2 className="h-4 w-4 text-success" />
-                ) : (
-                  <XCircle className="h-4 w-4 text-muted-foreground" />
-                )}
-                <span className={hasTimeframe ? 'text-foreground' : 'text-muted-foreground'}>
-                  Timeframe
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                {hasScopeOrInterest ? (
-                  <CheckCircle2 className="h-4 w-4 text-success" />
-                ) : (
-                  <XCircle className="h-4 w-4 text-muted-foreground" />
-                )}
-                <span className={hasScopeOrInterest ? 'text-foreground' : 'text-muted-foreground'}>
-                  Scope Notes or Product Interest
-                </span>
-              </div>
-              <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mt-4 mb-2">
                 Customer Profile
               </div>
               <div className="flex items-center gap-2">

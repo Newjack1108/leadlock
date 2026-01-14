@@ -25,18 +25,56 @@ class UserResponse(BaseModel):
     role: UserRole
 
 
+class CustomerCreate(BaseModel):
+    name: str
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    company_name: Optional[str] = None
+    address_line1: Optional[str] = None
+    address_line2: Optional[str] = None
+    city: Optional[str] = None
+    county: Optional[str] = None
+    postcode: Optional[str] = None
+    country: Optional[str] = "United Kingdom"
+
+
+class CustomerUpdate(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    company_name: Optional[str] = None
+    address_line1: Optional[str] = None
+    address_line2: Optional[str] = None
+    city: Optional[str] = None
+    county: Optional[str] = None
+    postcode: Optional[str] = None
+    country: Optional[str] = None
+
+
+class CustomerResponse(BaseModel):
+    id: int
+    customer_number: str
+    name: str
+    email: Optional[str]
+    phone: Optional[str]
+    company_name: Optional[str]
+    address_line1: Optional[str]
+    address_line2: Optional[str]
+    city: Optional[str]
+    county: Optional[str]
+    postcode: Optional[str]
+    country: Optional[str]
+    customer_since: datetime
+    created_at: datetime
+    updated_at: datetime
+
+
 class LeadCreate(BaseModel):
     name: str
     email: Optional[str] = None
     phone: Optional[str] = None
     postcode: Optional[str] = None
     description: Optional[str] = None
-    company_name: Optional[str] = None
-    address_line1: Optional[str] = None
-    address_line2: Optional[str] = None
-    city: Optional[str] = None
-    county: Optional[str] = None
-    country: Optional[str] = "United Kingdom"
     lead_type: Optional[LeadType] = None
     lead_source: Optional[LeadSource] = None
 
@@ -47,12 +85,6 @@ class LeadUpdate(BaseModel):
     phone: Optional[str] = None
     postcode: Optional[str] = None
     description: Optional[str] = None
-    company_name: Optional[str] = None
-    address_line1: Optional[str] = None
-    address_line2: Optional[str] = None
-    city: Optional[str] = None
-    county: Optional[str] = None
-    country: Optional[str] = None
     timeframe: Optional[Timeframe] = None
     scope_notes: Optional[str] = None
     product_interest: Optional[str] = None
@@ -68,14 +100,6 @@ class LeadResponse(BaseModel):
     phone: Optional[str]
     postcode: Optional[str]
     description: Optional[str]
-    company_name: Optional[str] = None
-    address_line1: Optional[str] = None
-    address_line2: Optional[str] = None
-    city: Optional[str] = None
-    county: Optional[str] = None
-    country: Optional[str] = "United Kingdom"
-    customer_since: Optional[datetime] = None
-    customer_number: Optional[str] = None
     status: LeadStatus
     timeframe: Timeframe
     scope_notes: Optional[str]
@@ -83,11 +107,13 @@ class LeadResponse(BaseModel):
     lead_type: LeadType
     lead_source: LeadSource
     assigned_to_id: Optional[int]
+    customer_id: Optional[int] = None
     created_at: datetime
     updated_at: datetime
     sla_badge: Optional[str] = None
     quote_locked: bool = False
     quote_lock_reason: Optional[dict] = None
+    customer: Optional[CustomerResponse] = None
 
 
 class StatusTransitionRequest(BaseModel):
@@ -102,7 +128,7 @@ class ActivityCreate(BaseModel):
 
 class ActivityResponse(BaseModel):
     id: int
-    lead_id: int
+    customer_id: int
     activity_type: ActivityType
     notes: Optional[str]
     created_by_id: int
@@ -251,7 +277,7 @@ class QuoteItemResponse(BaseModel):
 
 
 class QuoteCreate(BaseModel):
-    lead_id: int
+    customer_id: int
     quote_number: Optional[str] = None  # Auto-generated if not provided
     version: int = 1
     valid_until: Optional[datetime] = None
@@ -268,7 +294,7 @@ class QuoteUpdate(BaseModel):
 
 class QuoteResponse(BaseModel):
     id: int
-    lead_id: int
+    customer_id: int
     quote_number: str
     version: int
     status: QuoteStatus

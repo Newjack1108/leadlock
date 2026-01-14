@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 from typing import List
 from app.database import get_session
-from app.models import Quote, QuoteItem, Lead, User
+from app.models import Quote, QuoteItem, Customer, User
 from app.auth import get_current_user
 from app.schemas import QuoteCreate, QuoteUpdate, QuoteResponse, QuoteItemCreate, QuoteItemResponse
 from datetime import datetime
@@ -46,12 +46,12 @@ async def create_quote(
     current_user: User = Depends(get_current_user)
 ):
     """Create a new quote."""
-    # Verify lead exists
-    statement = select(Lead).where(Lead.id == quote_data.lead_id)
-    lead = session.exec(statement).first()
+    # Verify customer exists
+    statement = select(Customer).where(Customer.id == quote_data.customer_id)
+    customer = session.exec(statement).first()
     
-    if not lead:
-        raise HTTPException(status_code=404, detail="Lead not found")
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
     
     # Generate quote number if not provided
     quote_number = quote_data.quote_number or generate_quote_number(session)
@@ -80,7 +80,7 @@ async def create_quote(
     
     # Create quote
     quote = Quote(
-        lead_id=quote_data.lead_id,
+        customer_id=quote_data.customer_id,
         quote_number=quote_number,
         version=quote_data.version,
         subtotal=subtotal,
@@ -109,7 +109,7 @@ async def create_quote(
     
     return QuoteResponse(
         id=quote.id,
-        lead_id=quote.lead_id,
+        customer_id=quote.customer_id,
         quote_number=quote.quote_number,
         version=quote.version,
         status=quote.status,
@@ -148,7 +148,7 @@ async def get_quote(
     
     return QuoteResponse(
         id=quote.id,
-        lead_id=quote.lead_id,
+        customer_id=quote.customer_id,
         quote_number=quote.quote_number,
         version=quote.version,
         status=quote.status,
@@ -169,14 +169,14 @@ async def get_quote(
     )
 
 
-@router.get("/leads/{lead_id}", response_model=List[QuoteResponse])
-async def get_lead_quotes(
-    lead_id: int,
+@router.get("/customers/{customer_id}", response_model=List[QuoteResponse])
+async def get_customer_quotes(
+    customer_id: int,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
-    """Get all quotes for a lead."""
-    statement = select(Quote).where(Quote.lead_id == lead_id).order_by(Quote.created_at.desc())
+    """Get all quotes for a customer."""
+    statement = select(Quote).where(Quote.customer_id == customer_id).order_by(Quote.created_at.desc())
     quotes = session.exec(statement).all()
     
     result = []
@@ -186,7 +186,7 @@ async def get_lead_quotes(
         
         result.append(QuoteResponse(
             id=quote.id,
-            lead_id=quote.lead_id,
+            customer_id=quote.customer_id,
             quote_number=quote.quote_number,
             version=quote.version,
             status=quote.status,

@@ -64,6 +64,16 @@ export default function Header() {
               Leads
             </Button>
           </Link>
+          <Link href="/customers">
+            <Button
+              variant={pathname?.startsWith('/customers') ? 'default' : 'ghost'}
+              size="sm"
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <Users className="h-4 w-4 mr-2" />
+              Customers
+            </Button>
+          </Link>
           {isDirector && (
             <>
               <Link href="/products">
