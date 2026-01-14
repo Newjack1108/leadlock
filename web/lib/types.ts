@@ -29,6 +29,12 @@ export enum Timeframe {
   EXPLORING = "EXPLORING",
 }
 
+export enum ProductCategory {
+  STABLES = "STABLES",
+  SHEDS = "SHEDS",
+  CABINS = "CABINS",
+}
+
 export interface User {
   id: number;
   email: string;
