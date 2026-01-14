@@ -54,6 +54,7 @@ def check_quote_prerequisites(lead: Lead, session: Session) -> tuple[bool, Optio
     
     missing = []
     
+    # Basic lead requirements
     if not lead.postcode:
         missing.append("postcode")
     
@@ -62,6 +63,22 @@ def check_quote_prerequisites(lead: Lead, session: Session) -> tuple[bool, Optio
     
     if not lead.scope_notes and not lead.product_interest:
         missing.append("scope_notes or product_interest")
+    
+    # Customer profile requirements
+    if not lead.address_line1:
+        missing.append("address_line1")
+    
+    if not lead.city:
+        missing.append("city")
+    
+    if not lead.county:
+        missing.append("county")
+    
+    if not lead.email:
+        missing.append("email")
+    
+    if not lead.phone:
+        missing.append("phone")
     
     if missing:
         return False, {

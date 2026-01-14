@@ -69,6 +69,14 @@ export interface Lead {
   phone?: string;
   postcode?: string;
   description?: string;
+  company_name?: string;
+  address_line1?: string;
+  address_line2?: string;
+  city?: string;
+  county?: string;
+  country?: string;
+  customer_since?: string;
+  customer_number?: string;
   status: LeadStatus;
   timeframe: Timeframe;
   scope_notes?: string;

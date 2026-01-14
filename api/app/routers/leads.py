@@ -14,6 +14,35 @@ from datetime import datetime
 router = APIRouter(prefix="/api/leads", tags=["leads"])
 
 
+def generate_customer_number(session: Session) -> str:
+    """Generate a unique customer number like CUST-2024-001."""
+    from datetime import date
+    year = date.today().year
+    
+    # Find all leads with customer numbers for this year
+    statement = select(Lead).where(Lead.customer_number.like(f"CUST-{year}-%"))
+    leads = session.exec(statement).all()
+    
+    if not leads:
+        return f"CUST-{year}-001"
+    
+    # Extract numbers and find max
+    numbers = []
+    for lead in leads:
+        if lead.customer_number:
+            try:
+                num = int(lead.customer_number.split('-')[-1])
+                numbers.append(num)
+            except (ValueError, IndexError):
+                continue
+    
+    if not numbers:
+        return f"CUST-{year}-001"
+    
+    next_num = max(numbers) + 1
+    return f"CUST-{year}-{next_num:03d}"
+
+
 def enrich_lead_response(lead: Lead, session: Session, current_user: User) -> LeadResponse:
     """Enrich lead with SLA badge and quote lock info."""
     sla_badge = check_sla_overdue(lead, session)
@@ -211,6 +240,11 @@ async def transition_lead_status(
     old_status = lead.status
     lead.status = transition.new_status
     lead.updated_at = datetime.utcnow()
+    
+    # Auto-generate customer number when transitioning to QUALIFIED
+    if transition.new_status == LeadStatus.QUALIFIED and not lead.customer_number:
+        lead.customer_number = generate_customer_number(session)
+    
     session.add(lead)
     
     # Log status change

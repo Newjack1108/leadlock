@@ -333,6 +333,85 @@ export default function LeadDetailPage() {
               </CardContent>
             </Card>
 
+            {/* Customer Profile Card */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Customer Profile</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {lead.customer_number && (
+                  <div className="mb-4 p-3 bg-muted rounded-md">
+                    <div className="text-sm font-medium">Customer Number</div>
+                    <div className="text-lg font-semibold">{lead.customer_number}</div>
+                    {lead.customer_since && (
+                      <div className="text-xs text-muted-foreground mt-1">
+                        Customer since: {new Date(lead.customer_since).toLocaleDateString()}
+                      </div>
+                    )}
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="col-span-2">
+                    <Label>Company Name (Optional)</Label>
+                    <Input
+                      value={lead.company_name || ''}
+                      onChange={(e) => handleUpdateLead('company_name', e.target.value)}
+                      onBlur={(e) => handleUpdateLead('company_name', e.target.value)}
+                      placeholder="For B2B customers"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <Label>Address Line 1 <span className="text-destructive">*</span></Label>
+                    <Input
+                      value={lead.address_line1 || ''}
+                      onChange={(e) => handleUpdateLead('address_line1', e.target.value)}
+                      onBlur={(e) => handleUpdateLead('address_line1', e.target.value)}
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <Label>Address Line 2 (Optional)</Label>
+                    <Input
+                      value={lead.address_line2 || ''}
+                      onChange={(e) => handleUpdateLead('address_line2', e.target.value)}
+                      onBlur={(e) => handleUpdateLead('address_line2', e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <Label>City <span className="text-destructive">*</span></Label>
+                    <Input
+                      value={lead.city || ''}
+                      onChange={(e) => handleUpdateLead('city', e.target.value)}
+                      onBlur={(e) => handleUpdateLead('city', e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <Label>County <span className="text-destructive">*</span></Label>
+                    <Input
+                      value={lead.county || ''}
+                      onChange={(e) => handleUpdateLead('county', e.target.value)}
+                      onBlur={(e) => handleUpdateLead('county', e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <Label>Postcode <span className="text-destructive">*</span></Label>
+                    <Input
+                      value={lead.postcode || ''}
+                      onChange={(e) => handleUpdateLead('postcode', e.target.value)}
+                      onBlur={(e) => handleUpdateLead('postcode', e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <Label>Country</Label>
+                    <Input
+                      value={lead.country || 'United Kingdom'}
+                      onChange={(e) => handleUpdateLead('country', e.target.value)}
+                      onBlur={(e) => handleUpdateLead('country', e.target.value)}
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Quote Lock Card */}
             {lead.status === LeadStatus.QUALIFIED && <QuoteLockCard lead={lead} />}
 

@@ -21,6 +21,11 @@ export default function QuoteLockCard({ lead }: QuoteLockCardProps) {
   const hasPostcode = !!lead.postcode;
   const hasTimeframe = lead.timeframe !== Timeframe.UNKNOWN;
   const hasScopeOrInterest = !!(lead.scope_notes || lead.product_interest);
+  const hasAddressLine1 = !!lead.address_line1;
+  const hasCity = !!lead.city;
+  const hasCounty = !!lead.county;
+  const hasEmail = !!lead.email;
+  const hasPhone = !!lead.phone;
 
   return (
     <Card className={`${isLocked ? 'border-destructive/50' : 'border-success/50'}`}>
@@ -46,6 +51,9 @@ export default function QuoteLockCard({ lead }: QuoteLockCardProps) {
               Complete the requirements below to unlock quote sending:
             </p>
             <div className="space-y-2">
+              <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                Lead Information
+              </div>
               <div className="flex items-center gap-2">
                 {hasPostcode ? (
                   <CheckCircle2 className="h-4 w-4 text-success" />
@@ -74,6 +82,59 @@ export default function QuoteLockCard({ lead }: QuoteLockCardProps) {
                 )}
                 <span className={hasScopeOrInterest ? 'text-foreground' : 'text-muted-foreground'}>
                   Scope Notes or Product Interest
+                </span>
+              </div>
+              <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mt-4 mb-2">
+                Customer Profile
+              </div>
+              <div className="flex items-center gap-2">
+                {hasAddressLine1 ? (
+                  <CheckCircle2 className="h-4 w-4 text-success" />
+                ) : (
+                  <XCircle className="h-4 w-4 text-muted-foreground" />
+                )}
+                <span className={hasAddressLine1 ? 'text-foreground' : 'text-muted-foreground'}>
+                  Address Line 1
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                {hasCity ? (
+                  <CheckCircle2 className="h-4 w-4 text-success" />
+                ) : (
+                  <XCircle className="h-4 w-4 text-muted-foreground" />
+                )}
+                <span className={hasCity ? 'text-foreground' : 'text-muted-foreground'}>
+                  City
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                {hasCounty ? (
+                  <CheckCircle2 className="h-4 w-4 text-success" />
+                ) : (
+                  <XCircle className="h-4 w-4 text-muted-foreground" />
+                )}
+                <span className={hasCounty ? 'text-foreground' : 'text-muted-foreground'}>
+                  County
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                {hasEmail ? (
+                  <CheckCircle2 className="h-4 w-4 text-success" />
+                ) : (
+                  <XCircle className="h-4 w-4 text-muted-foreground" />
+                )}
+                <span className={hasEmail ? 'text-foreground' : 'text-muted-foreground'}>
+                  Email
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                {hasPhone ? (
+                  <CheckCircle2 className="h-4 w-4 text-success" />
+                ) : (
+                  <XCircle className="h-4 w-4 text-muted-foreground" />
+                )}
+                <span className={hasPhone ? 'text-foreground' : 'text-muted-foreground'}>
+                  Phone
                 </span>
               </div>
               {reason?.error === 'NO_ENGAGEMENT_PROOF' && (

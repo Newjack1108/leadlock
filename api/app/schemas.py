@@ -68,6 +68,14 @@ class LeadResponse(BaseModel):
     phone: Optional[str]
     postcode: Optional[str]
     description: Optional[str]
+    company_name: Optional[str] = None
+    address_line1: Optional[str] = None
+    address_line2: Optional[str] = None
+    city: Optional[str] = None
+    county: Optional[str] = None
+    country: Optional[str] = "United Kingdom"
+    customer_since: Optional[datetime] = None
+    customer_number: Optional[str] = None
     status: LeadStatus
     timeframe: Timeframe
     scope_notes: Optional[str]
