@@ -204,30 +204,39 @@ async def get_customer_activities(
     current_user: User = Depends(get_current_user)
 ):
     """Get all activities for a customer."""
-    statement = select(Customer).where(Customer.id == customer_id)
-    customer = session.exec(statement).first()
-    
-    if not customer:
-        raise HTTPException(status_code=404, detail="Customer not found")
-    
-    statement = select(Activity, User).join(User, Activity.created_by_id == User.id).where(
-        Activity.customer_id == customer_id
-    ).order_by(Activity.created_at.desc())
-    
-    results = session.exec(statement).all()
-    activities = []
-    for activity, user in results:
-        activities.append(ActivityResponse(
-            id=activity.id,
-            customer_id=activity.customer_id,
-            activity_type=activity.activity_type,
-            notes=activity.notes,
-            created_by_id=activity.created_by_id,
-            created_at=activity.created_at,
-            created_by_name=user.full_name
-        ))
-    
-    return activities
+    try:
+        statement = select(Customer).where(Customer.id == customer_id)
+        customer = session.exec(statement).first()
+        
+        if not customer:
+            raise HTTPException(status_code=404, detail="Customer not found")
+        
+        statement = select(Activity, User).join(User, Activity.created_by_id == User.id).where(
+            Activity.customer_id == customer_id
+        ).order_by(Activity.created_at.desc())
+        
+        results = session.exec(statement).all()
+        activities = []
+        for activity, user in results:
+            activities.append(ActivityResponse(
+                id=activity.id,
+                customer_id=activity.customer_id,
+                activity_type=activity.activity_type,
+                notes=activity.notes,
+                created_by_id=activity.created_by_id,
+                created_at=activity.created_at,
+                created_by_name=user.full_name
+            ))
+        
+        return activities
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        error_msg = f"Error fetching activities: {str(e)}"
+        print(error_msg, file=__import__('sys').stderr, flush=True)
+        print(traceback.format_exc(), file=__import__('sys').stderr, flush=True)
+        raise HTTPException(status_code=500, detail=error_msg)
 
 
 @router.post("/{customer_id}/activities", response_model=ActivityResponse)
@@ -238,31 +247,39 @@ async def create_customer_activity(
     current_user: User = Depends(get_current_user)
 ):
     """Create an activity for a customer."""
-    statement = select(Customer).where(Customer.id == customer_id)
-    customer = session.exec(statement).first()
-    
-    if not customer:
-        raise HTTPException(status_code=404, detail="Customer not found")
-    
-    activity = Activity(
-        customer_id=customer_id,
-        activity_type=activity_data.activity_type,
-        notes=activity_data.notes,
-        created_by_id=current_user.id
-    )
-    session.add(activity)
-    session.commit()
-    session.refresh(activity)
-    
-    return ActivityResponse(
-        id=activity.id,
-        customer_id=activity.customer_id,
-        activity_type=activity.activity_type,
-        notes=activity.notes,
-        created_by_id=activity.created_by_id,
-        created_at=activity.created_at,
-        created_by_name=current_user.full_name
-    )
+    try:
+        statement = select(Customer).where(Customer.id == customer_id)
+        customer = session.exec(statement).first()
+        
+        if not customer:
+            raise HTTPException(status_code=404, detail="Customer not found")
+        
+        activity = Activity(
+            customer_id=customer_id,
+            activity_type=activity_data.activity_type,
+            notes=activity_data.notes,
+            created_by_id=current_user.id
+        )
+        session.add(activity)
+        session.commit()
+        session.refresh(activity)
+        
+        return ActivityResponse(
+            id=activity.id,
+            customer_id=activity.customer_id,
+            activity_type=activity.activity_type,
+            notes=activity.notes,
+            created_by_id=activity.created_by_id,
+            created_at=activity.created_at,
+            created_by_name=current_user.full_name
+        )
+    except Exception as e:
+        import traceback
+        error_msg = f"Error creating activity: {str(e)}"
+        print(error_msg, file=__import__('sys').stderr, flush=True)
+        print(traceback.format_exc(), file=__import__('sys').stderr, flush=True)
+        session.rollback()
+        raise HTTPException(status_code=500, detail=error_msg)
 
 
 @router.get("/{customer_id}/leads")

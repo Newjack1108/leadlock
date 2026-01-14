@@ -199,21 +199,33 @@ def create_db_and_tables():
             
             if has_lead_id and not has_customer_id:
                 print("Migrating Activity table from lead_id to customer_id...", file=sys.stderr, flush=True)
-                with engine.begin() as conn:
-                    # Add customer_id column (nullable first)
-                    conn.execute(text("ALTER TABLE activity ADD COLUMN customer_id INTEGER"))
-                    # Migrate data: for each activity, get customer_id from lead
-                    conn.execute(text("""
-                        UPDATE activity 
-                        SET customer_id = (
-                            SELECT lead.customer_id
-                            FROM lead 
-                            WHERE lead.id = activity.lead_id
-                        )
-                        WHERE activity.lead_id IS NOT NULL
-                        AND EXISTS (SELECT 1 FROM lead WHERE lead.id = activity.lead_id AND lead.customer_id IS NOT NULL)
-                    """))
+                try:
+                    with engine.begin() as conn:
+                        # Add customer_id column (nullable first) - use IF NOT EXISTS equivalent
+                        try:
+                            conn.execute(text("ALTER TABLE activity ADD COLUMN customer_id INTEGER"))
+                        except Exception as col_error:
+                            # Column might already exist from SQLModel.create_all()
+                            if "already exists" not in str(col_error).lower() and "duplicate" not in str(col_error).lower():
+                                raise
+                            print("customer_id column already exists in activity table", file=sys.stderr, flush=True)
+                        
+                        # Migrate data: for each activity, get customer_id from lead
+                        conn.execute(text("""
+                            UPDATE activity 
+                            SET customer_id = (
+                                SELECT lead.customer_id
+                                FROM lead 
+                                WHERE lead.id = activity.lead_id
+                            )
+                            WHERE activity.lead_id IS NOT NULL
+                            AND EXISTS (SELECT 1 FROM lead WHERE lead.id = activity.lead_id AND lead.customer_id IS NOT NULL)
+                        """))
                     print("Migrated Activity table", file=sys.stderr, flush=True)
+                except Exception as e:
+                    print(f"Error migrating Activity table: {e}", file=sys.stderr, flush=True)
+                    import traceback
+                    print(traceback.format_exc(), file=sys.stderr, flush=True)
         
         # Step 5: Migrate Quote table: lead_id -> customer_id
         if has_quote_table:
@@ -223,21 +235,33 @@ def create_db_and_tables():
             
             if has_lead_id and not has_customer_id:
                 print("Migrating Quote table from lead_id to customer_id...", file=sys.stderr, flush=True)
-                with engine.begin() as conn:
-                    # Add customer_id column (nullable first)
-                    conn.execute(text("ALTER TABLE quote ADD COLUMN customer_id INTEGER"))
-                    # Migrate data: for each quote, get customer_id from lead
-                    conn.execute(text("""
-                        UPDATE quote 
-                        SET customer_id = (
-                            SELECT lead.customer_id
-                            FROM lead 
-                            WHERE lead.id = quote.lead_id
-                        )
-                        WHERE quote.lead_id IS NOT NULL
-                        AND EXISTS (SELECT 1 FROM lead WHERE lead.id = quote.lead_id AND lead.customer_id IS NOT NULL)
-                    """))
+                try:
+                    with engine.begin() as conn:
+                        # Add customer_id column (nullable first) - use IF NOT EXISTS equivalent
+                        try:
+                            conn.execute(text("ALTER TABLE quote ADD COLUMN customer_id INTEGER"))
+                        except Exception as col_error:
+                            # Column might already exist from SQLModel.create_all()
+                            if "already exists" not in str(col_error).lower() and "duplicate" not in str(col_error).lower():
+                                raise
+                            print("customer_id column already exists in quote table", file=sys.stderr, flush=True)
+                        
+                        # Migrate data: for each quote, get customer_id from lead
+                        conn.execute(text("""
+                            UPDATE quote 
+                            SET customer_id = (
+                                SELECT lead.customer_id
+                                FROM lead 
+                                WHERE lead.id = quote.lead_id
+                            )
+                            WHERE quote.lead_id IS NOT NULL
+                            AND EXISTS (SELECT 1 FROM lead WHERE lead.id = quote.lead_id AND lead.customer_id IS NOT NULL)
+                        """))
                     print("Migrated Quote table", file=sys.stderr, flush=True)
+                except Exception as e:
+                    print(f"Error migrating Quote table: {e}", file=sys.stderr, flush=True)
+                    import traceback
+                    print(traceback.format_exc(), file=sys.stderr, flush=True)
         
         print("Migration check completed", file=sys.stderr, flush=True)
     except Exception as e:
