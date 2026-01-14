@@ -41,7 +41,9 @@ def create_db_and_tables():
                     conn.execute(text("ALTER TABLE lead ADD COLUMN customer_number VARCHAR"))
     except Exception as e:
         # Log error but don't crash - migration might have already run
+        import traceback
         print(f"Migration warning: {e}")
+        print(traceback.format_exc())
 
 
 def get_session() -> Generator[Session, None, None]:
