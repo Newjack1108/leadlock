@@ -28,6 +28,10 @@ def create_db_and_tables():
             print(f"Existing lead table columns: {columns}", file=sys.stderr, flush=True)
             
             columns_to_add = []
+            # Add description column if missing (was added earlier)
+            if "description" not in columns:
+                columns_to_add.append("description VARCHAR")
+            # Add new customer fields
             if "company_name" not in columns:
                 columns_to_add.append("company_name VARCHAR")
             if "address_line1" not in columns:
