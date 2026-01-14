@@ -56,6 +56,11 @@ export default function ComposeEmailDialog({
         body: '',
       });
       setSelectedTemplateId(undefined);
+      setLoading(false); // Reset loading state when dialog opens
+    } else {
+      // Reset all state when dialog closes
+      setLoading(false);
+      setSelectedTemplateId(undefined);
     }
   }, [open, customer]);
 
@@ -162,7 +167,8 @@ export default function ComposeEmailDialog({
         }
       }
 
-      await sendEmail({
+      // Send email with timeout protection (30 seconds)
+      const emailPromise = sendEmail({
         customer_id: customer.id,
         to_email: formData.to_email,
         cc: formData.cc || undefined,
@@ -172,12 +178,31 @@ export default function ComposeEmailDialog({
         template_id: selectedTemplateId,
       });
 
+      // Wrap with timeout
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Request timeout - please try again')), 30000);
+      });
+
+      await Promise.race([emailPromise, timeoutPromise]);
+
       toast.success('Email sent successfully');
+      // Reset loading before closing
+      setLoading(false);
       onOpenChange(false);
-      onSuccess?.();
+      // Call onSuccess after a short delay to ensure dialog is closed
+      setTimeout(() => {
+        try {
+          onSuccess?.();
+        } catch (error) {
+          console.error('Error in onSuccess callback:', error);
+        }
+      }, 100);
     } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Failed to send email');
+      const errorMessage = error.response?.data?.detail || error.message || 'Failed to send email';
+      toast.error(errorMessage);
+      console.error('Email send error:', error);
     } finally {
+      // Always reset loading state, even if there's an error
       setLoading(false);
     }
   };
@@ -307,8 +332,10 @@ export default function ComposeEmailDialog({
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => onOpenChange(false)}
-                  disabled={loading}
+                  onClick={() => {
+                    setLoading(false); // Reset loading state when canceling
+                    onOpenChange(false);
+                  }}
                 >
                   Cancel
                 </Button>
