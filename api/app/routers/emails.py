@@ -7,10 +7,11 @@ from typing import List, Optional
 from datetime import datetime
 import uuid
 from app.database import get_session
-from app.models import Email, Customer, User, EmailDirection, Activity, ActivityType
+from app.models import Email, Customer, User, EmailDirection, Activity, ActivityType, EmailTemplate
 from app.auth import get_current_user
 from app.schemas import EmailCreate, EmailResponse, EmailReplyRequest
 from app.email_service import send_email, receive_emails
+from app.email_template_service import render_email_template
 
 router = APIRouter(prefix="/api/emails", tags=["emails"])
 
@@ -37,12 +38,31 @@ async def send_email_to_customer(
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
     
+    # If template_id is provided, render the template
+    subject = email_data.subject
+    body_html = email_data.body_html
+    body_text = email_data.body_text
+    
+    if email_data.template_id:
+        statement = select(EmailTemplate).where(EmailTemplate.id == email_data.template_id)
+        template = session.exec(statement).first()
+        
+        if template:
+            rendered_subject, rendered_body_html = render_email_template(template, customer)
+            # Use rendered content if subject/body not explicitly provided
+            if not subject:
+                subject = rendered_subject
+            if not body_html:
+                body_html = rendered_body_html
+            if not body_text:
+                body_text = rendered_body_html  # Use HTML as fallback for plain text
+    
     # Send email via SMTP
     success, message_id, error = send_email(
         to_email=email_data.to_email,
-        subject=email_data.subject,
-        body_html=email_data.body_html,
-        body_text=email_data.body_text,
+        subject=subject,
+        body_html=body_html,
+        body_text=body_text,
         cc=email_data.cc,
         bcc=email_data.bcc
     )
@@ -59,9 +79,9 @@ async def send_email_to_customer(
         to_email=email_data.to_email,
         cc=email_data.cc,
         bcc=email_data.bcc,
-        subject=email_data.subject,
-        body_html=email_data.body_html,
-        body_text=email_data.body_text,
+        subject=subject,
+        body_html=body_html,
+        body_text=body_text,
         sent_at=datetime.utcnow(),
         created_by_id=current_user.id,
         thread_id=generate_thread_id(message_id, None)
@@ -74,7 +94,7 @@ async def send_email_to_customer(
     activity = Activity(
         customer_id=email_data.customer_id,
         activity_type=ActivityType.EMAIL_SENT,
-        notes=f"Email sent to {email_data.to_email}: {email_data.subject}",
+        notes=f"Email sent to {email_data.to_email}: {subject}",
         created_by_id=current_user.id
     )
     session.add(activity)

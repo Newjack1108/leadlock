@@ -11,6 +11,7 @@ import { getCustomerEmails, sendEmail } from '@/lib/api';
 import { Email, EmailDirection, Customer } from '@/lib/types';
 import { toast } from 'sonner';
 import api from '@/lib/api';
+import ComposeEmailDialog from '@/components/ComposeEmailDialog';
 
 export default function CustomerEmailsPage() {
   const router = useRouter();
@@ -21,6 +22,7 @@ export default function CustomerEmailsPage() {
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedThread, setSelectedThread] = useState<string | null>(null);
+  const [composeEmailDialogOpen, setComposeEmailDialogOpen] = useState(false);
 
   useEffect(() => {
     if (customerId) {
@@ -96,14 +98,24 @@ export default function CustomerEmailsPage() {
       <Header />
       <main className="container mx-auto px-6 py-8">
         <div className="mb-6">
-          <Button
-            variant="ghost"
-            onClick={() => router.push(`/customers/${customerId}`)}
-            className="mb-4"
-          >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Customer
-          </Button>
+          <div className="flex items-center justify-between mb-4">
+            <Button
+              variant="ghost"
+              onClick={() => router.push(`/customers/${customerId}`)}
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Customer
+            </Button>
+            {customer && (
+              <Button
+                variant="default"
+                onClick={() => setComposeEmailDialogOpen(true)}
+              >
+                <Send className="h-4 w-4 mr-2" />
+                Compose Email
+              </Button>
+            )}
+          </div>
           <h1 className="text-3xl font-bold">
             {customer?.name ? `Emails - ${customer.name}` : 'Emails'}
           </h1>
@@ -228,6 +240,17 @@ export default function CustomerEmailsPage() {
           </div>
         </div>
       </main>
+
+      {customer && (
+        <ComposeEmailDialog
+          open={composeEmailDialogOpen}
+          onOpenChange={setComposeEmailDialogOpen}
+          customer={customer}
+          onSuccess={() => {
+            fetchEmails();
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -75,6 +75,7 @@ class EmailCreate(BaseModel):
     subject: str
     body_html: Optional[str] = None
     body_text: Optional[str] = None
+    template_id: Optional[int] = None  # EmailTemplate ID, None to use provided subject/body
 
 
 class EmailResponse(BaseModel):
@@ -104,6 +105,44 @@ class EmailReplyRequest(BaseModel):
     body_text: Optional[str] = None
     cc: Optional[str] = None
     bcc: Optional[str] = None
+
+
+class EmailTemplateCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    subject_template: str
+    body_template: str
+    is_default: Optional[bool] = False
+
+
+class EmailTemplateUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    subject_template: Optional[str] = None
+    body_template: Optional[str] = None
+    is_default: Optional[bool] = None
+
+
+class EmailTemplateResponse(BaseModel):
+    id: int
+    name: str
+    description: Optional[str]
+    subject_template: str
+    body_template: str
+    is_default: bool
+    created_by_id: int
+    created_at: datetime
+    updated_at: datetime
+    created_by_name: Optional[str] = None
+
+
+class EmailTemplatePreviewRequest(BaseModel):
+    customer_id: Optional[int] = None  # If provided, use real customer data, otherwise use sample
+
+
+class EmailTemplatePreviewResponse(BaseModel):
+    subject: str
+    body_html: str
 
 
 class QuoteEmailSendRequest(BaseModel):

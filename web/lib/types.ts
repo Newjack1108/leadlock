@@ -231,3 +231,41 @@ export interface QuoteEmailSendResponse {
   quote_email_id: number;
   message: string;
 }
+
+export interface EmailTemplate {
+  id: number;
+  name: string;
+  description?: string;
+  subject_template: string;
+  body_template: string;
+  is_default: boolean;
+  created_by_id: number;
+  created_at: string;
+  updated_at: string;
+  created_by_name?: string;
+}
+
+export interface EmailTemplateCreate {
+  name: string;
+  description?: string;
+  subject_template: string;
+  body_template: string;
+  is_default?: boolean;
+}
+
+export interface EmailTemplateUpdate {
+  name?: string;
+  description?: string;
+  subject_template?: string;
+  body_template?: string;
+  is_default?: boolean;
+}
+
+export interface EmailTemplatePreviewRequest {
+  customer_id?: number;
+}
+
+export interface EmailTemplatePreviewResponse {
+  subject: string;
+  body_html: string;
+}

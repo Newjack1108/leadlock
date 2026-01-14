@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import create_db_and_tables, engine
 from sqlmodel import Session
-from app.routers import auth, leads, dashboard, webhooks, products, settings, quotes, customers, emails
+from app.routers import auth, leads, dashboard, webhooks, products, settings, quotes, customers, emails, email_templates
 from sqlmodel import Session, select
 from app.models import User
 import os
@@ -33,6 +33,7 @@ app.include_router(settings.router)
 app.include_router(quotes.router)
 app.include_router(customers.router)
 app.include_router(emails.router)
+app.include_router(email_templates.router)
 
 
 @app.on_event("startup")

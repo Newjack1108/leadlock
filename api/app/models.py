@@ -325,6 +325,21 @@ class QuoteTemplate(SQLModel, table=True):
     created_by: User = Relationship()
 
 
+class EmailTemplate(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str
+    description: Optional[str] = None
+    subject_template: str  # Jinja2 template for subject
+    body_template: str  # Jinja2 template for body (HTML)
+    is_default: bool = Field(default=False)
+    created_by_id: int = Field(foreign_key="user.id")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    
+    # Relationships
+    created_by: User = Relationship()
+
+
 class DiscountTemplate(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str  # e.g., "10% Off", "£50 New Customer Discount"

@@ -16,11 +16,13 @@ import {
   MessageSquare,
   PhoneCall,
   ArrowRight,
+  Send,
 } from 'lucide-react';
 import api from '@/lib/api';
 import { Customer, Activity, ActivityType, Lead } from '@/lib/types';
 import { toast } from 'sonner';
 import SendQuoteEmailDialog from '@/components/SendQuoteEmailDialog';
+import ComposeEmailDialog from '@/components/ComposeEmailDialog';
 
 const activityIcons: Record<ActivityType, any> = {
   SMS_SENT: MessageSquare,
@@ -60,6 +62,7 @@ export default function CustomerDetailPage() {
   const [quoteLockReason, setQuoteLockReason] = useState<any>(null);
   const [sendEmailDialogOpen, setSendEmailDialogOpen] = useState(false);
   const [selectedQuoteId, setSelectedQuoteId] = useState<number | null>(null);
+  const [composeEmailDialogOpen, setComposeEmailDialogOpen] = useState(false);
 
   useEffect(() => {
     if (customerId) {
@@ -337,7 +340,15 @@ export default function CustomerDetailPage() {
               <CardHeader>
                 <CardTitle>Emails</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-2">
+                <Button
+                  variant="default"
+                  className="w-full"
+                  onClick={() => setComposeEmailDialogOpen(true)}
+                >
+                  <Send className="h-4 w-4 mr-2" />
+                  Compose Email
+                </Button>
                 <Button
                   variant="outline"
                   className="w-full"
@@ -480,6 +491,18 @@ export default function CustomerDetailPage() {
           onSuccess={() => {
             fetchQuotes();
             fetchActivities();
+          }}
+        />
+      )}
+
+      {customer && (
+        <ComposeEmailDialog
+          open={composeEmailDialogOpen}
+          onOpenChange={setComposeEmailDialogOpen}
+          customer={customer}
+          onSuccess={() => {
+            fetchActivities();
+            checkQuotePrerequisites();
           }}
         />
       )}

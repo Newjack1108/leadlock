@@ -45,6 +45,7 @@ export const sendEmail = async (emailData: {
   subject: string;
   body_html?: string;
   body_text?: string;
+  template_id?: number;
 }) => {
   const response = await api.post('/api/emails', emailData);
   return response.data;
@@ -83,5 +84,50 @@ export const sendQuoteEmail = async (quoteId: number, emailData: {
   custom_message?: string;
 }) => {
   const response = await api.post(`/api/quotes/${quoteId}/send-email`, emailData);
+  return response.data;
+};
+
+// Email Template API functions
+export const getEmailTemplates = async () => {
+  const response = await api.get('/api/email-templates');
+  return response.data;
+};
+
+export const getEmailTemplate = async (templateId: number) => {
+  const response = await api.get(`/api/email-templates/${templateId}`);
+  return response.data;
+};
+
+export const createEmailTemplate = async (templateData: {
+  name: string;
+  description?: string;
+  subject_template: string;
+  body_template: string;
+  is_default?: boolean;
+}) => {
+  const response = await api.post('/api/email-templates', templateData);
+  return response.data;
+};
+
+export const updateEmailTemplate = async (templateId: number, templateData: {
+  name?: string;
+  description?: string;
+  subject_template?: string;
+  body_template?: string;
+  is_default?: boolean;
+}) => {
+  const response = await api.put(`/api/email-templates/${templateId}`, templateData);
+  return response.data;
+};
+
+export const deleteEmailTemplate = async (templateId: number) => {
+  const response = await api.delete(`/api/email-templates/${templateId}`);
+  return response.data;
+};
+
+export const previewEmailTemplate = async (templateId: number, previewData?: {
+  customer_id?: number;
+}) => {
+  const response = await api.post(`/api/email-templates/${templateId}/preview`, previewData || {});
   return response.data;
 };
