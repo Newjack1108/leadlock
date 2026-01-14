@@ -31,45 +31,58 @@ async def send_email_to_customer(
     current_user: User = Depends(get_current_user)
 ):
     """Send an email to a customer."""
-    # Verify customer exists
-    statement = select(Customer).where(Customer.id == email_data.customer_id)
-    customer = session.exec(statement).first()
+    import traceback
+    import sys
     
-    if not customer:
-        raise HTTPException(status_code=404, detail="Customer not found")
-    
-    # If template_id is provided, render the template
-    subject = email_data.subject
-    body_html = email_data.body_html
-    body_text = email_data.body_text
-    
-    if email_data.template_id:
-        statement = select(EmailTemplate).where(EmailTemplate.id == email_data.template_id)
-        template = session.exec(statement).first()
+    try:
+        # Verify customer exists
+        statement = select(Customer).where(Customer.id == email_data.customer_id)
+        customer = session.exec(statement).first()
         
-        if template:
-            rendered_subject, rendered_body_html = render_email_template(template, customer)
-            # Use rendered content if subject/body not explicitly provided
-            if not subject:
-                subject = rendered_subject
-            if not body_html:
-                body_html = rendered_body_html
-            if not body_text:
-                body_text = rendered_body_html  # Use HTML as fallback for plain text
-    
-    # Send email via SMTP
-    success, message_id, error = send_email(
-        to_email=email_data.to_email,
-        subject=subject,
-        body_html=body_html,
-        body_text=body_text,
-        cc=email_data.cc,
-        bcc=email_data.bcc,
-        user_id=current_user.id
-    )
-    
-    if not success:
-        raise HTTPException(status_code=500, detail=f"Failed to send email: {error}")
+        if not customer:
+            raise HTTPException(status_code=404, detail="Customer not found")
+        
+        # If template_id is provided, render the template
+        subject = email_data.subject
+        body_html = email_data.body_html
+        body_text = email_data.body_text
+        
+        if email_data.template_id:
+            statement = select(EmailTemplate).where(EmailTemplate.id == email_data.template_id)
+            template = session.exec(statement).first()
+            
+            if template:
+                rendered_subject, rendered_body_html = render_email_template(template, customer)
+                # Use rendered content if subject/body not explicitly provided
+                if not subject:
+                    subject = rendered_subject
+                if not body_html:
+                    body_html = rendered_body_html
+                if not body_text:
+                    body_text = rendered_body_html  # Use HTML as fallback for plain text
+        
+        # Send email via SMTP
+        success, message_id, error = send_email(
+            to_email=email_data.to_email,
+            subject=subject,
+            body_html=body_html,
+            body_text=body_text,
+            cc=email_data.cc,
+            bcc=email_data.bcc,
+            user_id=current_user.id
+        )
+        
+        if not success:
+            error_msg = f"Failed to send email: {error}"
+            print(error_msg, file=sys.stderr, flush=True)
+            raise HTTPException(status_code=500, detail=error_msg)
+    except HTTPException:
+        raise
+    except Exception as e:
+        error_msg = f"Error sending email: {str(e)}"
+        print(error_msg, file=sys.stderr, flush=True)
+        print(traceback.format_exc(), file=sys.stderr, flush=True)
+        raise HTTPException(status_code=500, detail=error_msg)
     
     # Create email record
     email_record = Email(

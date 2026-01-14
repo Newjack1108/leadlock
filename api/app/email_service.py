@@ -22,24 +22,36 @@ def get_smtp_config(user_id: Optional[int] = None) -> Dict:
     """Get SMTP configuration from user settings or environment variables."""
     # Try user's database settings first
     if user_id:
-        from sqlmodel import Session, select
-        from app.database import engine
-        from app.models import User
-        
-        with Session(engine) as session:
-            statement = select(User).where(User.id == user_id)
-            user = session.exec(statement).first()
+        try:
+            from sqlmodel import Session, select
+            from app.database import engine
+            from app.models import User
             
-            if user and user.smtp_host:
-                return {
-                    "host": user.smtp_host,
-                    "port": user.smtp_port or 587,
-                    "user": user.smtp_user,
-                    "password": user.smtp_password,
-                    "use_tls": user.smtp_use_tls,
-                    "from_email": user.smtp_from_email or user.smtp_user or user.email,
-                    "from_name": user.smtp_from_name or user.full_name or "LeadLock CRM"
-                }
+            with Session(engine) as session:
+                statement = select(User).where(User.id == user_id)
+                user = session.exec(statement).first()
+                
+                if user:
+                    # Check if user has smtp_host configured (using getattr to handle missing attributes)
+                    smtp_host = getattr(user, 'smtp_host', None)
+                    smtp_user = getattr(user, 'smtp_user', None)
+                    smtp_password = getattr(user, 'smtp_password', None)
+                    
+                    # Only use user's config if they have host, user, and password configured
+                    if smtp_host and smtp_user and smtp_password:
+                        return {
+                            "host": smtp_host,
+                            "port": getattr(user, 'smtp_port', None) or 587,
+                            "user": smtp_user,
+                            "password": smtp_password,
+                            "use_tls": getattr(user, 'smtp_use_tls', True),
+                            "from_email": getattr(user, 'smtp_from_email', None) or smtp_user or user.email,
+                            "from_name": getattr(user, 'smtp_from_name', None) or user.full_name or "LeadLock CRM"
+                        }
+        except Exception as e:
+            # Log error but fall back to env vars
+            import sys
+            print(f"Error fetching user SMTP config: {e}", file=sys.stderr, flush=True)
     
     # Fallback to environment variables
     return {
@@ -57,22 +69,34 @@ def get_imap_config(user_id: Optional[int] = None) -> Dict:
     """Get IMAP configuration from user settings or environment variables."""
     # Try user's database settings first
     if user_id:
-        from sqlmodel import Session, select
-        from app.database import engine
-        from app.models import User
-        
-        with Session(engine) as session:
-            statement = select(User).where(User.id == user_id)
-            user = session.exec(statement).first()
+        try:
+            from sqlmodel import Session, select
+            from app.database import engine
+            from app.models import User
             
-            if user and user.imap_host:
-                return {
-                    "host": user.imap_host,
-                    "port": user.imap_port or 993,
-                    "user": user.imap_user,
-                    "password": user.imap_password,
-                    "use_ssl": user.imap_use_ssl
-                }
+            with Session(engine) as session:
+                statement = select(User).where(User.id == user_id)
+                user = session.exec(statement).first()
+                
+                if user:
+                    # Check if user has imap_host configured (using getattr to handle missing attributes)
+                    imap_host = getattr(user, 'imap_host', None)
+                    imap_user = getattr(user, 'imap_user', None)
+                    imap_password = getattr(user, 'imap_password', None)
+                    
+                    # Only use user's config if they have host, user, and password configured
+                    if imap_host and imap_user and imap_password:
+                        return {
+                            "host": imap_host,
+                            "port": getattr(user, 'imap_port', None) or 993,
+                            "user": imap_user,
+                            "password": imap_password,
+                            "use_ssl": getattr(user, 'imap_use_ssl', True)
+                        }
+        except Exception as e:
+            # Log error but fall back to env vars
+            import sys
+            print(f"Error fetching user IMAP config: {e}", file=sys.stderr, flush=True)
     
     # Fallback to environment variables
     return {
