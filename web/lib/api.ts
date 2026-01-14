@@ -35,3 +35,53 @@ api.interceptors.response.use(
 );
 
 export default api;
+
+// Email API functions
+export const sendEmail = async (emailData: {
+  customer_id: number;
+  to_email: string;
+  cc?: string;
+  bcc?: string;
+  subject: string;
+  body_html?: string;
+  body_text?: string;
+}) => {
+  const response = await api.post('/api/emails', emailData);
+  return response.data;
+};
+
+export const getCustomerEmails = async (customerId: number) => {
+  const response = await api.get(`/api/emails/customers/${customerId}`);
+  return response.data;
+};
+
+export const getEmail = async (emailId: number) => {
+  const response = await api.get(`/api/emails/${emailId}`);
+  return response.data;
+};
+
+export const replyToEmail = async (emailId: number, replyData: {
+  body_html?: string;
+  body_text?: string;
+  cc?: string;
+  bcc?: string;
+}) => {
+  const response = await api.post(`/api/emails/${emailId}/reply`, replyData);
+  return response.data;
+};
+
+export const getEmailThread = async (emailId: number) => {
+  const response = await api.get(`/api/emails/${emailId}/thread`);
+  return response.data;
+};
+
+export const sendQuoteEmail = async (quoteId: number, emailData: {
+  template_id?: number;
+  to_email: string;
+  cc?: string;
+  bcc?: string;
+  custom_message?: string;
+}) => {
+  const response = await api.post(`/api/quotes/${quoteId}/send-email`, emailData);
+  return response.data;
+};

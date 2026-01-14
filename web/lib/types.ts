@@ -173,3 +173,61 @@ export interface CompanySettings {
   logo_filename: string;
   updated_at: string;
 }
+
+export enum EmailDirection {
+  SENT = "SENT",
+  RECEIVED = "RECEIVED",
+}
+
+export interface Email {
+  id: number;
+  customer_id: number;
+  message_id?: string;
+  in_reply_to?: string;
+  thread_id?: string;
+  direction: EmailDirection;
+  from_email: string;
+  to_email: string;
+  cc?: string;
+  bcc?: string;
+  subject: string;
+  body_html?: string;
+  body_text?: string;
+  attachments?: string;
+  sent_at?: string;
+  received_at?: string;
+  created_by_id?: number;
+  created_at: string;
+  created_by_name?: string;
+}
+
+export interface EmailCreate {
+  customer_id: number;
+  to_email: string;
+  cc?: string;
+  bcc?: string;
+  subject: string;
+  body_html?: string;
+  body_text?: string;
+}
+
+export interface EmailReplyRequest {
+  body_html?: string;
+  body_text?: string;
+  cc?: string;
+  bcc?: string;
+}
+
+export interface QuoteEmailSendRequest {
+  template_id?: number;
+  to_email: string;
+  cc?: string;
+  bcc?: string;
+  custom_message?: string;
+}
+
+export interface QuoteEmailSendResponse {
+  email_id: number;
+  quote_email_id: number;
+  message: string;
+}

@@ -4,7 +4,8 @@ from datetime import datetime
 from decimal import Decimal
 from app.models import (
     LeadStatus, ActivityType, Timeframe, UserRole, ProductCategory,
-    QuoteStatus, DiscountType, DiscountScope, LeadType, LeadSource
+    QuoteStatus, DiscountType, DiscountScope, LeadType, LeadSource,
+    EmailDirection
 )
 
 
@@ -64,6 +65,59 @@ class CustomerResponse(BaseModel):
     customer_since: datetime
     created_at: datetime
     updated_at: datetime
+
+
+class EmailCreate(BaseModel):
+    customer_id: int
+    to_email: str
+    cc: Optional[str] = None
+    bcc: Optional[str] = None
+    subject: str
+    body_html: Optional[str] = None
+    body_text: Optional[str] = None
+
+
+class EmailResponse(BaseModel):
+    id: int
+    customer_id: int
+    message_id: Optional[str]
+    in_reply_to: Optional[str]
+    thread_id: Optional[str]
+    direction: EmailDirection
+    from_email: str
+    to_email: str
+    cc: Optional[str]
+    bcc: Optional[str]
+    subject: str
+    body_html: Optional[str]
+    body_text: Optional[str]
+    attachments: Optional[str]
+    sent_at: Optional[datetime]
+    received_at: Optional[datetime]
+    created_by_id: Optional[int]
+    created_at: datetime
+    created_by_name: Optional[str] = None
+
+
+class EmailReplyRequest(BaseModel):
+    body_html: Optional[str] = None
+    body_text: Optional[str] = None
+    cc: Optional[str] = None
+    bcc: Optional[str] = None
+
+
+class QuoteEmailSendRequest(BaseModel):
+    template_id: Optional[int] = None  # QuoteTemplate ID, None for default
+    to_email: str
+    cc: Optional[str] = None
+    bcc: Optional[str] = None
+    custom_message: Optional[str] = None  # Optional message appended to template
+
+
+class QuoteEmailSendResponse(BaseModel):
+    email_id: int
+    quote_email_id: int
+    message: str
 
 
 class LeadCreate(BaseModel):

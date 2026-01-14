@@ -197,31 +197,45 @@ def create_db_and_tables():
             has_lead_id = "lead_id" in activity_columns
             has_customer_id = "customer_id" in activity_columns
             
-            if has_lead_id and not has_customer_id:
+            if has_lead_id:
                 print("Migrating Activity table from lead_id to customer_id...", file=sys.stderr, flush=True)
                 try:
                     with engine.begin() as conn:
-                        # Add customer_id column (nullable first) - use IF NOT EXISTS equivalent
+                        # Make lead_id nullable first (if it's not already)
                         try:
-                            conn.execute(text("ALTER TABLE activity ADD COLUMN customer_id INTEGER"))
-                        except Exception as col_error:
-                            # Column might already exist from SQLModel.create_all()
-                            if "already exists" not in str(col_error).lower() and "duplicate" not in str(col_error).lower():
-                                raise
-                            print("customer_id column already exists in activity table", file=sys.stderr, flush=True)
+                            # Check if lead_id has NOT NULL constraint
+                            conn.execute(text("""
+                                ALTER TABLE activity ALTER COLUMN lead_id DROP NOT NULL
+                            """))
+                            print("Made lead_id nullable in activity table", file=sys.stderr, flush=True)
+                        except Exception as null_error:
+                            # Column might already be nullable or constraint doesn't exist
+                            if "does not exist" not in str(null_error).lower() and "not found" not in str(null_error).lower():
+                                print(f"Note: Could not modify lead_id constraint: {null_error}", file=sys.stderr, flush=True)
                         
-                        # Migrate data: for each activity, get customer_id from lead
-                        conn.execute(text("""
-                            UPDATE activity 
-                            SET customer_id = (
-                                SELECT lead.customer_id
-                                FROM lead 
-                                WHERE lead.id = activity.lead_id
-                            )
-                            WHERE activity.lead_id IS NOT NULL
-                            AND EXISTS (SELECT 1 FROM lead WHERE lead.id = activity.lead_id AND lead.customer_id IS NOT NULL)
-                        """))
-                    print("Migrated Activity table", file=sys.stderr, flush=True)
+                        # Add customer_id column if it doesn't exist
+                        if not has_customer_id:
+                            try:
+                                conn.execute(text("ALTER TABLE activity ADD COLUMN customer_id INTEGER"))
+                                print("Added customer_id column to activity table", file=sys.stderr, flush=True)
+                            except Exception as col_error:
+                                # Column might already exist from SQLModel.create_all()
+                                if "already exists" not in str(col_error).lower() and "duplicate" not in str(col_error).lower():
+                                    raise
+                                print("customer_id column already exists in activity table", file=sys.stderr, flush=True)
+                            
+                            # Migrate data: for each activity, get customer_id from lead
+                            conn.execute(text("""
+                                UPDATE activity 
+                                SET customer_id = (
+                                    SELECT lead.customer_id
+                                    FROM lead 
+                                    WHERE lead.id = activity.lead_id
+                                )
+                                WHERE activity.lead_id IS NOT NULL
+                                AND EXISTS (SELECT 1 FROM lead WHERE lead.id = activity.lead_id AND lead.customer_id IS NOT NULL)
+                            """))
+                            print("Migrated existing activity data to customer_id", file=sys.stderr, flush=True)
                 except Exception as e:
                     print(f"Error migrating Activity table: {e}", file=sys.stderr, flush=True)
                     import traceback

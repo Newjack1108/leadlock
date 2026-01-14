@@ -2,9 +2,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 from typing import List
 from app.database import get_session
-from app.models import Quote, QuoteItem, Customer, User
+from app.models import Quote, QuoteItem, Customer, User, QuoteEmail, Email, EmailDirection, Activity, ActivityType
 from app.auth import get_current_user
-from app.schemas import QuoteCreate, QuoteUpdate, QuoteResponse, QuoteItemCreate, QuoteItemResponse
+from app.schemas import (
+    QuoteCreate, QuoteUpdate, QuoteResponse, QuoteItemCreate, QuoteItemResponse,
+    QuoteEmailSendRequest, QuoteEmailSendResponse
+)
+from app.quote_email_service import send_quote_email
 from datetime import datetime
 from decimal import Decimal
 
@@ -210,3 +214,95 @@ async def get_customer_quotes(
         ))
     
     return result
+
+
+@router.post("/{quote_id}/send-email", response_model=QuoteEmailSendResponse)
+async def send_quote_email_endpoint(
+    quote_id: int,
+    email_data: QuoteEmailSendRequest,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    """Send a quote as an email with PDF attachment."""
+    # Get quote
+    statement = select(Quote).where(Quote.id == quote_id)
+    quote = session.exec(statement).first()
+    
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    
+    # Get customer
+    if not quote.customer_id:
+        raise HTTPException(status_code=400, detail="Quote must be associated with a customer")
+    
+    statement = select(Customer).where(Customer.id == quote.customer_id)
+    customer = session.exec(statement).first()
+    
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    
+    # Send quote email
+    success, message_id, error, pdf_buffer = send_quote_email(
+        quote=quote,
+        customer=customer,
+        to_email=email_data.to_email,
+        session=session,
+        template_id=email_data.template_id,
+        cc=email_data.cc,
+        bcc=email_data.bcc,
+        custom_message=email_data.custom_message
+    )
+    
+    if not success:
+        raise HTTPException(status_code=500, detail=f"Failed to send quote email: {error}")
+    
+    # Create Email record
+    email_record = Email(
+        customer_id=quote.customer_id,
+        message_id=message_id,
+        direction=EmailDirection.SENT,
+        from_email=current_user.email,
+        to_email=email_data.to_email,
+        cc=email_data.cc,
+        bcc=email_data.bcc,
+        subject=f"Quote {quote.quote_number}",
+        body_html=None,  # Will be stored in QuoteEmail
+        sent_at=datetime.utcnow(),
+        created_by_id=current_user.id
+    )
+    session.add(email_record)
+    session.commit()
+    session.refresh(email_record)
+    
+    # Create QuoteEmail record
+    quote_email = QuoteEmail(
+        quote_id=quote.id,
+        to_email=email_data.to_email,
+        subject=f"Quote {quote.quote_number}",
+        body_html=None,  # Template rendered content
+        tracking_id=message_id or f"quote-{quote.id}-{datetime.utcnow().timestamp()}"
+    )
+    session.add(quote_email)
+    
+    # Update quote sent_at
+    quote.sent_at = datetime.utcnow()
+    session.add(quote)
+    
+    session.commit()
+    session.refresh(quote_email)
+    
+    # Create EMAIL_SENT activity
+    activity = Activity(
+        customer_id=quote.customer_id,
+        activity_type=ActivityType.EMAIL_SENT,
+        notes=f"Quote {quote.quote_number} sent to {email_data.to_email}",
+        created_by_id=current_user.id
+    )
+    session.add(activity)
+    session.commit()
+    
+    return QuoteEmailSendResponse(
+        email_id=email_record.id,
+        quote_email_id=quote_email.id,
+        message="Quote email sent successfully"
+    )

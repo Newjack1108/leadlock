@@ -101,6 +101,7 @@ class Customer(SQLModel, table=True):
     leads: List["Lead"] = Relationship(back_populates="customer")
     quotes: List["Quote"] = Relationship(back_populates="customer")
     activities: List["Activity"] = Relationship(back_populates="customer")
+    emails: List["Email"] = Relationship(back_populates="customer")
 
 
 class Lead(SQLModel, table=True):
@@ -139,6 +140,36 @@ class Activity(SQLModel, table=True):
     # Relationships
     customer: Optional["Customer"] = Relationship(back_populates="activities")
     created_by: "User" = Relationship()
+
+
+class EmailDirection(str, Enum):
+    SENT = "SENT"
+    RECEIVED = "RECEIVED"
+
+
+class Email(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    customer_id: int = Field(foreign_key="customer.id")
+    message_id: Optional[str] = Field(default=None, unique=True, index=True)  # Email Message-ID header
+    in_reply_to: Optional[str] = Field(default=None, index=True)  # In-Reply-To header
+    thread_id: Optional[str] = Field(default=None, index=True)  # Group related emails
+    direction: EmailDirection
+    from_email: str
+    to_email: str
+    cc: Optional[str] = None  # Comma-separated
+    bcc: Optional[str] = None  # Comma-separated
+    subject: str
+    body_html: Optional[str] = None
+    body_text: Optional[str] = None
+    attachments: Optional[str] = None  # JSON array of attachment metadata
+    sent_at: Optional[datetime] = None
+    received_at: Optional[datetime] = None
+    created_by_id: Optional[int] = Field(default=None, foreign_key="user.id")  # For sent emails
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    
+    # Relationships
+    customer: "Customer" = Relationship(back_populates="emails")
+    created_by: Optional["User"] = Relationship()
 
 
 class StatusHistory(SQLModel, table=True):

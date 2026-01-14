@@ -20,6 +20,7 @@ import {
 import api from '@/lib/api';
 import { Customer, Activity, ActivityType, Lead } from '@/lib/types';
 import { toast } from 'sonner';
+import SendQuoteEmailDialog from '@/components/SendQuoteEmailDialog';
 
 const activityIcons: Record<ActivityType, any> = {
   SMS_SENT: MessageSquare,
@@ -57,6 +58,8 @@ export default function CustomerDetailPage() {
   const [loading, setLoading] = useState(true);
   const [quoteLocked, setQuoteLocked] = useState(false);
   const [quoteLockReason, setQuoteLockReason] = useState<any>(null);
+  const [sendEmailDialogOpen, setSendEmailDialogOpen] = useState(false);
+  const [selectedQuoteId, setSelectedQuoteId] = useState<number | null>(null);
 
   useEffect(() => {
     if (customerId) {
@@ -292,20 +295,57 @@ export default function CustomerDetailPage() {
                     {quotes.map((quote) => (
                       <div
                         key={quote.id}
-                        className="p-3 border rounded-md cursor-pointer hover:bg-muted"
-                        onClick={() => router.push(`/quotes/${quote.id}`)}
+                        className="p-3 border rounded-md"
                       >
-                        <div className="flex items-center justify-between">
-                          <span className="font-medium">{quote.quote_number}</span>
-                          <Badge>{quote.status}</Badge>
+                        <div className="flex items-center justify-between mb-2">
+                          <div 
+                            className="flex-1 cursor-pointer hover:text-primary"
+                            onClick={() => router.push(`/quotes/${quote.id}`)}
+                          >
+                            <span className="font-medium">{quote.quote_number}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge>{quote.status}</Badge>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedQuoteId(quote.id);
+                                setSendEmailDialogOpen(true);
+                              }}
+                            >
+                              Send Quote
+                            </Button>
+                          </div>
                         </div>
-                        <div className="text-sm text-muted-foreground mt-1">
+                        <div 
+                          className="text-sm text-muted-foreground cursor-pointer hover:text-primary"
+                          onClick={() => router.push(`/quotes/${quote.id}`)}
+                        >
                           £{quote.total_amount.toFixed(2)}
                         </div>
                       </div>
                     ))}
                   </div>
                 )}
+              </CardContent>
+            </Card>
+
+            {/* Emails Card */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Emails</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => router.push(`/customers/${customerId}/emails`)}
+                >
+                  <Mail className="h-4 w-4 mr-2" />
+                  View All Emails
+                </Button>
               </CardContent>
             </Card>
 
@@ -430,6 +470,19 @@ export default function CustomerDetailPage() {
           </div>
         </div>
       </main>
+
+      {customer && selectedQuoteId && (
+        <SendQuoteEmailDialog
+          open={sendEmailDialogOpen}
+          onOpenChange={setSendEmailDialogOpen}
+          quoteId={selectedQuoteId}
+          customer={customer}
+          onSuccess={() => {
+            fetchQuotes();
+            fetchActivities();
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -1,0 +1,273 @@
+"""
+Email service for sending and receiving emails via SMTP and IMAP.
+"""
+import smtplib
+import imaplib
+import email
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
+from email import encoders
+from typing import Optional, List, Dict, Tuple
+from datetime import datetime
+import os
+import json
+import uuid
+from dotenv import load_dotenv
+
+load_dotenv()
+
+
+def get_smtp_config() -> Dict:
+    """Get SMTP configuration from environment variables."""
+    return {
+        "host": os.getenv("SMTP_HOST", "smtp.gmail.com"),
+        "port": int(os.getenv("SMTP_PORT", "587")),
+        "user": os.getenv("SMTP_USER"),
+        "password": os.getenv("SMTP_PASSWORD"),
+        "use_tls": os.getenv("SMTP_USE_TLS", "true").lower() == "true",
+        "from_email": os.getenv("SMTP_FROM_EMAIL", os.getenv("SMTP_USER")),
+        "from_name": os.getenv("SMTP_FROM_NAME", "LeadLock CRM")
+    }
+
+
+def get_imap_config() -> Dict:
+    """Get IMAP configuration from environment variables."""
+    return {
+        "host": os.getenv("IMAP_HOST", "imap.gmail.com"),
+        "port": int(os.getenv("IMAP_PORT", "993")),
+        "user": os.getenv("IMAP_USER"),
+        "password": os.getenv("IMAP_PASSWORD"),
+        "use_ssl": os.getenv("IMAP_USE_SSL", "true").lower() == "true"
+    }
+
+
+def generate_message_id() -> str:
+    """Generate a unique message ID for emails."""
+    domain = os.getenv("SMTP_FROM_EMAIL", "leadlock.local").split("@")[-1]
+    return f"<{uuid.uuid4()}@{domain}>"
+
+
+def send_email(
+    to_email: str,
+    subject: str,
+    body_html: Optional[str] = None,
+    body_text: Optional[str] = None,
+    cc: Optional[str] = None,
+    bcc: Optional[str] = None,
+    attachments: Optional[List[Dict]] = None,
+    in_reply_to: Optional[str] = None,
+    references: Optional[str] = None
+) -> Tuple[bool, Optional[str], Optional[str]]:
+    """
+    Send an email via SMTP.
+    
+    Args:
+        to_email: Recipient email address
+        subject: Email subject
+        body_html: HTML body content
+        body_text: Plain text body content
+        cc: CC recipients (comma-separated)
+        bcc: BCC recipients (comma-separated)
+        attachments: List of attachment dicts with 'filename' and 'content' (bytes)
+        in_reply_to: Message-ID of email being replied to
+        references: References header for threading
+    
+    Returns:
+        Tuple of (success, message_id, error_message)
+    """
+    config = get_smtp_config()
+    
+    if not config["user"] or not config["password"]:
+        return False, None, "SMTP credentials not configured"
+    
+    try:
+        # Create message
+        msg = MIMEMultipart("alternative")
+        msg["From"] = f"{config['from_name']} <{config['from_email']}>"
+        msg["To"] = to_email
+        msg["Subject"] = subject
+        
+        if cc:
+            msg["Cc"] = cc
+        if bcc:
+            msg["Bcc"] = bcc
+        
+        # Generate message ID
+        message_id = generate_message_id()
+        msg["Message-ID"] = message_id
+        
+        if in_reply_to:
+            msg["In-Reply-To"] = in_reply_to
+        if references:
+            msg["References"] = references
+        
+        # Add body
+        if body_text:
+            msg.attach(MIMEText(body_text, "plain"))
+        if body_html:
+            msg.attach(MIMEText(body_html, "html"))
+        
+        # Add attachments
+        if attachments:
+            for attachment in attachments:
+                part = MIMEBase("application", "octet-stream")
+                part.set_payload(attachment["content"])
+                encoders.encode_base64(part)
+                part.add_header(
+                    "Content-Disposition",
+                    f'attachment; filename="{attachment["filename"]}"'
+                )
+                msg.attach(part)
+        
+        # Connect and send
+        if config["use_tls"]:
+            server = smtplib.SMTP(config["host"], config["port"])
+            server.starttls()
+        else:
+            server = smtplib.SMTP_SSL(config["host"], config["port"])
+        
+        server.login(config["user"], config["password"])
+        recipients = [to_email]
+        if cc:
+            recipients.extend([e.strip() for e in cc.split(",")])
+        if bcc:
+            recipients.extend([e.strip() for e in bcc.split(",")])
+        
+        server.sendmail(config["from_email"], recipients, msg.as_string())
+        server.quit()
+        
+        return True, message_id, None
+    
+    except Exception as e:
+        return False, None, str(e)
+
+
+def receive_emails() -> List[Dict]:
+    """
+    Receive emails from IMAP inbox.
+    
+    Returns:
+        List of email dictionaries with parsed email data
+    """
+    config = get_imap_config()
+    
+    if not config["user"] or not config["password"]:
+        return []
+    
+    emails = []
+    
+    try:
+        # Connect to IMAP server
+        if config["use_ssl"]:
+            mail = imaplib.IMAP4_SSL(config["host"], config["port"])
+        else:
+            mail = imaplib.IMAP4(config["host"], config["port"])
+        
+        mail.login(config["user"], config["password"])
+        mail.select("inbox")
+        
+        # Search for unread emails
+        status, messages = mail.search(None, "UNSEEN")
+        
+        if status != "OK":
+            mail.close()
+            mail.logout()
+            return []
+        
+        email_ids = messages[0].split()
+        
+        for email_id in email_ids:
+            try:
+                # Fetch email
+                status, msg_data = mail.fetch(email_id, "(RFC822)")
+                
+                if status != "OK":
+                    continue
+                
+                # Parse email
+                email_body = msg_data[0][1]
+                msg = email.message_from_bytes(email_body)
+                
+                # Extract headers
+                from_email = msg["From"]
+                to_email = msg["To"]
+                subject = msg["Subject"] or ""
+                message_id = msg["Message-ID"]
+                in_reply_to = msg["In-Reply-To"]
+                references = msg["References"]
+                date_str = msg["Date"]
+                
+                # Parse date
+                received_at = None
+                if date_str:
+                    try:
+                        received_at = email.utils.parsedate_to_datetime(date_str)
+                    except:
+                        received_at = datetime.utcnow()
+                else:
+                    received_at = datetime.utcnow()
+                
+                # Extract body
+                body_html = None
+                body_text = None
+                
+                if msg.is_multipart():
+                    for part in msg.walk():
+                        content_type = part.get_content_type()
+                        content_disposition = str(part.get("Content-Disposition"))
+                        
+                        if "attachment" not in content_disposition:
+                            if content_type == "text/html":
+                                body_html = part.get_payload(decode=True).decode("utf-8", errors="ignore")
+                            elif content_type == "text/plain":
+                                body_text = part.get_payload(decode=True).decode("utf-8", errors="ignore")
+                else:
+                    content_type = msg.get_content_type()
+                    if content_type == "text/html":
+                        body_html = msg.get_payload(decode=True).decode("utf-8", errors="ignore")
+                    elif content_type == "text/plain":
+                        body_text = msg.get_payload(decode=True).decode("utf-8", errors="ignore")
+                
+                # Extract attachments
+                attachments = []
+                if msg.is_multipart():
+                    for part in msg.walk():
+                        content_disposition = str(part.get("Content-Disposition"))
+                        if "attachment" in content_disposition:
+                            filename = part.get_filename()
+                            if filename:
+                                attachments.append({
+                                    "filename": filename,
+                                    "content_type": part.get_content_type(),
+                                    "size": len(part.get_payload(decode=True))
+                                })
+                
+                emails.append({
+                    "message_id": message_id,
+                    "in_reply_to": in_reply_to,
+                    "references": references,
+                    "from_email": from_email,
+                    "to_email": to_email,
+                    "subject": subject,
+                    "body_html": body_html,
+                    "body_text": body_text,
+                    "received_at": received_at,
+                    "attachments": json.dumps(attachments) if attachments else None
+                })
+                
+            except Exception as e:
+                print(f"Error parsing email {email_id}: {e}")
+                continue
+        
+        # Mark emails as read
+        if email_ids:
+            mail.store(b",".join(email_ids), "+FLAGS", "\\Seen")
+        
+        mail.close()
+        mail.logout()
+        
+    except Exception as e:
+        print(f"Error receiving emails: {e}")
+    
+    return emails
