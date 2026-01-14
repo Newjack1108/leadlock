@@ -167,8 +167,8 @@ export default function ComposeEmailDialog({
         }
       }
 
-      // Send email with timeout protection (30 seconds)
-      const emailPromise = sendEmail({
+      // Send email (axios already has 30s timeout configured)
+      await sendEmail({
         customer_id: customer.id,
         to_email: formData.to_email,
         cc: formData.cc || undefined,
@@ -178,23 +178,18 @@ export default function ComposeEmailDialog({
         template_id: selectedTemplateId,
       });
 
-      // Wrap with timeout
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Request timeout - please try again')), 30000);
-      });
-
-      await Promise.race([emailPromise, timeoutPromise]);
-
       toast.success('Email sent successfully');
       // Reset loading before closing
       setLoading(false);
       onOpenChange(false);
       // Call onSuccess after a short delay to ensure dialog is closed
+      // Wrap in try-catch to prevent errors from stalling the app
       setTimeout(() => {
         try {
           onSuccess?.();
         } catch (error) {
           console.error('Error in onSuccess callback:', error);
+          // Don't let onSuccess errors break the UI
         }
       }, 100);
     } catch (error: any) {

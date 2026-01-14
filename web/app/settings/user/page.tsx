@@ -31,6 +31,7 @@ export default function UserSettingsPage() {
     imap_user: '',
     imap_password: '',
     imap_use_ssl: true,
+    email_test_mode: false,
   });
   const [signature, setSignature] = useState('');
 
@@ -56,6 +57,7 @@ export default function UserSettingsPage() {
         imap_user: response.imap_user || '',
         imap_password: '', // Don't pre-fill password
         imap_use_ssl: response.imap_use_ssl ?? true,
+        email_test_mode: response.email_test_mode ?? false,
       });
       setSignature(response.email_signature || '');
     } catch (error: any) {
@@ -83,6 +85,7 @@ export default function UserSettingsPage() {
         imap_port: emailFormData.imap_port ? parseInt(emailFormData.imap_port) : undefined,
         imap_user: emailFormData.imap_user || undefined,
         imap_use_ssl: emailFormData.imap_use_ssl,
+        email_test_mode: emailFormData.email_test_mode,
       };
 
       // Only include password if it was changed (not empty)
@@ -301,6 +304,27 @@ export default function UserSettingsPage() {
                       />
                       <Label htmlFor="imap_use_ssl">Use SSL</Label>
                     </div>
+                  </div>
+                </div>
+
+                <div className="border-t pt-4">
+                  <h3 className="font-semibold mb-3">Test Mode</h3>
+                  <div className="space-y-3">
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        id="email_test_mode"
+                        checked={emailFormData.email_test_mode}
+                        onChange={(e) => setEmailFormData({ ...emailFormData, email_test_mode: e.target.checked })}
+                        className="rounded"
+                        disabled={saving}
+                      />
+                      <Label htmlFor="email_test_mode">Enable Email Test Mode</Label>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      When enabled, emails will be saved to the database but not actually sent via SMTP. 
+                      This allows you to test email templates, signatures, and other features without sending real emails.
+                    </p>
                   </div>
                 </div>
 

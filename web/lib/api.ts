@@ -7,6 +7,7 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  timeout: 30000, // 30 second timeout for all requests
 });
 
 // Add token to requests
@@ -152,6 +153,7 @@ export const updateUserEmailSettings = async (settingsData: {
   imap_password?: string;
   imap_use_ssl?: boolean;
   email_signature?: string;
+  email_test_mode?: boolean;
 }) => {
   const response = await api.put('/api/settings/user/email', settingsData);
   return response.data;

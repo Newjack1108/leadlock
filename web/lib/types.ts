@@ -76,6 +76,7 @@ export interface UserEmailSettings {
   imap_password?: string;
   imap_use_ssl: boolean;
   email_signature?: string;  // HTML signature
+  email_test_mode: boolean;
 }
 
 export interface UserEmailSettingsUpdate {
@@ -92,6 +93,7 @@ export interface UserEmailSettingsUpdate {
   imap_password?: string;
   imap_use_ssl?: boolean;
   email_signature?: string;
+  email_test_mode?: boolean;
 }
 
 export interface Customer {

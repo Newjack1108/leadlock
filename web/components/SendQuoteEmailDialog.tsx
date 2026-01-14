@@ -85,11 +85,23 @@ export default function SendQuoteEmailDialog({
       });
       
       toast.success('Quote email sent successfully');
+      setLoading(false);
       onOpenChange(false);
-      onSuccess?.();
+      // Wrap onSuccess in try-catch to prevent errors from stalling the app
+      setTimeout(() => {
+        try {
+          onSuccess?.();
+        } catch (error) {
+          console.error('Error in onSuccess callback:', error);
+          // Don't let onSuccess errors break the UI
+        }
+      }, 100);
     } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Failed to send quote email');
+      const errorMessage = error.response?.data?.detail || error.message || 'Failed to send quote email';
+      toast.error(errorMessage);
+      console.error('Quote email send error:', error);
     } finally {
+      // Always reset loading state, even if there's an error
       setLoading(false);
     }
   };

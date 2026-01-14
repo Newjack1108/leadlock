@@ -225,12 +225,13 @@ def send_email(
                 )
                 msg.attach(part)
         
-        # Connect and send
+        # Connect and send with timeout (10 seconds)
+        timeout = 10
         if config["use_tls"]:
-            server = smtplib.SMTP(config["host"], config["port"])
+            server = smtplib.SMTP(config["host"], config["port"], timeout=timeout)
             server.starttls()
         else:
-            server = smtplib.SMTP_SSL(config["host"], config["port"])
+            server = smtplib.SMTP_SSL(config["host"], config["port"], timeout=timeout)
         
         server.login(config["user"], config["password"])
         recipients = [to_email]
