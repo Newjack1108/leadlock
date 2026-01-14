@@ -68,7 +68,6 @@ export interface Customer {
   name: string;
   email?: string;
   phone?: string;
-  company_name?: string;
   address_line1?: string;
   address_line2?: string;
   city?: string;

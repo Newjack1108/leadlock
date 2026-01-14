@@ -87,7 +87,6 @@ class Customer(SQLModel, table=True):
     name: str
     email: Optional[str] = None
     phone: Optional[str] = None
-    company_name: Optional[str] = None  # For B2B customers
     address_line1: Optional[str] = None
     address_line2: Optional[str] = None
     city: Optional[str] = None

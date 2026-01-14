@@ -204,15 +204,6 @@ export default function CustomerDetailPage() {
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="col-span-2">
-                    <Label>Company Name (Optional)</Label>
-                    <Input
-                      value={customer.company_name || ''}
-                      onChange={(e) => handleUpdateCustomer('company_name', e.target.value)}
-                      onBlur={(e) => handleUpdateCustomer('company_name', e.target.value)}
-                      placeholder="For B2B customers"
-                    />
-                  </div>
                   <div>
                     <Label>Email <span className="text-destructive">*</span></Label>
                     <Input

@@ -102,7 +102,6 @@ async def create_lead_webhook(
                     name=customer.name,
                     email=customer.email,
                     phone=customer.phone,
-                    company_name=customer.company_name,
                     address_line1=customer.address_line1,
                     address_line2=customer.address_line2,
                     city=customer.city,

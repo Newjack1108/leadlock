@@ -29,7 +29,6 @@ class CustomerCreate(BaseModel):
     name: str
     email: Optional[str] = None
     phone: Optional[str] = None
-    company_name: Optional[str] = None
     address_line1: Optional[str] = None
     address_line2: Optional[str] = None
     city: Optional[str] = None
@@ -42,7 +41,6 @@ class CustomerUpdate(BaseModel):
     name: Optional[str] = None
     email: Optional[str] = None
     phone: Optional[str] = None
-    company_name: Optional[str] = None
     address_line1: Optional[str] = None
     address_line2: Optional[str] = None
     city: Optional[str] = None
@@ -57,7 +55,6 @@ class CustomerResponse(BaseModel):
     name: str
     email: Optional[str]
     phone: Optional[str]
-    company_name: Optional[str]
     address_line1: Optional[str]
     address_line2: Optional[str]
     city: Optional[str]
