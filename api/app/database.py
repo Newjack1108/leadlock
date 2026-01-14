@@ -21,28 +21,40 @@ def create_db_and_tables():
         inspector = inspect(engine)
         if inspector.has_table("lead"):
             columns = [col['name'] for col in inspector.get_columns("lead")]
+            print(f"Existing lead table columns: {columns}")
             
-            with engine.begin() as conn:  # begin() auto-commits
-                if "company_name" not in columns:
-                    conn.execute(text("ALTER TABLE lead ADD COLUMN company_name VARCHAR"))
-                if "address_line1" not in columns:
-                    conn.execute(text("ALTER TABLE lead ADD COLUMN address_line1 VARCHAR"))
-                if "address_line2" not in columns:
-                    conn.execute(text("ALTER TABLE lead ADD COLUMN address_line2 VARCHAR"))
-                if "city" not in columns:
-                    conn.execute(text("ALTER TABLE lead ADD COLUMN city VARCHAR"))
-                if "county" not in columns:
-                    conn.execute(text("ALTER TABLE lead ADD COLUMN county VARCHAR"))
-                if "country" not in columns:
-                    conn.execute(text("ALTER TABLE lead ADD COLUMN country VARCHAR DEFAULT 'United Kingdom'"))
-                if "customer_since" not in columns:
-                    conn.execute(text("ALTER TABLE lead ADD COLUMN customer_since TIMESTAMP"))
-                if "customer_number" not in columns:
-                    conn.execute(text("ALTER TABLE lead ADD COLUMN customer_number VARCHAR"))
+            columns_to_add = []
+            if "company_name" not in columns:
+                columns_to_add.append("company_name VARCHAR")
+            if "address_line1" not in columns:
+                columns_to_add.append("address_line1 VARCHAR")
+            if "address_line2" not in columns:
+                columns_to_add.append("address_line2 VARCHAR")
+            if "city" not in columns:
+                columns_to_add.append("city VARCHAR")
+            if "county" not in columns:
+                columns_to_add.append("county VARCHAR")
+            if "country" not in columns:
+                columns_to_add.append("country VARCHAR DEFAULT 'United Kingdom'")
+            if "customer_since" not in columns:
+                columns_to_add.append("customer_since TIMESTAMP")
+            if "customer_number" not in columns:
+                columns_to_add.append("customer_number VARCHAR")
+            
+            if columns_to_add:
+                print(f"Adding {len(columns_to_add)} columns to lead table...")
+                with engine.begin() as conn:  # begin() auto-commits
+                    for col_def in columns_to_add:
+                        col_name = col_def.split()[0]
+                        print(f"  Adding column: {col_name}")
+                        conn.execute(text(f"ALTER TABLE lead ADD COLUMN {col_def}"))
+                print("Migration completed successfully")
+            else:
+                print("All columns already exist, no migration needed")
     except Exception as e:
         # Log error but don't crash - migration might have already run
         import traceback
-        print(f"Migration warning: {e}")
+        print(f"Migration error: {e}")
         print(traceback.format_exc())
 
 
