@@ -28,6 +28,7 @@ WORKFLOW_TRANSITIONS = {
 ENGAGEMENT_PROOF_TYPES = {
     ActivityType.SMS_RECEIVED,
     ActivityType.EMAIL_RECEIVED,
+    ActivityType.EMAIL_SENT,  # Sending email counts as engagement/contact
     ActivityType.WHATSAPP_RECEIVED,
     ActivityType.LIVE_CALL,
 }
@@ -86,7 +87,7 @@ def check_quote_prerequisites(customer: Customer, session: Session) -> tuple[boo
     if not engagement_activities:
         return False, {
             "error": "NO_ENGAGEMENT_PROOF",
-            "message": "No engagement proof found (SMS_RECEIVED, EMAIL_RECEIVED, WHATSAPP_RECEIVED, or LIVE_CALL)"
+            "message": "No engagement proof found (SMS_RECEIVED, EMAIL_RECEIVED, EMAIL_SENT, WHATSAPP_RECEIVED, or LIVE_CALL)"
         }
     
     return True, None
