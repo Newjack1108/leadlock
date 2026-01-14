@@ -357,20 +357,15 @@ async def create_activity(
     # Get or create customer for activity
     customer_id = lead.customer_id
     if not customer_id:
-        # Create customer if lead is qualified, otherwise create temporary customer
-        if lead.status == LeadStatus.QUALIFIED:
-            customer = find_or_create_customer(lead, session)
-            lead.customer_id = customer.id
-            customer_id = customer.id
-            session.add(lead)
-            session.commit()
-        else:
-            # For non-qualified leads, create a temporary customer for activity tracking
-            customer = find_or_create_customer(lead, session)
-            lead.customer_id = customer.id
-            customer_id = customer.id
-            session.add(lead)
-            session.commit()
+        # Create customer for activity tracking (even for non-qualified leads)
+        customer = find_or_create_customer(lead, session)
+        lead.customer_id = customer.id
+        customer_id = customer.id
+        session.add(lead)
+        session.commit()
+    
+    if not customer_id:
+        raise HTTPException(status_code=400, detail="Unable to create customer for activity")
     
     activity = Activity(
         customer_id=customer_id,
@@ -431,6 +426,7 @@ async def get_lead_activities(
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
     
+    # Get activities for the lead's customer, or return empty if no customer
     if not lead.customer_id:
         return []
     

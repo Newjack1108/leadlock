@@ -128,7 +128,7 @@ class ActivityCreate(BaseModel):
 
 class ActivityResponse(BaseModel):
     id: int
-    customer_id: int
+    customer_id: Optional[int]
     activity_type: ActivityType
     notes: Optional[str]
     created_by_id: int
@@ -277,7 +277,7 @@ class QuoteItemResponse(BaseModel):
 
 
 class QuoteCreate(BaseModel):
-    customer_id: int
+    customer_id: Optional[int] = None  # Can be None during migration
     quote_number: Optional[str] = None  # Auto-generated if not provided
     version: int = 1
     valid_until: Optional[datetime] = None

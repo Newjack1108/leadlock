@@ -131,14 +131,14 @@ class Lead(SQLModel, table=True):
 
 class Activity(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    customer_id: int = Field(foreign_key="customer.id")
+    customer_id: Optional[int] = Field(default=None, foreign_key="customer.id")  # Temporarily nullable for migration
     activity_type: ActivityType
     notes: Optional[str] = None
     created_by_id: int = Field(foreign_key="user.id")
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
     # Relationships
-    customer: "Customer" = Relationship(back_populates="activities")
+    customer: Optional["Customer"] = Relationship(back_populates="activities")
     created_by: "User" = Relationship()
 
 
@@ -219,7 +219,7 @@ class DiscountScope(str, Enum):
 
 class Quote(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    customer_id: int = Field(foreign_key="customer.id")
+    customer_id: Optional[int] = Field(default=None, foreign_key="customer.id")  # Temporarily nullable for migration
     quote_number: str = Field(unique=True, index=True)  # e.g., "QT-2024-001"
     version: int = Field(default=1)  # For quote revisions
     status: QuoteStatus = Field(default=QuoteStatus.DRAFT)
@@ -238,7 +238,7 @@ class Quote(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     
     # Relationships
-    customer: "Customer" = Relationship(back_populates="quotes")
+    customer: Optional["Customer"] = Relationship(back_populates="quotes")
     items: List["QuoteItem"] = Relationship(back_populates="quote")
     discounts: List["QuoteDiscount"] = Relationship(back_populates="quote")
     created_by: User = Relationship()

@@ -47,6 +47,9 @@ async def create_quote(
 ):
     """Create a new quote."""
     # Verify customer exists
+    if not quote_data.customer_id:
+        raise HTTPException(status_code=400, detail="customer_id is required")
+    
     statement = select(Customer).where(Customer.id == quote_data.customer_id)
     customer = session.exec(statement).first()
     
