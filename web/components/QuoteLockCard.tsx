@@ -105,11 +105,19 @@ export default function QuoteLockCard({ customer, quoteLocked = false, quoteLock
                 </span>
               </div>
               {reason?.error === 'NO_ENGAGEMENT_PROOF' && (
-                <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border">
-                  <XCircle className="h-4 w-4 text-destructive" />
-                  <span className="text-destructive text-sm">
-                    Engagement proof required (SMS/Email/WhatsApp received or Live Call)
-                  </span>
+                <div className="mt-3 pt-3 border-t border-border space-y-2">
+                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                    Engagement Proof Required
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <XCircle className="h-4 w-4 text-destructive" />
+                    <span className="text-destructive text-sm">
+                      {reason?.message || "No engagement proof found. Log a Live Call, send an email, or wait for customer response."}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Required activities: SMS_RECEIVED, EMAIL_RECEIVED, EMAIL_SENT, WHATSAPP_RECEIVED, or LIVE_CALL
+                  </p>
                 </div>
               )}
             </div>

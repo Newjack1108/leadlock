@@ -125,8 +125,12 @@ export default function CustomerDetailPage() {
       const response = await api.get(`/api/customers/${customerId}/quote-status`);
       setQuoteLocked(response.data.quote_locked);
       setQuoteLockReason(response.data.quote_lock_reason);
+      // Log for debugging
+      if (response.data.quote_locked) {
+        console.log('Quote locked reason:', response.data.quote_lock_reason);
+      }
     } catch (error) {
-      console.error('Failed to check quote prerequisites');
+      console.error('Failed to check quote prerequisites:', error);
     }
   };
 
@@ -137,7 +141,10 @@ export default function CustomerDetailPage() {
       });
       toast.success('Activity logged');
       fetchActivities();
-      checkQuotePrerequisites();
+      // Add small delay to ensure database transaction is committed
+      setTimeout(() => {
+        checkQuotePrerequisites();
+      }, 200);
     } catch (error: any) {
       toast.error(error.response?.data?.detail || 'Failed to log activity');
     }
@@ -502,7 +509,10 @@ export default function CustomerDetailPage() {
           customer={customer}
           onSuccess={() => {
             fetchActivities();
-            checkQuotePrerequisites();
+            // Add small delay to ensure database transaction is committed
+            setTimeout(() => {
+              checkQuotePrerequisites();
+            }, 200);
           }}
         />
       )}
