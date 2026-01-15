@@ -14,6 +14,7 @@ from decimal import Decimal
 from app.models import Quote, Customer, QuoteItem, CompanySettings
 from sqlmodel import Session, select
 import os
+import urllib.request
 from pathlib import Path
 
 
@@ -129,6 +130,46 @@ def generate_quote_pdf(
             except Exception as e:
                 print(f"Warning: Could not load logo from {logo_path}: {e}", file=__import__('sys').stderr, flush=True)
                 logo = None
+
+        if not logo:
+            # Try loading logo from URL (e.g., frontend public URL)
+            logo_filename = company_settings.logo_filename or "logo1.png"
+            url_candidates = []
+            env_logo_url = os.getenv("LOGO_URL")
+            env_logo_base = os.getenv("LOGO_BASE_URL")
+            env_frontend_url = os.getenv("FRONTEND_URL") or os.getenv("PUBLIC_FRONTEND_URL")
+            cors_origins = os.getenv("CORS_ORIGINS", "")
+
+            if env_logo_url:
+                url_candidates.append(env_logo_url)
+            if env_logo_base:
+                url_candidates.append(env_logo_base.rstrip("/") + "/" + logo_filename)
+            if env_frontend_url:
+                url_candidates.append(env_frontend_url.rstrip("/") + "/" + logo_filename)
+
+            if cors_origins:
+                origins = [o.strip() for o in cors_origins.split(",") if o.strip()]
+                # Prefer frontend origin if present
+                frontend_origin = next((o for o in origins if "frontend" in o), None)
+                if frontend_origin:
+                    url_candidates.append(frontend_origin.rstrip("/") + "/" + logo_filename)
+                elif origins:
+                    url_candidates.append(origins[0].rstrip("/") + "/" + logo_filename)
+
+            for logo_url in url_candidates:
+                try:
+                    with urllib.request.urlopen(logo_url, timeout=5) as response:
+                        logo_bytes = BytesIO(response.read())
+                    logo = Image(logo_bytes, width=60*mm, height=None)
+                    if logo.imageHeight > 0:
+                        aspect_ratio = logo.imageWidth / logo.imageHeight
+                        logo.height = logo.width / aspect_ratio
+                        if logo.height > 25*mm:
+                            logo.height = 25*mm
+                            logo.width = logo.height * aspect_ratio
+                    break
+                except Exception as e:
+                    print(f"Warning: Could not load logo from URL {logo_url}: {e}", file=__import__('sys').stderr, flush=True)
         
         # Create header table with logo and company info
         if logo:
