@@ -6,11 +6,11 @@ import Header from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import api, { getQuote, sendQuoteEmail } from '@/lib/api';
+import api, { getQuote, previewQuotePdf } from '@/lib/api';
 import { Quote, QuoteItem, Customer } from '@/lib/types';
 import { toast } from 'sonner';
 import SendQuoteEmailDialog from '@/components/SendQuoteEmailDialog';
-import { ArrowLeft, Mail } from 'lucide-react';
+import { ArrowLeft, Mail, Eye } from 'lucide-react';
 
 export default function QuoteDetailPage() {
   const router = useRouter();
@@ -97,6 +97,19 @@ export default function QuoteDetailPage() {
             </div>
             <div className="flex items-center gap-3">
               <Badge className="text-sm">{quote.status}</Badge>
+              <Button
+                variant="outline"
+                onClick={async () => {
+                  try {
+                    await previewQuotePdf(quoteId);
+                  } catch (error: any) {
+                    toast.error(error.response?.data?.detail || error.message || 'Failed to preview PDF');
+                  }
+                }}
+              >
+                <Eye className="h-4 w-4 mr-2" />
+                Preview PDF
+              </Button>
               <Button
                 onClick={() => setSendEmailDialogOpen(true)}
                 disabled={!customer}

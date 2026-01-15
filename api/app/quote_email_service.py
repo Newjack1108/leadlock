@@ -109,8 +109,8 @@ def send_quote_email(
             body_template = Template(get_default_email_template()[1])
         
         # Render email templates
-        subject = render_email_template(subject_template, quote, customer, company_settings, custom_message, quote_items)
-        body_html = render_email_template(body_template, quote, customer, company_settings, custom_message, quote_items)
+        subject = render_email_template(subject_template, quote, customer, company_settings, custom_message)
+        body_html = render_email_template(body_template, quote, customer, company_settings, custom_message)
         
         # Generate PDF
         pdf_buffer = generate_quote_pdf(quote, customer, quote_items, company_settings, session)

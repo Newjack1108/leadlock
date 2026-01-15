@@ -190,6 +190,16 @@ export const getCustomerQuotes = async (customerId: number) => {
   return response.data;
 };
 
+export const previewQuotePdf = async (quoteId: number) => {
+  const response = await api.get(`/api/quotes/${quoteId}/preview-pdf`, {
+    responseType: 'blob',
+  });
+  const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+  window.open(url, '_blank');
+  // Clean up the URL after a delay
+  setTimeout(() => window.URL.revokeObjectURL(url), 100);
+};
+
 export const getProducts = async () => {
   const response = await api.get('/api/products');
   return response.data;

@@ -14,9 +14,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { sendQuoteEmail } from '@/lib/api';
+import { sendQuoteEmail, previewQuotePdf } from '@/lib/api';
 import { QuoteEmailSendRequest, Customer } from '@/lib/types';
 import { toast } from 'sonner';
+import { Eye } from 'lucide-react';
 
 interface QuoteTemplate {
   id: number;
@@ -68,6 +69,16 @@ export default function SendQuoteEmailDialog({
       setTemplates([]);
     }
   }, [open, customer]);
+
+  const handlePreview = async () => {
+    try {
+      await previewQuotePdf(quoteId);
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.detail || error.message || 'Failed to preview PDF';
+      toast.error(errorMessage);
+      console.error('Quote PDF preview error:', error);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -192,6 +203,15 @@ export default function SendQuoteEmailDialog({
               disabled={loading}
             >
               Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handlePreview}
+              disabled={loading}
+            >
+              <Eye className="h-4 w-4 mr-2" />
+              Preview PDF
             </Button>
             <Button type="submit" disabled={loading || !formData.to_email}>
               {loading ? 'Sending...' : 'Send Quote Email'}

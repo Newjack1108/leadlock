@@ -1,14 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import Response
 from sqlmodel import Session, select
 from typing import List
 from app.database import get_session
-from app.models import Quote, QuoteItem, Customer, User, QuoteEmail, Email, EmailDirection, Activity, ActivityType
+from app.models import Quote, QuoteItem, Customer, User, QuoteEmail, Email, EmailDirection, Activity, ActivityType, CompanySettings
 from app.auth import get_current_user
 from app.schemas import (
     QuoteCreate, QuoteUpdate, QuoteResponse, QuoteItemCreate, QuoteItemResponse,
     QuoteEmailSendRequest, QuoteEmailSendResponse
 )
 from app.quote_email_service import send_quote_email
+from app.quote_pdf_service import generate_quote_pdf
 from datetime import datetime
 from decimal import Decimal
 
@@ -316,3 +318,53 @@ async def send_quote_email_endpoint(
         quote_email_id=quote_email.id,
         message="Quote email sent successfully"
     )
+
+
+@router.get("/{quote_id}/preview-pdf")
+async def preview_quote_pdf(
+    quote_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    """Preview quote as PDF without sending email."""
+    # Get quote
+    statement = select(Quote).where(Quote.id == quote_id)
+    quote = session.exec(statement).first()
+    
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    
+    # Get customer
+    if not quote.customer_id:
+        raise HTTPException(status_code=400, detail="Quote must be associated with a customer")
+    
+    statement = select(Customer).where(Customer.id == quote.customer_id)
+    customer = session.exec(statement).first()
+    
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    
+    # Get quote items
+    statement = select(QuoteItem).where(QuoteItem.quote_id == quote.id).order_by(QuoteItem.sort_order)
+    quote_items = session.exec(statement).all()
+    
+    # Get company settings
+    statement = select(CompanySettings).limit(1)
+    company_settings = session.exec(statement).first()
+    
+    # Generate PDF
+    try:
+        pdf_buffer = generate_quote_pdf(quote, customer, quote_items, company_settings, session)
+        pdf_content = pdf_buffer.read()
+        
+        return Response(
+            content=pdf_content,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'inline; filename="Quote_{quote.quote_number}.pdf"'
+            }
+        )
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error generating PDF: {str(e)}")

@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from app.database import create_db_and_tables, engine
 from sqlmodel import Session
 from app.routers import auth, leads, dashboard, webhooks, products, settings, quotes, customers, emails, email_templates
@@ -8,8 +9,27 @@ from sqlmodel import Session, select
 from app.models import User
 import os
 import traceback
+import shutil
+from pathlib import Path
 
 app = FastAPI(title="LeadLock API", version="1.0.0")
+
+# Setup static files directory for logos and other assets
+static_dir = Path(__file__).parent.parent / "static"
+static_dir.mkdir(exist_ok=True)
+
+# Copy logo from frontend public folder if it exists and static doesn't have it
+frontend_logo = Path(__file__).parent.parent.parent / "web" / "public" / "logo1.png"
+static_logo = static_dir / "logo1.png"
+if frontend_logo.exists() and not static_logo.exists():
+    try:
+        shutil.copy2(frontend_logo, static_logo)
+        print(f"Copied logo from {frontend_logo} to {static_logo}", file=__import__('sys').stderr, flush=True)
+    except Exception as e:
+        print(f"Warning: Could not copy logo: {e}", file=__import__('sys').stderr, flush=True)
+
+# Mount static files
+app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 # Get allowed origins from environment or use defaults
 allowed_origins_str = os.getenv(
