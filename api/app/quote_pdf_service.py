@@ -314,11 +314,13 @@ def generate_quote_pdf(
             format_currency(item.final_line_total, quote.currency)
         ])
     
-    # Add totals
-    table_data.append(["", "", "<b>Subtotal:</b>", format_currency(quote.subtotal, quote.currency)])
+    # Add totals (no HTML tags; use table styling for emphasis)
+    subtotal_row_index = len(table_data)
+    table_data.append(["", "", "Subtotal:", format_currency(quote.subtotal, quote.currency)])
     if quote.discount_total > 0:
-        table_data.append(["", "", "<b>Discount:</b>", format_currency(quote.discount_total, quote.currency)])
-    table_data.append(["", "", "<b>Total:</b>", format_currency(quote.total_amount, quote.currency)])
+        table_data.append(["", "", "Discount:", format_currency(quote.discount_total, quote.currency)])
+    total_row_index = len(table_data)
+    table_data.append(["", "", "Total:", format_currency(quote.total_amount, quote.currency)])
     
     items_table = Table(table_data, colWidths=[90*mm, 25*mm, 30*mm, 35*mm])
     items_table.setStyle(TableStyle([
@@ -338,7 +340,8 @@ def generate_quote_pdf(
         ("GRID", (0, 0), (-1, -2), 0.5, colors.HexColor("#e0e0e0")),
         ("LINEBELOW", (0, -3), (-1, -1), 1.5, brand_color),
         ("LINEABOVE", (0, -3), (-1, -1), 0.5, colors.HexColor("#e0e0e0")),
-        ("FONTNAME", (0, -3), (-1, -1), "Helvetica-Bold"),
+        ("FONTNAME", (2, subtotal_row_index), (3, subtotal_row_index), "Helvetica-Bold"),
+        ("FONTNAME", (2, total_row_index), (3, total_row_index), "Helvetica-Bold"),
     ]))
     elements.append(items_table)
     elements.append(Spacer(1, 20))

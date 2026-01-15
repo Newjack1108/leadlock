@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Logo from './Logo';
 import { Button } from '@/components/ui/button';
-import { LogOut, LayoutDashboard, Users, Settings, Package, User } from 'lucide-react';
+import { LogOut, LayoutDashboard, Users, Settings, Package, User, Mail } from 'lucide-react';
 import api from '@/lib/api';
 
 export default function Header() {
@@ -84,6 +84,16 @@ export default function Header() {
                 >
                   <Package className="h-4 w-4 mr-2" />
                   Products
+                </Button>
+              </Link>
+              <Link href="/settings/email-templates">
+                <Button
+                  variant={pathname?.startsWith('/settings/email-templates') ? 'default' : 'ghost'}
+                  size="sm"
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <Mail className="h-4 w-4 mr-2" />
+                  Email Templates
                 </Button>
               </Link>
               <Link href="/settings/company">
