@@ -193,6 +193,7 @@ export interface Product {
 export interface CompanySettings {
   id: number;
   company_name: string;
+  trading_name?: string;
   company_registration_number?: string;
   vat_number?: string;
   address_line1?: string;

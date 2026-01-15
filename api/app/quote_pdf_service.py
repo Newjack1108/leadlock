@@ -57,11 +57,12 @@ def generate_quote_pdf(
     
     # Define styles
     styles = getSampleStyleSheet()
+    brand_color = colors.HexColor("#0b3d2e")
     title_style = ParagraphStyle(
         "CustomTitle",
         parent=styles["Heading1"],
         fontSize=28,
-        textColor=colors.HexColor("#1a1a1a"),
+        textColor=brand_color,
         spaceAfter=12,
         fontName="Helvetica-Bold",
     )
@@ -69,7 +70,7 @@ def generate_quote_pdf(
         "CustomHeading",
         parent=styles["Heading2"],
         fontSize=14,
-        textColor=colors.HexColor("#333333"),
+        textColor=brand_color,
         spaceAfter=8,
         spaceBefore=12,
         fontName="Helvetica-Bold",
@@ -84,7 +85,7 @@ def generate_quote_pdf(
         "CompanyName",
         parent=styles["Heading1"],
         fontSize=20,
-        textColor=colors.HexColor("#1a1a1a"),
+        textColor=brand_color,
         spaceAfter=6,
         fontName="Helvetica-Bold",
     )
@@ -134,7 +135,8 @@ def generate_quote_pdf(
             # Logo on left, company info on right
             # Build company info as HTML text with line breaks
             company_info_lines = []
-            company_info_lines.append(f"<b>{company_settings.company_name or 'Company'}</b>")
+            trading_name = company_settings.trading_name or "Cheshire Stables"
+            company_info_lines.append(f"<font size='14'><b>{trading_name}</b></font>")
             
             if company_settings.address_line1:
                 address_parts = [
@@ -160,7 +162,7 @@ def generate_quote_pdf(
                 company_info_lines.append(f"Website: {company_settings.website}")
             
             company_info_text = "<br/>".join(company_info_lines)
-            company_info_para = Paragraph(company_info_text, company_name_style)
+            company_info_para = Paragraph(company_info_text, normal_style)
             
             header_table = Table([[logo, company_info_para]], colWidths=[70*mm, 110*mm])
             header_table.setStyle(TableStyle([
@@ -175,7 +177,8 @@ def generate_quote_pdf(
             elements.append(header_table)
         else:
             # No logo - just company info
-            elements.append(Paragraph(company_settings.company_name or "Company", company_name_style))
+            trading_name = company_settings.trading_name or "Cheshire Stables"
+            elements.append(Paragraph(trading_name, company_name_style))
             if company_settings.address_line1:
                 address_parts = [
                     company_settings.address_line1,
@@ -278,7 +281,7 @@ def generate_quote_pdf(
     
     items_table = Table(table_data, colWidths=[90*mm, 25*mm, 30*mm, 35*mm])
     items_table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2c3e50")),
+        ("BACKGROUND", (0, 0), (-1, 0), brand_color),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
         ("ALIGN", (0, 0), (-1, -1), "LEFT"),
         ("ALIGN", (1, 0), (1, -1), "CENTER"),
@@ -292,7 +295,7 @@ def generate_quote_pdf(
         ("LEFTPADDING", (0, 0), (-1, -1), 4),
         ("RIGHTPADDING", (0, 0), (-1, -1), 4),
         ("GRID", (0, 0), (-1, -2), 0.5, colors.HexColor("#e0e0e0")),
-        ("LINEBELOW", (0, -3), (-1, -1), 1.5, colors.HexColor("#2c3e50")),
+        ("LINEBELOW", (0, -3), (-1, -1), 1.5, brand_color),
         ("LINEABOVE", (0, -3), (-1, -1), 0.5, colors.HexColor("#e0e0e0")),
         ("FONTNAME", (0, -3), (-1, -1), "Helvetica-Bold"),
     ]))

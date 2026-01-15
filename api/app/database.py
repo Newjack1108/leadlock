@@ -291,7 +291,22 @@ def create_db_and_tables():
                     import traceback
                     print(traceback.format_exc(), file=sys.stderr, flush=True)
         
-        # Step 6: Add email settings columns to User table
+        # Step 6: Add trading_name to CompanySettings table
+        has_company_settings = inspector.has_table("companysettings")
+        if has_company_settings:
+            company_columns = [col['name'] for col in inspector.get_columns("companysettings")]
+            if "trading_name" not in company_columns:
+                print("Adding trading_name column to companysettings table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text('ALTER TABLE companysettings ADD COLUMN trading_name VARCHAR(255)'))
+                    print("Added trading_name column to companysettings table", file=sys.stderr, flush=True)
+                except Exception as e:
+                    print(f"Error adding trading_name column: {e}", file=sys.stderr, flush=True)
+                    import traceback
+                    print(traceback.format_exc(), file=sys.stderr, flush=True)
+
+        # Step 7: Add email settings columns to User table
         has_user_table = inspector.has_table("user")
         if has_user_table:
             user_columns = [col['name'] for col in inspector.get_columns("user")]

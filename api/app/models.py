@@ -226,6 +226,7 @@ class Product(SQLModel, table=True):
 class CompanySettings(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     company_name: str
+    trading_name: Optional[str] = None  # Trading name for quotes/branding
     company_registration_number: Optional[str] = None  # Company reg number
     vat_number: Optional[str] = None  # VAT number
     address_line1: Optional[str] = None

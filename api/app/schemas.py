@@ -328,6 +328,7 @@ class ProductResponse(BaseModel):
 
 class CompanySettingsCreate(BaseModel):
     company_name: str
+    trading_name: Optional[str] = None
     company_registration_number: Optional[str] = None
     vat_number: Optional[str] = None
     address_line1: Optional[str] = None
@@ -344,6 +345,7 @@ class CompanySettingsCreate(BaseModel):
 
 class CompanySettingsUpdate(BaseModel):
     company_name: Optional[str] = None
+    trading_name: Optional[str] = None
     company_registration_number: Optional[str] = None
     vat_number: Optional[str] = None
     address_line1: Optional[str] = None
@@ -361,6 +363,7 @@ class CompanySettingsUpdate(BaseModel):
 class CompanySettingsResponse(BaseModel):
     id: int
     company_name: str
+    trading_name: Optional[str]
     company_registration_number: Optional[str]
     vat_number: Optional[str]
     address_line1: Optional[str]

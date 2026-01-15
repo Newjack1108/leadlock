@@ -19,6 +19,7 @@ export default function CompanySettingsPage() {
   const [settings, setSettings] = useState<CompanySettings | null>(null);
   const [formData, setFormData] = useState({
     company_name: '',
+    trading_name: '',
     company_registration_number: '',
     vat_number: '',
     address_line1: '',
@@ -44,6 +45,7 @@ export default function CompanySettingsPage() {
       setSettings(response.data);
       setFormData({
         company_name: response.data.company_name || '',
+        trading_name: response.data.trading_name || '',
         company_registration_number: response.data.company_registration_number || '',
         vat_number: response.data.vat_number || '',
         address_line1: response.data.address_line1 || '',
@@ -134,9 +136,23 @@ export default function CompanySettingsPage() {
                 id="company_name"
                 value={formData.company_name}
                 onChange={(e) => setFormData({ ...formData, company_name: e.target.value })}
+                placeholder="Registered company name"
+                disabled={saving}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="trading_name">Trading Name</Label>
+              <Input
+                id="trading_name"
+                value={formData.trading_name}
+                onChange={(e) => setFormData({ ...formData, trading_name: e.target.value })}
                 placeholder="Cheshire Stables"
                 disabled={saving}
               />
+              <p className="text-xs text-muted-foreground">
+                Used on quote headers and branding. Registered name remains in the footer.
+              </p>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
