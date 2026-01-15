@@ -101,7 +101,7 @@ export default function CreateQuoteDialog({
             ...newItems[index],
             product_id: product.id,
             description: product.name,
-            unit_price: product.base_price,
+            unit_price: Number(product.base_price),
             is_custom: false,
           };
         }
@@ -227,7 +227,7 @@ export default function CreateQuoteDialog({
                           <SelectItem value="custom">Custom Item</SelectItem>
                           {products.map((product) => (
                             <SelectItem key={product.id} value={product.id.toString()}>
-                              {product.name} - £{product.base_price.toFixed(2)}
+                              {product.name} - £{Number(product.base_price).toFixed(2)}
                             </SelectItem>
                           ))}
                         </SelectContent>
