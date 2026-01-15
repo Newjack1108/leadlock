@@ -7,6 +7,7 @@ import Logo from './Logo';
 import { Button } from '@/components/ui/button';
 import { LogOut, Users, Settings, Package, User, Mail, Bell, FileText, ShoppingCart, ChevronDown } from 'lucide-react';
 import api from '@/lib/api';
+import { getStaleSummary } from '@/lib/api';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,6 +20,8 @@ export default function Header() {
   const router = useRouter();
   const pathname = usePathname();
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [reminderCount, setReminderCount] = useState<number>(0);
+  const [newLeadsCount, setNewLeadsCount] = useState<number>(0);
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -32,6 +35,31 @@ export default function Header() {
     };
     fetchUser();
   }, []);
+
+  const fetchReminderCount = async () => {
+    try {
+      const summary = await getStaleSummary();
+      setReminderCount(summary.total_reminders || 0);
+    } catch (error) {
+      // Silently fail to avoid disrupting navigation
+      setReminderCount(0);
+    }
+  };
+
+  const fetchNewLeadsCount = async () => {
+    try {
+      const response = await api.get('/api/dashboard/stats');
+      setNewLeadsCount(response.data.new_count || 0);
+    } catch (error) {
+      // Silently fail to avoid disrupting navigation
+      setNewLeadsCount(0);
+    }
+  };
+
+  useEffect(() => {
+    fetchReminderCount();
+    fetchNewLeadsCount();
+  }, [pathname]);
 
   const handleLogout = () => {
     // Clear token from localStorage
@@ -52,7 +80,7 @@ export default function Header() {
         <Logo />
         <nav className="flex items-center gap-4">
           {/* Main Navigation */}
-          <Link href="/leads">
+          <Link href="/leads" className="relative">
             <Button
               variant={pathname?.startsWith('/leads') ? 'default' : 'ghost'}
               size="sm"
@@ -61,6 +89,11 @@ export default function Header() {
               <Users className="h-4 w-4 mr-2" />
               Leads
             </Button>
+            {newLeadsCount > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-red-500 text-white text-xs font-semibold flex items-center justify-center">
+                {newLeadsCount > 99 ? '99+' : newLeadsCount}
+              </span>
+            )}
           </Link>
           <Link href="/customers">
             <Button
@@ -104,7 +137,7 @@ export default function Header() {
               </Button>
             </Link>
           )}
-          <Link href="/reminders">
+          <Link href="/reminders" className="relative">
             <Button
               variant={pathname?.startsWith('/reminders') ? 'default' : 'ghost'}
               size="sm"
@@ -113,6 +146,11 @@ export default function Header() {
               <Bell className="h-4 w-4 mr-2" />
               Reminders
             </Button>
+            {reminderCount > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-red-500 text-white text-xs font-semibold flex items-center justify-center">
+                {reminderCount > 99 ? '99+' : reminderCount}
+              </span>
+            )}
           </Link>
 
           {/* Profile Dropdown */}
