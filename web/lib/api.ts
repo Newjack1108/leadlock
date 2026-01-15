@@ -204,3 +204,36 @@ export const getProducts = async () => {
   const response = await api.get('/api/products');
   return response.data;
 };
+
+// Reminder API functions
+export const getReminders = async (params?: {
+  dismissed?: boolean;
+  priority?: string;
+  reminder_type?: string;
+}) => {
+  const response = await api.get('/api/reminders', { params });
+  return response.data;
+};
+
+export const getStaleSummary = async () => {
+  const response = await api.get('/api/reminders/stale-summary');
+  return response.data;
+};
+
+export const dismissReminder = async (reminderId: number, reason?: string) => {
+  const response = await api.post(`/api/reminders/${reminderId}/dismiss`, { reason });
+  return response.data;
+};
+
+export const actOnReminder = async (reminderId: number, actionTaken: string, notes?: string) => {
+  const response = await api.post(`/api/reminders/${reminderId}/act`, {
+    action_taken: actionTaken,
+    notes,
+  });
+  return response.data;
+};
+
+export const generateReminders = async () => {
+  const response = await api.post('/api/reminders/generate');
+  return response.data;
+};

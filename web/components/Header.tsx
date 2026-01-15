@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Logo from './Logo';
 import { Button } from '@/components/ui/button';
-import { LogOut, LayoutDashboard, Users, Settings, Package, User, Mail } from 'lucide-react';
+import { LogOut, LayoutDashboard, Users, Settings, Package, User, Mail, Bell } from 'lucide-react';
 import api from '@/lib/api';
 
 export default function Header() {
@@ -52,6 +52,16 @@ export default function Header() {
             >
               <LayoutDashboard className="h-4 w-4 mr-2" />
               Dashboard
+            </Button>
+          </Link>
+          <Link href="/reminders">
+            <Button
+              variant={pathname?.startsWith('/reminders') ? 'default' : 'ghost'}
+              size="sm"
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <Bell className="h-4 w-4 mr-2" />
+              Reminders
             </Button>
           </Link>
           <Link href="/leads">

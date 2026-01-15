@@ -371,3 +371,55 @@ export interface QuoteCreate {
   deposit_amount?: number;
   items: QuoteItemCreate[];
 }
+
+export enum ReminderPriority {
+  LOW = "LOW",
+  MEDIUM = "MEDIUM",
+  HIGH = "HIGH",
+  URGENT = "URGENT",
+}
+
+export enum ReminderType {
+  LEAD_STALE = "LEAD_STALE",
+  QUOTE_STALE = "QUOTE_STALE",
+  QUOTE_EXPIRING = "QUOTE_EXPIRING",
+  QUOTE_EXPIRED = "QUOTE_EXPIRED",
+}
+
+export enum SuggestedAction {
+  FOLLOW_UP = "FOLLOW_UP",
+  MARK_LOST = "MARK_LOST",
+  RESEND_QUOTE = "RESEND_QUOTE",
+  REVIEW_QUOTE = "REVIEW_QUOTE",
+  CONTACT_CUSTOMER = "CONTACT_CUSTOMER",
+}
+
+export interface Reminder {
+  id: number;
+  reminder_type: ReminderType;
+  lead_id?: number;
+  quote_id?: number;
+  customer_id?: number;
+  assigned_to_id: number;
+  priority: ReminderPriority;
+  title: string;
+  message: string;
+  suggested_action: SuggestedAction;
+  days_stale: number;
+  created_at: string;
+  dismissed_at?: string;
+  acted_upon_at?: string;
+  lead_name?: string;
+  quote_number?: string;
+  customer_name?: string;
+}
+
+export interface StaleSummary {
+  total_reminders: number;
+  urgent_count: number;
+  high_count: number;
+  medium_count: number;
+  low_count: number;
+  stale_leads_count: number;
+  stale_quotes_count: number;
+}

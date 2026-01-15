@@ -368,6 +368,103 @@ def create_db_and_tables():
                     import traceback
                     print(traceback.format_exc(), file=sys.stderr, flush=True)
         
+        # Step 9: Create Reminder and ReminderRule tables
+        has_reminder_table = inspector.has_table("reminder")
+        has_reminder_rule_table = inspector.has_table("reminderrule")
+        
+        if not has_reminder_table or not has_reminder_rule_table:
+            print("Creating reminder tables...", file=sys.stderr, flush=True)
+            # Tables will be created by SQLModel.metadata.create_all() if they don't exist
+            # But we'll also seed default reminder rules
+            try:
+                with Session(engine) as session:
+                    from app.models import ReminderRule, ReminderPriority, SuggestedAction
+                    
+                    # Check if rules already exist
+                    if not has_reminder_rule_table:
+                        # Create default reminder rules
+                        default_rules = [
+                            ReminderRule(
+                                rule_name="NEW_LEAD_STALE",
+                                entity_type="LEAD",
+                                status="NEW",
+                                threshold_days=3,
+                                check_type="LAST_ACTIVITY",
+                                is_active=True,
+                                priority=ReminderPriority.HIGH,
+                                suggested_action=SuggestedAction.FOLLOW_UP
+                            ),
+                            ReminderRule(
+                                rule_name="CONTACT_ATTEMPTED_STALE",
+                                entity_type="LEAD",
+                                status="CONTACT_ATTEMPTED",
+                                threshold_days=5,
+                                check_type="LAST_ACTIVITY",
+                                is_active=True,
+                                priority=ReminderPriority.HIGH,
+                                suggested_action=SuggestedAction.FOLLOW_UP
+                            ),
+                            ReminderRule(
+                                rule_name="ENGAGED_STALE",
+                                entity_type="LEAD",
+                                status="ENGAGED",
+                                threshold_days=7,
+                                check_type="LAST_ACTIVITY",
+                                is_active=True,
+                                priority=ReminderPriority.MEDIUM,
+                                suggested_action=SuggestedAction.FOLLOW_UP
+                            ),
+                            ReminderRule(
+                                rule_name="QUALIFIED_STALE",
+                                entity_type="LEAD",
+                                status="QUALIFIED",
+                                threshold_days=7,
+                                check_type="LAST_ACTIVITY",
+                                is_active=True,
+                                priority=ReminderPriority.MEDIUM,
+                                suggested_action=SuggestedAction.CONTACT_CUSTOMER
+                            ),
+                            ReminderRule(
+                                rule_name="QUOTED_STALE",
+                                entity_type="LEAD",
+                                status="QUOTED",
+                                threshold_days=5,
+                                check_type="LAST_ACTIVITY",
+                                is_active=True,
+                                priority=ReminderPriority.HIGH,
+                                suggested_action=SuggestedAction.FOLLOW_UP
+                            ),
+                            ReminderRule(
+                                rule_name="QUOTE_SENT_STALE",
+                                entity_type="QUOTE",
+                                status="SENT",
+                                threshold_days=7,
+                                check_type="SENT_DATE",
+                                is_active=True,
+                                priority=ReminderPriority.HIGH,
+                                suggested_action=SuggestedAction.RESEND_QUOTE
+                            ),
+                            ReminderRule(
+                                rule_name="QUOTE_EXPIRED",
+                                entity_type="QUOTE",
+                                status=None,
+                                threshold_days=0,
+                                check_type="VALID_UNTIL",
+                                is_active=True,
+                                priority=ReminderPriority.URGENT,
+                                suggested_action=SuggestedAction.REVIEW_QUOTE
+                            ),
+                        ]
+                        
+                        for rule in default_rules:
+                            session.add(rule)
+                        session.commit()
+                        print(f"Created {len(default_rules)} default reminder rules", file=sys.stderr, flush=True)
+            except Exception as e:
+                print(f"Error creating reminder rules: {e}", file=sys.stderr, flush=True)
+                import traceback
+                print(traceback.format_exc(), file=sys.stderr, flush=True)
+        
         print("Migration check completed", file=sys.stderr, flush=True)
     except Exception as e:
         # Log error but don't crash - migration might have already run

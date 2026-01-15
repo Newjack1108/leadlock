@@ -4,7 +4,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from app.database import create_db_and_tables, engine
 from sqlmodel import Session
-from app.routers import auth, leads, dashboard, webhooks, products, settings, quotes, customers, emails, email_templates
+from app.routers import auth, leads, dashboard, webhooks, products, settings, quotes, customers, emails, email_templates, reminders
 from sqlmodel import Session, select
 from app.models import User
 import os
@@ -92,6 +92,7 @@ app.include_router(quotes.router)
 app.include_router(customers.router)
 app.include_router(emails.router)
 app.include_router(email_templates.router)
+app.include_router(reminders.router)
 
 
 @app.on_event("startup")

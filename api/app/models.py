@@ -395,3 +395,62 @@ class QuoteDiscount(SQLModel, table=True):
     quote_item: Optional[QuoteItem] = Relationship(back_populates="discounts")
     template: Optional[DiscountTemplate] = Relationship(back_populates="quote_discounts")
     applied_by: User = Relationship()
+
+
+class ReminderPriority(str, Enum):
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+    URGENT = "URGENT"
+
+
+class ReminderType(str, Enum):
+    LEAD_STALE = "LEAD_STALE"
+    QUOTE_STALE = "QUOTE_STALE"
+    QUOTE_EXPIRING = "QUOTE_EXPIRING"
+    QUOTE_EXPIRED = "QUOTE_EXPIRED"
+
+
+class SuggestedAction(str, Enum):
+    FOLLOW_UP = "FOLLOW_UP"
+    MARK_LOST = "MARK_LOST"
+    RESEND_QUOTE = "RESEND_QUOTE"
+    REVIEW_QUOTE = "REVIEW_QUOTE"
+    CONTACT_CUSTOMER = "CONTACT_CUSTOMER"
+
+
+class Reminder(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    reminder_type: ReminderType
+    lead_id: Optional[int] = Field(default=None, foreign_key="lead.id")
+    quote_id: Optional[int] = Field(default=None, foreign_key="quote.id")
+    customer_id: Optional[int] = Field(default=None, foreign_key="customer.id")
+    assigned_to_id: int = Field(foreign_key="user.id")  # User who should act
+    priority: ReminderPriority = Field(default=ReminderPriority.MEDIUM)
+    title: str
+    message: str
+    suggested_action: SuggestedAction
+    days_stale: int
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    dismissed_at: Optional[datetime] = None
+    acted_upon_at: Optional[datetime] = None
+    
+    # Relationships
+    lead: Optional["Lead"] = Relationship()
+    quote: Optional["Quote"] = Relationship()
+    customer: Optional["Customer"] = Relationship()
+    assigned_to: User = Relationship()
+
+
+class ReminderRule(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    rule_name: str = Field(unique=True, index=True)  # "NEW_LEAD_STALE", "QUOTE_SENT_STALE"
+    entity_type: str  # "LEAD", "QUOTE"
+    status: Optional[str] = None  # LeadStatus or QuoteStatus value as string
+    threshold_days: int
+    check_type: str  # "LAST_ACTIVITY", "STATUS_DURATION", "SENT_DATE", "VALID_UNTIL"
+    is_active: bool = Field(default=True)
+    priority: ReminderPriority = Field(default=ReminderPriority.MEDIUM)
+    suggested_action: SuggestedAction
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)

@@ -5,7 +5,7 @@ from decimal import Decimal
 from app.models import (
     LeadStatus, ActivityType, Timeframe, UserRole, ProductCategory,
     QuoteStatus, DiscountType, DiscountScope, LeadType, LeadSource,
-    EmailDirection
+    EmailDirection, ReminderPriority, ReminderType, SuggestedAction
 )
 
 
@@ -510,3 +510,63 @@ class QuoteDiscountResponse(BaseModel):
     description: str
     applied_at: datetime
     applied_by_id: int
+
+
+class ReminderResponse(BaseModel):
+    id: int
+    reminder_type: ReminderType
+    lead_id: Optional[int]
+    quote_id: Optional[int]
+    customer_id: Optional[int]
+    assigned_to_id: int
+    priority: ReminderPriority
+    title: str
+    message: str
+    suggested_action: SuggestedAction
+    days_stale: int
+    created_at: datetime
+    dismissed_at: Optional[datetime]
+    acted_upon_at: Optional[datetime]
+    lead_name: Optional[str] = None
+    quote_number: Optional[str] = None
+    customer_name: Optional[str] = None
+
+
+class ReminderDismissRequest(BaseModel):
+    reason: Optional[str] = None
+
+
+class ReminderActRequest(BaseModel):
+    action_taken: str
+    notes: Optional[str] = None
+
+
+class ReminderRuleResponse(BaseModel):
+    id: int
+    rule_name: str
+    entity_type: str
+    status: Optional[str]
+    threshold_days: int
+    check_type: str
+    is_active: bool
+    priority: ReminderPriority
+    suggested_action: SuggestedAction
+    created_at: datetime
+    updated_at: datetime
+
+
+class ReminderRuleUpdate(BaseModel):
+    threshold_days: Optional[int] = None
+    is_active: Optional[bool] = None
+    priority: Optional[ReminderPriority] = None
+    suggested_action: Optional[SuggestedAction] = None
+
+
+class StaleSummaryResponse(BaseModel):
+    total_reminders: int
+    urgent_count: int
+    high_count: int
+    medium_count: int
+    low_count: int
+    stale_leads_count: int
+    stale_quotes_count: int

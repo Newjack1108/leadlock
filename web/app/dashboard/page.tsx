@@ -2,17 +2,21 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import Header from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import api from '@/lib/api';
-import { DashboardStats } from '@/lib/types';
+import { Button } from '@/components/ui/button';
+import ReminderList from '@/components/ReminderList';
+import api, { getStaleSummary } from '@/lib/api';
+import { DashboardStats, StaleSummary } from '@/lib/types';
 import { toast } from 'sonner';
-import { TrendingUp, Users, CheckCircle2, DollarSign } from 'lucide-react';
+import { TrendingUp, Users, CheckCircle2, DollarSign, Bell, ArrowRight } from 'lucide-react';
 
 export default function DashboardPage() {
   const router = useRouter();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [stuckLeads, setStuckLeads] = useState<any[]>([]);
+  const [staleSummary, setStaleSummary] = useState<StaleSummary | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -21,12 +25,14 @@ export default function DashboardPage() {
 
   const fetchDashboard = async () => {
     try {
-      const [statsRes, stuckRes] = await Promise.all([
+      const [statsRes, stuckRes, staleRes] = await Promise.all([
         api.get('/api/dashboard/stats'),
         api.get('/api/dashboard/stuck-leads'),
+        getStaleSummary().catch(() => null), // Don't fail if reminders not available
       ]);
       setStats(statsRes.data);
       setStuckLeads(stuckRes.data);
+      setStaleSummary(staleRes);
     } catch (error: any) {
       if (error.response?.status === 401) {
         router.push('/login');
@@ -137,6 +143,49 @@ export default function DashboardPage() {
               <div className="text-3xl font-bold">{stats.lost_count}</div>
             </CardContent>
           </Card>
+        </div>
+
+        {/* Stale Items Summary */}
+        {staleSummary && staleSummary.total_reminders > 0 && (
+          <Card className="mb-8">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <Bell className="h-5 w-5" />
+                Stale Items Requiring Attention
+              </CardTitle>
+              <Link href="/reminders">
+                <Button variant="outline" size="sm">
+                  View All
+                  <ArrowRight className="h-4 w-4 ml-2" />
+                </Button>
+              </Link>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                <div>
+                  <div className="text-2xl font-bold">{staleSummary.total_reminders}</div>
+                  <div className="text-sm text-muted-foreground">Total Reminders</div>
+                </div>
+                <div>
+                  <div className="text-2xl font-bold text-red-600">{staleSummary.urgent_count}</div>
+                  <div className="text-sm text-muted-foreground">Urgent</div>
+                </div>
+                <div>
+                  <div className="text-2xl font-bold">{staleSummary.stale_leads_count}</div>
+                  <div className="text-sm text-muted-foreground">Stale Leads</div>
+                </div>
+                <div>
+                  <div className="text-2xl font-bold">{staleSummary.stale_quotes_count}</div>
+                  <div className="text-sm text-muted-foreground">Stale Quotes</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Reminders List */}
+        <div className="mb-8">
+          <ReminderList limit={5} showActions={true} />
         </div>
 
         {/* Stuck Leads */}
