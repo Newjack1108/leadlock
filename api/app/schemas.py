@@ -414,6 +414,7 @@ class QuoteCreate(BaseModel):
 
 
 class QuoteUpdate(BaseModel):
+    status: Optional["QuoteStatus"] = None
     valid_until: Optional[datetime] = None
     terms_and_conditions: Optional[str] = None
     notes: Optional[str] = None

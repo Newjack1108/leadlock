@@ -3,7 +3,7 @@ from fastapi.responses import Response
 from sqlmodel import Session, select
 from typing import List
 from app.database import get_session
-from app.models import Quote, QuoteItem, Customer, User, QuoteEmail, Email, EmailDirection, Activity, ActivityType, CompanySettings
+from app.models import Quote, QuoteItem, Customer, User, QuoteEmail, Email, EmailDirection, Activity, ActivityType, CompanySettings, Lead, LeadStatus, QuoteStatus
 from app.auth import get_current_user
 from app.schemas import (
     QuoteCreate, QuoteUpdate, QuoteResponse, QuoteItemCreate, QuoteItemResponse,
@@ -386,6 +386,19 @@ async def send_quote_email_endpoint(
         session.add(activity)
         session.commit()
         
+        # QUALIFIED → QUOTED: Transition lead when quote is sent
+        from app.workflow import auto_transition_lead_status, find_leads_by_customer_id
+        leads = find_leads_by_customer_id(quote.customer_id, session)
+        for lead in leads:
+            if lead.status == LeadStatus.QUALIFIED:
+                auto_transition_lead_status(
+                    lead.id,
+                    LeadStatus.QUOTED,
+                    session,
+                    current_user.id,
+                    "Automatic transition: Quote sent"
+                )
+        
         return QuoteEmailSendResponse(
             email_id=email_record.id,
             quote_email_id=quote_email.id,
@@ -400,6 +413,93 @@ async def send_quote_email_endpoint(
         print(traceback.format_exc(), file=__import__('sys').stderr, flush=True)
         session.rollback()
         raise HTTPException(status_code=500, detail=error_msg)
+
+
+@router.patch("/{quote_id}", response_model=QuoteResponse)
+async def update_quote(
+    quote_id: int,
+    quote_data: QuoteUpdate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    """Update a quote."""
+    statement = select(Quote).where(Quote.id == quote_id)
+    quote = session.exec(statement).first()
+    
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    
+    old_status = quote.status
+    
+    # Update quote fields
+    update_data = quote_data.dict(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(quote, field, value)
+    
+    # Set accepted_at if status changes to ACCEPTED
+    if quote_data.status == QuoteStatus.ACCEPTED and old_status != QuoteStatus.ACCEPTED:
+        quote.accepted_at = datetime.utcnow()
+    
+    quote.updated_at = datetime.utcnow()
+    session.add(quote)
+    session.commit()
+    session.refresh(quote)
+    
+    # QUOTED → WON/LOST: Transition lead when quote status changes
+    if quote_data.status and quote.customer_id:
+        from app.workflow import auto_transition_lead_status, find_leads_by_customer_id
+        leads = find_leads_by_customer_id(quote.customer_id, session)
+        
+        if quote_data.status == QuoteStatus.ACCEPTED:
+            # Transition QUOTED → WON
+            for lead in leads:
+                if lead.status == LeadStatus.QUOTED:
+                    auto_transition_lead_status(
+                        lead.id,
+                        LeadStatus.WON,
+                        session,
+                        current_user.id,
+                        "Automatic transition: Quote accepted"
+                    )
+        elif quote_data.status == QuoteStatus.REJECTED:
+            # Transition QUOTED → LOST
+            for lead in leads:
+                if lead.status == LeadStatus.QUOTED:
+                    auto_transition_lead_status(
+                        lead.id,
+                        LeadStatus.LOST,
+                        session,
+                        current_user.id,
+                        "Automatic transition: Quote rejected"
+                    )
+    
+    # Get quote items for response
+    statement = select(QuoteItem).where(QuoteItem.quote_id == quote.id).order_by(QuoteItem.sort_order)
+    quote_items = session.exec(statement).all()
+    
+    return QuoteResponse(
+        id=quote.id,
+        customer_id=quote.customer_id,
+        quote_number=quote.quote_number,
+        version=quote.version,
+        status=quote.status,
+        subtotal=quote.subtotal,
+        discount_total=quote.discount_total,
+        total_amount=quote.total_amount,
+        deposit_amount=quote.deposit_amount,
+        balance_amount=quote.balance_amount,
+        currency=quote.currency,
+        valid_until=quote.valid_until,
+        terms_and_conditions=quote.terms_and_conditions,
+        notes=quote.notes,
+        created_by_id=quote.created_by_id,
+        sent_at=quote.sent_at,
+        viewed_at=quote.viewed_at,
+        accepted_at=quote.accepted_at,
+        created_at=quote.created_at,
+        updated_at=quote.updated_at,
+        items=[QuoteItemResponse(**item.dict()) for item in quote_items]
+    )
 
 
 @router.get("/{quote_id}/preview-pdf")

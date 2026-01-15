@@ -7,14 +7,14 @@ from datetime import datetime, timedelta
 # Define allowed transitions per role
 WORKFLOW_TRANSITIONS = {
     UserRole.DIRECTOR: {
-        LeadStatus.NEW: [LeadStatus.CONTACT_ATTEMPTED, LeadStatus.LOST],
+        LeadStatus.NEW: [LeadStatus.ENGAGED, LeadStatus.CONTACT_ATTEMPTED, LeadStatus.LOST],
         LeadStatus.CONTACT_ATTEMPTED: [LeadStatus.ENGAGED, LeadStatus.LOST],
         LeadStatus.ENGAGED: [LeadStatus.QUALIFIED, LeadStatus.LOST],
         LeadStatus.QUALIFIED: [LeadStatus.QUOTED, LeadStatus.LOST],
         LeadStatus.QUOTED: [LeadStatus.WON, LeadStatus.LOST],
     },
     UserRole.SALES_MANAGER: {
-        LeadStatus.NEW: [LeadStatus.CONTACT_ATTEMPTED],
+        LeadStatus.NEW: [LeadStatus.ENGAGED, LeadStatus.CONTACT_ATTEMPTED],
         LeadStatus.CONTACT_ATTEMPTED: [LeadStatus.ENGAGED],
         LeadStatus.ENGAGED: [LeadStatus.QUALIFIED],
     },
@@ -174,3 +174,65 @@ def check_sla_overdue(lead: Lead, session: Session) -> Optional[str]:
                 return "amber"
     
     return None
+
+
+def auto_transition_lead_status(
+    lead_id: int,
+    new_status: LeadStatus,
+    session: Session,
+    changed_by_id: int,
+    reason: Optional[str] = None
+) -> bool:
+    """
+    Automatically transition a lead to a new status.
+    Uses director override logic to allow automatic transitions.
+    Returns True if transition occurred, False otherwise.
+    """
+    statement = select(Lead).where(Lead.id == lead_id)
+    lead = session.exec(statement).first()
+    
+    if not lead:
+        return False
+    
+    # Skip if already in target status
+    if lead.status == new_status:
+        return False
+    
+    # Use director override logic for automatic transitions
+    allowed, error = can_transition(
+        UserRole.DIRECTOR,  # Use director role for automatic transitions
+        lead.status,
+        new_status,
+        lead,
+        session,
+        is_override=True  # Allow override for automatic transitions
+    )
+    
+    if not allowed:
+        return False
+    
+    old_status = lead.status
+    lead.status = new_status
+    lead.updated_at = datetime.utcnow()
+    session.add(lead)
+    
+    # Create status history record
+    from app.models import StatusHistory
+    status_history = StatusHistory(
+        lead_id=lead.id,
+        old_status=old_status,
+        new_status=new_status,
+        changed_by_id=changed_by_id,
+        override_reason=reason or "Automatic transition"
+    )
+    session.add(status_history)
+    session.commit()
+    session.refresh(lead)
+    
+    return True
+
+
+def find_leads_by_customer_id(customer_id: int, session: Session) -> list[Lead]:
+    """Find all leads associated with a customer."""
+    statement = select(Lead).where(Lead.customer_id == customer_id)
+    return list(session.exec(statement).all())

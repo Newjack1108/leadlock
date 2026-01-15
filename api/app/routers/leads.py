@@ -376,31 +376,47 @@ async def create_activity(
     session.commit()
     session.refresh(activity)
     
-    # Auto-transition to ENGAGED if we have engagement proof
+    # Auto-transition logic
+    from app.workflow import auto_transition_lead_status, check_quote_prerequisites, find_leads_by_customer_id
+    
+    # NEW → ENGAGED: Transition when any activity is created
+    if lead.status == LeadStatus.NEW:
+        auto_transition_lead_status(
+            lead.id,
+            LeadStatus.ENGAGED,
+            session,
+            current_user.id,
+            "Automatic transition: Activity created"
+        )
+        session.refresh(lead)
+    
+    # CONTACT_ATTEMPTED → ENGAGED: Keep existing logic for backward compatibility
     from app.workflow import ENGAGEMENT_PROOF_TYPES
     if activity.activity_type in ENGAGEMENT_PROOF_TYPES and lead.status == LeadStatus.CONTACT_ATTEMPTED:
-        allowed, error = can_transition(
-            current_user.role,
-            lead.status,
+        auto_transition_lead_status(
+            lead.id,
             LeadStatus.ENGAGED,
-            lead,
-            session
+            session,
+            current_user.id,
+            "Automatic transition: Engagement proof activity"
         )
-        if allowed:
-            old_status = lead.status
-            lead.status = LeadStatus.ENGAGED
-            lead.updated_at = datetime.utcnow()
-            session.add(lead)
-            
-            status_history = StatusHistory(
-                lead_id=lead.id,
-                old_status=old_status,
-                new_status=LeadStatus.ENGAGED,
-                changed_by_id=current_user.id
-            )
-            session.add(status_history)
-            session.commit()
-            session.refresh(lead)
+        session.refresh(lead)
+    
+    # ENGAGED → QUALIFIED: Check if quote unlocks after activity creation
+    if lead.status == LeadStatus.ENGAGED and lead.customer_id:
+        statement = select(Customer).where(Customer.id == lead.customer_id)
+        customer = session.exec(statement).first()
+        if customer:
+            can_quote, error = check_quote_prerequisites(customer, session)
+            if can_quote:
+                auto_transition_lead_status(
+                    lead.id,
+                    LeadStatus.QUALIFIED,
+                    session,
+                    current_user.id,
+                    "Automatic transition: Quote unlocked"
+                )
+                session.refresh(lead)
     
     return ActivityResponse(
         id=activity.id,
