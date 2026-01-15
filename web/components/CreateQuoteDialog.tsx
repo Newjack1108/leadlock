@@ -85,24 +85,27 @@ export default function CreateQuoteDialog({
 
   const updateItem = (index: number, field: keyof QuoteItemCreate, value: any) => {
     const newItems = [...items];
-    if (field === 'product_id' && value) {
-      const product = products.find((p) => p.id === parseInt(value));
-      if (product) {
+    if (field === 'product_id') {
+      if (value === 'custom' || !value) {
+        // Clear product selection - custom item
         newItems[index] = {
           ...newItems[index],
-          product_id: product.id,
-          description: product.name,
-          unit_price: product.base_price,
-          is_custom: false,
+          product_id: undefined,
+          is_custom: true,
         };
+      } else {
+        // Product selected
+        const product = products.find((p) => p.id === parseInt(value));
+        if (product) {
+          newItems[index] = {
+            ...newItems[index],
+            product_id: product.id,
+            description: product.name,
+            unit_price: product.base_price,
+            is_custom: false,
+          };
+        }
       }
-    } else if (field === 'product_id' && !value) {
-      // Clear product selection
-      newItems[index] = {
-        ...newItems[index],
-        product_id: undefined,
-        is_custom: true,
-      };
     } else {
       newItems[index] = { ...newItems[index], [field]: value };
     }
@@ -214,14 +217,14 @@ export default function CreateQuoteDialog({
                     <div className="space-y-2">
                       <Label>Product (Optional)</Label>
                       <Select
-                        value={item.product_id?.toString() || ''}
-                        onValueChange={(value) => updateItem(index, 'product_id', value)}
+                        value={item.product_id?.toString() || 'custom'}
+                        onValueChange={(value) => updateItem(index, 'product_id', value === 'custom' ? undefined : value)}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Select product or enter custom" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="">Custom Item</SelectItem>
+                          <SelectItem value="custom">Custom Item</SelectItem>
                           {products.map((product) => (
                             <SelectItem key={product.id} value={product.id.toString()}>
                               {product.name} - £{product.base_price.toFixed(2)}
