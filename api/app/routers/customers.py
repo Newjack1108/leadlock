@@ -286,33 +286,33 @@ async def create_customer_activity(
         if not customer:
             raise HTTPException(status_code=404, detail="Customer not found")
         
-    activity = Activity(
-        customer_id=customer_id,
-        activity_type=activity_data.activity_type,
-        notes=activity_data.notes,
-        created_by_id=current_user.id
-    )
-    session.add(activity)
-    session.commit()
-    session.refresh(activity)
-    
-    # Check if quote unlocks and transition ENGAGED → QUALIFIED
-    from app.workflow import check_quote_prerequisites, auto_transition_lead_status, find_leads_by_customer_id
-    can_quote, error = check_quote_prerequisites(customer, session)
-    if can_quote:
-        # Find all ENGAGED leads for this customer and transition to QUALIFIED
-        leads = find_leads_by_customer_id(customer.id, session)
-        for lead in leads:
-            if lead.status == LeadStatus.ENGAGED:
-                auto_transition_lead_status(
-                    lead.id,
-                    LeadStatus.QUALIFIED,
-                    session,
-                    current_user.id,
-                    "Automatic transition: Quote unlocked"
-                )
-    
-    return ActivityResponse(
+        activity = Activity(
+            customer_id=customer_id,
+            activity_type=activity_data.activity_type,
+            notes=activity_data.notes,
+            created_by_id=current_user.id
+        )
+        session.add(activity)
+        session.commit()
+        session.refresh(activity)
+        
+        # Check if quote unlocks and transition ENGAGED → QUALIFIED
+        from app.workflow import check_quote_prerequisites, auto_transition_lead_status, find_leads_by_customer_id
+        can_quote, error = check_quote_prerequisites(customer, session)
+        if can_quote:
+            # Find all ENGAGED leads for this customer and transition to QUALIFIED
+            leads = find_leads_by_customer_id(customer.id, session)
+            for lead in leads:
+                if lead.status == LeadStatus.ENGAGED:
+                    auto_transition_lead_status(
+                        lead.id,
+                        LeadStatus.QUALIFIED,
+                        session,
+                        current_user.id,
+                        "Automatic transition: Quote unlocked"
+                    )
+        
+        return ActivityResponse(
             id=activity.id,
             customer_id=activity.customer_id,
             activity_type=activity.activity_type,
