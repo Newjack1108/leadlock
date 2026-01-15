@@ -359,7 +359,7 @@ export default function CustomerDetailPage() {
                           className="text-sm text-muted-foreground cursor-pointer hover:text-primary"
                           onClick={() => router.push(`/quotes/${quote.id}`)}
                         >
-                          £{quote.total_amount.toFixed(2)}
+                          £{Number(quote.total_amount).toFixed(2)}
                         </div>
                       </div>
                     ))}
