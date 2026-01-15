@@ -91,6 +91,21 @@ async def create_quote(
             )
             items.append(item)
     
+        # Calculate deposit and balance
+        # Default to 50% deposit if not provided
+        total_amount = subtotal  # No discounts applied yet
+        if quote_data.deposit_amount is not None:
+            deposit_amount = Decimal(str(quote_data.deposit_amount))
+        else:
+            # Default to 50% of total
+            deposit_amount = total_amount * Decimal("0.5")
+        
+        # Ensure deposit doesn't exceed total
+        if deposit_amount > total_amount:
+            deposit_amount = total_amount
+        
+        balance_amount = total_amount - deposit_amount
+        
         # Create quote
         quote = Quote(
             customer_id=quote_data.customer_id,
@@ -98,7 +113,9 @@ async def create_quote(
             version=quote_data.version or 1,
             subtotal=subtotal,
             discount_total=Decimal(0),
-            total_amount=subtotal,
+            total_amount=total_amount,
+            deposit_amount=deposit_amount,
+            balance_amount=balance_amount,
             currency="GBP",
             valid_until=quote_data.valid_until,
             terms_and_conditions=quote_data.terms_and_conditions,
@@ -129,6 +146,8 @@ async def create_quote(
             subtotal=quote.subtotal,
             discount_total=quote.discount_total,
             total_amount=quote.total_amount,
+            deposit_amount=quote.deposit_amount,
+            balance_amount=quote.balance_amount,
             currency=quote.currency,
             valid_until=quote.valid_until,
             terms_and_conditions=quote.terms_and_conditions,
@@ -173,6 +192,8 @@ async def get_quote(
         subtotal=quote.subtotal,
         discount_total=quote.discount_total,
         total_amount=quote.total_amount,
+        deposit_amount=quote.deposit_amount,
+        balance_amount=quote.balance_amount,
         currency=quote.currency,
         valid_until=quote.valid_until,
         terms_and_conditions=quote.terms_and_conditions,
@@ -211,6 +232,8 @@ async def get_customer_quotes(
             subtotal=quote.subtotal,
             discount_total=quote.discount_total,
             total_amount=quote.total_amount,
+            deposit_amount=quote.deposit_amount,
+            balance_amount=quote.balance_amount,
             currency=quote.currency,
             valid_until=quote.valid_until,
             terms_and_conditions=quote.terms_and_conditions,

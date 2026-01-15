@@ -409,6 +409,7 @@ class QuoteCreate(BaseModel):
     valid_until: Optional[datetime] = None
     terms_and_conditions: Optional[str] = None
     notes: Optional[str] = None
+    deposit_amount: Optional[Decimal] = None  # Optional deposit amount (defaults to 50% of total if not provided)
     items: List[QuoteItemCreate]
 
 
@@ -416,6 +417,7 @@ class QuoteUpdate(BaseModel):
     valid_until: Optional[datetime] = None
     terms_and_conditions: Optional[str] = None
     notes: Optional[str] = None
+    deposit_amount: Optional[Decimal] = None
 
 
 class QuoteResponse(BaseModel):
@@ -427,6 +429,8 @@ class QuoteResponse(BaseModel):
     subtotal: Decimal
     discount_total: Decimal
     total_amount: Decimal
+    deposit_amount: Decimal
+    balance_amount: Decimal
     currency: str
     valid_until: Optional[datetime]
     terms_and_conditions: Optional[str]

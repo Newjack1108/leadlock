@@ -345,6 +345,29 @@ def create_db_and_tables():
                     import traceback
                     print(traceback.format_exc(), file=sys.stderr, flush=True)
         
+        # Step 8: Add deposit_amount and balance_amount to Quote table
+        if has_quote_table:
+            quote_columns = [col['name'] for col in inspector.get_columns("quote")]
+            if "deposit_amount" not in quote_columns:
+                print("Adding deposit_amount and balance_amount columns to quote table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text('ALTER TABLE quote ADD COLUMN deposit_amount NUMERIC(10, 2) DEFAULT 0'))
+                        conn.execute(text('ALTER TABLE quote ADD COLUMN balance_amount NUMERIC(10, 2) DEFAULT 0'))
+                        
+                        # Calculate and set deposit/balance for existing quotes (50% default)
+                        conn.execute(text("""
+                            UPDATE quote 
+                            SET deposit_amount = total_amount * 0.5,
+                                balance_amount = total_amount * 0.5
+                            WHERE deposit_amount = 0 AND balance_amount = 0
+                        """))
+                        print("Added deposit_amount and balance_amount columns to quote table", file=sys.stderr, flush=True)
+                except Exception as e:
+                    print(f"Error adding deposit/balance columns: {e}", file=sys.stderr, flush=True)
+                    import traceback
+                    print(traceback.format_exc(), file=sys.stderr, flush=True)
+        
         print("Migration check completed", file=sys.stderr, flush=True)
     except Exception as e:
         # Log error but don't crash - migration might have already run

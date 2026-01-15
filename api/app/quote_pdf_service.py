@@ -322,8 +322,17 @@ def generate_quote_pdf(
     total_row_index = len(table_data)
     table_data.append(["", "", "Total:", format_currency(quote.total_amount, quote.currency)])
     
-    items_table = Table(table_data, colWidths=[90*mm, 25*mm, 30*mm, 35*mm])
-    items_table.setStyle(TableStyle([
+    # Add deposit and balance rows (always show if total > 0)
+    deposit_row_index = None
+    balance_row_index = None
+    if quote.total_amount > 0:
+        deposit_row_index = len(table_data)
+        table_data.append(["", "", "Deposit (on order):", format_currency(quote.deposit_amount, quote.currency)])
+        balance_row_index = len(table_data)
+        table_data.append(["", "", "Balance:", format_currency(quote.balance_amount, quote.currency)])
+    
+    # Build table style list
+    table_style_list = [
         ("BACKGROUND", (0, 0), (-1, 0), brand_color),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
         ("ALIGN", (0, 0), (-1, -1), "LEFT"),
@@ -338,11 +347,19 @@ def generate_quote_pdf(
         ("LEFTPADDING", (0, 0), (-1, -1), 4),
         ("RIGHTPADDING", (0, 0), (-1, -1), 4),
         ("GRID", (0, 0), (-1, -2), 0.5, colors.HexColor("#e0e0e0")),
-        ("LINEBELOW", (0, -3), (-1, -1), 1.5, brand_color),
-        ("LINEABOVE", (0, -3), (-1, -1), 0.5, colors.HexColor("#e0e0e0")),
+        ("LINEBELOW", (0, total_row_index), (-1, total_row_index), 1.5, brand_color),
+        ("LINEABOVE", (0, total_row_index), (-1, total_row_index), 0.5, colors.HexColor("#e0e0e0")),
         ("FONTNAME", (2, subtotal_row_index), (3, subtotal_row_index), "Helvetica-Bold"),
         ("FONTNAME", (2, total_row_index), (3, total_row_index), "Helvetica-Bold"),
-    ]))
+    ]
+    # Add deposit and balance styling if they exist
+    if deposit_row_index is not None:
+        table_style_list.append(("FONTNAME", (2, deposit_row_index), (3, deposit_row_index), "Helvetica-Bold"))
+    if balance_row_index is not None:
+        table_style_list.append(("FONTNAME", (2, balance_row_index), (3, balance_row_index), "Helvetica-Bold"))
+    
+    items_table = Table(table_data, colWidths=[90*mm, 25*mm, 30*mm, 35*mm])
+    items_table.setStyle(TableStyle(table_style_list))
     elements.append(items_table)
     elements.append(Spacer(1, 20))
     

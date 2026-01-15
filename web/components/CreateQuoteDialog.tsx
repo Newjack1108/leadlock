@@ -46,6 +46,7 @@ export default function CreateQuoteDialog({
   const [validUntil, setValidUntil] = useState('');
   const [termsAndConditions, setTermsAndConditions] = useState('');
   const [notes, setNotes] = useState('');
+  const [depositAmount, setDepositAmount] = useState<number | ''>('');
 
   useEffect(() => {
     if (open) {
@@ -116,6 +117,27 @@ export default function CreateQuoteDialog({
     return items.reduce((sum, item) => sum + (item.quantity || 0) * (item.unit_price || 0), 0);
   };
 
+  const calculateTotal = () => {
+    return calculateSubtotal();
+  };
+
+  const calculateDefaultDeposit = () => {
+    return calculateTotal() * 0.5;
+  };
+
+  const getDepositAmount = () => {
+    if (depositAmount === '') {
+      return calculateDefaultDeposit();
+    }
+    return Number(depositAmount);
+  };
+
+  const getBalanceAmount = () => {
+    const total = calculateTotal();
+    const deposit = getDepositAmount();
+    return Math.max(0, total - deposit);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -153,6 +175,10 @@ export default function CreateQuoteDialog({
       if (notes && notes.trim()) {
         quoteData.notes = notes.trim();
       }
+      // Include deposit_amount if explicitly set, otherwise let backend default to 50%
+      if (depositAmount !== '') {
+        quoteData.deposit_amount = Number(depositAmount);
+      }
 
       await createQuote(quoteData);
       toast.success('Quote created successfully');
@@ -173,6 +199,7 @@ export default function CreateQuoteDialog({
       setValidUntil(date.toISOString().split('T')[0]);
       setTermsAndConditions('');
       setNotes('');
+      setDepositAmount('');
 
       setTimeout(() => {
         try {
@@ -288,16 +315,43 @@ export default function CreateQuoteDialog({
                   </div>
                 </div>
               ))}
-              <div className="p-3 bg-muted rounded-md">
+              <div className="p-3 bg-muted rounded-md space-y-2">
                 <div className="flex justify-between items-center">
                   <span className="font-semibold">Subtotal:</span>
-                  <span className="font-semibold text-lg">£{calculateSubtotal().toFixed(2)}</span>
+                  <span className="font-semibold">£{calculateSubtotal().toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between items-center border-t pt-2">
+                  <span className="font-semibold text-lg">Total:</span>
+                  <span className="font-semibold text-lg">£{calculateTotal().toFixed(2)}</span>
                 </div>
               </div>
             </div>
 
             {/* Quote Details */}
             <div className="space-y-4 border-t pt-4">
+              <div className="space-y-2">
+                <Label>Deposit Amount (£)</Label>
+                <div className="space-y-2">
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={depositAmount}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setDepositAmount(value === '' ? '' : parseFloat(value) || 0);
+                    }}
+                    placeholder={`Default: £${calculateDefaultDeposit().toFixed(2)} (50%)`}
+                  />
+                  <div className="text-sm text-muted-foreground">
+                    {depositAmount === '' ? (
+                      <>Default deposit: £{calculateDefaultDeposit().toFixed(2)} (50% of total)</>
+                    ) : (
+                      <>Balance: £{getBalanceAmount().toFixed(2)}</>
+                    )}
+                  </div>
+                </div>
+              </div>
               <div className="space-y-2">
                 <Label>Valid Until</Label>
                 <Input

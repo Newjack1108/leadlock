@@ -346,6 +346,8 @@ export interface Quote {
   subtotal: number;
   discount_total: number;
   total_amount: number;
+  deposit_amount: number;
+  balance_amount: number;
   currency: string;
   valid_until?: string;
   terms_and_conditions?: string;
@@ -366,5 +368,6 @@ export interface QuoteCreate {
   valid_until?: string;
   terms_and_conditions?: string;
   notes?: string;
+  deposit_amount?: number;
   items: QuoteItemCreate[];
 }
