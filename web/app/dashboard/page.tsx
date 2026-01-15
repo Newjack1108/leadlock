@@ -199,7 +199,8 @@ export default function DashboardPage() {
                 {stuckLeads.map((lead) => (
                   <div
                     key={lead.id}
-                    className="flex items-center justify-between p-3 rounded-lg bg-card border border-border"
+                    onClick={() => router.push(`/leads/${lead.id}`)}
+                    className="flex items-center justify-between p-3 rounded-lg bg-card border border-border cursor-pointer hover:bg-muted transition-colors"
                   >
                     <div>
                       <p className="font-medium">{lead.name}</p>
@@ -207,6 +208,7 @@ export default function DashboardPage() {
                         {lead.status} • {lead.days_old} days old
                       </p>
                     </div>
+                    <ArrowRight className="h-4 w-4 text-muted-foreground" />
                   </div>
                 ))}
               </div>
