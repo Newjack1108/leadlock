@@ -17,12 +17,14 @@ import {
   PhoneCall,
   ArrowRight,
   Send,
+  Plus,
 } from 'lucide-react';
 import api from '@/lib/api';
 import { Customer, Activity, ActivityType, Lead } from '@/lib/types';
 import { toast } from 'sonner';
 import SendQuoteEmailDialog from '@/components/SendQuoteEmailDialog';
 import ComposeEmailDialog from '@/components/ComposeEmailDialog';
+import CreateQuoteDialog from '@/components/CreateQuoteDialog';
 
 const activityIcons: Record<ActivityType, any> = {
   SMS_SENT: MessageSquare,
@@ -63,6 +65,7 @@ export default function CustomerDetailPage() {
   const [sendEmailDialogOpen, setSendEmailDialogOpen] = useState(false);
   const [selectedQuoteId, setSelectedQuoteId] = useState<number | null>(null);
   const [composeEmailDialogOpen, setComposeEmailDialogOpen] = useState(false);
+  const [createQuoteDialogOpen, setCreateQuoteDialogOpen] = useState(false);
 
   useEffect(() => {
     if (customerId) {
@@ -295,11 +298,34 @@ export default function CustomerDetailPage() {
             {/* Quotes Card */}
             <Card>
               <CardHeader>
-                <CardTitle>Quotes</CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Quotes</CardTitle>
+                  {!quoteLocked && (
+                    <Button
+                      size="sm"
+                      onClick={() => setCreateQuoteDialogOpen(true)}
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Create Quote
+                    </Button>
+                  )}
+                </div>
               </CardHeader>
               <CardContent>
                 {quotes.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No quotes yet</p>
+                  <div className="space-y-3">
+                    <p className="text-sm text-muted-foreground">No quotes yet</p>
+                    {!quoteLocked && (
+                      <Button
+                        variant="outline"
+                        className="w-full"
+                        onClick={() => setCreateQuoteDialogOpen(true)}
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Create First Quote
+                      </Button>
+                    )}
+                  </div>
                 ) : (
                   <div className="space-y-2">
                     {quotes.map((quote) => (
@@ -513,6 +539,17 @@ export default function CustomerDetailPage() {
             setTimeout(() => {
               checkQuotePrerequisites();
             }, 200);
+          }}
+        />
+      )}
+
+      {customer && (
+        <CreateQuoteDialog
+          open={createQuoteDialogOpen}
+          onOpenChange={setCreateQuoteDialogOpen}
+          customer={customer}
+          onSuccess={() => {
+            fetchQuotes();
           }}
         />
       )}

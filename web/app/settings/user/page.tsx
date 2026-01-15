@@ -120,7 +120,11 @@ export default function UserSettingsPage() {
   };
 
   const insertLogo = () => {
-    const logoHtml = '<img src="/logo1.png" alt="Company Logo" style="max-height: 60px; margin: 10px 0;" />';
+    // Use absolute URL to ensure logo loads correctly from any page
+    const logoUrl = typeof window !== 'undefined' 
+      ? `${window.location.origin}/logo1.png`
+      : '/logo1.png';
+    const logoHtml = `<img src="${logoUrl}" alt="Company Logo" style="max-height: 60px; margin: 10px 0;" />`;
     setSignature(signature + '\n' + logoHtml);
   };
 

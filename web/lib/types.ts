@@ -303,3 +303,67 @@ export interface EmailTemplatePreviewResponse {
   subject: string;
   body_html: string;
 }
+
+export enum QuoteStatus {
+  DRAFT = "DRAFT",
+  SENT = "SENT",
+  VIEWED = "VIEWED",
+  ACCEPTED = "ACCEPTED",
+  REJECTED = "REJECTED",
+  EXPIRED = "EXPIRED",
+}
+
+export interface QuoteItem {
+  id: number;
+  quote_id: number;
+  product_id?: number;
+  description: string;
+  quantity: number;
+  unit_price: number;
+  line_total: number;
+  discount_amount: number;
+  final_line_total: number;
+  sort_order: number;
+  is_custom: boolean;
+}
+
+export interface QuoteItemCreate {
+  product_id?: number;
+  description: string;
+  quantity: number;
+  unit_price: number;
+  is_custom?: boolean;
+  sort_order?: number;
+}
+
+export interface Quote {
+  id: number;
+  customer_id: number;
+  quote_number: string;
+  version: number;
+  status: QuoteStatus;
+  subtotal: number;
+  discount_total: number;
+  total_amount: number;
+  currency: string;
+  valid_until?: string;
+  terms_and_conditions?: string;
+  notes?: string;
+  created_by_id: number;
+  sent_at?: string;
+  viewed_at?: string;
+  accepted_at?: string;
+  created_at: string;
+  updated_at: string;
+  items: QuoteItem[];
+}
+
+export interface QuoteCreate {
+  customer_id: number;
+  quote_number?: string;
+  version?: number;
+  valid_until?: string;
+  terms_and_conditions?: string;
+  notes?: string;
+  items: QuoteItemCreate[];
+}

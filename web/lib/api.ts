@@ -158,3 +158,39 @@ export const updateUserEmailSettings = async (settingsData: {
   const response = await api.put('/api/settings/user/email', settingsData);
   return response.data;
 };
+
+// Quote API functions
+export const createQuote = async (quoteData: {
+  customer_id: number;
+  quote_number?: string;
+  version?: number;
+  valid_until?: string;
+  terms_and_conditions?: string;
+  notes?: string;
+  items: Array<{
+    product_id?: number;
+    description: string;
+    quantity: number;
+    unit_price: number;
+    is_custom?: boolean;
+    sort_order?: number;
+  }>;
+}) => {
+  const response = await api.post('/api/quotes', quoteData);
+  return response.data;
+};
+
+export const getQuote = async (quoteId: number) => {
+  const response = await api.get(`/api/quotes/${quoteId}`);
+  return response.data;
+};
+
+export const getCustomerQuotes = async (customerId: number) => {
+  const response = await api.get(`/api/quotes/customers/${customerId}`);
+  return response.data;
+};
+
+export const getProducts = async () => {
+  const response = await api.get('/api/products');
+  return response.data;
+};

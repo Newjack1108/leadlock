@@ -26,6 +26,16 @@ export default function QuoteLockCard({ customer, quoteLocked = false, quoteLock
   const hasPostcode = !!customer.postcode;
   const hasEmail = !!customer.email;
   const hasPhone = !!customer.phone;
+  
+  // Map missing field names to display names
+  const fieldDisplayNames: Record<string, string> = {
+    'address_line1': 'Address Line 1',
+    'city': 'City',
+    'county': 'County',
+    'postcode': 'Postcode',
+    'email': 'Email',
+    'phone': 'Phone',
+  };
 
   return (
     <Card className={`${isLocked ? 'border-destructive/50' : 'border-success/50'}`}>
@@ -58,52 +68,83 @@ export default function QuoteLockCard({ customer, quoteLocked = false, quoteLock
                 {hasAddressLine1 ? (
                   <CheckCircle2 className="h-4 w-4 text-success" />
                 ) : (
-                  <XCircle className="h-4 w-4 text-muted-foreground" />
+                  <XCircle className="h-4 w-4 text-destructive" />
                 )}
-                <span className={hasAddressLine1 ? 'text-foreground' : 'text-muted-foreground'}>
+                <span className={hasAddressLine1 ? 'text-foreground' : missingItems.includes('address_line1') ? 'text-destructive font-medium' : 'text-muted-foreground'}>
                   Address Line 1
+                  {missingItems.includes('address_line1') && <span className="ml-1 text-xs">(Required)</span>}
                 </span>
               </div>
               <div className="flex items-center gap-2">
                 {hasCity ? (
                   <CheckCircle2 className="h-4 w-4 text-success" />
                 ) : (
-                  <XCircle className="h-4 w-4 text-muted-foreground" />
+                  <XCircle className="h-4 w-4 text-destructive" />
                 )}
-                <span className={hasCity ? 'text-foreground' : 'text-muted-foreground'}>
+                <span className={hasCity ? 'text-foreground' : missingItems.includes('city') ? 'text-destructive font-medium' : 'text-muted-foreground'}>
                   City
+                  {missingItems.includes('city') && <span className="ml-1 text-xs">(Required)</span>}
                 </span>
               </div>
               <div className="flex items-center gap-2">
                 {hasCounty ? (
                   <CheckCircle2 className="h-4 w-4 text-success" />
                 ) : (
-                  <XCircle className="h-4 w-4 text-muted-foreground" />
+                  <XCircle className="h-4 w-4 text-destructive" />
                 )}
-                <span className={hasCounty ? 'text-foreground' : 'text-muted-foreground'}>
+                <span className={hasCounty ? 'text-foreground' : missingItems.includes('county') ? 'text-destructive font-medium' : 'text-muted-foreground'}>
                   County
+                  {missingItems.includes('county') && <span className="ml-1 text-xs">(Required)</span>}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                {hasPostcode ? (
+                  <CheckCircle2 className="h-4 w-4 text-success" />
+                ) : (
+                  <XCircle className="h-4 w-4 text-destructive" />
+                )}
+                <span className={hasPostcode ? 'text-foreground' : missingItems.includes('postcode') ? 'text-destructive font-medium' : 'text-muted-foreground'}>
+                  Postcode
+                  {missingItems.includes('postcode') && <span className="ml-1 text-xs">(Required)</span>}
                 </span>
               </div>
               <div className="flex items-center gap-2">
                 {hasEmail ? (
                   <CheckCircle2 className="h-4 w-4 text-success" />
                 ) : (
-                  <XCircle className="h-4 w-4 text-muted-foreground" />
+                  <XCircle className="h-4 w-4 text-destructive" />
                 )}
-                <span className={hasEmail ? 'text-foreground' : 'text-muted-foreground'}>
+                <span className={hasEmail ? 'text-foreground' : missingItems.includes('email') ? 'text-destructive font-medium' : 'text-muted-foreground'}>
                   Email
+                  {missingItems.includes('email') && <span className="ml-1 text-xs">(Required)</span>}
                 </span>
               </div>
               <div className="flex items-center gap-2">
                 {hasPhone ? (
                   <CheckCircle2 className="h-4 w-4 text-success" />
                 ) : (
-                  <XCircle className="h-4 w-4 text-muted-foreground" />
+                  <XCircle className="h-4 w-4 text-destructive" />
                 )}
-                <span className={hasPhone ? 'text-foreground' : 'text-muted-foreground'}>
+                <span className={hasPhone ? 'text-foreground' : missingItems.includes('phone') ? 'text-destructive font-medium' : 'text-muted-foreground'}>
                   Phone
+                  {missingItems.includes('phone') && <span className="ml-1 text-xs">(Required)</span>}
                 </span>
               </div>
+              {reason?.error === 'QUOTE_PREREQS_MISSING' && missingItems.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-border space-y-2">
+                  <div className="text-xs font-semibold text-destructive uppercase tracking-wide mb-2">
+                    Missing Required Fields
+                  </div>
+                  {missingItems.map((field: string) => (
+                    <div key={field} className="flex items-center gap-2">
+                      <XCircle className="h-4 w-4 text-destructive" />
+                      <span className="text-destructive text-sm">
+                        {fieldDisplayNames[field] || field}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
               {reason?.error === 'NO_ENGAGEMENT_PROOF' && (
                 <div className="mt-3 pt-3 border-t border-border space-y-2">
                   <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
