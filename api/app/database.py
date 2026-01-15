@@ -247,18 +247,19 @@ def create_db_and_tables():
             has_lead_id = "lead_id" in quote_columns
             has_customer_id = "customer_id" in quote_columns
             
-            if has_lead_id and not has_customer_id:
+            if has_lead_id:
                 print("Migrating Quote table from lead_id to customer_id...", file=sys.stderr, flush=True)
                 try:
                     with engine.begin() as conn:
-                        # Add customer_id column (nullable first) - use IF NOT EXISTS equivalent
-                        try:
-                            conn.execute(text("ALTER TABLE quote ADD COLUMN customer_id INTEGER"))
-                        except Exception as col_error:
-                            # Column might already exist from SQLModel.create_all()
-                            if "already exists" not in str(col_error).lower() and "duplicate" not in str(col_error).lower():
-                                raise
-                            print("customer_id column already exists in quote table", file=sys.stderr, flush=True)
+                        # Add customer_id column if it doesn't exist
+                        if not has_customer_id:
+                            try:
+                                conn.execute(text("ALTER TABLE quote ADD COLUMN customer_id INTEGER"))
+                            except Exception as col_error:
+                                # Column might already exist from SQLModel.create_all()
+                                if "already exists" not in str(col_error).lower() and "duplicate" not in str(col_error).lower():
+                                    raise
+                                print("customer_id column already exists in quote table", file=sys.stderr, flush=True)
                         
                         # Migrate data: for each quote, get customer_id from lead
                         conn.execute(text("""
@@ -271,9 +272,22 @@ def create_db_and_tables():
                             WHERE quote.lead_id IS NOT NULL
                             AND EXISTS (SELECT 1 FROM lead WHERE lead.id = quote.lead_id AND lead.customer_id IS NOT NULL)
                         """))
+                        
+                        # Make lead_id nullable to allow quotes without leads
+                        try:
+                            # PostgreSQL syntax
+                            conn.execute(text("ALTER TABLE quote ALTER COLUMN lead_id DROP NOT NULL"))
+                            print("Made lead_id nullable in quote table", file=sys.stderr, flush=True)
+                        except Exception as alter_error:
+                            # Try to get more info about the error
+                            error_str = str(alter_error).lower()
+                            if "does not exist" not in error_str and "not-null" not in error_str and "constraint" not in error_str:
+                                print(f"Warning: Could not make lead_id nullable: {alter_error}", file=sys.stderr, flush=True)
                     print("Migrated Quote table", file=sys.stderr, flush=True)
                 except Exception as e:
                     print(f"Error migrating Quote table: {e}", file=sys.stderr, flush=True)
+                    import traceback
+                    print(traceback.format_exc(), file=sys.stderr, flush=True)(f"Error migrating Quote table: {e}", file=sys.stderr, flush=True)
                     import traceback
                     print(traceback.format_exc(), file=sys.stderr, flush=True)
         
