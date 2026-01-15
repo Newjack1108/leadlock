@@ -195,6 +195,8 @@ async def get_customer_quotes(
             subtotal=quote.subtotal,
             discount_total=quote.discount_total,
             total_amount=quote.total_amount,
+            deposit_amount=quote.deposit_amount,
+            balance_amount=quote.balance_amount,
             currency=quote.currency,
             valid_until=quote.valid_until,
             terms_and_conditions=quote.terms_and_conditions,
