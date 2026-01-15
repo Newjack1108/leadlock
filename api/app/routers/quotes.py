@@ -322,7 +322,7 @@ async def send_quote_email_endpoint(
             raise HTTPException(status_code=400, detail="User email is not configured")
         
         # Send quote email
-        success, message_id, error, pdf_buffer = send_quote_email(
+        success, message_id, error, pdf_buffer, email_subject, email_body_html = send_quote_email(
             quote=quote,
             customer=customer,
             to_email=email_data.to_email,
@@ -337,6 +337,10 @@ async def send_quote_email_endpoint(
         if not success:
             raise HTTPException(status_code=500, detail=f"Failed to send quote email: {error}")
         
+        # Use rendered subject and body_html, fallback to defaults if None
+        final_subject = email_subject or f"Quote {quote.quote_number}"
+        final_body_html = email_body_html or f"<p>Please find attached your quote {quote.quote_number}.</p>"
+        
         # Create Email record
         email_record = Email(
             customer_id=quote.customer_id,
@@ -346,7 +350,7 @@ async def send_quote_email_endpoint(
             to_email=email_data.to_email,
             cc=email_data.cc,
             bcc=email_data.bcc,
-            subject=f"Quote {quote.quote_number}",
+            subject=final_subject,
             body_html=None,  # Will be stored in QuoteEmail
             sent_at=datetime.utcnow(),
             created_by_id=current_user.id
@@ -359,8 +363,8 @@ async def send_quote_email_endpoint(
         quote_email = QuoteEmail(
             quote_id=quote.id,
             to_email=email_data.to_email,
-            subject=f"Quote {quote.quote_number}",
-            body_html=None,  # Template rendered content
+            subject=final_subject,
+            body_html=final_body_html,  # Template rendered content
             tracking_id=message_id or f"quote-{quote.id}-{datetime.utcnow().timestamp()}"
         )
         session.add(quote_email)
@@ -435,11 +439,17 @@ async def preview_quote_pdf(
         pdf_buffer = generate_quote_pdf(quote, customer, quote_items, company_settings, session)
         pdf_content = pdf_buffer.read()
         
+        # Sanitize customer name for filename (remove invalid characters)
+        import re
+        safe_customer_name = re.sub(r'[<>:"/\\|?*]', '_', customer.name).strip()
+        safe_customer_name = re.sub(r'\s+', '_', safe_customer_name)  # Replace spaces with underscores
+        pdf_filename = f"Quote_{quote.quote_number}_{safe_customer_name}.pdf"
+        
         return Response(
             content=pdf_content,
             media_type="application/pdf",
             headers={
-                "Content-Disposition": f'inline; filename="Quote_{quote.quote_number}.pdf"'
+                "Content-Disposition": f'inline; filename="{pdf_filename}"'
             }
         )
     except Exception as e:

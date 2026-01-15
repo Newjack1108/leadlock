@@ -66,7 +66,7 @@ def send_quote_email(
     bcc: Optional[str] = None,
     custom_message: Optional[str] = None,
     user_id: Optional[int] = None
-) -> Tuple[bool, Optional[str], Optional[str], Optional[BytesIO]]:
+) -> Tuple[bool, Optional[str], Optional[str], Optional[BytesIO], Optional[str], Optional[str]]:
     """
     Send a quote as an email with PDF attachment.
     
@@ -79,9 +79,10 @@ def send_quote_email(
         cc: Optional CC recipients
         bcc: Optional BCC recipients
         custom_message: Optional custom message to append
+        user_id: Optional user ID for email sending
     
     Returns:
-        Tuple of (success, message_id, error_message, pdf_buffer)
+        Tuple of (success, message_id, error_message, pdf_buffer, subject, body_html)
     """
     try:
         # Get quote items
@@ -114,7 +115,11 @@ def send_quote_email(
         
         # Generate PDF
         pdf_buffer = generate_quote_pdf(quote, customer, quote_items, company_settings, session)
-        pdf_filename = f"Quote_{quote.quote_number}.pdf"
+        # Sanitize customer name for filename (remove invalid characters)
+        import re
+        safe_customer_name = re.sub(r'[<>:"/\\|?*]', '_', customer.name).strip()
+        safe_customer_name = re.sub(r'\s+', '_', safe_customer_name)  # Replace spaces with underscores
+        pdf_filename = f"Quote_{quote.quote_number}_{safe_customer_name}.pdf"
         
         # Send email
         success, message_id, error = send_email(
@@ -131,9 +136,9 @@ def send_quote_email(
         )
         
         if success:
-            return True, message_id, None, pdf_buffer
+            return True, message_id, None, pdf_buffer, subject, body_html
         else:
-            return False, None, error, pdf_buffer
+            return False, None, error, pdf_buffer, subject, body_html
     
     except Exception as e:
-        return False, None, str(e), None
+        return False, None, str(e), None, None, None

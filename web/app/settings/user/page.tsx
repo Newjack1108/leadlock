@@ -124,6 +124,9 @@ export default function UserSettingsPage() {
     const logoUrl = typeof window !== 'undefined' 
       ? `${window.location.origin}/logo1.png`
       : '/logo1.png';
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/5f6616a2-cda8-4249-a2cd-9eef4a062c60',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'settings/user/page.tsx:insertLogo',message:'Inserting logo1.png',data:{logoUrl,windowOrigin:typeof window!=='undefined'?window.location.origin:'SSR',resolvedUrl:typeof window!=='undefined'?new URL('/logo1.png',window.location.origin).href:'SSR'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+    // #endregion
     const logoHtml = `<img src="${logoUrl}" alt="Company Logo" style="max-height: 60px; margin: 10px 0;" />`;
     setSignature(signature + '\n' + logoHtml);
   };

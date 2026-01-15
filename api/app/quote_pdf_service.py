@@ -97,6 +97,27 @@ def generate_quote_pdf(
         logo = None
         logo_path = None
         
+        # #region agent log
+        import json
+        log_data = {
+            "location": "quote_pdf_service.py:generate_quote_pdf",
+            "message": "Starting logo search",
+            "data": {
+                "logo_filename": company_settings.logo_filename,
+                "current_file": str(__file__),
+                "parent_parent": str(Path(__file__).parent.parent) if Path(__file__).exists() else "N/A"
+            },
+            "timestamp": int(datetime.now().timestamp() * 1000),
+            "sessionId": "debug-session",
+            "runId": "run1",
+            "hypothesisId": "E"
+        }
+        try:
+            with open("c:\\projects\\LeadLock\\.cursor\\debug.log", "a", encoding="utf-8") as f:
+                f.write(json.dumps(log_data) + "\n")
+        except: pass
+        # #endregion
+        
         # Try multiple possible logo locations
         possible_logo_paths = [
             Path(__file__).parent.parent / "static" / company_settings.logo_filename,
@@ -104,6 +125,27 @@ def generate_quote_pdf(
             Path(__file__).parent.parent.parent / "web" / "public" / company_settings.logo_filename,
             company_settings.logo_filename,  # Absolute path
         ]
+        
+        # #region agent log
+        checked_paths = []
+        for p in possible_logo_paths:
+            path_str = str(p) if not isinstance(p, str) else p
+            exists = os.path.exists(path_str) if isinstance(p, str) else p.exists()
+            checked_paths.append({"path": path_str, "exists": exists})
+        log_data2 = {
+            "location": "quote_pdf_service.py:generate_quote_pdf",
+            "message": "Checked file paths",
+            "data": {"checked_paths": checked_paths},
+            "timestamp": int(datetime.now().timestamp() * 1000),
+            "sessionId": "debug-session",
+            "runId": "run1",
+            "hypothesisId": "F"
+        }
+        try:
+            with open("c:\\projects\\LeadLock\\.cursor\\debug.log", "a", encoding="utf-8") as f:
+                f.write(json.dumps(log_data2) + "\n")
+        except: pass
+        # #endregion
         
         for path in possible_logo_paths:
             if isinstance(path, str):
@@ -116,6 +158,21 @@ def generate_quote_pdf(
                     break
         
         if logo_path and os.path.exists(logo_path):
+            # #region agent log
+            log_data3 = {
+                "location": "quote_pdf_service.py:generate_quote_pdf",
+                "message": "Found logo file path",
+                "data": {"logo_path": logo_path, "file_exists": os.path.exists(logo_path)},
+                "timestamp": int(datetime.now().timestamp() * 1000),
+                "sessionId": "debug-session",
+                "runId": "run1",
+                "hypothesisId": "G"
+            }
+            try:
+                with open("c:\\projects\\LeadLock\\.cursor\\debug.log", "a", encoding="utf-8") as f:
+                    f.write(json.dumps(log_data3) + "\n")
+            except: pass
+            # #endregion
             try:
                 # Load logo with appropriate size (max width 60mm, maintain aspect ratio)
                 logo = Image(logo_path, width=60*mm, height=None)
@@ -127,7 +184,37 @@ def generate_quote_pdf(
                     if logo.height > 25*mm:
                         logo.height = 25*mm
                         logo.width = logo.height * aspect_ratio
+                # #region agent log
+                log_data4 = {
+                    "location": "quote_pdf_service.py:generate_quote_pdf",
+                    "message": "Logo loaded successfully from file",
+                    "data": {"logo_path": logo_path, "width": logo.width, "height": logo.height},
+                    "timestamp": int(datetime.now().timestamp() * 1000),
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "H"
+                }
+                try:
+                    with open("c:\\projects\\LeadLock\\.cursor\\debug.log", "a", encoding="utf-8") as f:
+                        f.write(json.dumps(log_data4) + "\n")
+                except: pass
+                # #endregion
             except Exception as e:
+                # #region agent log
+                log_data5 = {
+                    "location": "quote_pdf_service.py:generate_quote_pdf",
+                    "message": "Failed to load logo from file",
+                    "data": {"logo_path": logo_path, "error": str(e)},
+                    "timestamp": int(datetime.now().timestamp() * 1000),
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "I"
+                }
+                try:
+                    with open("c:\\projects\\LeadLock\\.cursor\\debug.log", "a", encoding="utf-8") as f:
+                        f.write(json.dumps(log_data5) + "\n")
+                except: pass
+                # #endregion
                 print(f"Warning: Could not load logo from {logo_path}: {e}", file=__import__('sys').stderr, flush=True)
                 logo = None
 
@@ -156,6 +243,31 @@ def generate_quote_pdf(
                 elif origins:
                     url_candidates.append(origins[0].rstrip("/") + "/" + logo_filename)
 
+            # #region agent log
+            log_data6 = {
+                "location": "quote_pdf_service.py:generate_quote_pdf",
+                "message": "Trying URL fallback for logo",
+                "data": {
+                    "logo_filename": logo_filename,
+                    "url_candidates": url_candidates,
+                    "env_vars": {
+                        "LOGO_URL": bool(env_logo_url),
+                        "LOGO_BASE_URL": bool(env_logo_base),
+                        "FRONTEND_URL": bool(env_frontend_url),
+                        "CORS_ORIGINS": bool(cors_origins)
+                    }
+                },
+                "timestamp": int(datetime.now().timestamp() * 1000),
+                "sessionId": "debug-session",
+                "runId": "run1",
+                "hypothesisId": "J"
+            }
+            try:
+                with open("c:\\projects\\LeadLock\\.cursor\\debug.log", "a", encoding="utf-8") as f:
+                    f.write(json.dumps(log_data6) + "\n")
+            except: pass
+            # #endregion
+
             for logo_url in url_candidates:
                 try:
                     with urllib.request.urlopen(logo_url, timeout=5) as response:
@@ -167,8 +279,38 @@ def generate_quote_pdf(
                         if logo.height > 25*mm:
                             logo.height = 25*mm
                             logo.width = logo.height * aspect_ratio
+                    # #region agent log
+                    log_data7 = {
+                        "location": "quote_pdf_service.py:generate_quote_pdf",
+                        "message": "Logo loaded successfully from URL",
+                        "data": {"logo_url": logo_url},
+                        "timestamp": int(datetime.now().timestamp() * 1000),
+                        "sessionId": "debug-session",
+                        "runId": "run1",
+                        "hypothesisId": "K"
+                    }
+                    try:
+                        with open("c:\\projects\\LeadLock\\.cursor\\debug.log", "a", encoding="utf-8") as f:
+                            f.write(json.dumps(log_data7) + "\n")
+                    except: pass
+                    # #endregion
                     break
                 except Exception as e:
+                    # #region agent log
+                    log_data8 = {
+                        "location": "quote_pdf_service.py:generate_quote_pdf",
+                        "message": "Failed to load logo from URL",
+                        "data": {"logo_url": logo_url, "error": str(e)},
+                        "timestamp": int(datetime.now().timestamp() * 1000),
+                        "sessionId": "debug-session",
+                        "runId": "run1",
+                        "hypothesisId": "L"
+                    }
+                    try:
+                        with open("c:\\projects\\LeadLock\\.cursor\\debug.log", "a", encoding="utf-8") as f:
+                            f.write(json.dumps(log_data8) + "\n")
+                    except: pass
+                    # #endregion
                     print(f"Warning: Could not load logo from URL {logo_url}: {e}", file=__import__('sys').stderr, flush=True)
         
         # Create header table with logo and company info
