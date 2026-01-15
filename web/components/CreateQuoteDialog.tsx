@@ -131,16 +131,28 @@ export default function CreateQuoteDialog({
 
     setLoading(true);
     try {
-      const quoteData = {
+      const quoteData: any = {
         customer_id: customer.id,
-        valid_until: validUntil ? new Date(validUntil).toISOString() : undefined,
-        terms_and_conditions: termsAndConditions || undefined,
-        notes: notes || undefined,
         items: validItems.map((item, index) => ({
-          ...item,
+          product_id: item.product_id || null,
+          description: item.description,
+          quantity: Number(item.quantity),
+          unit_price: Number(item.unit_price),
+          is_custom: item.is_custom !== undefined ? item.is_custom : (item.product_id === undefined || item.product_id === null),
           sort_order: index,
         })),
       };
+
+      // Only include optional fields if they have values
+      if (validUntil) {
+        quoteData.valid_until = new Date(validUntil).toISOString();
+      }
+      if (termsAndConditions && termsAndConditions.trim()) {
+        quoteData.terms_and_conditions = termsAndConditions.trim();
+      }
+      if (notes && notes.trim()) {
+        quoteData.notes = notes.trim();
+      }
 
       await createQuote(quoteData);
       toast.success('Quote created successfully');

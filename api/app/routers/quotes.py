@@ -50,91 +50,100 @@ async def create_quote(
     current_user: User = Depends(get_current_user)
 ):
     """Create a new quote."""
-    # Verify customer exists
-    if not quote_data.customer_id:
-        raise HTTPException(status_code=400, detail="customer_id is required")
-    
-    statement = select(Customer).where(Customer.id == quote_data.customer_id)
-    customer = session.exec(statement).first()
-    
-    if not customer:
-        raise HTTPException(status_code=404, detail="Customer not found")
-    
-    # Generate quote number if not provided
-    quote_number = quote_data.quote_number or generate_quote_number(session)
-    
-    # Calculate totals
-    subtotal = Decimal(0)
-    items = []
-    
-    for item_data in quote_data.items:
-        line_total = item_data.quantity * item_data.unit_price
-        subtotal += line_total
+    try:
+        # Verify customer exists
+        if not quote_data.customer_id:
+            raise HTTPException(status_code=400, detail="customer_id is required")
         
-        item = QuoteItem(
-            quote_id=0,  # Will be set after quote is created
-            product_id=item_data.product_id,
-            description=item_data.description,
-            quantity=item_data.quantity,
-            unit_price=item_data.unit_price,
-            line_total=line_total,
-            discount_amount=Decimal(0),
-            final_line_total=line_total,
-            sort_order=item_data.sort_order,
-            is_custom=item_data.is_custom
+        statement = select(Customer).where(Customer.id == quote_data.customer_id)
+        customer = session.exec(statement).first()
+        
+        if not customer:
+            raise HTTPException(status_code=404, detail="Customer not found")
+        
+        # Generate quote number if not provided
+        quote_number = quote_data.quote_number or generate_quote_number(session)
+        
+        # Calculate totals
+        subtotal = Decimal(0)
+        items = []
+        
+        for item_data in quote_data.items:
+            # Ensure Decimal conversion
+            quantity = Decimal(str(item_data.quantity))
+            unit_price = Decimal(str(item_data.unit_price))
+            line_total = quantity * unit_price
+            subtotal += line_total
+            
+            item = QuoteItem(
+                quote_id=0,  # Will be set after quote is created
+                product_id=item_data.product_id,
+                description=item_data.description,
+                quantity=quantity,
+                unit_price=unit_price,
+                line_total=line_total,
+                discount_amount=Decimal(0),
+                final_line_total=line_total,
+                sort_order=item_data.sort_order or 0,
+                is_custom=item_data.is_custom if item_data.is_custom is not None else False
+            )
+            items.append(item)
+    
+        # Create quote
+        quote = Quote(
+            customer_id=quote_data.customer_id,
+            quote_number=quote_number,
+            version=quote_data.version or 1,
+            subtotal=subtotal,
+            discount_total=Decimal(0),
+            total_amount=subtotal,
+            currency="GBP",
+            valid_until=quote_data.valid_until,
+            terms_and_conditions=quote_data.terms_and_conditions,
+            notes=quote_data.notes,
+            created_by_id=current_user.id
         )
-        items.append(item)
-    
-    # Create quote
-    quote = Quote(
-        customer_id=quote_data.customer_id,
-        quote_number=quote_number,
-        version=quote_data.version,
-        subtotal=subtotal,
-        discount_total=Decimal(0),
-        total_amount=subtotal,
-        currency="GBP",
-        valid_until=quote_data.valid_until,
-        terms_and_conditions=quote_data.terms_and_conditions,
-        notes=quote_data.notes,
-        created_by_id=current_user.id
-    )
-    session.add(quote)
-    session.commit()
-    session.refresh(quote)
-    
-    # Add items with quote_id
-    for item in items:
-        item.quote_id = quote.id
-        session.add(item)
-    session.commit()
-    
-    # Refresh to get items
-    session.refresh(quote)
-    statement = select(QuoteItem).where(QuoteItem.quote_id == quote.id)
-    quote_items = session.exec(statement).all()
-    
-    return QuoteResponse(
-        id=quote.id,
-        customer_id=quote.customer_id,
-        quote_number=quote.quote_number,
-        version=quote.version,
-        status=quote.status,
-        subtotal=quote.subtotal,
-        discount_total=quote.discount_total,
-        total_amount=quote.total_amount,
-        currency=quote.currency,
-        valid_until=quote.valid_until,
-        terms_and_conditions=quote.terms_and_conditions,
-        notes=quote.notes,
-        created_by_id=quote.created_by_id,
-        sent_at=quote.sent_at,
-        viewed_at=quote.viewed_at,
-        accepted_at=quote.accepted_at,
-        created_at=quote.created_at,
-        updated_at=quote.updated_at,
-        items=[QuoteItemResponse(**item.dict()) for item in quote_items]
-    )
+        session.add(quote)
+        session.commit()
+        session.refresh(quote)
+        
+        # Add items with quote_id
+        for item in items:
+            item.quote_id = quote.id
+            session.add(item)
+        session.commit()
+        
+        # Refresh to get items
+        session.refresh(quote)
+        statement = select(QuoteItem).where(QuoteItem.quote_id == quote.id)
+        quote_items = session.exec(statement).all()
+        
+        return QuoteResponse(
+            id=quote.id,
+            customer_id=quote.customer_id,
+            quote_number=quote.quote_number,
+            version=quote.version,
+            status=quote.status,
+            subtotal=quote.subtotal,
+            discount_total=quote.discount_total,
+            total_amount=quote.total_amount,
+            currency=quote.currency,
+            valid_until=quote.valid_until,
+            terms_and_conditions=quote.terms_and_conditions,
+            notes=quote.notes,
+            created_by_id=quote.created_by_id,
+            sent_at=quote.sent_at,
+            viewed_at=quote.viewed_at,
+            accepted_at=quote.accepted_at,
+            created_at=quote.created_at,
+            updated_at=quote.updated_at,
+            items=[QuoteItemResponse(**item.dict()) for item in quote_items]
+        )
+    except Exception as e:
+        import traceback
+        error_detail = str(e)
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error creating quote: {error_detail}")
 
 
 @router.get("/{quote_id}", response_model=QuoteResponse)
