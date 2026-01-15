@@ -180,6 +180,11 @@ export const createQuote = async (quoteData: {
   return response.data;
 };
 
+export const getQuotes = async () => {
+  const response = await api.get('/api/quotes');
+  return response.data;
+};
+
 export const getQuote = async (quoteId: number) => {
   const response = await api.get(`/api/quotes/${quoteId}`);
   return response.data;

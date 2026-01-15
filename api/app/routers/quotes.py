@@ -167,6 +167,47 @@ async def create_quote(
         raise HTTPException(status_code=500, detail=f"Error creating quote: {error_detail}")
 
 
+@router.get("", response_model=List[QuoteResponse])
+async def get_all_quotes(
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    """Get all quotes."""
+    statement = select(Quote).order_by(Quote.created_at.desc())
+    quotes = session.exec(statement).all()
+    
+    result = []
+    for quote in quotes:
+        item_statement = select(QuoteItem).where(QuoteItem.quote_id == quote.id).order_by(QuoteItem.sort_order)
+        quote_items = session.exec(item_statement).all()
+        
+        result.append(QuoteResponse(
+            id=quote.id,
+            customer_id=quote.customer_id,
+            quote_number=quote.quote_number,
+            version=quote.version,
+            status=quote.status,
+            subtotal=quote.subtotal,
+            discount_total=quote.discount_total,
+            total_amount=quote.total_amount,
+            deposit_amount=quote.deposit_amount,
+            balance_amount=quote.balance_amount,
+            currency=quote.currency,
+            valid_until=quote.valid_until,
+            terms_and_conditions=quote.terms_and_conditions,
+            notes=quote.notes,
+            created_by_id=quote.created_by_id,
+            sent_at=quote.sent_at,
+            viewed_at=quote.viewed_at,
+            accepted_at=quote.accepted_at,
+            created_at=quote.created_at,
+            updated_at=quote.updated_at,
+            items=[QuoteItemResponse(**item.dict()) for item in quote_items]
+        ))
+    
+    return result
+
+
 @router.get("/{quote_id}", response_model=QuoteResponse)
 async def get_quote(
     quote_id: int,
