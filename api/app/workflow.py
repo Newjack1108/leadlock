@@ -2,6 +2,7 @@ from typing import Optional
 from app.models import LeadStatus, UserRole, ActivityType, Timeframe, Lead, Activity, Customer
 from sqlmodel import Session, select
 from datetime import datetime, timedelta
+from decimal import Decimal
 
 
 # Define allowed transitions per role
@@ -236,3 +237,61 @@ def find_leads_by_customer_id(customer_id: int, session: Session) -> list[Lead]:
     """Find all leads associated with a customer."""
     statement = select(Lead).where(Lead.customer_id == customer_id)
     return list(session.exec(statement).all())
+
+
+def auto_create_opportunity(
+    customer_id: int,
+    lead_id: int,
+    session: Session,
+    created_by_id: int
+) -> Optional["Quote"]:
+    """
+    Automatically create an opportunity (quote) when lead becomes QUALIFIED.
+    Returns the created Quote/opportunity, or None if one already exists.
+    """
+    from app.models import Quote, OpportunityStage, QuoteStatus
+    from app.routers.quotes import generate_quote_number
+    
+    # Check if opportunity already exists for this customer
+    statement = select(Quote).where(Quote.customer_id == customer_id)
+    existing_quotes = session.exec(statement).all()
+    
+    if existing_quotes:
+        # Opportunity already exists, return None
+        return None
+    
+    # Get the lead to inherit owner
+    statement = select(Lead).where(Lead.id == lead_id)
+    lead = session.exec(statement).first()
+    
+    if not lead:
+        return None
+    
+    # Create minimal opportunity (quote) with default values
+    quote_number = generate_quote_number(session)
+    next_action_due = datetime.utcnow() + timedelta(days=2)
+    
+    opportunity = Quote(
+        customer_id=customer_id,
+        quote_number=quote_number,
+        version=1,
+        subtotal=Decimal(0),
+        discount_total=Decimal(0),
+        total_amount=Decimal(0),
+        deposit_amount=Decimal(0),
+        balance_amount=Decimal(0),
+        currency="GBP",
+        status=QuoteStatus.DRAFT,
+        created_by_id=created_by_id,
+        owner_id=lead.assigned_to_id if lead.assigned_to_id else created_by_id,
+        opportunity_stage=OpportunityStage.DISCOVERY,
+        close_probability=Decimal("25.00"),  # 25% default for DISCOVERY
+        next_action="Initial contact and site visit",
+        next_action_due_date=next_action_due
+    )
+    
+    session.add(opportunity)
+    session.commit()
+    session.refresh(opportunity)
+    
+    return opportunity

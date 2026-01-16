@@ -417,6 +417,14 @@ async def create_activity(
                     "Automatic transition: Quote unlocked"
                 )
                 session.refresh(lead)
+                # Auto-create opportunity when lead becomes QUALIFIED
+                from app.workflow import auto_create_opportunity
+                auto_create_opportunity(
+                    customer.id,
+                    lead.id,
+                    session,
+                    current_user.id
+                )
     
     return ActivityResponse(
         id=activity.id,

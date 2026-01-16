@@ -1,13 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
-from sqlmodel import Session, select
-from typing import List
+from sqlmodel import Session, select, or_, and_
+from typing import List, Optional
 from app.database import get_session
-from app.models import Quote, QuoteItem, Customer, User, QuoteEmail, Email, EmailDirection, Activity, ActivityType, CompanySettings, Lead, LeadStatus, QuoteStatus
+from app.models import Quote, QuoteItem, Customer, User, QuoteEmail, Email, EmailDirection, Activity, ActivityType, CompanySettings, Lead, LeadStatus, QuoteStatus, OpportunityStage, LossCategory
 from app.auth import get_current_user
 from app.schemas import (
     QuoteCreate, QuoteUpdate, QuoteResponse, QuoteItemCreate, QuoteItemResponse,
-    QuoteEmailSendRequest, QuoteEmailSendResponse
+    QuoteEmailSendRequest, QuoteEmailSendResponse, OpportunityWonRequest, OpportunityLostRequest
 )
 from app.quote_email_service import send_quote_email
 from app.quote_pdf_service import generate_quote_pdf
@@ -171,7 +171,15 @@ async def create_quote(
             accepted_at=quote.accepted_at,
             created_at=quote.created_at,
             updated_at=quote.updated_at,
-            items=[QuoteItemResponse(**item.dict()) for item in quote_items]
+            items=[QuoteItemResponse(**item.dict()) for item in quote_items],
+            opportunity_stage=quote.opportunity_stage,
+            close_probability=quote.close_probability,
+            expected_close_date=quote.expected_close_date,
+            next_action=quote.next_action,
+            next_action_due_date=quote.next_action_due_date,
+            loss_reason=quote.loss_reason,
+            loss_category=quote.loss_category,
+            owner_id=quote.owner_id
         )
     except Exception as e:
         import traceback
@@ -215,7 +223,139 @@ async def get_all_quotes(
             accepted_at=quote.accepted_at,
             created_at=quote.created_at,
             updated_at=quote.updated_at,
-            items=[QuoteItemResponse(**item.dict()) for item in quote_items]
+            items=[QuoteItemResponse(**item.dict()) for item in quote_items],
+            opportunity_stage=quote.opportunity_stage,
+            close_probability=quote.close_probability,
+            expected_close_date=quote.expected_close_date,
+            next_action=quote.next_action,
+            next_action_due_date=quote.next_action_due_date,
+            loss_reason=quote.loss_reason,
+            loss_category=quote.loss_category,
+            owner_id=quote.owner_id
+        ))
+    
+    return result
+
+
+# Opportunity Management Endpoints (must be before /{quote_id} to avoid route conflicts)
+
+@router.get("/opportunities", response_model=List[QuoteResponse])
+async def get_opportunities(
+    stage: Optional[OpportunityStage] = None,
+    owner_id: Optional[int] = None,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    """Get all opportunities (quotes with opportunity_stage set)."""
+    statement = select(Quote).where(Quote.opportunity_stage.isnot(None))
+    
+    if stage:
+        statement = statement.where(Quote.opportunity_stage == stage)
+    if owner_id:
+        statement = statement.where(Quote.owner_id == owner_id)
+    
+    statement = statement.order_by(Quote.created_at.desc())
+    quotes = session.exec(statement).all()
+    
+    result = []
+    for quote in quotes:
+        item_statement = select(QuoteItem).where(QuoteItem.quote_id == quote.id).order_by(QuoteItem.sort_order)
+        quote_items = session.exec(item_statement).all()
+        
+        result.append(QuoteResponse(
+            id=quote.id,
+            customer_id=quote.customer_id,
+            quote_number=quote.quote_number,
+            version=quote.version,
+            status=quote.status,
+            subtotal=quote.subtotal,
+            discount_total=quote.discount_total,
+            total_amount=quote.total_amount,
+            deposit_amount=quote.deposit_amount,
+            balance_amount=quote.balance_amount,
+            currency=quote.currency,
+            valid_until=quote.valid_until,
+            terms_and_conditions=quote.terms_and_conditions,
+            notes=quote.notes,
+            created_by_id=quote.created_by_id,
+            sent_at=quote.sent_at,
+            viewed_at=quote.viewed_at,
+            accepted_at=quote.accepted_at,
+            created_at=quote.created_at,
+            updated_at=quote.updated_at,
+            items=[QuoteItemResponse(**item.dict()) for item in quote_items],
+            opportunity_stage=quote.opportunity_stage,
+            close_probability=quote.close_probability,
+            expected_close_date=quote.expected_close_date,
+            next_action=quote.next_action,
+            next_action_due_date=quote.next_action_due_date,
+            loss_reason=quote.loss_reason,
+            loss_category=quote.loss_category,
+            owner_id=quote.owner_id
+        ))
+    
+    return result
+
+
+@router.get("/opportunities/stale", response_model=List[QuoteResponse])
+async def get_stale_opportunities(
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    """Get opportunities that need attention (overdue next actions, stale, etc.)."""
+    from datetime import datetime, timedelta
+    
+    now = datetime.utcnow()
+    
+    # Find opportunities with overdue next actions or expected close dates
+    statement = select(Quote).where(
+        and_(
+            Quote.opportunity_stage.isnot(None),
+            Quote.opportunity_stage.notin_([OpportunityStage.WON, OpportunityStage.LOST]),
+            or_(
+                and_(Quote.next_action_due_date.isnot(None), Quote.next_action_due_date < now),
+                and_(Quote.expected_close_date.isnot(None), Quote.expected_close_date < now)
+            )
+        )
+    ).order_by(Quote.next_action_due_date.asc())
+    
+    quotes = session.exec(statement).all()
+    
+    result = []
+    for quote in quotes:
+        item_statement = select(QuoteItem).where(QuoteItem.quote_id == quote.id).order_by(QuoteItem.sort_order)
+        quote_items = session.exec(item_statement).all()
+        
+        result.append(QuoteResponse(
+            id=quote.id,
+            customer_id=quote.customer_id,
+            quote_number=quote.quote_number,
+            version=quote.version,
+            status=quote.status,
+            subtotal=quote.subtotal,
+            discount_total=quote.discount_total,
+            total_amount=quote.total_amount,
+            deposit_amount=quote.deposit_amount,
+            balance_amount=quote.balance_amount,
+            currency=quote.currency,
+            valid_until=quote.valid_until,
+            terms_and_conditions=quote.terms_and_conditions,
+            notes=quote.notes,
+            created_by_id=quote.created_by_id,
+            sent_at=quote.sent_at,
+            viewed_at=quote.viewed_at,
+            accepted_at=quote.accepted_at,
+            created_at=quote.created_at,
+            updated_at=quote.updated_at,
+            items=[QuoteItemResponse(**item.dict()) for item in quote_items],
+            opportunity_stage=quote.opportunity_stage,
+            close_probability=quote.close_probability,
+            expected_close_date=quote.expected_close_date,
+            next_action=quote.next_action,
+            next_action_due_date=quote.next_action_due_date,
+            loss_reason=quote.loss_reason,
+            loss_category=quote.loss_category,
+            owner_id=quote.owner_id
         ))
     
     return result
@@ -258,7 +398,15 @@ async def get_quote(
         accepted_at=quote.accepted_at,
         created_at=quote.created_at,
         updated_at=quote.updated_at,
-        items=[QuoteItemResponse(**item.dict()) for item in quote_items]
+        items=[QuoteItemResponse(**item.dict()) for item in quote_items],
+        opportunity_stage=quote.opportunity_stage,
+        close_probability=quote.close_probability,
+        expected_close_date=quote.expected_close_date,
+        next_action=quote.next_action,
+        next_action_due_date=quote.next_action_due_date,
+        loss_reason=quote.loss_reason,
+        loss_category=quote.loss_category,
+        owner_id=quote.owner_id
     )
 
 
@@ -298,7 +446,15 @@ async def get_customer_quotes(
             accepted_at=quote.accepted_at,
             created_at=quote.created_at,
             updated_at=quote.updated_at,
-            items=[QuoteItemResponse(**item.dict()) for item in quote_items]
+            items=[QuoteItemResponse(**item.dict()) for item in quote_items],
+            opportunity_stage=quote.opportunity_stage,
+            close_probability=quote.close_probability,
+            expected_close_date=quote.expected_close_date,
+            next_action=quote.next_action,
+            next_action_due_date=quote.next_action_due_date,
+            loss_reason=quote.loss_reason,
+            loss_category=quote.loss_category,
+            owner_id=quote.owner_id
         ))
     
     return result
@@ -422,7 +578,7 @@ async def update_quote(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
-    """Update a quote."""
+    """Update a quote/opportunity."""
     statement = select(Quote).where(Quote.id == quote_id)
     quote = session.exec(statement).first()
     
@@ -430,20 +586,47 @@ async def update_quote(
         raise HTTPException(status_code=404, detail="Quote not found")
     
     old_status = quote.status
+    old_stage = quote.opportunity_stage
     
     # Update quote fields
     update_data = quote_data.dict(exclude_unset=True)
     for field, value in update_data.items():
         setattr(quote, field, value)
     
+    # Mandatory next action validation (for open opportunities)
+    if quote.opportunity_stage and quote.opportunity_stage not in [OpportunityStage.WON, OpportunityStage.LOST]:
+        if not quote.next_action or not quote.next_action_due_date:
+            raise HTTPException(
+                status_code=400,
+                detail="next_action and next_action_due_date are required for open opportunities"
+            )
+    
     # Set accepted_at if status changes to ACCEPTED
     if quote_data.status == QuoteStatus.ACCEPTED and old_status != QuoteStatus.ACCEPTED:
         quote.accepted_at = datetime.utcnow()
+    
+    # Update opportunity stage based on quote status if stage not explicitly set
+    if quote_data.status and not quote_data.opportunity_stage:
+        if quote_data.status == QuoteStatus.ACCEPTED:
+            quote.opportunity_stage = OpportunityStage.WON
+        elif quote_data.status == QuoteStatus.REJECTED:
+            quote.opportunity_stage = OpportunityStage.LOST
+        elif quote_data.status == QuoteStatus.SENT and quote.opportunity_stage == OpportunityStage.CONCEPT:
+            quote.opportunity_stage = OpportunityStage.QUOTE_SENT
     
     quote.updated_at = datetime.utcnow()
     session.add(quote)
     session.commit()
     session.refresh(quote)
+    
+    # Update opportunity stage based on quote status if stage not explicitly set
+    if quote_data.status and not quote_data.opportunity_stage:
+        if quote_data.status == QuoteStatus.ACCEPTED:
+            quote.opportunity_stage = OpportunityStage.WON
+        elif quote_data.status == QuoteStatus.REJECTED:
+            quote.opportunity_stage = OpportunityStage.LOST
+        elif quote_data.status == QuoteStatus.SENT and quote.opportunity_stage == OpportunityStage.CONCEPT:
+            quote.opportunity_stage = OpportunityStage.QUOTE_SENT
     
     # QUOTED → WON/LOST: Transition lead when quote status changes
     if quote_data.status and quote.customer_id:
@@ -498,7 +681,15 @@ async def update_quote(
         accepted_at=quote.accepted_at,
         created_at=quote.created_at,
         updated_at=quote.updated_at,
-        items=[QuoteItemResponse(**item.dict()) for item in quote_items]
+        items=[QuoteItemResponse(**item.dict()) for item in quote_items],
+        opportunity_stage=quote.opportunity_stage,
+        close_probability=quote.close_probability,
+        expected_close_date=quote.expected_close_date,
+        next_action=quote.next_action,
+        next_action_due_date=quote.next_action_due_date,
+        loss_reason=quote.loss_reason,
+        loss_category=quote.loss_category,
+        owner_id=quote.owner_id
     )
 
 
@@ -553,6 +744,11 @@ async def preview_quote_pdf(
             }
         )
     except Exception as e:
+        import traceback
+        error_msg = f"Error generating PDF: {str(e)}"
+        print(error_msg, file=__import__('sys').stderr, flush=True)
+        print(traceback.format_exc(), file=__import__('sys').stderr, flush=True)
+        raise HTTPException(status_code=500, detail=error_msg)
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error generating PDF: {str(e)}")

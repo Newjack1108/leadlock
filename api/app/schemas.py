@@ -5,7 +5,8 @@ from decimal import Decimal
 from app.models import (
     LeadStatus, ActivityType, Timeframe, UserRole, ProductCategory,
     QuoteStatus, DiscountType, DiscountScope, LeadType, LeadSource,
-    EmailDirection, ReminderPriority, ReminderType, SuggestedAction
+    EmailDirection, ReminderPriority, ReminderType, SuggestedAction,
+    OpportunityStage, LossCategory
 )
 
 
@@ -190,6 +191,15 @@ class QuoteEmailSendResponse(BaseModel):
     email_id: int
     quote_email_id: int
     message: str
+
+
+class OpportunityWonRequest(BaseModel):
+    confirmed_value: Optional[Decimal] = None  # Optional confirmation of final value
+
+
+class OpportunityLostRequest(BaseModel):
+    loss_reason: str
+    loss_category: "LossCategory"
 
 
 class LeadCreate(BaseModel):
@@ -419,6 +429,13 @@ class QuoteUpdate(BaseModel):
     terms_and_conditions: Optional[str] = None
     notes: Optional[str] = None
     deposit_amount: Optional[Decimal] = None
+    # Opportunity fields
+    opportunity_stage: Optional["OpportunityStage"] = None
+    close_probability: Optional[Decimal] = None
+    expected_close_date: Optional[datetime] = None
+    next_action: Optional[str] = None
+    next_action_due_date: Optional[datetime] = None
+    owner_id: Optional[int] = None
 
 
 class QuoteResponse(BaseModel):
@@ -443,6 +460,15 @@ class QuoteResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     items: List[QuoteItemResponse] = []
+    # Opportunity fields
+    opportunity_stage: Optional["OpportunityStage"] = None
+    close_probability: Optional[Decimal] = None
+    expected_close_date: Optional[datetime] = None
+    next_action: Optional[str] = None
+    next_action_due_date: Optional[datetime] = None
+    loss_reason: Optional[str] = None
+    loss_category: Optional["LossCategory"] = None
+    owner_id: Optional[int] = None
 
 
 class QuoteEmailResponse(BaseModel):

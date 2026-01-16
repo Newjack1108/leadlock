@@ -110,7 +110,9 @@ export default function LeadsPage() {
       }
 
       const response = await api.get('/api/leads', { params });
-      setLeads(response.data);
+      // Filter out QUOTED, WON, and LOST leads
+      const filteredLeads = response.data.filter((lead: Lead) => !['QUOTED', 'WON', 'LOST'].includes(lead.status));
+      setLeads(filteredLeads);
     } catch (error: any) {
       if (error.response?.status === 401) {
         router.push('/login');
@@ -151,7 +153,7 @@ export default function LeadsPage() {
     }
   };
 
-  const statusTabs: (LeadStatus | 'ALL')[] = ['ALL', ...Object.values(LeadStatus)];
+  const statusTabs: (LeadStatus | 'ALL')[] = ['ALL', ...Object.values(LeadStatus).filter(status => !['QUOTED', 'WON', 'LOST'].includes(status))];
 
   return (
     <div className="min-h-screen bg-background">

@@ -151,7 +151,7 @@ async def update_customer(
     session.refresh(customer)
     
     # Check if quote unlocks and transition ENGAGED → QUALIFIED
-    from app.workflow import check_quote_prerequisites, auto_transition_lead_status, find_leads_by_customer_id
+    from app.workflow import check_quote_prerequisites, auto_transition_lead_status, find_leads_by_customer_id, auto_create_opportunity
     can_quote, error = check_quote_prerequisites(customer, session)
     if can_quote:
         # Find all ENGAGED leads for this customer and transition to QUALIFIED
@@ -164,6 +164,13 @@ async def update_customer(
                     session,
                     current_user.id,
                     "Automatic transition: Quote unlocked"
+                )
+                # Auto-create opportunity when lead becomes QUALIFIED
+                auto_create_opportunity(
+                    customer.id,
+                    lead.id,
+                    session,
+                    current_user.id
                 )
     
     return CustomerResponse(
@@ -297,7 +304,7 @@ async def create_customer_activity(
         session.refresh(activity)
         
         # Check if quote unlocks and transition ENGAGED → QUALIFIED
-        from app.workflow import check_quote_prerequisites, auto_transition_lead_status, find_leads_by_customer_id
+        from app.workflow import check_quote_prerequisites, auto_transition_lead_status, find_leads_by_customer_id, auto_create_opportunity
         can_quote, error = check_quote_prerequisites(customer, session)
         if can_quote:
             # Find all ENGAGED leads for this customer and transition to QUALIFIED
@@ -310,6 +317,13 @@ async def create_customer_activity(
                         session,
                         current_user.id,
                         "Automatic transition: Quote unlocked"
+                    )
+                    # Auto-create opportunity when lead becomes QUALIFIED
+                    auto_create_opportunity(
+                        customer.id,
+                        lead.id,
+                        session,
+                        current_user.id
                     )
         
         return ActivityResponse(

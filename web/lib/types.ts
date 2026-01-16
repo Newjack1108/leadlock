@@ -314,6 +314,24 @@ export enum QuoteStatus {
   EXPIRED = "EXPIRED",
 }
 
+export enum OpportunityStage {
+  DISCOVERY = "DISCOVERY",
+  CONCEPT = "CONCEPT",
+  QUOTE_SENT = "QUOTE_SENT",
+  FOLLOW_UP = "FOLLOW_UP",
+  DECISION_PENDING = "DECISION_PENDING",
+  WON = "WON",
+  LOST = "LOST",
+}
+
+export enum LossCategory {
+  PRICE = "PRICE",
+  TIMING = "TIMING",
+  COMPETITOR = "COMPETITOR",
+  PLANNING = "PLANNING",
+  OTHER = "OTHER",
+}
+
 export interface QuoteItem {
   id: number;
   quote_id: number;
@@ -359,6 +377,15 @@ export interface Quote {
   created_at: string;
   updated_at: string;
   items: QuoteItem[];
+  // Opportunity fields
+  opportunity_stage?: OpportunityStage;
+  close_probability?: number;
+  expected_close_date?: string;
+  next_action?: string;
+  next_action_due_date?: string;
+  loss_reason?: string;
+  loss_category?: LossCategory;
+  owner_id?: number;
 }
 
 export interface QuoteCreate {

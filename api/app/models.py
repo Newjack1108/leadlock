@@ -255,6 +255,24 @@ class QuoteStatus(str, Enum):
     EXPIRED = "EXPIRED"
 
 
+class OpportunityStage(str, Enum):
+    DISCOVERY = "DISCOVERY"  # Discovery / Site Info
+    CONCEPT = "CONCEPT"  # Concept / Configuration
+    QUOTE_SENT = "QUOTE_SENT"  # Quote Sent
+    FOLLOW_UP = "FOLLOW_UP"  # Follow-Up
+    DECISION_PENDING = "DECISION_PENDING"  # Decision Pending
+    WON = "WON"
+    LOST = "LOST"
+
+
+class LossCategory(str, Enum):
+    PRICE = "PRICE"
+    TIMING = "TIMING"
+    COMPETITOR = "COMPETITOR"
+    PLANNING = "PLANNING"
+    OTHER = "OTHER"
+
+
 class DiscountType(str, Enum):
     FIXED_AMOUNT = "FIXED_AMOUNT"
     PERCENTAGE = "PERCENTAGE"
@@ -287,11 +305,22 @@ class Quote(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     
+    # Opportunity management fields
+    opportunity_stage: Optional["OpportunityStage"] = Field(default=None)
+    close_probability: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(5, 2)))  # 0-100 percentage
+    expected_close_date: Optional[datetime] = None
+    next_action: Optional[str] = None
+    next_action_due_date: Optional[datetime] = None
+    loss_reason: Optional[str] = None
+    loss_category: Optional["LossCategory"] = None
+    owner_id: Optional[int] = Field(default=None, foreign_key="user.id")  # Opportunity owner (can differ from created_by)
+    
     # Relationships
     customer: Optional["Customer"] = Relationship(back_populates="quotes")
     items: List["QuoteItem"] = Relationship(back_populates="quote")
     discounts: List["QuoteDiscount"] = Relationship(back_populates="quote")
     created_by: User = Relationship()
+    owner: Optional["User"] = Relationship(foreign_keys=[owner_id])
     email_sends: List["QuoteEmail"] = Relationship(back_populates="quote")
 
 

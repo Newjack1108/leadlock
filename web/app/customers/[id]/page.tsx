@@ -20,7 +20,7 @@ import {
   Plus,
 } from 'lucide-react';
 import api from '@/lib/api';
-import { Customer, Activity, ActivityType, Lead } from '@/lib/types';
+import { Customer, Activity, ActivityType, Lead, OpportunityStage } from '@/lib/types';
 import { toast } from 'sonner';
 import SendQuoteEmailDialog from '@/components/SendQuoteEmailDialog';
 import ComposeEmailDialog from '@/components/ComposeEmailDialog';
@@ -59,6 +59,7 @@ export default function CustomerDetailPage() {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [quotes, setQuotes] = useState<any[]>([]);
+  const [opportunities, setOpportunities] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [quoteLocked, setQuoteLocked] = useState(false);
   const [quoteLockReason, setQuoteLockReason] = useState<any>(null);
@@ -73,6 +74,7 @@ export default function CustomerDetailPage() {
       fetchActivities();
       fetchLeads();
       fetchQuotes();
+      fetchOpportunities();
     }
   }, [customerId]);
 
@@ -120,6 +122,17 @@ export default function CustomerDetailPage() {
       setQuotes(response.data);
     } catch (error: any) {
       console.error('Failed to load quotes');
+    }
+  };
+
+  const fetchOpportunities = async () => {
+    try {
+      // Get opportunities for this customer (quotes with opportunity_stage)
+      const response = await api.get('/api/quotes/opportunities');
+      const customerOpportunities = response.data.filter((opp: any) => opp.customer_id === customerId);
+      setOpportunities(customerOpportunities);
+    } catch (error: any) {
+      console.error('Failed to load opportunities');
     }
   };
 
@@ -363,6 +376,66 @@ export default function CustomerDetailPage() {
                         </div>
                       </div>
                     ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Opportunities Card */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Opportunities</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {opportunities.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No opportunities yet</p>
+                ) : (
+                  <div className="space-y-2">
+                    {opportunities.map((opp) => {
+                      const isOverdue = opp.next_action_due_date && new Date(opp.next_action_due_date) < new Date();
+                      return (
+                        <div
+                          key={opp.id}
+                          className={`p-3 border rounded-md ${isOverdue ? 'border-red-500 bg-red-50 dark:bg-red-500/10' : ''}`}
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <div 
+                              className="flex-1 cursor-pointer hover:text-primary"
+                              onClick={() => router.push(`/opportunities/${opp.id}`)}
+                            >
+                              <span className="font-medium">{opp.quote_number}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {opp.opportunity_stage && (
+                                <Badge className={opp.opportunity_stage === 'WON' ? 'bg-green-100 text-green-700' : opp.opportunity_stage === 'LOST' ? 'bg-red-100 text-red-700' : ''}>
+                                  {opp.opportunity_stage.replace('_', ' ')}
+                                </Badge>
+                              )}
+                              {isOverdue && (
+                                <Badge variant="destructive" className="text-xs">
+                                  Overdue
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                          {opp.next_action && (
+                            <div className="text-sm text-muted-foreground mb-1">
+                              Next: {opp.next_action}
+                            </div>
+                          )}
+                          <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                            {opp.close_probability !== undefined && (
+                              <span>{opp.close_probability}% probability</span>
+                            )}
+                            {opp.total_amount > 0 && (
+                              <span className="font-semibold">£{opp.total_amount.toLocaleString()}</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </CardContent>

@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from typing import List, Optional, Tuple
 from app.models import (
     Lead, Quote, Activity, Reminder, ReminderRule, ReminderType, 
-    ReminderPriority, SuggestedAction, LeadStatus, QuoteStatus
+    ReminderPriority, SuggestedAction, LeadStatus, QuoteStatus, OpportunityStage
 )
 
 
@@ -185,6 +185,77 @@ def detect_stale_quotes(session: Session) -> List[Tuple[Quote, ReminderRule, int
     return stale_items
 
 
+def detect_stale_opportunities(session: Session) -> List[Tuple[Quote, str, int]]:
+    """
+    Detect opportunities that need attention based on opportunity-specific rules.
+    Returns list of (quote, reason, days_overdue) tuples.
+    """
+    stale_items = []
+    now = datetime.utcnow()
+    
+    # Get all open opportunities (not WON/LOST)
+    statement = select(Quote).where(
+        and_(
+            Quote.opportunity_stage.isnot(None),
+            Quote.opportunity_stage.notin_([OpportunityStage.WON, OpportunityStage.LOST])
+        )
+    )
+    opportunities = session.exec(statement).all()
+    
+    for opp in opportunities:
+        # Check 1: Overdue next action
+        if opp.next_action_due_date and opp.next_action_due_date < now:
+            days_overdue = calculate_days_stale(opp.next_action_due_date)
+            stale_items.append((opp, "OVERDUE_NEXT_ACTION", days_overdue))
+        
+        # Check 2: Expected close date passed
+        if opp.expected_close_date and opp.expected_close_date < now:
+            days_overdue = calculate_days_stale(opp.expected_close_date)
+            stale_items.append((opp, "CLOSE_DATE_PASSED", days_overdue))
+        
+        # Check 3: Quote sent and no reply (QUOTE_SENT stage)
+        if opp.opportunity_stage == OpportunityStage.QUOTE_SENT and opp.sent_at:
+            days_since_sent = calculate_days_stale(opp.sent_at)
+            if days_since_sent >= 2 and days_since_sent < 5:
+                stale_items.append((opp, "QUOTE_SENT_SOFT_NUDGE", days_since_sent))
+            elif days_since_sent >= 5 and days_since_sent < 10:
+                stale_items.append((opp, "QUOTE_SENT_FIRM_FOLLOWUP", days_since_sent))
+            elif days_since_sent >= 10:
+                stale_items.append((opp, "QUOTE_SENT_ESCALATION", days_since_sent))
+        
+        # Check 4: No activity in X days (configurable, default 7 days)
+        if opp.customer_id:
+            last_activity = get_last_activity_date(opp.customer_id, session)
+            if last_activity:
+                days_since_activity = calculate_days_stale(last_activity)
+                if days_since_activity >= 7:  # Configurable threshold
+                    stale_items.append((opp, "NO_ACTIVITY", days_since_activity))
+            else:
+                # No activity at all
+                days_since_created = calculate_days_stale(opp.created_at)
+                if days_since_created >= 7:
+                    stale_items.append((opp, "NO_ACTIVITY", days_since_created))
+    
+    return stale_items
+
+
+def get_suggested_action_for_opportunity(quote: Quote, reason: str, days_overdue: int) -> SuggestedAction:
+    """Determine suggested action based on opportunity issue."""
+    if reason == "OVERDUE_NEXT_ACTION":
+        return SuggestedAction.FOLLOW_UP
+    elif reason == "CLOSE_DATE_PASSED":
+        return SuggestedAction.REVIEW_QUOTE
+    elif reason in ["QUOTE_SENT_SOFT_NUDGE", "QUOTE_SENT_FIRM_FOLLOWUP"]:
+        return SuggestedAction.RESEND_QUOTE
+    elif reason == "QUOTE_SENT_ESCALATION":
+        return SuggestedAction.MARK_LOST
+    elif reason == "NO_ACTIVITY":
+        if days_overdue >= 14:
+            return SuggestedAction.MARK_LOST
+        return SuggestedAction.CONTACT_CUSTOMER
+    return SuggestedAction.FOLLOW_UP
+
+
 def generate_reminders(session: Session, user_id: Optional[int] = None) -> int:
     """
     Generate reminder records for stale leads and quotes.
@@ -311,6 +382,87 @@ def generate_reminders(session: Session, user_id: Optional[int] = None) -> int:
             message=message,
             suggested_action=suggested_action,
             days_stale=days_stale
+        )
+        session.add(reminder)
+        count += 1
+    
+    # Detect stale opportunities
+    stale_opportunities = detect_stale_opportunities(session)
+    
+    for opp, reason, days_overdue in stale_opportunities:
+        # Determine reminder type and priority
+        if reason == "OVERDUE_NEXT_ACTION":
+            reminder_type = ReminderType.QUOTE_STALE  # Reuse existing type
+            priority = ReminderPriority.URGENT if days_overdue >= 3 else ReminderPriority.HIGH
+            title = f"Overdue Next Action: {opp.quote_number}"
+            message = f"Next action '{opp.next_action}' was due {days_overdue} days ago"
+        elif reason == "CLOSE_DATE_PASSED":
+            reminder_type = ReminderType.QUOTE_EXPIRED  # Reuse existing type
+            priority = ReminderPriority.URGENT
+            title = f"Close Date Passed: {opp.quote_number}"
+            message = f"Expected close date passed {days_overdue} days ago. Status update required."
+        elif reason == "QUOTE_SENT_SOFT_NUDGE":
+            reminder_type = ReminderType.QUOTE_STALE
+            priority = ReminderPriority.MEDIUM
+            title = f"Quote Follow-Up: {opp.quote_number}"
+            message = f"Quote sent {days_overdue} days ago. Consider following up."
+        elif reason == "QUOTE_SENT_FIRM_FOLLOWUP":
+            reminder_type = ReminderType.QUOTE_STALE
+            priority = ReminderPriority.HIGH
+            title = f"Quote Follow-Up Required: {opp.quote_number}"
+            message = f"Quote sent {days_overdue} days ago. Firm follow-up needed."
+        elif reason == "QUOTE_SENT_ESCALATION":
+            reminder_type = ReminderType.QUOTE_STALE
+            priority = ReminderPriority.URGENT
+            title = f"Deal Stalling: {opp.quote_number}"
+            message = f"Quote sent {days_overdue} days ago. Deal may be stalling - consider marking as lost."
+        elif reason == "NO_ACTIVITY":
+            reminder_type = ReminderType.QUOTE_STALE
+            priority = ReminderPriority.HIGH if days_overdue >= 14 else ReminderPriority.MEDIUM
+            title = f"No Activity: {opp.quote_number}"
+            message = f"No activity logged for {days_overdue} days. Follow up required."
+        else:
+            continue
+        
+        # Check if reminder already exists
+        existing = session.exec(
+            select(Reminder).where(
+                and_(
+                    Reminder.quote_id == opp.id,
+                    Reminder.reminder_type == reminder_type,
+                    Reminder.dismissed_at.is_(None)
+                )
+            )
+        ).first()
+        
+        if existing:
+            # Update existing reminder
+            if days_overdue > existing.days_stale:
+                existing.days_stale = days_overdue
+                existing.priority = priority
+                existing.message = message
+                session.add(existing)
+            continue
+        
+        # Get assigned user (opportunity owner or creator)
+        assigned_to_id = opp.owner_id or opp.created_by_id or user_id
+        if not assigned_to_id:
+            continue
+        
+        # Get suggested action
+        suggested_action = get_suggested_action_for_opportunity(opp, reason, days_overdue)
+        
+        # Create reminder
+        reminder = Reminder(
+            reminder_type=reminder_type,
+            quote_id=opp.id,
+            customer_id=opp.customer_id,
+            assigned_to_id=assigned_to_id,
+            priority=priority,
+            title=title,
+            message=message,
+            suggested_action=suggested_action,
+            days_stale=days_overdue
         )
         session.add(reminder)
         count += 1
