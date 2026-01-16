@@ -238,7 +238,7 @@ class CompanySettings(SQLModel, table=True):
     phone: Optional[str] = None
     email: Optional[str] = None
     website: Optional[str] = None
-    logo_filename: str = Field(default="logo1.png")  # Company logo for quotes (different from app logo)
+    logo_filename: str = Field(default="logo1.jpg")  # Company logo for quotes (different from app logo)
     updated_by_id: int = Field(foreign_key="user.id")
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     

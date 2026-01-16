@@ -220,7 +220,7 @@ def generate_quote_pdf(
 
         if not logo:
             # Try loading logo from URL (e.g., frontend public URL)
-            logo_filename = company_settings.logo_filename or "logo1.png"
+            logo_filename = company_settings.logo_filename or "logo1.jpg"
             url_candidates = []
             env_logo_url = os.getenv("LOGO_URL")
             env_logo_base = os.getenv("LOGO_BASE_URL")

@@ -19,8 +19,8 @@ static_dir = Path(__file__).parent.parent / "static"
 static_dir.mkdir(exist_ok=True)
 
 # Copy logo from frontend public folder if it exists and static doesn't have it
-frontend_logo = Path(__file__).parent.parent.parent / "web" / "public" / "logo1.png"
-static_logo = static_dir / "logo1.png"
+frontend_logo = Path(__file__).parent.parent.parent / "web" / "public" / "logo1.jpg"
+static_logo = static_dir / "logo1.jpg"
 if frontend_logo.exists() and not static_logo.exists():
     try:
         shutil.copy2(frontend_logo, static_logo)

@@ -31,7 +31,7 @@ export default function CompanySettingsPage() {
     phone: '',
     email: '',
     website: '',
-    logo_filename: 'logo1.png',
+    logo_filename: 'logo1.jpg',
   });
 
   useEffect(() => {
@@ -57,7 +57,7 @@ export default function CompanySettingsPage() {
         phone: response.data.phone || '',
         email: response.data.email || '',
         website: response.data.website || '',
-        logo_filename: response.data.logo_filename || 'logo1.png',
+        logo_filename: response.data.logo_filename || 'logo1.jpg',
       });
     } catch (error: any) {
       if (error.response?.status === 401) {
@@ -284,7 +284,7 @@ export default function CompanySettingsPage() {
                 id="logo_filename"
                 value={formData.logo_filename}
                 onChange={(e) => setFormData({ ...formData, logo_filename: e.target.value })}
-                placeholder="logo1.png"
+                placeholder="logo1.jpg"
                 disabled={saving}
               />
               <p className="text-sm text-muted-foreground">

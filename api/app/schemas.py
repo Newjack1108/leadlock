@@ -340,7 +340,7 @@ class CompanySettingsCreate(BaseModel):
     phone: Optional[str] = None
     email: Optional[str] = None
     website: Optional[str] = None
-    logo_filename: str = "logo1.png"
+    logo_filename: str = "logo1.jpg"
 
 
 class CompanySettingsUpdate(BaseModel):
