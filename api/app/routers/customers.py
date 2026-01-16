@@ -243,7 +243,7 @@ async def get_customer_activities(
         if not customer:
             raise HTTPException(status_code=404, detail="Customer not found")
         
-        statement = select(Activity, User).join(User, Activity.created_by_id == User.id).where(
+        statement = select(Activity, User).outerjoin(User, Activity.created_by_id == User.id).where(
             Activity.customer_id == customer_id
         ).order_by(Activity.created_at.desc())
         
@@ -257,7 +257,7 @@ async def get_customer_activities(
                 notes=activity.notes,
                 created_by_id=activity.created_by_id,
                 created_at=activity.created_at,
-                created_by_name=user.full_name
+                created_by_name=user.full_name if user else "Unknown"
             ))
         
         return activities
