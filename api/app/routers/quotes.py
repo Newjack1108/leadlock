@@ -132,6 +132,19 @@ async def create_quote(
             session.add(item)
         session.commit()
         
+        # QUALIFIED → QUOTED: Transition lead when quote is created
+        from app.workflow import auto_transition_lead_status, find_leads_by_customer_id
+        leads = find_leads_by_customer_id(quote.customer_id, session)
+        for lead in leads:
+            if lead.status == LeadStatus.QUALIFIED:
+                auto_transition_lead_status(
+                    lead.id,
+                    LeadStatus.QUOTED,
+                    session,
+                    current_user.id,
+                    "Automatic transition: Quote created"
+                )
+        
         # Refresh to get items
         session.refresh(quote)
         statement = select(QuoteItem).where(QuoteItem.quote_id == quote.id)
@@ -385,19 +398,6 @@ async def send_quote_email_endpoint(
         )
         session.add(activity)
         session.commit()
-        
-        # QUALIFIED → QUOTED: Transition lead when quote is sent
-        from app.workflow import auto_transition_lead_status, find_leads_by_customer_id
-        leads = find_leads_by_customer_id(quote.customer_id, session)
-        for lead in leads:
-            if lead.status == LeadStatus.QUALIFIED:
-                auto_transition_lead_status(
-                    lead.id,
-                    LeadStatus.QUOTED,
-                    session,
-                    current_user.id,
-                    "Automatic transition: Quote sent"
-                )
         
         return QuoteEmailSendResponse(
             email_id=email_record.id,

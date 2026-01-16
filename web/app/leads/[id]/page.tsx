@@ -18,21 +18,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import {
   Phone,
   Mail,
   MessageSquare,
   PhoneCall,
   Clock,
-  ArrowRight,
-  Lock,
 } from 'lucide-react';
 import api from '@/lib/api';
 import { Lead, Activity, ActivityType, LeadStatus, Timeframe, LeadType, LeadSource } from '@/lib/types';
@@ -69,19 +59,12 @@ export default function LeadDetailPage() {
 
   const [lead, setLead] = useState<Lead | null>(null);
   const [activities, setActivities] = useState<Activity[]>([]);
-  const [allowedTransitions, setAllowedTransitions] = useState<string[]>([]);
-  const [canOverride, setCanOverride] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [transitionDialogOpen, setTransitionDialogOpen] = useState(false);
-  const [selectedNewStatus, setSelectedNewStatus] = useState<LeadStatus | ''>('');
-  const [overrideReason, setOverrideReason] = useState('');
-  const [updating, setUpdating] = useState(false);
 
   useEffect(() => {
     if (leadId) {
       fetchLead();
       fetchActivities();
-      fetchAllowedTransitions();
     }
   }, [leadId]);
 
@@ -108,16 +91,6 @@ export default function LeadDetailPage() {
     }
   };
 
-  const fetchAllowedTransitions = async () => {
-    try {
-      const response = await api.get(`/api/leads/${leadId}/allowed-transitions`);
-      setAllowedTransitions(response.data.allowed_transitions);
-      setCanOverride(response.data.can_override);
-    } catch (error: any) {
-      console.error('Failed to load transitions');
-    }
-  };
-
   const handleQuickLog = async (activityType: ActivityType) => {
     try {
       await api.post(`/api/leads/${leadId}/activities`, {
@@ -128,39 +101,6 @@ export default function LeadDetailPage() {
       fetchActivities();
     } catch (error: any) {
       toast.error(error.response?.data?.detail || 'Failed to log activity');
-    }
-  };
-
-  const handleStatusTransition = async () => {
-    if (!selectedNewStatus) return;
-
-    try {
-      setUpdating(true);
-      await api.post(`/api/leads/${leadId}/transition`, {
-        new_status: selectedNewStatus,
-        override_reason: overrideReason || undefined,
-      });
-      toast.success('Status updated');
-      setTransitionDialogOpen(false);
-      setSelectedNewStatus('');
-      setOverrideReason('');
-      fetchLead();
-      fetchAllowedTransitions();
-    } catch (error: any) {
-      const detail = error.response?.data?.detail;
-      if (typeof detail === 'object' && detail.error) {
-        if (detail.error === 'QUOTE_PREREQS_MISSING') {
-          toast.error(`Missing: ${detail.missing?.join(', ')}`);
-        } else if (detail.error === 'NO_ENGAGEMENT_PROOF') {
-          toast.error('Engagement proof required');
-        } else {
-          toast.error(detail.message || 'Transition failed');
-        }
-      } else {
-        toast.error(detail || 'Failed to update status');
-      }
-    } finally {
-      setUpdating(false);
     }
   };
 
@@ -456,125 +396,8 @@ export default function LeadDetailPage() {
               </CardContent>
             </Card>
 
-            {/* Workflow Actions */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Workflow Actions</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {allowedTransitions.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    No transitions available
-                  </p>
-                ) : (
-                  allowedTransitions.map((status) => (
-                    <Button
-                      key={status}
-                      variant="outline"
-                      className="w-full justify-between"
-                      onClick={() => {
-                        setSelectedNewStatus(status as LeadStatus);
-                        setTransitionDialogOpen(true);
-                      }}
-                      disabled={
-                        status === LeadStatus.QUOTED && lead.quote_locked
-                      }
-                    >
-                      <span>Move to {status.replace('_', ' ')}</span>
-                      <ArrowRight className="h-4 w-4" />
-                    </Button>
-                  ))
-                )}
-                {canOverride && (
-                  <Button
-                    variant="outline"
-                    className="w-full justify-between mt-4"
-                    onClick={() => {
-                      setSelectedNewStatus('');
-                      setTransitionDialogOpen(true);
-                    }}
-                  >
-                    <span>Override Transition</span>
-                    <Lock className="h-4 w-4" />
-                  </Button>
-                )}
-              </CardContent>
-            </Card>
           </div>
         </div>
-
-        {/* Transition Dialog */}
-        <Dialog open={transitionDialogOpen} onOpenChange={setTransitionDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Change Status</DialogTitle>
-              <DialogDescription>
-                {canOverride && !selectedNewStatus
-                  ? 'Override workflow transition (reason required)'
-                  : 'Move lead to new status'}
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              {canOverride && !selectedNewStatus && (
-                <div>
-                  <Label>New Status</Label>
-                  <Select
-                    value={selectedNewStatus}
-                    onValueChange={(value) =>
-                      setSelectedNewStatus(value as LeadStatus)
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.values(LeadStatus)
-                        .filter((s) => s !== lead.status)
-                        .map((status) => (
-                          <SelectItem key={status} value={status}>
-                            {status.replace('_', ' ')}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-              {canOverride && (
-                <div>
-                  <Label>Override Reason (Required)</Label>
-                  <Textarea
-                    value={overrideReason}
-                    onChange={(e) => setOverrideReason(e.target.value)}
-                    placeholder="Explain why this transition is being overridden..."
-                    rows={3}
-                  />
-                </div>
-              )}
-            </div>
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setTransitionDialogOpen(false);
-                  setSelectedNewStatus('');
-                  setOverrideReason('');
-                }}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleStatusTransition}
-                disabled={
-                  updating ||
-                  (canOverride && !selectedNewStatus) ||
-                  (canOverride && !overrideReason.trim())
-                }
-              >
-                {updating ? 'Updating...' : 'Confirm'}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       </main>
     </div>
   );
