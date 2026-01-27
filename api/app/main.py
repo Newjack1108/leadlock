@@ -38,12 +38,16 @@ allowed_origins_str = os.getenv(
 )
 allowed_origins = [origin.strip() for origin in allowed_origins_str.split(",") if origin.strip()]
 
+# Log allowed origins for debugging (only in non-production or if DEBUG is set)
+if os.getenv("DEBUG", "false").lower() == "true" or not os.getenv("RAILWAY_ENVIRONMENT"):
+    print(f"CORS allowed origins: {allowed_origins}", file=__import__('sys').stderr, flush=True)
+
 # CORS middleware - must be added before routers
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
     expose_headers=["*"],
 )

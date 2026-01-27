@@ -320,7 +320,7 @@ class Quote(SQLModel, table=True):
     items: List["QuoteItem"] = Relationship(back_populates="quote")
     discounts: List["QuoteDiscount"] = Relationship(back_populates="quote")
     created_by: User = Relationship()
-    owner: Optional["User"] = Relationship(foreign_keys=[owner_id])
+    # owner relationship - SQLModel will infer from owner_id field name
     email_sends: List["QuoteEmail"] = Relationship(back_populates="quote")
 
 
