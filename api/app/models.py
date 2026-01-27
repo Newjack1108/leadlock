@@ -322,7 +322,8 @@ class Quote(SQLModel, table=True):
     discounts: List["QuoteDiscount"] = Relationship(back_populates="quote")
     # Explicitly specify created_by_id as the foreign key since we also have owner_id
     # SQLAlchemy needs explicit foreign_keys when multiple FKs point to same table
-    created_by: User = Relationship(foreign_keys=["created_by_id"])
+    # Use sa_relationship_kwargs to pass SQLAlchemy-specific parameters
+    created_by: User = Relationship(sa_relationship_kwargs={"foreign_keys": "[Quote.created_by_id]"})
     email_sends: List["QuoteEmail"] = Relationship(back_populates="quote")
 
 
