@@ -1,4 +1,5 @@
 from sqlmodel import SQLModel, Field, Relationship, Column
+from sqlalchemy.orm import relationship
 from sqlalchemy import Numeric
 from typing import Optional, List
 from datetime import datetime
@@ -319,8 +320,9 @@ class Quote(SQLModel, table=True):
     customer: Optional["Customer"] = Relationship(back_populates="quotes")
     items: List["QuoteItem"] = Relationship(back_populates="quote")
     discounts: List["QuoteDiscount"] = Relationship(back_populates="quote")
-    created_by: User = Relationship()
-    # owner relationship - SQLModel will infer from owner_id field name
+    # Explicitly specify created_by_id as the foreign key since we also have owner_id
+    # SQLAlchemy needs explicit foreign_keys when multiple FKs point to same table
+    created_by: User = Relationship(foreign_keys="created_by_id")
     email_sends: List["QuoteEmail"] = Relationship(back_populates="quote")
 
 
