@@ -304,6 +304,8 @@ class ProductCreate(BaseModel):
     sku: Optional[str] = None
     image_url: Optional[str] = None
     specifications: Optional[str] = None
+    installation_hours: Optional[Decimal] = None
+    optional_extras: Optional[List[int]] = None  # List of product IDs that are optional extras
 
 
 class ProductUpdate(BaseModel):
@@ -318,6 +320,8 @@ class ProductUpdate(BaseModel):
     is_active: Optional[bool] = None
     image_url: Optional[str] = None
     specifications: Optional[str] = None
+    installation_hours: Optional[Decimal] = None
+    optional_extras: Optional[List[int]] = None  # List of product IDs that are optional extras
 
 
 class ProductResponse(BaseModel):
@@ -333,8 +337,16 @@ class ProductResponse(BaseModel):
     is_active: bool
     image_url: Optional[str]
     specifications: Optional[str]
+    installation_hours: Optional[Decimal] = None
+    optional_extras: Optional[List["ProductResponse"]] = None  # Nested optional extras
     created_at: datetime
     updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+        json_encoders = {
+            Decimal: str
+        }
 
 
 class CompanySettingsCreate(BaseModel):
@@ -353,6 +365,7 @@ class CompanySettingsCreate(BaseModel):
     website: Optional[str] = None
     logo_filename: str = "logo1.jpg"
     default_terms_and_conditions: Optional[str] = None
+    hourly_install_rate: Optional[Decimal] = None
 
 
 class CompanySettingsUpdate(BaseModel):
@@ -371,6 +384,7 @@ class CompanySettingsUpdate(BaseModel):
     website: Optional[str] = None
     logo_filename: Optional[str] = None
     default_terms_and_conditions: Optional[str] = None
+    hourly_install_rate: Optional[Decimal] = None
 
 
 class CompanySettingsResponse(BaseModel):
@@ -390,6 +404,7 @@ class CompanySettingsResponse(BaseModel):
     website: Optional[str]
     logo_filename: str
     default_terms_and_conditions: Optional[str]
+    hourly_install_rate: Optional[Decimal] = None
     updated_at: datetime
 
 

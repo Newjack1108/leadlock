@@ -9,14 +9,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -25,6 +17,7 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Plus, Edit, Trash2, Package } from 'lucide-react';
+import Link from 'next/link';
 import api from '@/lib/api';
 import { Product, ProductCategory } from '@/lib/types';
 import { toast } from 'sonner';
@@ -35,7 +28,6 @@ export default function ProductsPage() {
   const [loading, setLoading] = useState(true);
   const [categoryFilter, setCategoryFilter] = useState<ProductCategory | 'ALL'>('ALL');
   const [extrasFilter, setExtrasFilter] = useState<'ALL' | true | false>('ALL');
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [saving, setSaving] = useState(false);
@@ -80,61 +72,9 @@ export default function ProductsPage() {
     }
   };
 
-  const handleCreateProduct = async () => {
-    if (!newProduct.name.trim() || !newProduct.base_price) {
-      toast.error('Name and base price are required');
-      return;
-    }
-
-    try {
-      setSaving(true);
-      await api.post('/api/products', {
-        ...newProduct,
-        base_price: parseFloat(newProduct.base_price),
-        description: newProduct.description.trim() || undefined,
-        subcategory: newProduct.subcategory.trim() || undefined,
-        sku: newProduct.sku.trim() || undefined,
-        image_url: newProduct.image_url.trim() || undefined,
-        specifications: newProduct.specifications.trim() || undefined,
-      });
-      
-      toast.success('Product created successfully');
-      setCreateDialogOpen(false);
-      setNewProduct({
-        name: '',
-        description: '',
-        category: ProductCategory.STABLES,
-        subcategory: '',
-        is_extra: false,
-        base_price: '',
-        unit: 'unit',
-        sku: '',
-        image_url: '',
-        specifications: '',
-      });
-      fetchProducts();
-    } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Failed to create product');
-    } finally {
-      setSaving(false);
-    }
-  };
 
   const handleEditProduct = (product: Product) => {
-    setEditingProduct(product);
-    setNewProduct({
-      name: product.name,
-      description: product.description || '',
-      category: product.category,
-      subcategory: product.subcategory || '',
-      is_extra: product.is_extra,
-      base_price: product.base_price.toString(),
-      unit: product.unit,
-      sku: product.sku || '',
-      image_url: product.image_url || '',
-      specifications: product.specifications || '',
-    });
-    setEditDialogOpen(true);
+    router.push(`/products/${product.id}/edit`);
   };
 
   const handleUpdateProduct = async () => {
@@ -195,9 +135,11 @@ export default function ProductsPage() {
             <h1 className="text-3xl font-semibold mb-2">Products</h1>
             <p className="text-muted-foreground">Manage your product catalog</p>
           </div>
-          <Button onClick={() => setCreateDialogOpen(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Create Product
+          <Button asChild>
+            <Link href="/products/create">
+              <Plus className="h-4 w-4 mr-2" />
+              Create Product
+            </Link>
           </Button>
         </div>
 
@@ -236,7 +178,7 @@ export default function ProductsPage() {
         ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {products.map((product) => (
-              <Card key={product.id}>
+              <Card key={product.id} className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => router.push(`/products/${product.id}`)}>
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
@@ -298,158 +240,6 @@ export default function ProductsPage() {
             ))}
           </div>
         )}
-
-        {/* Create Product Dialog */}
-        <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Create New Product</DialogTitle>
-              <DialogDescription>
-                Add a new product to your catalog
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">
-                    Name <span className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    id="name"
-                    value={newProduct.name}
-                    onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
-                    placeholder="Product Name"
-                    disabled={saving}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="base_price">
-                    Base Price (£) <span className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    id="base_price"
-                    type="number"
-                    step="0.01"
-                    value={newProduct.base_price}
-                    onChange={(e) => setNewProduct({ ...newProduct, base_price: e.target.value })}
-                    placeholder="0.00"
-                    disabled={saving}
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  value={newProduct.description}
-                  onChange={(e) => setNewProduct({ ...newProduct, description: e.target.value })}
-                  placeholder="Product description..."
-                  rows={3}
-                  disabled={saving}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="category">Category <span className="text-destructive">*</span></Label>
-                  <Select
-                    value={newProduct.category}
-                    onValueChange={(value) => setNewProduct({ ...newProduct, category: value as ProductCategory })}
-                    disabled={saving}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.values(ProductCategory).map((cat) => (
-                        <SelectItem key={cat} value={cat}>
-                          {cat}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="subcategory">Subcategory</Label>
-                  <Input
-                    id="subcategory"
-                    value={newProduct.subcategory}
-                    onChange={(e) => setNewProduct({ ...newProduct, subcategory: e.target.value })}
-                    placeholder="e.g., Extras, Premium"
-                    disabled={saving}
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="unit">Unit</Label>
-                  <Input
-                    id="unit"
-                    value={newProduct.unit}
-                    onChange={(e) => setNewProduct({ ...newProduct, unit: e.target.value })}
-                    placeholder="unit, sqft, etc."
-                    disabled={saving}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="sku">SKU</Label>
-                  <Input
-                    id="sku"
-                    value={newProduct.sku}
-                    onChange={(e) => setNewProduct({ ...newProduct, sku: e.target.value })}
-                    placeholder="Stock keeping unit"
-                    disabled={saving}
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="image_url">Image URL</Label>
-                <Input
-                  id="image_url"
-                  value={newProduct.image_url}
-                  onChange={(e) => setNewProduct({ ...newProduct, image_url: e.target.value })}
-                  placeholder="https://..."
-                  disabled={saving}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="specifications">Specifications</Label>
-                <Textarea
-                  id="specifications"
-                  value={newProduct.specifications}
-                  onChange={(e) => setNewProduct({ ...newProduct, specifications: e.target.value })}
-                  placeholder="Technical specifications..."
-                  rows={3}
-                  disabled={saving}
-                />
-              </div>
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="is_extra"
-                  checked={newProduct.is_extra}
-                  onChange={(e) => setNewProduct({ ...newProduct, is_extra: e.target.checked })}
-                  disabled={saving}
-                  className="h-4 w-4"
-                />
-                <Label htmlFor="is_extra" className="cursor-pointer">
-                  This is an optional extra
-                </Label>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setCreateDialogOpen(false)}
-                disabled={saving}
-              >
-                Cancel
-              </Button>
-              <Button onClick={handleCreateProduct} disabled={saving || !newProduct.name.trim() || !newProduct.base_price}>
-                {saving ? 'Creating...' : 'Create Product'}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
 
         {/* Edit Product Dialog */}
         <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>

@@ -75,12 +75,14 @@ function CreateQuoteContent() {
   const [termsAndConditions, setTermsAndConditions] = useState('');
   const [notes, setNotes] = useState('');
   const [depositAmount, setDepositAmount] = useState<number | ''>('');
+  const [companySettings, setCompanySettings] = useState<any>(null);
 
   useEffect(() => {
     if (customerId) {
       fetchCustomer();
       fetchProducts();
       fetchDefaultTerms();
+      fetchCompanySettings();
       // Set default valid until to 30 days from now
       const date = new Date();
       date.setDate(date.getDate() + 30);
@@ -133,6 +135,15 @@ function CreateQuoteContent() {
     }
   };
 
+  const fetchCompanySettings = async () => {
+    try {
+      const settings = await getCompanySettings();
+      setCompanySettings(settings);
+    } catch (error) {
+      console.error('Failed to load company settings');
+    }
+  };
+
   const addItem = () => {
     setItems([
       ...items,
@@ -177,6 +188,32 @@ function CreateQuoteContent() {
       newItems[index] = { ...newItems[index], [field]: value };
     }
     setItems(newItems);
+  };
+
+  const addOptionalExtra = (productId: number, extra: Product) => {
+    const newItem: QuoteItemCreate = {
+      product_id: extra.id,
+      description: extra.name,
+      quantity: 1,
+      unit_price: Number(extra.base_price),
+      is_custom: false,
+      sort_order: items.length,
+    };
+    setItems([...items, newItem]);
+  };
+
+  const getSelectedProduct = (item: QuoteItemCreate) => {
+    if (item.product_id) {
+      return products.find((p) => p.id === item.product_id);
+    }
+    return null;
+  };
+
+  const calculateInstallCost = (product: Product) => {
+    if (!product.installation_hours || !companySettings?.hourly_install_rate) {
+      return null;
+    }
+    return product.installation_hours * companySettings.hourly_install_rate;
   };
 
   const calculateSubtotal = () => {
@@ -399,6 +436,58 @@ function CreateQuoteContent() {
                     <div className="text-sm text-muted-foreground">
                       Line Total: £{((item.quantity || 0) * (item.unit_price || 0)).toFixed(2)}
                     </div>
+                    {(() => {
+                      const selectedProduct = getSelectedProduct(item);
+                      if (!selectedProduct) return null;
+                      
+                      const installCost = calculateInstallCost(selectedProduct);
+                      
+                      return (
+                        <div className="mt-4 pt-4 border-t space-y-2">
+                          {selectedProduct.installation_hours && (
+                            <div className="text-sm">
+                              <span className="text-muted-foreground">Installation Hours: </span>
+                              <span className="font-medium">{selectedProduct.installation_hours} hours</span>
+                            </div>
+                          )}
+                          {installCost !== null && (
+                            <div className="text-sm">
+                              <span className="text-muted-foreground">Installation Cost: </span>
+                              <span className="font-medium">£{installCost.toFixed(2)}</span>
+                            </div>
+                          )}
+                          {selectedProduct.optional_extras && selectedProduct.optional_extras.length > 0 && (
+                            <div className="mt-2">
+                              <Label className="text-sm font-medium">Optional Extras:</Label>
+                              <div className="mt-2 space-y-2">
+                                {selectedProduct.optional_extras.map((extra) => (
+                                  <div
+                                    key={extra.id}
+                                    className="flex items-center justify-between p-2 border rounded-md hover:bg-muted/50"
+                                  >
+                                    <div className="flex-1">
+                                      <p className="text-sm font-medium">{extra.name}</p>
+                                      <p className="text-xs text-muted-foreground">
+                                        £{Number(extra.base_price).toFixed(2)}
+                                      </p>
+                                    </div>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => addOptionalExtra(selectedProduct.id, extra)}
+                                    >
+                                      <Plus className="h-3 w-3 mr-1" />
+                                      Add
+                                    </Button>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 ))}
                 <div className="p-4 bg-muted rounded-md space-y-2">

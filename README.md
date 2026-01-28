@@ -125,6 +125,11 @@ The app will be available at `http://localhost:3000`
 - `ACCESS_TOKEN_EXPIRE_MINUTES`: Token expiration time (default: 1440 = 24 hours)
 - `WEBHOOK_API_KEY`: Secret API key for webhook authentication (required for Make.com integration)
 - `WEBHOOK_DEFAULT_USER_ID`: (Optional) User ID to assign webhook-created leads to. If not set, leads will be unassigned.
+- `CLOUDINARY_CLOUD_NAME`: (Optional) Cloudinary cloud name for image uploads. If not set, images will be stored locally.
+- `CLOUDINARY_API_KEY`: (Optional) Cloudinary API key
+- `CLOUDINARY_API_SECRET`: (Optional) Cloudinary API secret
+
+**Note:** See `CLOUDINARY_SETUP.md` for detailed Cloudinary setup instructions.
 
 ### Frontend (`web/.env.local`)
 

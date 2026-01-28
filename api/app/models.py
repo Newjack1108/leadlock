@@ -217,6 +217,7 @@ class Product(SQLModel, table=True):
     is_active: bool = Field(default=True)  # For soft deletion
     image_url: Optional[str] = None  # Product image URL
     specifications: Optional[str] = None  # Technical specs (JSON or text)
+    installation_hours: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(10, 2)))  # Hours required for installation
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     
@@ -241,6 +242,7 @@ class CompanySettings(SQLModel, table=True):
     website: Optional[str] = None
     logo_filename: str = Field(default="logo1.jpg")  # Company logo for quotes (different from app logo)
     default_terms_and_conditions: Optional[str] = None  # Default terms and conditions for quotes
+    hourly_install_rate: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(10, 2)))  # Hourly rate for installation cost calculation
     updated_by_id: int = Field(foreign_key="user.id")
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     
@@ -487,3 +489,11 @@ class ReminderRule(SQLModel, table=True):
     suggested_action: SuggestedAction
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class ProductOptionalExtra(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    product_id: int = Field(foreign_key="product.id")
+    optional_extra_id: int = Field(foreign_key="product.id")
+    sort_order: int = Field(default=0)
+    created_at: datetime = Field(default_factory=datetime.utcnow)

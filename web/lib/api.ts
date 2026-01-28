@@ -216,6 +216,84 @@ export const getProducts = async () => {
   return response.data;
 };
 
+export const getProduct = async (productId: number) => {
+  const response = await api.get(`/api/products/${productId}`);
+  return response.data;
+};
+
+export const createProduct = async (productData: {
+  name: string;
+  description?: string;
+  category: string;
+  subcategory?: string;
+  is_extra?: boolean;
+  base_price: number;
+  unit?: string;
+  sku?: string;
+  image_url?: string;
+  specifications?: string;
+  installation_hours?: number;
+  optional_extras?: number[];
+}) => {
+  const response = await api.post('/api/products', productData);
+  return response.data;
+};
+
+export const updateProduct = async (productId: number, productData: {
+  name?: string;
+  description?: string;
+  category?: string;
+  subcategory?: string;
+  is_extra?: boolean;
+  base_price?: number;
+  unit?: string;
+  sku?: string;
+  image_url?: string;
+  specifications?: string;
+  installation_hours?: number;
+  optional_extras?: number[];
+  is_active?: boolean;
+}) => {
+  const response = await api.patch(`/api/products/${productId}`, productData);
+  return response.data;
+};
+
+export const deleteProduct = async (productId: number) => {
+  const response = await api.delete(`/api/products/${productId}`);
+  return response.data;
+};
+
+export const uploadProductImage = async (file: File) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  const response = await api.post('/api/products/upload-image', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+  return response.data.image_url;
+};
+
+export const getOptionalExtras = async () => {
+  const response = await api.get('/api/products/optional-extras');
+  return response.data;
+};
+
+export const getProductOptionalExtras = async (productId: number) => {
+  const response = await api.get(`/api/products/${productId}/optional-extras`);
+  return response.data;
+};
+
+export const addOptionalExtraToProduct = async (productId: number, extraId: number) => {
+  const response = await api.post(`/api/products/${productId}/optional-extras?extra_id=${extraId}`);
+  return response.data;
+};
+
+export const removeOptionalExtraFromProduct = async (productId: number, extraId: number) => {
+  const response = await api.delete(`/api/products/${productId}/optional-extras/${extraId}`);
+  return response.data;
+};
+
 // Reminder API functions
 export const getReminders = async (params?: {
   dismissed?: boolean;

@@ -186,6 +186,8 @@ export interface Product {
   is_active: boolean;
   image_url?: string;
   specifications?: string;
+  installation_hours?: number;
+  optional_extras?: Product[];
   created_at: string;
   updated_at: string;
 }
@@ -207,6 +209,7 @@ export interface CompanySettings {
   website?: string;
   logo_filename: string;
   default_terms_and_conditions?: string;
+  hourly_install_rate?: number;
   updated_at: string;
 }
 
