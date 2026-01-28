@@ -211,47 +211,53 @@ async def get_all_quotes(
     current_user: User = Depends(get_current_user)
 ):
     """Get all quotes."""
-    statement = select(Quote).order_by(Quote.created_at.desc())
-    quotes = session.exec(statement).all()
-    
-    result = []
-    for quote in quotes:
-        item_statement = select(QuoteItem).where(QuoteItem.quote_id == quote.id).order_by(QuoteItem.sort_order)
-        quote_items = session.exec(item_statement).all()
+    try:
+        statement = select(Quote).order_by(Quote.created_at.desc())
+        quotes = session.exec(statement).all()
         
-        result.append(QuoteResponse(
-            id=quote.id,
-            customer_id=quote.customer_id,
-            quote_number=quote.quote_number,
-            version=quote.version,
-            status=quote.status,
-            subtotal=quote.subtotal,
-            discount_total=quote.discount_total,
-            total_amount=quote.total_amount,
-            deposit_amount=quote.deposit_amount,
-            balance_amount=quote.balance_amount,
-            currency=quote.currency,
-            valid_until=quote.valid_until,
-            terms_and_conditions=quote.terms_and_conditions,
-            notes=quote.notes,
-            created_by_id=quote.created_by_id,
-            sent_at=quote.sent_at,
-            viewed_at=quote.viewed_at,
-            accepted_at=quote.accepted_at,
-            created_at=quote.created_at,
-            updated_at=quote.updated_at,
-            items=[quote_item_to_response(item) for item in quote_items],
-            opportunity_stage=quote.opportunity_stage,
-            close_probability=quote.close_probability,
-            expected_close_date=quote.expected_close_date,
-            next_action=quote.next_action,
-            next_action_due_date=quote.next_action_due_date,
-            loss_reason=quote.loss_reason,
-            loss_category=quote.loss_category,
-            owner_id=quote.owner_id
-        ))
-    
-    return result
+        result = []
+        for quote in quotes:
+            item_statement = select(QuoteItem).where(QuoteItem.quote_id == quote.id).order_by(QuoteItem.sort_order)
+            quote_items = session.exec(item_statement).all()
+            
+            result.append(QuoteResponse(
+                id=quote.id,
+                customer_id=quote.customer_id,
+                quote_number=quote.quote_number,
+                version=quote.version,
+                status=quote.status,
+                subtotal=quote.subtotal,
+                discount_total=quote.discount_total,
+                total_amount=quote.total_amount,
+                deposit_amount=quote.deposit_amount,
+                balance_amount=quote.balance_amount,
+                currency=quote.currency,
+                valid_until=quote.valid_until,
+                terms_and_conditions=quote.terms_and_conditions,
+                notes=quote.notes,
+                created_by_id=quote.created_by_id,
+                sent_at=quote.sent_at,
+                viewed_at=quote.viewed_at,
+                accepted_at=quote.accepted_at,
+                created_at=quote.created_at,
+                updated_at=quote.updated_at,
+                items=[quote_item_to_response(item) for item in quote_items],
+                opportunity_stage=quote.opportunity_stage,
+                close_probability=quote.close_probability,
+                expected_close_date=quote.expected_close_date,
+                next_action=quote.next_action,
+                next_action_due_date=quote.next_action_due_date,
+                loss_reason=quote.loss_reason,
+                loss_category=quote.loss_category,
+                owner_id=quote.owner_id
+            ))
+        
+        return result
+    except Exception as e:
+        import traceback
+        error_detail = str(e)
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error fetching quotes: {error_detail}")
 
 
 # Opportunity Management Endpoints (must be before /{quote_id} to avoid route conflicts)
