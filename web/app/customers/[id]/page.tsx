@@ -18,9 +18,17 @@ import {
   ArrowRight,
   Send,
   Plus,
+  History,
+  FileText,
+  CheckCircle,
+  XCircle,
+  Clock,
+  User,
+  Building,
+  Eye,
 } from 'lucide-react';
-import api from '@/lib/api';
-import { Customer, Activity, ActivityType, Lead, OpportunityStage } from '@/lib/types';
+import api, { getCustomerHistory } from '@/lib/api';
+import { Customer, Activity, ActivityType, Lead, OpportunityStage, CustomerHistoryEvent, CustomerHistoryEventType } from '@/lib/types';
 import { toast } from 'sonner';
 import SendQuoteEmailDialog from '@/components/SendQuoteEmailDialog';
 import ComposeEmailDialog from '@/components/ComposeEmailDialog';
@@ -50,6 +58,42 @@ const activityColors: Record<ActivityType, string> = {
   NOTE: 'text-muted-foreground',
 };
 
+const historyIcons: Record<CustomerHistoryEventType, any> = {
+  ACTIVITY: MessageSquare,
+  LEAD_STATUS_CHANGE: ArrowRight,
+  LEAD_QUALIFIED: CheckCircle,
+  QUOTE_CREATED: FileText,
+  QUOTE_SENT: Send,
+  QUOTE_VIEWED: Eye,
+  QUOTE_ACCEPTED: CheckCircle,
+  QUOTE_REJECTED: XCircle,
+  QUOTE_EXPIRED: Clock,
+  QUOTE_UPDATED: FileText,
+  EMAIL_SENT: Mail,
+  EMAIL_RECEIVED: Mail,
+  CUSTOMER_CREATED: Building,
+  CUSTOMER_UPDATED: Building,
+  OPPORTUNITY_CREATED: FileText,
+};
+
+const historyColors: Record<CustomerHistoryEventType, string> = {
+  ACTIVITY: 'text-blue-600',
+  LEAD_STATUS_CHANGE: 'text-yellow-600',
+  LEAD_QUALIFIED: 'text-green-600',
+  QUOTE_CREATED: 'text-blue-600',
+  QUOTE_SENT: 'text-blue-600',
+  QUOTE_VIEWED: 'text-purple-600',
+  QUOTE_ACCEPTED: 'text-green-600',
+  QUOTE_REJECTED: 'text-red-600',
+  QUOTE_EXPIRED: 'text-orange-600',
+  QUOTE_UPDATED: 'text-blue-600',
+  EMAIL_SENT: 'text-blue-600',
+  EMAIL_RECEIVED: 'text-green-600',
+  CUSTOMER_CREATED: 'text-green-600',
+  CUSTOMER_UPDATED: 'text-yellow-600',
+  OPPORTUNITY_CREATED: 'text-blue-600',
+};
+
 export default function CustomerDetailPage() {
   const router = useRouter();
   const params = useParams();
@@ -57,6 +101,7 @@ export default function CustomerDetailPage() {
 
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [history, setHistory] = useState<CustomerHistoryEvent[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [quotes, setQuotes] = useState<any[]>([]);
   const [opportunities, setOpportunities] = useState<any[]>([]);
@@ -72,6 +117,7 @@ export default function CustomerDetailPage() {
     if (customerId) {
       fetchCustomer();
       fetchActivities();
+      fetchHistory();
       fetchLeads();
       fetchQuotes();
       fetchOpportunities();
@@ -104,6 +150,15 @@ export default function CustomerDetailPage() {
       setActivities(response.data);
     } catch (error: any) {
       console.error('Failed to load activities');
+    }
+  };
+
+  const fetchHistory = async () => {
+    try {
+      const response = await getCustomerHistory(customerId);
+      setHistory(response.events || []);
+    } catch (error: any) {
+      console.error('Failed to load history');
     }
   };
 
@@ -157,6 +212,7 @@ export default function CustomerDetailPage() {
       });
       toast.success('Activity logged');
       fetchActivities();
+      fetchHistory();
       // Add small delay to ensure database transaction is committed
       setTimeout(() => {
         checkQuotePrerequisites();
@@ -172,6 +228,7 @@ export default function CustomerDetailPage() {
         [field]: value,
       });
       fetchCustomer();
+      fetchHistory();
       checkQuotePrerequisites();
     } catch (error: any) {
       toast.error('Failed to update');
@@ -496,6 +553,74 @@ export default function CustomerDetailPage() {
               </CardContent>
             </Card>
 
+            {/* Customer History Timeline */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    <History className="h-5 w-5" />
+                    Customer History
+                  </CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {history.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No history yet</p>
+                  ) : (
+                    history.map((event, index) => {
+                      const Icon = historyIcons[event.event_type] || History;
+                      const color = historyColors[event.event_type] || 'text-muted-foreground';
+                      return (
+                        <div key={index} className="flex gap-4 relative">
+                          <div className={`${color} flex-shrink-0`}>
+                            <Icon className="h-5 w-5" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-medium">{event.title}</span>
+                              <span className="text-xs text-muted-foreground">
+                                {new Date(event.timestamp).toLocaleString()}
+                              </span>
+                            </div>
+                            {event.description && (
+                              <p className="text-sm text-muted-foreground mt-1">
+                                {event.description}
+                              </p>
+                            )}
+                            {event.created_by_name && (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                by {event.created_by_name}
+                              </p>
+                            )}
+                            {event.metadata && Object.keys(event.metadata).length > 0 && (
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                {event.metadata.quote_number && (
+                                  <Badge variant="outline" className="text-xs">
+                                    Quote: {event.metadata.quote_number}
+                                  </Badge>
+                                )}
+                                {event.metadata.lead_name && (
+                                  <Badge variant="outline" className="text-xs">
+                                    Lead: {event.metadata.lead_name}
+                                  </Badge>
+                                )}
+                                {event.metadata.old_status && event.metadata.new_status && (
+                                  <Badge variant="outline" className="text-xs">
+                                    {event.metadata.old_status} → {event.metadata.new_status}
+                                  </Badge>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Activity Timeline */}
             <Card>
               <CardHeader>
@@ -597,6 +722,7 @@ export default function CustomerDetailPage() {
           onSuccess={() => {
             fetchQuotes();
             fetchActivities();
+            fetchHistory();
           }}
         />
       )}
@@ -608,6 +734,7 @@ export default function CustomerDetailPage() {
           customer={customer}
           onSuccess={() => {
             fetchActivities();
+            fetchHistory();
             // Add small delay to ensure database transaction is committed
             setTimeout(() => {
               checkQuotePrerequisites();
@@ -623,6 +750,7 @@ export default function CustomerDetailPage() {
           customer={customer}
           onSuccess={() => {
             fetchQuotes();
+            fetchHistory();
           }}
         />
       )}

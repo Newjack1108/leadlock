@@ -242,3 +242,9 @@ export const generateReminders = async () => {
   const response = await api.post('/api/reminders/generate');
   return response.data;
 };
+
+// Customer History API functions
+export const getCustomerHistory = async (customerId: number) => {
+  const response = await api.get(`/api/customers/${customerId}/history`);
+  return response.data;
+};

@@ -2,15 +2,33 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, select, or_
 from typing import Optional, List
 from app.database import get_session
-from app.models import Customer, User, Activity, Quote, Lead, QuoteItem
+from app.models import Customer, User, Activity, Quote, Lead, QuoteItem, StatusHistory, Email, QuoteEmail, EmailDirection, QuoteStatus
 from app.auth import get_current_user
 from app.schemas import (
-    CustomerResponse, CustomerUpdate, ActivityCreate, ActivityResponse, QuoteResponse, QuoteItemResponse
+    CustomerResponse, CustomerUpdate, ActivityCreate, ActivityResponse, QuoteResponse, QuoteItemResponse,
+    CustomerHistoryResponse, CustomerHistoryEvent, CustomerHistoryEventType
 )
 from app.workflow import check_quote_prerequisites
 from datetime import datetime
 
 router = APIRouter(prefix="/api/customers", tags=["customers"])
+
+
+def quote_item_to_response(item: QuoteItem) -> QuoteItemResponse:
+    """Convert a QuoteItem SQLModel instance to QuoteItemResponse."""
+    return QuoteItemResponse(
+        id=item.id,
+        quote_id=item.quote_id,
+        product_id=item.product_id,
+        description=item.description,
+        quantity=item.quantity,
+        unit_price=item.unit_price,
+        line_total=item.line_total,
+        discount_amount=item.discount_amount,
+        final_line_total=item.final_line_total,
+        sort_order=item.sort_order,
+        is_custom=item.is_custom
+    )
 
 
 @router.get("", response_model=List[CustomerResponse])
@@ -230,7 +248,7 @@ async def get_customer_quotes(
             accepted_at=quote.accepted_at,
             created_at=quote.created_at,
             updated_at=quote.updated_at,
-            items=[QuoteItemResponse(**item.dict()) for item in quote_items]
+            items=[quote_item_to_response(item) for item in quote_items]
         ))
     
     return result
@@ -364,3 +382,297 @@ async def get_customer_leads(
     leads = session.exec(statement).all()
     
     return [enrich_lead_response(lead, session, current_user) for lead in leads]
+
+
+@router.get("/{customer_id}/history", response_model=CustomerHistoryResponse)
+async def get_customer_history(
+    customer_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    """Get unified customer history timeline with all events."""
+    # Verify customer exists
+    statement = select(Customer).where(Customer.id == customer_id)
+    customer = session.exec(statement).first()
+    
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    
+    events = []
+    
+    # 1. Customer creation event
+    events.append(CustomerHistoryEvent(
+        event_type=CustomerHistoryEventType.CUSTOMER_CREATED,
+        timestamp=customer.created_at,
+        title="Customer Created",
+        description=f"Customer {customer.customer_number} was created",
+        metadata={"customer_number": customer.customer_number},
+        created_by_id=None,
+        created_by_name=None
+    ))
+    
+    # 2. Customer updates (track via updated_at if different from created_at)
+    if customer.updated_at and customer.updated_at != customer.created_at:
+        events.append(CustomerHistoryEvent(
+            event_type=CustomerHistoryEventType.CUSTOMER_UPDATED,
+            timestamp=customer.updated_at,
+            title="Customer Profile Updated",
+            description="Customer profile information was updated",
+            metadata={},
+            created_by_id=None,
+            created_by_name=None
+        ))
+    
+    # 3. Activities
+    statement = select(Activity, User).outerjoin(User, Activity.created_by_id == User.id).where(
+        Activity.customer_id == customer_id
+    ).order_by(Activity.created_at)
+    activity_results = session.exec(statement).all()
+    
+    for activity, user in activity_results:
+        activity_type_name = activity.activity_type.value.replace("_", " ").title()
+        events.append(CustomerHistoryEvent(
+            event_type=CustomerHistoryEventType.ACTIVITY,
+            timestamp=activity.created_at,
+            title=activity_type_name,
+            description=activity.notes or f"{activity_type_name} activity recorded",
+            metadata={"activity_type": activity.activity_type.value, "activity_id": activity.id},
+            created_by_id=activity.created_by_id,
+            created_by_name=user.full_name if user else "Unknown"
+        ))
+    
+    # 4. Lead status changes (for leads linked to this customer)
+    statement = select(StatusHistory, User, Lead).join(
+        User, StatusHistory.changed_by_id == User.id
+    ).join(
+        Lead, StatusHistory.lead_id == Lead.id
+    ).where(
+        Lead.customer_id == customer_id
+    ).order_by(StatusHistory.created_at)
+    status_results = session.exec(statement).all()
+    
+    for status_hist, user, lead in status_results:
+        old_status = status_hist.old_status.value if status_hist.old_status else "New"
+        new_status = status_hist.new_status.value
+        
+        # Special handling for QUALIFIED status
+        if status_hist.new_status.value == "QUALIFIED":
+            events.append(CustomerHistoryEvent(
+                event_type=CustomerHistoryEventType.LEAD_QUALIFIED,
+                timestamp=status_hist.created_at,
+                title="Lead Qualified",
+                description=f"Lead '{lead.name}' was qualified and linked to this customer",
+                metadata={
+                    "lead_id": lead.id,
+                    "lead_name": lead.name,
+                    "old_status": old_status,
+                    "new_status": new_status,
+                    "override_reason": status_hist.override_reason
+                },
+                created_by_id=status_hist.changed_by_id,
+                created_by_name=user.full_name if user else "Unknown"
+            ))
+        else:
+            events.append(CustomerHistoryEvent(
+                event_type=CustomerHistoryEventType.LEAD_STATUS_CHANGE,
+                timestamp=status_hist.created_at,
+                title="Lead Status Changed",
+                description=f"Lead '{lead.name}' status changed from {old_status} to {new_status}",
+                metadata={
+                    "lead_id": lead.id,
+                    "lead_name": lead.name,
+                    "old_status": old_status,
+                    "new_status": new_status,
+                    "override_reason": status_hist.override_reason
+                },
+                created_by_id=status_hist.changed_by_id,
+                created_by_name=user.full_name if user else "Unknown"
+            ))
+    
+    # 5. Quotes/Opportunities
+    statement = select(Quote, User).outerjoin(User, Quote.created_by_id == User.id).where(
+        Quote.customer_id == customer_id
+    ).order_by(Quote.created_at)
+    quote_results = session.exec(statement).all()
+    
+    for quote, user in quote_results:
+        # Quote created
+        events.append(CustomerHistoryEvent(
+            event_type=CustomerHistoryEventType.QUOTE_CREATED,
+            timestamp=quote.created_at,
+            title="Quote Created",
+            description=f"Quote {quote.quote_number} was created",
+            metadata={
+                "quote_id": quote.id,
+                "quote_number": quote.quote_number,
+                "total_amount": float(quote.total_amount) if quote.total_amount else 0
+            },
+            created_by_id=quote.created_by_id,
+            created_by_name=user.full_name if user else "Unknown"
+        ))
+        
+        # Opportunity created (if it's in DISCOVERY stage, it's an opportunity)
+        if quote.opportunity_stage and quote.opportunity_stage.value == "DISCOVERY":
+            events.append(CustomerHistoryEvent(
+                event_type=CustomerHistoryEventType.OPPORTUNITY_CREATED,
+                timestamp=quote.created_at,
+                title="Opportunity Created",
+                description=f"New opportunity created with quote {quote.quote_number}",
+                metadata={
+                    "quote_id": quote.id,
+                    "quote_number": quote.quote_number,
+                    "stage": quote.opportunity_stage.value
+                },
+                created_by_id=quote.created_by_id,
+                created_by_name=user.full_name if user else "Unknown"
+            ))
+        
+        # Quote sent
+        if quote.sent_at:
+            events.append(CustomerHistoryEvent(
+                event_type=CustomerHistoryEventType.QUOTE_SENT,
+                timestamp=quote.sent_at,
+                title="Quote Sent",
+                description=f"Quote {quote.quote_number} was sent to customer",
+                metadata={
+                    "quote_id": quote.id,
+                    "quote_number": quote.quote_number
+                },
+                created_by_id=quote.created_by_id,
+                created_by_name=user.full_name if user else "Unknown"
+            ))
+        
+        # Quote viewed
+        if quote.viewed_at:
+            events.append(CustomerHistoryEvent(
+                event_type=CustomerHistoryEventType.QUOTE_VIEWED,
+                timestamp=quote.viewed_at,
+                title="Quote Viewed",
+                description=f"Customer viewed quote {quote.quote_number}",
+                metadata={
+                    "quote_id": quote.id,
+                    "quote_number": quote.quote_number
+                },
+                created_by_id=None,
+                created_by_name=None
+            ))
+        
+        # Quote accepted/rejected/expired
+        if quote.status == QuoteStatus.ACCEPTED and quote.accepted_at:
+            events.append(CustomerHistoryEvent(
+                event_type=CustomerHistoryEventType.QUOTE_ACCEPTED,
+                timestamp=quote.accepted_at,
+                title="Quote Accepted",
+                description=f"Quote {quote.quote_number} was accepted by customer",
+                metadata={
+                    "quote_id": quote.id,
+                    "quote_number": quote.quote_number,
+                    "total_amount": float(quote.total_amount) if quote.total_amount else 0
+                },
+                created_by_id=None,
+                created_by_name=None
+            ))
+        elif quote.status == QuoteStatus.REJECTED:
+            events.append(CustomerHistoryEvent(
+                event_type=CustomerHistoryEventType.QUOTE_REJECTED,
+                timestamp=quote.updated_at,
+                title="Quote Rejected",
+                description=f"Quote {quote.quote_number} was rejected",
+                metadata={
+                    "quote_id": quote.id,
+                    "quote_number": quote.quote_number
+                },
+                created_by_id=None,
+                created_by_name=None
+            ))
+        elif quote.status == QuoteStatus.EXPIRED:
+            events.append(CustomerHistoryEvent(
+                event_type=CustomerHistoryEventType.QUOTE_EXPIRED,
+                timestamp=quote.updated_at,
+                title="Quote Expired",
+                description=f"Quote {quote.quote_number} has expired",
+                metadata={
+                    "quote_id": quote.id,
+                    "quote_number": quote.quote_number
+                },
+                created_by_id=None,
+                created_by_name=None
+            ))
+        
+        # Quote updated (if updated_at differs from created_at and not already covered)
+        if quote.updated_at and quote.updated_at != quote.created_at and not quote.sent_at and not quote.viewed_at and not quote.accepted_at:
+            events.append(CustomerHistoryEvent(
+                event_type=CustomerHistoryEventType.QUOTE_UPDATED,
+                timestamp=quote.updated_at,
+                title="Quote Updated",
+                description=f"Quote {quote.quote_number} was updated",
+                metadata={
+                    "quote_id": quote.id,
+                    "quote_number": quote.quote_number
+                },
+                created_by_id=quote.created_by_id,
+                created_by_name=user.full_name if user else "Unknown"
+            ))
+    
+    # 6. Quote emails (QuoteEmail records)
+    statement = select(QuoteEmail, Quote).join(Quote, QuoteEmail.quote_id == Quote.id).where(
+        Quote.customer_id == customer_id
+    ).order_by(QuoteEmail.sent_at)
+    quote_email_results = session.exec(statement).all()
+    
+    for quote_email, quote in quote_email_results:
+        events.append(CustomerHistoryEvent(
+            event_type=CustomerHistoryEventType.QUOTE_SENT,
+            timestamp=quote_email.sent_at,
+            title="Quote Email Sent",
+            description=f"Quote {quote.quote_number} email sent to {quote_email.to_email}",
+            metadata={
+                "quote_id": quote.id,
+                "quote_number": quote.quote_number,
+                "to_email": quote_email.to_email,
+                "email_id": quote_email.id
+            },
+            created_by_id=None,
+            created_by_name=None
+        ))
+    
+    # 7. Regular emails (Email records)
+    statement = select(Email, User).outerjoin(User, Email.created_by_id == User.id).where(
+        Email.customer_id == customer_id
+    ).order_by(Email.created_at)
+    email_results = session.exec(statement).all()
+    
+    for email, user in email_results:
+        if email.direction == EmailDirection.SENT:
+            events.append(CustomerHistoryEvent(
+                event_type=CustomerHistoryEventType.EMAIL_SENT,
+                timestamp=email.sent_at or email.created_at,
+                title="Email Sent",
+                description=f"Email sent to {email.to_email}: {email.subject}",
+                metadata={
+                    "email_id": email.id,
+                    "to_email": email.to_email,
+                    "subject": email.subject
+                },
+                created_by_id=email.created_by_id,
+                created_by_name=user.full_name if user else "Unknown"
+            ))
+        elif email.direction == EmailDirection.RECEIVED:
+            events.append(CustomerHistoryEvent(
+                event_type=CustomerHistoryEventType.EMAIL_RECEIVED,
+                timestamp=email.received_at or email.created_at,
+                title="Email Received",
+                description=f"Email received from {email.from_email}: {email.subject}",
+                metadata={
+                    "email_id": email.id,
+                    "from_email": email.from_email,
+                    "subject": email.subject
+                },
+                created_by_id=None,
+                created_by_name=None
+            ))
+    
+    # Sort all events by timestamp (most recent first)
+    events.sort(key=lambda x: x.timestamp, reverse=True)
+    
+    return CustomerHistoryResponse(events=events)

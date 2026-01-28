@@ -2,6 +2,7 @@ from pydantic import BaseModel, EmailStr
 from typing import Optional, List
 from datetime import datetime
 from decimal import Decimal
+from enum import Enum
 from app.models import (
     LeadStatus, ActivityType, Timeframe, UserRole, ProductCategory,
     QuoteStatus, DiscountType, DiscountScope, LeadType, LeadSource,
@@ -597,3 +598,35 @@ class StaleSummaryResponse(BaseModel):
     low_count: int
     stale_leads_count: int
     stale_quotes_count: int
+
+
+class CustomerHistoryEventType(str, Enum):
+    ACTIVITY = "ACTIVITY"
+    LEAD_STATUS_CHANGE = "LEAD_STATUS_CHANGE"
+    QUOTE_CREATED = "QUOTE_CREATED"
+    QUOTE_SENT = "QUOTE_SENT"
+    QUOTE_VIEWED = "QUOTE_VIEWED"
+    QUOTE_ACCEPTED = "QUOTE_ACCEPTED"
+    QUOTE_REJECTED = "QUOTE_REJECTED"
+    QUOTE_EXPIRED = "QUOTE_EXPIRED"
+    QUOTE_UPDATED = "QUOTE_UPDATED"
+    EMAIL_SENT = "EMAIL_SENT"
+    EMAIL_RECEIVED = "EMAIL_RECEIVED"
+    CUSTOMER_CREATED = "CUSTOMER_CREATED"
+    CUSTOMER_UPDATED = "CUSTOMER_UPDATED"
+    LEAD_QUALIFIED = "LEAD_QUALIFIED"
+    OPPORTUNITY_CREATED = "OPPORTUNITY_CREATED"
+
+
+class CustomerHistoryEvent(BaseModel):
+    event_type: CustomerHistoryEventType
+    timestamp: datetime
+    title: str
+    description: Optional[str] = None
+    metadata: Optional[dict] = None  # Additional context (quote number, lead status, etc.)
+    created_by_name: Optional[str] = None
+    created_by_id: Optional[int] = None
+
+
+class CustomerHistoryResponse(BaseModel):
+    events: List[CustomerHistoryEvent]

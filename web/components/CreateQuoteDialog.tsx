@@ -219,7 +219,7 @@ export default function CreateQuoteDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Create New Quote</DialogTitle>
           <DialogDescription>
@@ -252,7 +252,7 @@ export default function CreateQuoteDialog({
                       </Button>
                     )}
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-2 gap-6">
                     <div className="space-y-2">
                       <Label>Product (Optional)</Label>
                       <Select

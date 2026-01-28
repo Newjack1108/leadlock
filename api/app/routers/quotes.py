@@ -17,6 +17,23 @@ from decimal import Decimal
 router = APIRouter(prefix="/api/quotes", tags=["quotes"])
 
 
+def quote_item_to_response(item: QuoteItem) -> QuoteItemResponse:
+    """Convert a QuoteItem SQLModel instance to QuoteItemResponse."""
+    return QuoteItemResponse(
+        id=item.id,
+        quote_id=item.quote_id,
+        product_id=item.product_id,
+        description=item.description,
+        quantity=item.quantity,
+        unit_price=item.unit_price,
+        line_total=item.line_total,
+        discount_amount=item.discount_amount,
+        final_line_total=item.final_line_total,
+        sort_order=item.sort_order,
+        is_custom=item.is_custom
+    )
+
+
 def generate_quote_number(session: Session) -> str:
     """Generate a unique quote number like QT-2024-001."""
     from datetime import date
@@ -171,7 +188,7 @@ async def create_quote(
             accepted_at=quote.accepted_at,
             created_at=quote.created_at,
             updated_at=quote.updated_at,
-            items=[QuoteItemResponse(**item.dict()) for item in quote_items],
+            items=[quote_item_to_response(item) for item in quote_items],
             opportunity_stage=quote.opportunity_stage,
             close_probability=quote.close_probability,
             expected_close_date=quote.expected_close_date,
@@ -223,7 +240,7 @@ async def get_all_quotes(
             accepted_at=quote.accepted_at,
             created_at=quote.created_at,
             updated_at=quote.updated_at,
-            items=[QuoteItemResponse(**item.dict()) for item in quote_items],
+            items=[quote_item_to_response(item) for item in quote_items],
             opportunity_stage=quote.opportunity_stage,
             close_probability=quote.close_probability,
             expected_close_date=quote.expected_close_date,
@@ -283,7 +300,7 @@ async def get_opportunities(
             accepted_at=quote.accepted_at,
             created_at=quote.created_at,
             updated_at=quote.updated_at,
-            items=[QuoteItemResponse(**item.dict()) for item in quote_items],
+            items=[quote_item_to_response(item) for item in quote_items],
             opportunity_stage=quote.opportunity_stage,
             close_probability=quote.close_probability,
             expected_close_date=quote.expected_close_date,
@@ -347,7 +364,7 @@ async def get_stale_opportunities(
             accepted_at=quote.accepted_at,
             created_at=quote.created_at,
             updated_at=quote.updated_at,
-            items=[QuoteItemResponse(**item.dict()) for item in quote_items],
+            items=[quote_item_to_response(item) for item in quote_items],
             opportunity_stage=quote.opportunity_stage,
             close_probability=quote.close_probability,
             expected_close_date=quote.expected_close_date,
@@ -446,7 +463,7 @@ async def get_customer_quotes(
             accepted_at=quote.accepted_at,
             created_at=quote.created_at,
             updated_at=quote.updated_at,
-            items=[QuoteItemResponse(**item.dict()) for item in quote_items],
+            items=[quote_item_to_response(item) for item in quote_items],
             opportunity_stage=quote.opportunity_stage,
             close_probability=quote.close_probability,
             expected_close_date=quote.expected_close_date,

@@ -450,3 +450,35 @@ export interface StaleSummary {
   stale_leads_count: number;
   stale_quotes_count: number;
 }
+
+export enum CustomerHistoryEventType {
+  ACTIVITY = "ACTIVITY",
+  LEAD_STATUS_CHANGE = "LEAD_STATUS_CHANGE",
+  QUOTE_CREATED = "QUOTE_CREATED",
+  QUOTE_SENT = "QUOTE_SENT",
+  QUOTE_VIEWED = "QUOTE_VIEWED",
+  QUOTE_ACCEPTED = "QUOTE_ACCEPTED",
+  QUOTE_REJECTED = "QUOTE_REJECTED",
+  QUOTE_EXPIRED = "QUOTE_EXPIRED",
+  QUOTE_UPDATED = "QUOTE_UPDATED",
+  EMAIL_SENT = "EMAIL_SENT",
+  EMAIL_RECEIVED = "EMAIL_RECEIVED",
+  CUSTOMER_CREATED = "CUSTOMER_CREATED",
+  CUSTOMER_UPDATED = "CUSTOMER_UPDATED",
+  LEAD_QUALIFIED = "LEAD_QUALIFIED",
+  OPPORTUNITY_CREATED = "OPPORTUNITY_CREATED",
+}
+
+export interface CustomerHistoryEvent {
+  event_type: CustomerHistoryEventType;
+  timestamp: string;
+  title: string;
+  description?: string;
+  metadata?: Record<string, any>;
+  created_by_name?: string;
+  created_by_id?: number;
+}
+
+export interface CustomerHistoryResponse {
+  events: CustomerHistoryEvent[];
+}
