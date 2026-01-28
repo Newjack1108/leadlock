@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Header from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,7 +15,7 @@ import { Customer, Product, QuoteItemCreate } from '@/lib/types';
 import { toast } from 'sonner';
 import { Plus, Trash2, ArrowLeft } from 'lucide-react';
 
-export default function CreateQuotePage() {
+function CreateQuoteContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const customerId = searchParams.get('customer_id') ? parseInt(searchParams.get('customer_id')!) : null;
@@ -436,5 +436,20 @@ export default function CreateQuotePage() {
         </form>
       </main>
     </div>
+  );
+}
+
+export default function CreateQuotePage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-background">
+        <Header />
+        <div className="container mx-auto px-6 py-8">
+          <div className="text-center py-12 text-muted-foreground">Loading...</div>
+        </div>
+      </div>
+    }>
+      <CreateQuoteContent />
+    </Suspense>
   );
 }
