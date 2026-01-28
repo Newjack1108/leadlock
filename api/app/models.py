@@ -403,6 +403,7 @@ class DiscountTemplate(SQLModel, table=True):
     discount_value: Decimal = Field(sa_column=Column(Numeric(10, 2)))  # Amount or percentage (e.g., 10 for 10%)
     scope: DiscountScope  # PRODUCT or QUOTE
     is_active: bool = Field(default=True)
+    is_giveaway: bool = Field(default=False)  # True if this is a giveaway discount
     created_by_id: int = Field(foreign_key="user.id")
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)

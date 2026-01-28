@@ -1,13 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 from sqlmodel import Session, select, or_, and_
 from typing import List, Optional
 from app.database import get_session
-from app.models import Quote, QuoteItem, Customer, User, QuoteEmail, Email, EmailDirection, Activity, ActivityType, CompanySettings, Lead, LeadStatus, QuoteStatus, OpportunityStage, LossCategory
+from app.models import Quote, QuoteItem, Customer, User, QuoteEmail, Email, EmailDirection, Activity, ActivityType, CompanySettings, Lead, LeadStatus, QuoteStatus, OpportunityStage, LossCategory, DiscountTemplate, QuoteDiscount, DiscountType, DiscountScope
 from app.auth import get_current_user
 from app.schemas import (
     QuoteCreate, QuoteUpdate, QuoteResponse, QuoteItemCreate, QuoteItemResponse,
-    QuoteEmailSendRequest, QuoteEmailSendResponse, OpportunityWonRequest, OpportunityLostRequest
+    QuoteEmailSendRequest, QuoteEmailSendResponse, OpportunityWonRequest, OpportunityLostRequest,
+    QuoteDiscountResponse
 )
 from app.quote_email_service import send_quote_email
 from app.quote_pdf_service import generate_quote_pdf
@@ -32,6 +33,117 @@ def quote_item_to_response(item: QuoteItem) -> QuoteItemResponse:
         sort_order=item.sort_order,
         is_custom=item.is_custom
     )
+
+
+def build_quote_response(quote: Quote, quote_items: List[QuoteItem], session: Session) -> QuoteResponse:
+    """Build a QuoteResponse with items and discounts."""
+    discount_statement = select(QuoteDiscount).where(QuoteDiscount.quote_id == quote.id)
+    quote_discounts = session.exec(discount_statement).all()
+    
+    return QuoteResponse(
+        id=quote.id,
+        customer_id=quote.customer_id,
+        quote_number=quote.quote_number,
+        version=quote.version,
+        status=quote.status,
+        subtotal=quote.subtotal,
+        discount_total=quote.discount_total,
+        total_amount=quote.total_amount,
+        deposit_amount=quote.deposit_amount,
+        balance_amount=quote.balance_amount,
+        currency=quote.currency,
+        valid_until=quote.valid_until,
+        terms_and_conditions=quote.terms_and_conditions,
+        notes=quote.notes,
+        created_by_id=quote.created_by_id,
+        sent_at=quote.sent_at,
+        viewed_at=quote.viewed_at,
+        accepted_at=quote.accepted_at,
+        created_at=quote.created_at,
+        updated_at=quote.updated_at,
+        items=[quote_item_to_response(item) for item in quote_items],
+        discounts=[QuoteDiscountResponse(**discount.dict()) for discount in quote_discounts],
+        opportunity_stage=quote.opportunity_stage,
+        close_probability=quote.close_probability,
+        expected_close_date=quote.expected_close_date,
+        next_action=quote.next_action,
+        next_action_due_date=quote.next_action_due_date,
+        loss_reason=quote.loss_reason,
+        loss_category=quote.loss_category,
+        owner_id=quote.owner_id
+    )
+
+
+def apply_discount_to_quote(
+    quote: Quote,
+    discount_template: DiscountTemplate,
+    quote_items: List[QuoteItem],
+    session: Session,
+    current_user: User
+) -> Decimal:
+    """
+    Apply a discount template to a quote.
+    Returns the total discount amount applied.
+    """
+    total_discount = Decimal(0)
+    
+    if discount_template.scope == DiscountScope.PRODUCT:
+        # Apply discount to each quote item (building products)
+        for item in quote_items:
+            if item.line_total > 0:  # Only apply to items with value
+                # Calculate discount based on current line total (before other discounts)
+                base_amount = item.line_total + item.discount_amount  # Original line total
+                if discount_template.discount_type == DiscountType.PERCENTAGE:
+                    discount_amount = base_amount * (discount_template.discount_value / Decimal(100))
+                else:  # FIXED_AMOUNT
+                    discount_amount = min(discount_template.discount_value, base_amount)
+                
+                # Update item discount (additive with other discounts)
+                item.discount_amount += discount_amount
+                item.final_line_total = item.line_total - item.discount_amount
+                # Ensure final_line_total doesn't go negative
+                if item.final_line_total < 0:
+                    item.final_line_total = Decimal(0)
+                total_discount += discount_amount
+                
+                # Create QuoteDiscount record for this item
+                quote_discount = QuoteDiscount(
+                    quote_id=quote.id,
+                    quote_item_id=item.id,
+                    template_id=discount_template.id,
+                    discount_type=discount_template.discount_type,
+                    discount_value=discount_template.discount_value,
+                    scope=discount_template.scope,
+                    discount_amount=discount_amount,
+                    description=discount_template.name,
+                    applied_by_id=current_user.id
+                )
+                session.add(quote_discount)
+    else:  # QUOTE scope
+        # Apply discount to entire quote subtotal (before item discounts)
+        # Quote-level discounts apply to the original subtotal
+        if discount_template.discount_type == DiscountType.PERCENTAGE:
+            discount_amount = quote.subtotal * (discount_template.discount_value / Decimal(100))
+        else:  # FIXED_AMOUNT
+            discount_amount = min(discount_template.discount_value, quote.subtotal)
+        
+        total_discount = discount_amount
+        
+        # Create QuoteDiscount record for quote-level discount
+        quote_discount = QuoteDiscount(
+            quote_id=quote.id,
+            quote_item_id=None,
+            template_id=discount_template.id,
+            discount_type=discount_template.discount_type,
+            discount_value=discount_template.discount_value,
+            scope=discount_template.scope,
+            discount_amount=discount_amount,
+            description=discount_template.name,
+            applied_by_id=current_user.id
+        )
+        session.add(quote_discount)
+    
+    return total_discount
 
 
 def generate_quote_number(session: Session) -> str:
@@ -149,6 +261,98 @@ async def create_quote(
             session.add(item)
         session.commit()
         
+        # Refresh to get items with IDs
+        session.refresh(quote)
+        statement = select(QuoteItem).where(QuoteItem.quote_id == quote.id)
+        quote_items = session.exec(statement).all()
+        
+        # Apply discounts if provided
+        discount_total = Decimal(0)
+        if quote_data.discount_template_ids:
+            for template_id in quote_data.discount_template_ids:
+                template_statement = select(DiscountTemplate).where(
+                    DiscountTemplate.id == template_id,
+                    DiscountTemplate.is_active == True
+                )
+                discount_template = session.exec(template_statement).first()
+                
+                if discount_template:
+                    # Handle giveaway discounts
+                    if discount_template.is_giveaway:
+                        # For giveaways, we expect the product to already be in the items
+                        # with a 100% discount applied. The discount template just marks it.
+                        # Apply 100% discount to matching products if needed
+                        for item in quote_items:
+                            if item.product_id and discount_template.scope == DiscountScope.PRODUCT:
+                                # Apply 100% discount to this item
+                                item.discount_amount = item.line_total
+                                item.final_line_total = Decimal(0)
+                                discount_total += item.line_total
+                                
+                                quote_discount = QuoteDiscount(
+                                    quote_id=quote.id,
+                                    quote_item_id=item.id,
+                                    template_id=discount_template.id,
+                                    discount_type=DiscountType.PERCENTAGE,
+                                    discount_value=Decimal(100),
+                                    scope=discount_template.scope,
+                                    discount_amount=item.line_total,
+                                    description=discount_template.name,
+                                    applied_by_id=current_user.id
+                                )
+                                session.add(quote_discount)
+                    else:
+                        # Apply regular discount
+                        discount_amount = apply_discount_to_quote(
+                            quote, discount_template, quote_items, session, current_user
+                        )
+                        discount_total += discount_amount
+                    
+                    # Update items after discount application
+                    for item in quote_items:
+                        session.add(item)
+        
+        # Recalculate totals with discounts
+        # Commit item changes first
+        session.commit()
+        
+        # Refresh items to get updated discount amounts
+        session.refresh(quote)
+        statement = select(QuoteItem).where(QuoteItem.quote_id == quote.id)
+        quote_items = session.exec(statement).all()
+        
+        # Sum up all item-level discounts
+        item_discount_total = sum(item.discount_amount for item in quote_items)
+        
+        # Get quote-level discounts
+        discount_statement = select(QuoteDiscount).where(
+            QuoteDiscount.quote_id == quote.id,
+            QuoteDiscount.quote_item_id.is_(None)
+        )
+        quote_level_discounts = session.exec(discount_statement).all()
+        quote_level_discount_total = sum(d.discount_amount for d in quote_level_discounts)
+        
+        quote.discount_total = item_discount_total + quote_level_discount_total
+        quote.total_amount = quote.subtotal - quote.discount_total
+        # Ensure total doesn't go negative
+        if quote.total_amount < 0:
+            quote.total_amount = Decimal(0)
+        
+        # Recalculate deposit and balance
+        if quote_data.deposit_amount is not None:
+            deposit_amount = Decimal(str(quote_data.deposit_amount))
+        else:
+            deposit_amount = quote.total_amount * Decimal("0.5")
+        
+        if deposit_amount > quote.total_amount:
+            deposit_amount = quote.total_amount
+        
+        quote.deposit_amount = deposit_amount
+        quote.balance_amount = quote.total_amount - deposit_amount
+        
+        session.add(quote)
+        session.commit()
+        
         # QUALIFIED → QUOTED: Transition lead when quote is created
         from app.workflow import auto_transition_lead_status, find_leads_by_customer_id
         leads = find_leads_by_customer_id(quote.customer_id, session)
@@ -167,37 +371,7 @@ async def create_quote(
         statement = select(QuoteItem).where(QuoteItem.quote_id == quote.id)
         quote_items = session.exec(statement).all()
         
-        return QuoteResponse(
-            id=quote.id,
-            customer_id=quote.customer_id,
-            quote_number=quote.quote_number,
-            version=quote.version,
-            status=quote.status,
-            subtotal=quote.subtotal,
-            discount_total=quote.discount_total,
-            total_amount=quote.total_amount,
-            deposit_amount=quote.deposit_amount,
-            balance_amount=quote.balance_amount,
-            currency=quote.currency,
-            valid_until=quote.valid_until,
-            terms_and_conditions=quote.terms_and_conditions,
-            notes=quote.notes,
-            created_by_id=quote.created_by_id,
-            sent_at=quote.sent_at,
-            viewed_at=quote.viewed_at,
-            accepted_at=quote.accepted_at,
-            created_at=quote.created_at,
-            updated_at=quote.updated_at,
-            items=[quote_item_to_response(item) for item in quote_items],
-            opportunity_stage=quote.opportunity_stage,
-            close_probability=quote.close_probability,
-            expected_close_date=quote.expected_close_date,
-            next_action=quote.next_action,
-            next_action_due_date=quote.next_action_due_date,
-            loss_reason=quote.loss_reason,
-            loss_category=quote.loss_category,
-            owner_id=quote.owner_id
-        )
+        return build_quote_response(quote, quote_items, session)
     except Exception as e:
         import traceback
         error_detail = str(e)
@@ -219,38 +393,7 @@ async def get_all_quotes(
         for quote in quotes:
             item_statement = select(QuoteItem).where(QuoteItem.quote_id == quote.id).order_by(QuoteItem.sort_order)
             quote_items = session.exec(item_statement).all()
-            
-            result.append(QuoteResponse(
-                id=quote.id,
-                customer_id=quote.customer_id,
-                quote_number=quote.quote_number,
-                version=quote.version,
-                status=quote.status,
-                subtotal=quote.subtotal,
-                discount_total=quote.discount_total,
-                total_amount=quote.total_amount,
-                deposit_amount=quote.deposit_amount,
-                balance_amount=quote.balance_amount,
-                currency=quote.currency,
-                valid_until=quote.valid_until,
-                terms_and_conditions=quote.terms_and_conditions,
-                notes=quote.notes,
-                created_by_id=quote.created_by_id,
-                sent_at=quote.sent_at,
-                viewed_at=quote.viewed_at,
-                accepted_at=quote.accepted_at,
-                created_at=quote.created_at,
-                updated_at=quote.updated_at,
-                items=[quote_item_to_response(item) for item in quote_items],
-                opportunity_stage=quote.opportunity_stage,
-                close_probability=quote.close_probability,
-                expected_close_date=quote.expected_close_date,
-                next_action=quote.next_action,
-                next_action_due_date=quote.next_action_due_date,
-                loss_reason=quote.loss_reason,
-                loss_category=quote.loss_category,
-                owner_id=quote.owner_id
-            ))
+            result.append(build_quote_response(quote, quote_items, session))
         
         return result
     except Exception as e:
@@ -284,38 +427,7 @@ async def get_opportunities(
     for quote in quotes:
         item_statement = select(QuoteItem).where(QuoteItem.quote_id == quote.id).order_by(QuoteItem.sort_order)
         quote_items = session.exec(item_statement).all()
-        
-        result.append(QuoteResponse(
-            id=quote.id,
-            customer_id=quote.customer_id,
-            quote_number=quote.quote_number,
-            version=quote.version,
-            status=quote.status,
-            subtotal=quote.subtotal,
-            discount_total=quote.discount_total,
-            total_amount=quote.total_amount,
-            deposit_amount=quote.deposit_amount,
-            balance_amount=quote.balance_amount,
-            currency=quote.currency,
-            valid_until=quote.valid_until,
-            terms_and_conditions=quote.terms_and_conditions,
-            notes=quote.notes,
-            created_by_id=quote.created_by_id,
-            sent_at=quote.sent_at,
-            viewed_at=quote.viewed_at,
-            accepted_at=quote.accepted_at,
-            created_at=quote.created_at,
-            updated_at=quote.updated_at,
-            items=[quote_item_to_response(item) for item in quote_items],
-            opportunity_stage=quote.opportunity_stage,
-            close_probability=quote.close_probability,
-            expected_close_date=quote.expected_close_date,
-            next_action=quote.next_action,
-            next_action_due_date=quote.next_action_due_date,
-            loss_reason=quote.loss_reason,
-            loss_category=quote.loss_category,
-            owner_id=quote.owner_id
-        ))
+        result.append(build_quote_response(quote, quote_items, session))
     
     return result
 
@@ -348,38 +460,7 @@ async def get_stale_opportunities(
     for quote in quotes:
         item_statement = select(QuoteItem).where(QuoteItem.quote_id == quote.id).order_by(QuoteItem.sort_order)
         quote_items = session.exec(item_statement).all()
-        
-        result.append(QuoteResponse(
-            id=quote.id,
-            customer_id=quote.customer_id,
-            quote_number=quote.quote_number,
-            version=quote.version,
-            status=quote.status,
-            subtotal=quote.subtotal,
-            discount_total=quote.discount_total,
-            total_amount=quote.total_amount,
-            deposit_amount=quote.deposit_amount,
-            balance_amount=quote.balance_amount,
-            currency=quote.currency,
-            valid_until=quote.valid_until,
-            terms_and_conditions=quote.terms_and_conditions,
-            notes=quote.notes,
-            created_by_id=quote.created_by_id,
-            sent_at=quote.sent_at,
-            viewed_at=quote.viewed_at,
-            accepted_at=quote.accepted_at,
-            created_at=quote.created_at,
-            updated_at=quote.updated_at,
-            items=[quote_item_to_response(item) for item in quote_items],
-            opportunity_stage=quote.opportunity_stage,
-            close_probability=quote.close_probability,
-            expected_close_date=quote.expected_close_date,
-            next_action=quote.next_action,
-            next_action_due_date=quote.next_action_due_date,
-            loss_reason=quote.loss_reason,
-            loss_category=quote.loss_category,
-            owner_id=quote.owner_id
-        ))
+        result.append(build_quote_response(quote, quote_items, session))
     
     return result
 
@@ -403,37 +484,7 @@ async def get_opportunity(
     statement = select(QuoteItem).where(QuoteItem.quote_id == quote.id).order_by(QuoteItem.sort_order)
     quote_items = session.exec(statement).all()
     
-    return QuoteResponse(
-        id=quote.id,
-        customer_id=quote.customer_id,
-        quote_number=quote.quote_number,
-        version=quote.version,
-        status=quote.status,
-        subtotal=quote.subtotal,
-        discount_total=quote.discount_total,
-        total_amount=quote.total_amount,
-        deposit_amount=quote.deposit_amount,
-        balance_amount=quote.balance_amount,
-        currency=quote.currency,
-        valid_until=quote.valid_until,
-        terms_and_conditions=quote.terms_and_conditions,
-        notes=quote.notes,
-        created_by_id=quote.created_by_id,
-        sent_at=quote.sent_at,
-        viewed_at=quote.viewed_at,
-        accepted_at=quote.accepted_at,
-        created_at=quote.created_at,
-        updated_at=quote.updated_at,
-        items=[quote_item_to_response(item) for item in quote_items],
-        opportunity_stage=quote.opportunity_stage,
-        close_probability=quote.close_probability,
-        expected_close_date=quote.expected_close_date,
-        next_action=quote.next_action,
-        next_action_due_date=quote.next_action_due_date,
-        loss_reason=quote.loss_reason,
-        loss_category=quote.loss_category,
-        owner_id=quote.owner_id
-    )
+    return build_quote_response(quote, quote_items, session)
 
 
 @router.get("/{quote_id}", response_model=QuoteResponse)
@@ -735,37 +786,90 @@ async def update_quote(
     statement = select(QuoteItem).where(QuoteItem.quote_id == quote.id).order_by(QuoteItem.sort_order)
     quote_items = session.exec(statement).all()
     
-    return QuoteResponse(
-        id=quote.id,
-        customer_id=quote.customer_id,
-        quote_number=quote.quote_number,
-        version=quote.version,
-        status=quote.status,
-        subtotal=quote.subtotal,
-        discount_total=quote.discount_total,
-        total_amount=quote.total_amount,
-        deposit_amount=quote.deposit_amount,
-        balance_amount=quote.balance_amount,
-        currency=quote.currency,
-        valid_until=quote.valid_until,
-        terms_and_conditions=quote.terms_and_conditions,
-        notes=quote.notes,
-        created_by_id=quote.created_by_id,
-        sent_at=quote.sent_at,
-        viewed_at=quote.viewed_at,
-        accepted_at=quote.accepted_at,
-        created_at=quote.created_at,
-        updated_at=quote.updated_at,
-        items=[quote_item_to_response(item) for item in quote_items],
-        opportunity_stage=quote.opportunity_stage,
-        close_probability=quote.close_probability,
-        expected_close_date=quote.expected_close_date,
-        next_action=quote.next_action,
-        next_action_due_date=quote.next_action_due_date,
-        loss_reason=quote.loss_reason,
-        loss_category=quote.loss_category,
-        owner_id=quote.owner_id
+    return build_quote_response(quote, quote_items, session)
+
+
+@router.post("/{quote_id}/discounts")
+async def apply_discount_to_quote_endpoint(
+    quote_id: int,
+    template_id: int = Query(...),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    """Apply a discount template to an existing quote."""
+    # Get quote
+    statement = select(Quote).where(Quote.id == quote_id)
+    quote = session.exec(statement).first()
+    
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    
+    # Get discount template
+    template_statement = select(DiscountTemplate).where(
+        DiscountTemplate.id == template_id,
+        DiscountTemplate.is_active == True
     )
+    discount_template = session.exec(template_statement).first()
+    
+    if not discount_template:
+        raise HTTPException(status_code=404, detail="Discount template not found")
+    
+    # Get quote items
+    item_statement = select(QuoteItem).where(QuoteItem.quote_id == quote.id)
+    quote_items = session.exec(item_statement).all()
+    
+    if not quote_items:
+        raise HTTPException(status_code=400, detail="Quote has no items")
+    
+    # Apply discount
+    if discount_template.is_giveaway:
+        # Handle giveaway - apply 100% discount to products
+        for item in quote_items:
+            if item.product_id and discount_template.scope == DiscountScope.PRODUCT:
+                item.discount_amount = item.line_total
+                item.final_line_total = Decimal(0)
+                session.add(item)
+                
+                quote_discount = QuoteDiscount(
+                    quote_id=quote.id,
+                    quote_item_id=item.id,
+                    template_id=discount_template.id,
+                    discount_type=DiscountType.PERCENTAGE,
+                    discount_value=Decimal(100),
+                    scope=discount_template.scope,
+                    discount_amount=item.line_total,
+                    description=discount_template.name,
+                    applied_by_id=current_user.id
+                )
+                session.add(quote_discount)
+    else:
+        # Apply regular discount
+        apply_discount_to_quote(quote, discount_template, quote_items, session, current_user)
+    
+    # Recalculate totals
+    item_discount_total = sum(item.discount_amount for item in quote_items)
+    discount_statement = select(QuoteDiscount).where(
+        QuoteDiscount.quote_id == quote.id,
+        QuoteDiscount.quote_item_id.is_(None)
+    )
+    quote_level_discounts = session.exec(discount_statement).all()
+    quote_level_discount_total = sum(d.discount_amount for d in quote_level_discounts)
+    
+    quote.discount_total = item_discount_total + quote_level_discount_total
+    quote.total_amount = quote.subtotal - quote.discount_total
+    if quote.total_amount < 0:
+        quote.total_amount = Decimal(0)
+    
+    # Recalculate deposit and balance
+    if quote.deposit_amount > quote.total_amount:
+        quote.deposit_amount = quote.total_amount
+    quote.balance_amount = quote.total_amount - quote.deposit_amount
+    
+    session.add(quote)
+    session.commit()
+    session.refresh(quote)
+    
+    return build_quote_response(quote, quote_items, session)
 
 
 @router.get("/{quote_id}/preview-pdf")

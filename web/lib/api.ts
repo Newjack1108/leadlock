@@ -332,3 +332,50 @@ export const getCustomerHistory = async (customerId: number) => {
   const response = await api.get(`/api/customers/${customerId}/history`);
   return response.data;
 };
+
+// Discount Template API functions
+export const getDiscountTemplates = async (isActive?: boolean) => {
+  const params = isActive !== undefined ? { is_active: isActive } : {};
+  const response = await api.get('/api/discounts', { params });
+  return response.data;
+};
+
+export const getDiscountTemplate = async (discountId: number) => {
+  const response = await api.get(`/api/discounts/${discountId}`);
+  return response.data;
+};
+
+export const createDiscountTemplate = async (templateData: {
+  name: string;
+  description?: string;
+  discount_type: string;
+  discount_value: number;
+  scope: string;
+  is_giveaway?: boolean;
+}) => {
+  const response = await api.post('/api/discounts', templateData);
+  return response.data;
+};
+
+export const updateDiscountTemplate = async (discountId: number, templateData: {
+  name?: string;
+  description?: string;
+  discount_type?: string;
+  discount_value?: number;
+  scope?: string;
+  is_active?: boolean;
+  is_giveaway?: boolean;
+}) => {
+  const response = await api.patch(`/api/discounts/${discountId}`, templateData);
+  return response.data;
+};
+
+export const deleteDiscountTemplate = async (discountId: number) => {
+  const response = await api.delete(`/api/discounts/${discountId}`);
+  return response.data;
+};
+
+export const applyDiscountToQuote = async (quoteId: number, templateId: number) => {
+  const response = await api.post(`/api/quotes/${quoteId}/discounts?template_id=${templateId}`);
+  return response.data;
+};

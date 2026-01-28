@@ -9,11 +9,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { createQuote, getProducts, getCompanySettings } from '@/lib/api';
+import { createQuote, getProducts, getCompanySettings, getDiscountTemplates } from '@/lib/api';
 import api from '@/lib/api';
-import { Customer, Product, QuoteItemCreate } from '@/lib/types';
+import { Customer, Product, QuoteItemCreate, DiscountTemplate } from '@/lib/types';
 import { toast } from 'sonner';
-import { Plus, Trash2, ArrowLeft } from 'lucide-react';
+import { Plus, Trash2, ArrowLeft, X } from 'lucide-react';
 
 // Default terms and conditions constant (fallback if not set in company settings)
 const DEFAULT_TERMS_AND_CONDITIONS = `Key Terms Summary (For Quotations)
@@ -76,6 +76,8 @@ function CreateQuoteContent() {
   const [notes, setNotes] = useState('');
   const [depositAmount, setDepositAmount] = useState<number | ''>('');
   const [companySettings, setCompanySettings] = useState<any>(null);
+  const [availableDiscounts, setAvailableDiscounts] = useState<DiscountTemplate[]>([]);
+  const [selectedDiscountIds, setSelectedDiscountIds] = useState<number[]>([]);
 
   useEffect(() => {
     if (customerId) {
@@ -83,6 +85,7 @@ function CreateQuoteContent() {
       fetchProducts();
       fetchDefaultTerms();
       fetchCompanySettings();
+      fetchDiscounts();
       // Set default valid until to 30 days from now
       const date = new Date();
       date.setDate(date.getDate() + 30);
@@ -141,6 +144,15 @@ function CreateQuoteContent() {
       setCompanySettings(settings);
     } catch (error) {
       console.error('Failed to load company settings');
+    }
+  };
+
+  const fetchDiscounts = async () => {
+    try {
+      const discounts = await getDiscountTemplates(true); // Only active discounts
+      setAvailableDiscounts(discounts);
+    } catch (error) {
+      console.error('Failed to load discounts');
     }
   };
 
@@ -221,6 +233,8 @@ function CreateQuoteContent() {
   };
 
   const calculateTotal = () => {
+    // Note: Discounts are calculated on the backend
+    // This is just the subtotal for preview
     return calculateSubtotal();
   };
 
@@ -271,6 +285,7 @@ function CreateQuoteContent() {
           is_custom: item.is_custom !== undefined ? item.is_custom : (item.product_id === undefined || item.product_id === null),
           sort_order: index,
         })),
+        discount_template_ids: selectedDiscountIds.length > 0 ? selectedDiscountIds : undefined,
       };
 
       // Only include optional fields if they have values
@@ -495,11 +510,92 @@ function CreateQuoteContent() {
                     <span className="font-semibold">Subtotal:</span>
                     <span className="font-semibold">£{calculateSubtotal().toFixed(2)}</span>
                   </div>
+                  {selectedDiscountIds.length > 0 && (
+                    <div className="flex justify-between items-center text-sm text-muted-foreground">
+                      <span>Discounts will be calculated on submission</span>
+                    </div>
+                  )}
                   <div className="flex justify-between items-center border-t pt-2">
                     <span className="font-semibold text-lg">Total:</span>
                     <span className="font-semibold text-lg">£{calculateTotal().toFixed(2)}</span>
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Discounts Selection */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Discounts & Giveaways</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Select Discounts</Label>
+                  <Select
+                    value=""
+                    onValueChange={(value) => {
+                      if (value && !selectedDiscountIds.includes(parseInt(value))) {
+                        setSelectedDiscountIds([...selectedDiscountIds, parseInt(value)]);
+                      }
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a discount to apply..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableDiscounts
+                        .filter((d) => !selectedDiscountIds.includes(d.id))
+                        .map((discount) => (
+                          <SelectItem key={discount.id} value={discount.id.toString()}>
+                            {discount.name} - {discount.discount_type === 'PERCENTAGE' ? `${discount.discount_value}%` : `£${discount.discount_value}`} ({discount.scope === 'PRODUCT' ? 'Product' : 'Quote'})
+                            {discount.is_giveaway && ' 🎁'}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {selectedDiscountIds.length > 0 && (
+                  <div className="space-y-2">
+                    <Label>Selected Discounts</Label>
+                    <div className="space-y-2">
+                      {selectedDiscountIds.map((discountId) => {
+                        const discount = availableDiscounts.find((d) => d.id === discountId);
+                        if (!discount) return null;
+                        return (
+                          <div
+                            key={discountId}
+                            className="flex items-center justify-between p-3 border rounded-md"
+                          >
+                            <div className="flex-1">
+                              <p className="font-medium">
+                                {discount.name}
+                                {discount.is_giveaway && ' 🎁'}
+                              </p>
+                              <p className="text-sm text-muted-foreground">
+                                {discount.discount_type === 'PERCENTAGE'
+                                  ? `${discount.discount_value}%`
+                                  : `£${discount.discount_value}`}{' '}
+                                off {discount.scope === 'PRODUCT' ? 'products' : 'entire quote'}
+                              </p>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() =>
+                                setSelectedDiscountIds(
+                                  selectedDiscountIds.filter((id) => id !== discountId)
+                                )
+                              }
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
 

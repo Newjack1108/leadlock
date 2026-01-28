@@ -440,6 +440,7 @@ class QuoteCreate(BaseModel):
     notes: Optional[str] = None
     deposit_amount: Optional[Decimal] = None  # Optional deposit amount (defaults to 50% of total if not provided)
     items: List[QuoteItemCreate]
+    discount_template_ids: Optional[List[int]] = None  # List of discount template IDs to apply
 
 
 class QuoteUpdate(BaseModel):
@@ -479,6 +480,7 @@ class QuoteResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     items: List[QuoteItemResponse] = []
+    discounts: List["QuoteDiscountResponse"] = []
     # Opportunity fields
     opportunity_stage: Optional["OpportunityStage"] = None
     close_probability: Optional[Decimal] = None
@@ -512,6 +514,7 @@ class DiscountTemplateCreate(BaseModel):
     discount_type: DiscountType
     discount_value: Decimal
     scope: DiscountScope
+    is_giveaway: Optional[bool] = False
 
 
 class DiscountTemplateUpdate(BaseModel):
@@ -521,6 +524,7 @@ class DiscountTemplateUpdate(BaseModel):
     discount_value: Optional[Decimal] = None
     scope: Optional[DiscountScope] = None
     is_active: Optional[bool] = None
+    is_giveaway: Optional[bool] = None
 
 
 class DiscountTemplateResponse(BaseModel):
@@ -531,6 +535,7 @@ class DiscountTemplateResponse(BaseModel):
     discount_value: Decimal
     scope: DiscountScope
     is_active: bool
+    is_giveaway: bool
     created_at: datetime
     updated_at: datetime
 

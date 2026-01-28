@@ -69,7 +69,7 @@ export default function EditProductPage() {
         installation_hours: product.installation_hours?.toString() || '',
       });
       if (product.optional_extras) {
-        setSelectedExtras(product.optional_extras.map((e) => e.id));
+        setSelectedExtras(product.optional_extras.map((e: Product) => e.id));
       }
     } catch (error: any) {
       if (error.response?.status === 404) {

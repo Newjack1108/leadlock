@@ -7,10 +7,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import api, { getQuote, previewQuotePdf } from '@/lib/api';
-import { Quote, QuoteItem, Customer } from '@/lib/types';
+import { Quote, QuoteItem, Customer, QuoteDiscount } from '@/lib/types';
 import { toast } from 'sonner';
 import SendQuoteEmailDialog from '@/components/SendQuoteEmailDialog';
-import { ArrowLeft, Mail, Eye } from 'lucide-react';
+import { ArrowLeft, Mail, Eye, Tag, Gift } from 'lucide-react';
 
 export default function QuoteDetailPage() {
   const router = useRouter();
@@ -143,14 +143,37 @@ export default function QuoteDetailPage() {
                       </thead>
                       <tbody>
                         {quote.items && quote.items.length > 0 ? (
-                          quote.items.map((item: QuoteItem) => (
-                            <tr key={item.id} className="border-b">
-                              <td className="py-2 px-3">{item.description}</td>
-                              <td className="text-right py-2 px-3">{Number(item.quantity).toFixed(2)}</td>
-                              <td className="text-right py-2 px-3">£{Number(item.unit_price).toFixed(2)}</td>
-                              <td className="text-right py-2 px-3 font-medium">£{Number(item.line_total).toFixed(2)}</td>
-                            </tr>
-                          ))
+                          quote.items.map((item: QuoteItem) => {
+                            const hasDiscount = item.discount_amount > 0;
+                            return (
+                              <tr key={item.id} className="border-b">
+                                <td className="py-2 px-3">
+                                  {item.description}
+                                  {hasDiscount && (
+                                    <Badge variant="outline" className="ml-2 text-xs">
+                                      Discounted
+                                    </Badge>
+                                  )}
+                                </td>
+                                <td className="text-right py-2 px-3">{Number(item.quantity).toFixed(2)}</td>
+                                <td className="text-right py-2 px-3">£{Number(item.unit_price).toFixed(2)}</td>
+                                <td className="text-right py-2 px-3">
+                                  {hasDiscount ? (
+                                    <div>
+                                      <div className="text-muted-foreground line-through text-sm">
+                                        £{Number(item.line_total).toFixed(2)}
+                                      </div>
+                                      <div className="font-medium text-destructive">
+                                        £{Number(item.final_line_total).toFixed(2)}
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <span className="font-medium">£{Number(item.line_total).toFixed(2)}</span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })
                         ) : (
                           <tr>
                             <td colSpan={4} className="text-center py-4 text-muted-foreground">
@@ -169,7 +192,7 @@ export default function QuoteDetailPage() {
                     </div>
                     {Number(quote.discount_total) > 0 && (
                       <div className="flex justify-between text-destructive">
-                        <span>Discount:</span>
+                        <span>Total Discount:</span>
                         <span>-£{Number(quote.discount_total).toFixed(2)}</span>
                       </div>
                     )}
@@ -193,6 +216,53 @@ export default function QuoteDetailPage() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Applied Discounts */}
+            {quote.discounts && quote.discounts.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Applied Discounts</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {quote.discounts.map((discount: QuoteDiscount) => (
+                      <div
+                        key={discount.id}
+                        className="flex items-start justify-between p-3 border rounded-md"
+                      >
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <Tag className="h-4 w-4 text-muted-foreground" />
+                            <p className="font-medium">{discount.description}</p>
+                            {discount.scope === 'PRODUCT' && (
+                              <Badge variant="outline" className="text-xs">
+                                Product Level
+                              </Badge>
+                            )}
+                            {discount.scope === 'QUOTE' && (
+                              <Badge variant="outline" className="text-xs">
+                                Quote Level
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {discount.discount_type === 'PERCENTAGE'
+                              ? `${discount.discount_value}%`
+                              : `£${discount.discount_value.toFixed(2)}`}{' '}
+                            discount
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-semibold text-destructive">
+                            -£{Number(discount.discount_amount).toFixed(2)}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Terms and Conditions */}
             {quote.terms_and_conditions && (

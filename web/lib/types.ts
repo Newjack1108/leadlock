@@ -318,6 +318,16 @@ export enum QuoteStatus {
   EXPIRED = "EXPIRED",
 }
 
+export enum DiscountType {
+  FIXED_AMOUNT = "FIXED_AMOUNT",
+  PERCENTAGE = "PERCENTAGE",
+}
+
+export enum DiscountScope {
+  PRODUCT = "PRODUCT",
+  QUOTE = "QUOTE",
+}
+
 export enum OpportunityStage {
   DISCOVERY = "DISCOVERY",
   CONCEPT = "CONCEPT",
@@ -381,6 +391,7 @@ export interface Quote {
   created_at: string;
   updated_at: string;
   items: QuoteItem[];
+  discounts?: QuoteDiscount[];
   // Opportunity fields
   opportunity_stage?: OpportunityStage;
   close_probability?: number;
@@ -401,6 +412,54 @@ export interface QuoteCreate {
   notes?: string;
   deposit_amount?: number;
   items: QuoteItemCreate[];
+  discount_template_ids?: number[];
+}
+
+export interface DiscountTemplate {
+  id: number;
+  name: string;
+  description?: string;
+  discount_type: DiscountType;
+  discount_value: number;
+  scope: DiscountScope;
+  is_active: boolean;
+  is_giveaway: boolean;
+  created_at: string;
+  updated_at: string;
+  usage_count?: number;
+}
+
+export interface DiscountTemplateCreate {
+  name: string;
+  description?: string;
+  discount_type: DiscountType;
+  discount_value: number;
+  scope: DiscountScope;
+  is_giveaway?: boolean;
+}
+
+export interface DiscountTemplateUpdate {
+  name?: string;
+  description?: string;
+  discount_type?: DiscountType;
+  discount_value?: number;
+  scope?: DiscountScope;
+  is_active?: boolean;
+  is_giveaway?: boolean;
+}
+
+export interface QuoteDiscount {
+  id: number;
+  quote_id: number;
+  quote_item_id?: number;
+  template_id?: number;
+  discount_type: DiscountType;
+  discount_value: number;
+  scope: DiscountScope;
+  discount_amount: number;
+  description: string;
+  applied_at: string;
+  applied_by_id: number;
 }
 
 export enum ReminderPriority {
