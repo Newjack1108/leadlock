@@ -32,7 +32,6 @@ import { Customer, Activity, ActivityType, Lead, OpportunityStage, CustomerHisto
 import { toast } from 'sonner';
 import SendQuoteEmailDialog from '@/components/SendQuoteEmailDialog';
 import ComposeEmailDialog from '@/components/ComposeEmailDialog';
-import CreateQuoteDialog from '@/components/CreateQuoteDialog';
 
 const activityIcons: Record<ActivityType, any> = {
   SMS_SENT: MessageSquare,
@@ -111,7 +110,6 @@ export default function CustomerDetailPage() {
   const [sendEmailDialogOpen, setSendEmailDialogOpen] = useState(false);
   const [selectedQuoteId, setSelectedQuoteId] = useState<number | null>(null);
   const [composeEmailDialogOpen, setComposeEmailDialogOpen] = useState(false);
-  const [createQuoteDialogOpen, setCreateQuoteDialogOpen] = useState(false);
 
   useEffect(() => {
     if (customerId) {
@@ -373,7 +371,7 @@ export default function CustomerDetailPage() {
                   {!quoteLocked && (
                     <Button
                       size="sm"
-                      onClick={() => setCreateQuoteDialogOpen(true)}
+                      onClick={() => router.push(`/quotes/create?customer_id=${customerId}`)}
                     >
                       <Plus className="h-4 w-4 mr-2" />
                       Create Quote
@@ -389,7 +387,7 @@ export default function CustomerDetailPage() {
                       <Button
                         variant="outline"
                         className="w-full"
-                        onClick={() => setCreateQuoteDialogOpen(true)}
+                        onClick={() => router.push(`/quotes/create?customer_id=${customerId}`)}
                       >
                         <Plus className="h-4 w-4 mr-2" />
                         Create First Quote
@@ -743,17 +741,6 @@ export default function CustomerDetailPage() {
         />
       )}
 
-      {customer && (
-        <CreateQuoteDialog
-          open={createQuoteDialogOpen}
-          onOpenChange={setCreateQuoteDialogOpen}
-          customer={customer}
-          onSuccess={() => {
-            fetchQuotes();
-            fetchHistory();
-          }}
-        />
-      )}
     </div>
   );
 }
