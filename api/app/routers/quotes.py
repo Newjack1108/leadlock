@@ -378,6 +378,58 @@ async def get_stale_opportunities(
     return result
 
 
+@router.get("/opportunities/{quote_id}", response_model=QuoteResponse)
+async def get_opportunity(
+    quote_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    """Get a specific opportunity by quote ID."""
+    statement = select(Quote).where(Quote.id == quote_id)
+    quote = session.exec(statement).first()
+    
+    if not quote:
+        raise HTTPException(status_code=404, detail="Opportunity not found")
+    
+    if quote.opportunity_stage is None:
+        raise HTTPException(status_code=404, detail="Quote is not an opportunity")
+    
+    statement = select(QuoteItem).where(QuoteItem.quote_id == quote.id).order_by(QuoteItem.sort_order)
+    quote_items = session.exec(statement).all()
+    
+    return QuoteResponse(
+        id=quote.id,
+        customer_id=quote.customer_id,
+        quote_number=quote.quote_number,
+        version=quote.version,
+        status=quote.status,
+        subtotal=quote.subtotal,
+        discount_total=quote.discount_total,
+        total_amount=quote.total_amount,
+        deposit_amount=quote.deposit_amount,
+        balance_amount=quote.balance_amount,
+        currency=quote.currency,
+        valid_until=quote.valid_until,
+        terms_and_conditions=quote.terms_and_conditions,
+        notes=quote.notes,
+        created_by_id=quote.created_by_id,
+        sent_at=quote.sent_at,
+        viewed_at=quote.viewed_at,
+        accepted_at=quote.accepted_at,
+        created_at=quote.created_at,
+        updated_at=quote.updated_at,
+        items=[quote_item_to_response(item) for item in quote_items],
+        opportunity_stage=quote.opportunity_stage,
+        close_probability=quote.close_probability,
+        expected_close_date=quote.expected_close_date,
+        next_action=quote.next_action,
+        next_action_due_date=quote.next_action_due_date,
+        loss_reason=quote.loss_reason,
+        loss_category=quote.loss_category,
+        owner_id=quote.owner_id
+    )
+
+
 @router.get("/{quote_id}", response_model=QuoteResponse)
 async def get_quote(
     quote_id: int,
@@ -415,7 +467,7 @@ async def get_quote(
         accepted_at=quote.accepted_at,
         created_at=quote.created_at,
         updated_at=quote.updated_at,
-        items=[QuoteItemResponse(**item.dict()) for item in quote_items],
+        items=[quote_item_to_response(item) for item in quote_items],
         opportunity_stage=quote.opportunity_stage,
         close_probability=quote.close_probability,
         expected_close_date=quote.expected_close_date,
@@ -698,7 +750,7 @@ async def update_quote(
         accepted_at=quote.accepted_at,
         created_at=quote.created_at,
         updated_at=quote.updated_at,
-        items=[QuoteItemResponse(**item.dict()) for item in quote_items],
+        items=[quote_item_to_response(item) for item in quote_items],
         opportunity_stage=quote.opportunity_stage,
         close_probability=quote.close_probability,
         expected_close_date=quote.expected_close_date,
