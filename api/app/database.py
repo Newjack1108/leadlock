@@ -287,9 +287,36 @@ def create_db_and_tables():
                 except Exception as e:
                     print(f"Error migrating Quote table: {e}", file=sys.stderr, flush=True)
                     import traceback
-                    print(traceback.format_exc(), file=sys.stderr, flush=True)(f"Error migrating Quote table: {e}", file=sys.stderr, flush=True)
-                    import traceback
                     print(traceback.format_exc(), file=sys.stderr, flush=True)
+            
+            # Add opportunity management columns to quote table if they don't exist
+            quote_columns = [col['name'] for col in inspector.get_columns("quote")]
+            opportunity_columns = {
+                'opportunity_stage': 'VARCHAR(50)',
+                'close_probability': 'NUMERIC(5, 2)',
+                'expected_close_date': 'TIMESTAMP',
+                'next_action': 'TEXT',
+                'next_action_due_date': 'TIMESTAMP',
+                'loss_reason': 'TEXT',
+                'loss_category': 'VARCHAR(50)',
+                'owner_id': 'INTEGER'
+            }
+            
+            for col_name, col_type in opportunity_columns.items():
+                if col_name not in quote_columns:
+                    print(f"Adding {col_name} column to quote table...", file=sys.stderr, flush=True)
+                    try:
+                        with engine.begin() as conn:
+                            if col_name == 'owner_id':
+                                # Add foreign key constraint for owner_id (nullable)
+                                conn.execute(text(f"ALTER TABLE quote ADD COLUMN {col_name} {col_type} REFERENCES \"user\"(id)"))
+                            else:
+                                conn.execute(text(f"ALTER TABLE quote ADD COLUMN {col_name} {col_type}"))
+                        print(f"Added {col_name} column to quote table", file=sys.stderr, flush=True)
+                    except Exception as col_error:
+                        error_str = str(col_error).lower()
+                        if "already exists" not in error_str and "duplicate" not in error_str:
+                            print(f"Warning: Could not add {col_name} column: {col_error}", file=sys.stderr, flush=True)
         
         # Step 6: Add trading_name to CompanySettings table
         has_company_settings = inspector.has_table("companysettings")
