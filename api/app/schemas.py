@@ -352,6 +352,7 @@ class CompanySettingsCreate(BaseModel):
     email: Optional[str] = None
     website: Optional[str] = None
     logo_filename: str = "logo1.jpg"
+    default_terms_and_conditions: Optional[str] = None
 
 
 class CompanySettingsUpdate(BaseModel):
@@ -369,6 +370,7 @@ class CompanySettingsUpdate(BaseModel):
     email: Optional[str] = None
     website: Optional[str] = None
     logo_filename: Optional[str] = None
+    default_terms_and_conditions: Optional[str] = None
 
 
 class CompanySettingsResponse(BaseModel):
@@ -387,6 +389,7 @@ class CompanySettingsResponse(BaseModel):
     email: Optional[str]
     website: Optional[str]
     logo_filename: str
+    default_terms_and_conditions: Optional[str]
     updated_at: datetime
 
 

@@ -206,6 +206,7 @@ export interface CompanySettings {
   email?: string;
   website?: string;
   logo_filename: string;
+  default_terms_and_conditions?: string;
   updated_at: string;
 }
 

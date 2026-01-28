@@ -9,11 +9,49 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { createQuote, getProducts } from '@/lib/api';
+import { createQuote, getProducts, getCompanySettings } from '@/lib/api';
 import api from '@/lib/api';
 import { Customer, Product, QuoteItemCreate } from '@/lib/types';
 import { toast } from 'sonner';
 import { Plus, Trash2, ArrowLeft } from 'lucide-react';
+
+// Default terms and conditions constant (fallback if not set in company settings)
+const DEFAULT_TERMS_AND_CONDITIONS = `Key Terms Summary (For Quotations)
+
+Orders & Payment
+All orders are subject to our full Terms & Conditions.
+A non-refundable deposit is required to secure your order.
+Ownership of goods passes only once full payment has been received.
+
+Prices
+Prices are in GBP (£) and may exclude VAT unless stated.
+Delivery and installation are not included unless clearly specified.
+Drawings and plans are for guidance only.
+
+Delivery
+Delivery dates are approximate and not guaranteed.
+Delivery is to roadside only unless agreed otherwise.
+Goods must be inspected on delivery; damage must be reported within 24 hours.
+
+Installation
+Installation (if included) requires a flat, level, suitable base and clear access.
+Abortive visits due to poor access or base issues may incur charges.
+
+Cancellations
+Standard goods may be cancelled within 14 days of delivery.
+Bespoke, made-to-order, or personalised items are non-refundable.
+No cancellations once goods are assembled, altered, or used.
+
+Planning & Use
+Customers are responsible for planning permission where required.
+Natural timber characteristics (knots, cracks, colour variation) are normal.
+
+Warranty & Liability
+12-month parts-only warranty.
+We are not liable for third-party installation, access damage, weather events, or indirect losses.
+
+Full Terms & Conditions available on request or on our website.
+Statutory consumer rights are not affected.`;
 
 function CreateQuoteContent() {
   const router = useRouter();
@@ -42,6 +80,7 @@ function CreateQuoteContent() {
     if (customerId) {
       fetchCustomer();
       fetchProducts();
+      fetchDefaultTerms();
       // Set default valid until to 30 days from now
       const date = new Date();
       date.setDate(date.getDate() + 30);
@@ -76,6 +115,21 @@ function CreateQuoteContent() {
       setProducts(response.filter((p: Product) => p.is_active));
     } catch (error) {
       console.error('Failed to load products');
+    }
+  };
+
+  const fetchDefaultTerms = async () => {
+    try {
+      const settings = await getCompanySettings();
+      if (settings?.default_terms_and_conditions) {
+        setTermsAndConditions(settings.default_terms_and_conditions);
+      } else {
+        setTermsAndConditions(DEFAULT_TERMS_AND_CONDITIONS);
+      }
+    } catch (error) {
+      // If settings don't exist or error, use hardcoded default
+      console.error('Failed to load company settings, using default terms');
+      setTermsAndConditions(DEFAULT_TERMS_AND_CONDITIONS);
     }
   };
 

@@ -240,6 +240,7 @@ class CompanySettings(SQLModel, table=True):
     email: Optional[str] = None
     website: Optional[str] = None
     logo_filename: str = Field(default="logo1.jpg")  # Company logo for quotes (different from app logo)
+    default_terms_and_conditions: Optional[str] = None  # Default terms and conditions for quotes
     updated_by_id: int = Field(foreign_key="user.id")
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     

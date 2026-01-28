@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Settings, Save } from 'lucide-react';
 import api from '@/lib/api';
 import { CompanySettings } from '@/lib/types';
@@ -32,6 +33,7 @@ export default function CompanySettingsPage() {
     email: '',
     website: '',
     logo_filename: 'logo1.jpg',
+    default_terms_and_conditions: '',
   });
 
   useEffect(() => {
@@ -58,6 +60,7 @@ export default function CompanySettingsPage() {
         email: response.data.email || '',
         website: response.data.website || '',
         logo_filename: response.data.logo_filename || 'logo1.jpg',
+        default_terms_and_conditions: response.data.default_terms_and_conditions || '',
       });
     } catch (error: any) {
       if (error.response?.status === 401) {
@@ -289,6 +292,22 @@ export default function CompanySettingsPage() {
               />
               <p className="text-sm text-muted-foreground">
                 Logo file should be placed in <code className="text-xs bg-muted px-1 py-0.5 rounded">web/public/</code> directory
+              </p>
+            </div>
+
+            <div className="space-y-2 border-t pt-6">
+              <Label htmlFor="default_terms_and_conditions">Default Terms and Conditions</Label>
+              <Textarea
+                id="default_terms_and_conditions"
+                value={formData.default_terms_and_conditions}
+                onChange={(e) => setFormData({ ...formData, default_terms_and_conditions: e.target.value })}
+                placeholder="Enter default terms and conditions that will be pre-filled when creating quotes..."
+                rows={12}
+                disabled={saving}
+                className="font-mono text-sm"
+              />
+              <p className="text-sm text-muted-foreground">
+                These terms will be automatically pre-filled when creating new quotes. Users can still edit them before submitting.
               </p>
             </div>
 

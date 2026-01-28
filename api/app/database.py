@@ -318,7 +318,7 @@ def create_db_and_tables():
                         if "already exists" not in error_str and "duplicate" not in error_str:
                             print(f"Warning: Could not add {col_name} column: {col_error}", file=sys.stderr, flush=True)
         
-        # Step 6: Add trading_name to CompanySettings table
+        # Step 6: Add trading_name and default_terms_and_conditions to CompanySettings table
         has_company_settings = inspector.has_table("companysettings")
         if has_company_settings:
             company_columns = [col['name'] for col in inspector.get_columns("companysettings")]
@@ -332,6 +332,19 @@ def create_db_and_tables():
                     print(f"Error adding trading_name column: {e}", file=sys.stderr, flush=True)
                     import traceback
                     print(traceback.format_exc(), file=sys.stderr, flush=True)
+            
+            if "default_terms_and_conditions" not in company_columns:
+                print("Adding default_terms_and_conditions column to companysettings table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text('ALTER TABLE companysettings ADD COLUMN default_terms_and_conditions TEXT'))
+                    print("Added default_terms_and_conditions column to companysettings table", file=sys.stderr, flush=True)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Error adding default_terms_and_conditions column: {e}", file=sys.stderr, flush=True)
+                        import traceback
+                        print(traceback.format_exc(), file=sys.stderr, flush=True)
 
         # Step 7: Add email settings columns to User table
         has_user_table = inspector.has_table("user")

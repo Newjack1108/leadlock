@@ -159,6 +159,12 @@ export const updateUserEmailSettings = async (settingsData: {
   return response.data;
 };
 
+// Company Settings API functions
+export const getCompanySettings = async () => {
+  const response = await api.get('/api/settings/company');
+  return response.data;
+};
+
 // Quote API functions
 export const createQuote = async (quoteData: {
   customer_id: number;
