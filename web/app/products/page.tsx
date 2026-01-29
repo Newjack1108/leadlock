@@ -143,12 +143,19 @@ export default function ProductsPage() {
             <h1 className="text-3xl font-semibold mb-2">Products</h1>
             <p className="text-muted-foreground">Manage your product catalog</p>
           </div>
-          <Button asChild>
-            <Link href="/products/create">
-              <Plus className="h-4 w-4 mr-2" />
-              Create Product
-            </Link>
-          </Button>
+          <div className="flex items-center gap-3">
+            <Button variant="outline" asChild>
+              <Link href="/products/optional-extras">
+                Optional Extras
+              </Link>
+            </Button>
+            <Button asChild>
+              <Link href="/products/create">
+                <Plus className="h-4 w-4 mr-2" />
+                Create Product
+              </Link>
+            </Button>
+          </div>
         </div>
 
         {/* Filters */}
