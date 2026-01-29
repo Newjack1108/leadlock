@@ -32,14 +32,14 @@ export default function OptionalExtrasPage() {
       const allProducts = await getProducts();
       const usageMap: Record<number, Product[]> = {};
       
-      extras.forEach((extra) => {
+      extras.forEach((extra: Product) => {
         usageMap[extra.id] = [];
       });
       
       // For each product, check if it has optional extras
       for (const product of allProducts) {
         if (product.optional_extras) {
-          product.optional_extras.forEach((extra) => {
+          product.optional_extras.forEach((extra: Product) => {
             if (usageMap[extra.id]) {
               usageMap[extra.id].push(product);
             }
