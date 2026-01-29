@@ -505,6 +505,36 @@ def create_db_and_tables():
                 import traceback
                 print(traceback.format_exc(), file=sys.stderr, flush=True)
         
+        # Step 10: Add installation_hours to Product table
+        has_product_table = inspector.has_table("product")
+        if has_product_table:
+            product_columns = [col['name'] for col in inspector.get_columns("product")]
+            if "installation_hours" not in product_columns:
+                print("Adding installation_hours column to product table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE product ADD COLUMN installation_hours NUMERIC(10, 2)"))
+                    print("Added installation_hours column to product table", file=sys.stderr, flush=True)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Error adding installation_hours column: {e}", file=sys.stderr, flush=True)
+        
+        # Step 11: Add is_giveaway to DiscountTemplate table
+        has_discount_template_table = inspector.has_table("discounttemplate")
+        if has_discount_template_table:
+            dt_columns = [col['name'] for col in inspector.get_columns("discounttemplate")]
+            if "is_giveaway" not in dt_columns:
+                print("Adding is_giveaway column to discounttemplate table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE discounttemplate ADD COLUMN is_giveaway BOOLEAN DEFAULT FALSE"))
+                    print("Added is_giveaway column to discounttemplate table", file=sys.stderr, flush=True)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Error adding is_giveaway column: {e}", file=sys.stderr, flush=True)
+        
         print("Migration check completed", file=sys.stderr, flush=True)
     except Exception as e:
         # Log error but don't crash - migration might have already run
