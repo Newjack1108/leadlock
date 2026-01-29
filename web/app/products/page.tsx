@@ -16,6 +16,14 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Plus, Edit, Trash2, Package } from 'lucide-react';
 import Link from 'next/link';
 import api from '@/lib/api';
