@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Header from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,50 +8,23 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import ImageUpload from '@/components/ImageUpload';
-import { createProduct, getOptionalExtras } from '@/lib/api';
-import { ProductCategory, Product } from '@/lib/types';
+import { createProduct } from '@/lib/api';
+import { ProductCategory } from '@/lib/types';
 import { toast } from 'sonner';
-import { ArrowLeft, X } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 
-export default function CreateProductPage() {
+export default function CreateOptionalExtraPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [optionalExtras, setOptionalExtras] = useState<Product[]>([]);
-  const [selectedExtras, setSelectedExtras] = useState<number[]>([]);
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    category: ProductCategory.STABLES,
-    subcategory: '',
-    is_extra: false,
     base_price: '',
     unit: 'unit',
     sku: '',
-    image_url: '',
     specifications: '',
     installation_hours: '',
   });
-
-  useEffect(() => {
-    fetchOptionalExtras();
-  }, []);
-
-  const fetchOptionalExtras = async () => {
-    try {
-      const extras = await getOptionalExtras();
-      setOptionalExtras(extras);
-    } catch (error) {
-      console.error('Failed to load optional extras');
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,36 +36,26 @@ export default function CreateProductPage() {
 
     setLoading(true);
     try {
-      const productData = {
-        ...formData,
+      await createProduct({
+        name: formData.name.trim(),
+        description: formData.description.trim() || undefined,
+        category: ProductCategory.STABLES,
+        is_extra: true,
         base_price: parseFloat(formData.base_price),
+        unit: formData.unit.trim() || 'unit',
+        sku: formData.sku.trim() || undefined,
+        specifications: formData.specifications.trim() || undefined,
         installation_hours: formData.installation_hours
           ? parseFloat(formData.installation_hours)
           : undefined,
-        description: formData.description.trim() || undefined,
-        subcategory: formData.subcategory.trim() || undefined,
-        sku: formData.sku.trim() || undefined,
-        image_url: formData.image_url.trim() || undefined,
-        specifications: formData.specifications.trim() || undefined,
-        optional_extras: selectedExtras.length > 0 ? selectedExtras : undefined,
-      };
-
-      const newProduct = await createProduct(productData);
-      toast.success('Product created successfully');
-      router.push(`/products/${newProduct.id}`);
+      });
+      toast.success('Optional extra created successfully');
+      router.push('/products/optional-extras');
     } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Failed to create product');
+      toast.error(error.response?.data?.detail || 'Failed to create optional extra');
     } finally {
       setLoading(false);
     }
-  };
-
-  const toggleExtra = (extraId: number) => {
-    setSelectedExtras((prev) =>
-      prev.includes(extraId)
-        ? prev.filter((id) => id !== extraId)
-        : [...prev, extraId]
-    );
   };
 
   return (
@@ -102,26 +65,25 @@ export default function CreateProductPage() {
         <div className="mb-6">
           <Button
             variant="ghost"
-            onClick={() => router.push('/products')}
+            onClick={() => router.push('/products/optional-extras')}
             className="mb-4"
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Products
+            Back to Optional Extras
           </Button>
           <div>
-            <h1 className="text-3xl font-semibold">Create New Product</h1>
+            <h1 className="text-3xl font-semibold">Create Optional Extra</h1>
             <p className="text-muted-foreground mt-1">
-              Add a new product to your catalog
+              Add an optional extra that can be linked to products
             </p>
           </div>
         </div>
 
         <form onSubmit={handleSubmit}>
           <div className="space-y-6">
-            {/* Basic Information */}
             <Card>
               <CardHeader>
-                <CardTitle>Basic Information</CardTitle>
+                <CardTitle>Details</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
@@ -135,7 +97,7 @@ export default function CreateProductPage() {
                       onChange={(e) =>
                         setFormData({ ...formData, name: e.target.value })
                       }
-                      placeholder="Product Name"
+                      placeholder="Optional extra name"
                       required
                       disabled={loading}
                     />
@@ -166,50 +128,10 @@ export default function CreateProductPage() {
                     onChange={(e) =>
                       setFormData({ ...formData, description: e.target.value })
                     }
-                    placeholder="Product description..."
+                    placeholder="Description..."
                     rows={3}
                     disabled={loading}
                   />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="category">
-                      Category <span className="text-destructive">*</span>
-                    </Label>
-                    <Select
-                      value={formData.category}
-                      onValueChange={(value) =>
-                        setFormData({
-                          ...formData,
-                          category: value as ProductCategory,
-                        })
-                      }
-                      disabled={loading}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Object.values(ProductCategory).map((cat) => (
-                          <SelectItem key={cat} value={cat}>
-                            {cat}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="subcategory">Subcategory</Label>
-                    <Input
-                      id="subcategory"
-                      value={formData.subcategory}
-                      onChange={(e) =>
-                        setFormData({ ...formData, subcategory: e.target.value })
-                      }
-                      placeholder="e.g., Extras, Premium"
-                      disabled={loading}
-                    />
-                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -238,9 +160,7 @@ export default function CreateProductPage() {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="installation_hours">
-                    Installation Hours
-                  </Label>
+                  <Label htmlFor="installation_hours">Installation Hours</Label>
                   <Input
                     id="installation_hours"
                     type="number"
@@ -262,64 +182,6 @@ export default function CreateProductPage() {
               </CardContent>
             </Card>
 
-            {/* Image Upload */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Product Image</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ImageUpload
-                  value={formData.image_url}
-                  onChange={(url) =>
-                    setFormData({ ...formData, image_url: url })
-                  }
-                  disabled={loading}
-                />
-              </CardContent>
-            </Card>
-
-            {/* Optional Extras */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Optional Extras</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  Select optional extras that can be added when this product is sold
-                </p>
-                {optionalExtras.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    No optional extras available. Create optional extras first.
-                  </p>
-                ) : (
-                  <div className="space-y-2">
-                    {optionalExtras.map((extra) => (
-                      <div
-                        key={extra.id}
-                        className="flex items-center space-x-2 p-3 border rounded-md hover:bg-muted/50 cursor-pointer"
-                        onClick={() => toggleExtra(extra.id)}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedExtras.includes(extra.id)}
-                          onChange={() => toggleExtra(extra.id)}
-                          className="h-4 w-4"
-                          disabled={loading}
-                        />
-                        <div className="flex-1">
-                          <p className="font-medium">{extra.name}</p>
-                          <p className="text-sm text-muted-foreground">
-                            £{Number(extra.base_price).toFixed(2)}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Specifications */}
             <Card>
               <CardHeader>
                 <CardTitle>Specifications</CardTitle>
@@ -344,18 +206,17 @@ export default function CreateProductPage() {
               </CardContent>
             </Card>
 
-            {/* Action Buttons */}
             <div className="flex items-center justify-end gap-4 pb-6">
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => router.push('/products')}
+                onClick={() => router.push('/products/optional-extras')}
                 disabled={loading}
               >
                 Cancel
               </Button>
               <Button type="submit" disabled={loading || !formData.name.trim() || !formData.base_price}>
-                {loading ? 'Creating...' : 'Create Product'}
+                {loading ? 'Creating...' : 'Create Optional Extra'}
               </Button>
             </div>
           </div>

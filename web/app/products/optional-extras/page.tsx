@@ -86,7 +86,7 @@ export default function OptionalExtrasPage() {
               </p>
             </div>
             <Button asChild>
-              <Link href="/products/create">
+              <Link href="/products/optional-extras/create">
                 <Plus className="h-4 w-4 mr-2" />
                 Create Optional Extra
               </Link>
@@ -102,7 +102,7 @@ export default function OptionalExtrasPage() {
               <Package className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
               <p className="text-muted-foreground mb-4">No optional extras found</p>
               <Button asChild>
-                <Link href="/products/create">
+                <Link href="/products/optional-extras/create">
                   <Plus className="h-4 w-4 mr-2" />
                   Create Your First Optional Extra
                 </Link>

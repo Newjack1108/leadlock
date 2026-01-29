@@ -102,7 +102,7 @@ export default function EditProductPage() {
 
     setLoading(true);
     try {
-      const productData = {
+      const productData: Parameters<typeof updateProduct>[1] = {
         ...formData,
         base_price: parseFloat(formData.base_price),
         installation_hours: formData.installation_hours
@@ -111,10 +111,15 @@ export default function EditProductPage() {
         description: formData.description.trim() || undefined,
         subcategory: formData.subcategory.trim() || undefined,
         sku: formData.sku.trim() || undefined,
-        image_url: formData.image_url.trim() || undefined,
         specifications: formData.specifications.trim() || undefined,
-        optional_extras: selectedExtras.length > 0 ? selectedExtras : undefined,
       };
+      if (formData.is_extra) {
+        productData.image_url = undefined;
+        // Extras cannot link other extras; omit optional_extras
+      } else {
+        productData.image_url = formData.image_url?.trim() || undefined;
+        productData.optional_extras = selectedExtras.length > 0 ? selectedExtras : undefined;
+      }
 
       await updateProduct(productId, productData);
       toast.success('Product updated successfully');
@@ -312,62 +317,76 @@ export default function EditProductPage() {
               </CardContent>
             </Card>
 
-            {/* Image Upload */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Product Image</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ImageUpload
-                  value={formData.image_url}
-                  onChange={(url) =>
-                    setFormData({ ...formData, image_url: url })
-                  }
-                  disabled={loading}
-                />
-              </CardContent>
-            </Card>
+            {!formData.is_extra && (
+              <>
+                {/* Image Upload */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Product Image</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ImageUpload
+                      value={formData.image_url}
+                      onChange={(url) =>
+                        setFormData({ ...formData, image_url: url })
+                      }
+                      disabled={loading}
+                    />
+                  </CardContent>
+                </Card>
 
-            {/* Optional Extras */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Optional Extras</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  Select optional extras that can be added when this product is sold
-                </p>
-                {optionalExtras.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    No optional extras available. Create optional extras first.
-                  </p>
-                ) : (
-                  <div className="space-y-2">
-                    {optionalExtras.map((extra) => (
-                      <div
-                        key={extra.id}
-                        className="flex items-center space-x-2 p-3 border rounded-md hover:bg-muted/50 cursor-pointer"
-                        onClick={() => toggleExtra(extra.id)}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedExtras.includes(extra.id)}
-                          onChange={() => toggleExtra(extra.id)}
-                          className="h-4 w-4"
-                          disabled={loading}
-                        />
-                        <div className="flex-1">
-                          <p className="font-medium">{extra.name}</p>
-                          <p className="text-sm text-muted-foreground">
-                            £{Number(extra.base_price).toFixed(2)}
-                          </p>
-                        </div>
+                {/* Optional Extras */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Optional Extras</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <p className="text-sm text-muted-foreground">
+                      Select optional extras that can be added when this product is sold
+                    </p>
+                    {optionalExtras.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        No optional extras available. Create optional extras first.
+                      </p>
+                    ) : (
+                      <div className="space-y-2">
+                        {optionalExtras.map((extra) => (
+                          <div
+                            key={extra.id}
+                            className="flex items-center space-x-2 p-3 border rounded-md hover:bg-muted/50 cursor-pointer"
+                            onClick={() => toggleExtra(extra.id)}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selectedExtras.includes(extra.id)}
+                              onChange={() => toggleExtra(extra.id)}
+                              className="h-4 w-4"
+                              disabled={loading}
+                            />
+                            <div className="flex-1">
+                              <p className="font-medium">{extra.name}</p>
+                              <p className="text-sm text-muted-foreground">
+                                £{Number(extra.base_price).toFixed(2)}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                    )}
+                  </CardContent>
+                </Card>
+              </>
+            )}
+
+            {formData.is_extra && (
+              <Card>
+                <CardContent className="pt-6">
+                  <p className="text-sm text-muted-foreground">
+                    This is an optional extra. Image is not used.
+                  </p>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Specifications */}
             <Card>
@@ -390,30 +409,6 @@ export default function EditProductPage() {
                     rows={4}
                     disabled={loading}
                   />
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Type */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Product Type</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    id="is_extra"
-                    checked={formData.is_extra}
-                    onChange={(e) =>
-                      setFormData({ ...formData, is_extra: e.target.checked })
-                    }
-                    disabled={loading}
-                    className="h-4 w-4"
-                  />
-                  <Label htmlFor="is_extra" className="cursor-pointer">
-                    This is an optional extra
-                  </Label>
                 </div>
               </CardContent>
             </Card>

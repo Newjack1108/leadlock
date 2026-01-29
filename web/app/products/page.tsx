@@ -372,19 +372,6 @@ export default function ProductsPage() {
                   disabled={saving}
                 />
               </div>
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="edit-is_extra"
-                  checked={newProduct.is_extra}
-                  onChange={(e) => setNewProduct({ ...newProduct, is_extra: e.target.checked })}
-                  disabled={saving}
-                  className="h-4 w-4"
-                />
-                <Label htmlFor="edit-is_extra" className="cursor-pointer">
-                  This is an optional extra
-                </Label>
-              </div>
             </div>
             <DialogFooter>
               <Button
