@@ -187,6 +187,7 @@ export interface Product {
   image_url?: string;
   specifications?: string;
   installation_hours?: number;
+  boxes_per_product?: number;
   optional_extras?: Product[];
   created_at: string;
   updated_at: string;

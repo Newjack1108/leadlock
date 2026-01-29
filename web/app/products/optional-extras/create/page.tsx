@@ -24,6 +24,7 @@ export default function CreateOptionalExtraPage() {
     sku: '',
     specifications: '',
     installation_hours: '',
+    boxes_per_product: '',
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -47,6 +48,9 @@ export default function CreateOptionalExtraPage() {
         specifications: formData.specifications.trim() || undefined,
         installation_hours: formData.installation_hours
           ? parseFloat(formData.installation_hours)
+          : undefined,
+        boxes_per_product: formData.boxes_per_product
+          ? parseInt(formData.boxes_per_product, 10)
           : undefined,
       });
       toast.success('Optional extra created successfully');
@@ -177,6 +181,26 @@ export default function CreateOptionalExtraPage() {
                   />
                   <p className="text-xs text-muted-foreground">
                     Used to calculate installation cost
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="boxes_per_product">Number of boxes (optional)</Label>
+                  <Input
+                    id="boxes_per_product"
+                    type="number"
+                    min={1}
+                    value={formData.boxes_per_product}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        boxes_per_product: e.target.value,
+                      })
+                    }
+                    placeholder="e.g. 4"
+                    disabled={loading}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Used in installation calculation. Leave blank if not boxed.
                   </p>
                 </div>
               </CardContent>

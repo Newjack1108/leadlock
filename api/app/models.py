@@ -218,6 +218,7 @@ class Product(SQLModel, table=True):
     image_url: Optional[str] = None  # Product image URL
     specifications: Optional[str] = None  # Technical specs (JSON or text)
     installation_hours: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(10, 2)))  # Hours required for installation
+    boxes_per_product: Optional[int] = None  # Number of boxes per product (optional; used in installation calculation)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     

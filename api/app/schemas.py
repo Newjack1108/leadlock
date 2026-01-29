@@ -305,6 +305,7 @@ class ProductCreate(BaseModel):
     image_url: Optional[str] = None
     specifications: Optional[str] = None
     installation_hours: Optional[Decimal] = None
+    boxes_per_product: Optional[int] = None  # Number of boxes per product (optional; used in installation calculation)
     optional_extras: Optional[List[int]] = None  # List of product IDs that are optional extras
 
 
@@ -321,6 +322,7 @@ class ProductUpdate(BaseModel):
     image_url: Optional[str] = None
     specifications: Optional[str] = None
     installation_hours: Optional[Decimal] = None
+    boxes_per_product: Optional[int] = None
     optional_extras: Optional[List[int]] = None  # List of product IDs that are optional extras
 
 
@@ -338,6 +340,7 @@ class ProductResponse(BaseModel):
     image_url: Optional[str]
     specifications: Optional[str]
     installation_hours: Optional[Decimal] = None
+    boxes_per_product: Optional[int] = None
     optional_extras: Optional[List["ProductResponse"]] = None  # Nested optional extras
     created_at: datetime
     updated_at: datetime

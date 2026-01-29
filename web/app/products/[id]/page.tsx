@@ -180,6 +180,12 @@ export default function ProductDetailPage() {
                       <span>{product.installation_hours} hours</span>
                     </div>
                   )}
+                  {product.boxes_per_product != null && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Boxes per product:</span>
+                      <span>{product.boxes_per_product}</span>
+                    </div>
+                  )}
                   {installCost !== null && (
                     <div className="flex justify-between border-t pt-2">
                       <span className="font-semibold">Installation Cost:</span>

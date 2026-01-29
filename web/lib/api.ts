@@ -233,6 +233,7 @@ export const createProduct = async (productData: {
   image_url?: string;
   specifications?: string;
   installation_hours?: number;
+  boxes_per_product?: number;
   optional_extras?: number[];
 }) => {
   const response = await api.post('/api/products', productData);
@@ -251,6 +252,7 @@ export const updateProduct = async (productId: number, productData: {
   image_url?: string;
   specifications?: string;
   installation_hours?: number;
+  boxes_per_product?: number;
   optional_extras?: number[];
   is_active?: boolean;
 }) => {

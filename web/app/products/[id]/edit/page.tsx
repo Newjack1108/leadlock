@@ -42,6 +42,7 @@ export default function EditProductPage() {
     image_url: '',
     specifications: '',
     installation_hours: '',
+    boxes_per_product: '',
   });
 
   useEffect(() => {
@@ -67,6 +68,7 @@ export default function EditProductPage() {
         image_url: product.image_url || '',
         specifications: product.specifications || '',
         installation_hours: product.installation_hours?.toString() || '',
+        boxes_per_product: product.boxes_per_product?.toString() || '',
       });
       if (product.optional_extras) {
         setSelectedExtras(product.optional_extras.map((e: Product) => e.id));
@@ -107,6 +109,9 @@ export default function EditProductPage() {
         base_price: parseFloat(formData.base_price),
         installation_hours: formData.installation_hours
           ? parseFloat(formData.installation_hours)
+          : undefined,
+        boxes_per_product: formData.boxes_per_product
+          ? parseInt(formData.boxes_per_product, 10)
           : undefined,
         description: formData.description.trim() || undefined,
         subcategory: formData.subcategory.trim() || undefined,
@@ -312,6 +317,28 @@ export default function EditProductPage() {
                   />
                   <p className="text-xs text-muted-foreground">
                     Used to calculate installation cost
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="boxes_per_product">
+                    Number of boxes (optional)
+                  </Label>
+                  <Input
+                    id="boxes_per_product"
+                    type="number"
+                    min={1}
+                    value={formData.boxes_per_product}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        boxes_per_product: e.target.value,
+                      })
+                    }
+                    placeholder="e.g. 4"
+                    disabled={loading}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Used in installation calculation. Leave blank if this product is not boxed.
                   </p>
                 </div>
               </CardContent>
