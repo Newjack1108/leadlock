@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Logo from './Logo';
 import { Button } from '@/components/ui/button';
-import { LogOut, Users, Settings, Package, User, Mail, Bell, FileText, ShoppingCart, ChevronDown } from 'lucide-react';
+import { LogOut, Users, Settings, Package, User, Mail, Bell, FileText, ShoppingCart, ChevronDown, Gift } from 'lucide-react';
 import api from '@/lib/api';
 import { getStaleSummary } from '@/lib/api';
 import {
@@ -184,6 +184,12 @@ export default function Header() {
                     <DropdownMenuItem className="cursor-pointer">
                       <Mail className="h-4 w-4 mr-2" />
                       Email Templates
+                    </DropdownMenuItem>
+                  </Link>
+                  <Link href="/discounts">
+                    <DropdownMenuItem className="cursor-pointer">
+                      <Gift className="h-4 w-4 mr-2" />
+                      Discounts & Giveaways
                     </DropdownMenuItem>
                   </Link>
                 </>
