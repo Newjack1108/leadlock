@@ -466,6 +466,7 @@ class QuoteUpdate(BaseModel):
 class QuoteResponse(BaseModel):
     id: int
     customer_id: int
+    customer_name: Optional[str] = None
     quote_number: str
     version: int
     status: QuoteStatus

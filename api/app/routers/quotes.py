@@ -40,10 +40,14 @@ def build_quote_response(quote: Quote, quote_items: List[QuoteItem], session: Se
     """Build a QuoteResponse with items and discounts."""
     discount_statement = select(QuoteDiscount).where(QuoteDiscount.quote_id == quote.id)
     quote_discounts = session.exec(discount_statement).all()
-    
+    customer_name = None
+    if quote.customer_id:
+        customer = session.exec(select(Customer).where(Customer.id == quote.customer_id)).first()
+        customer_name = customer.name if customer else None
     return QuoteResponse(
         id=quote.id,
         customer_id=quote.customer_id,
+        customer_name=customer_name,
         quote_number=quote.quote_number,
         version=quote.version,
         status=quote.status,
@@ -518,9 +522,14 @@ async def get_quote(
     statement = select(QuoteItem).where(QuoteItem.quote_id == quote.id).order_by(QuoteItem.sort_order)
     quote_items = session.exec(statement).all()
     
+    customer_name = None
+    if quote.customer_id:
+        customer = session.exec(select(Customer).where(Customer.id == quote.customer_id)).first()
+        customer_name = customer.name if customer else None
     return QuoteResponse(
         id=quote.id,
         customer_id=quote.customer_id,
+        customer_name=customer_name,
         quote_number=quote.quote_number,
         version=quote.version,
         status=quote.status,
@@ -558,6 +567,8 @@ async def get_customer_quotes(
     current_user: User = Depends(get_current_user)
 ):
     """Get all quotes for a customer."""
+    customer = session.exec(select(Customer).where(Customer.id == customer_id)).first()
+    customer_name = customer.name if customer else None
     statement = select(Quote).where(Quote.customer_id == customer_id).order_by(Quote.created_at.desc())
     quotes = session.exec(statement).all()
     
@@ -569,6 +580,7 @@ async def get_customer_quotes(
         result.append(QuoteResponse(
             id=quote.id,
             customer_id=quote.customer_id,
+            customer_name=customer_name,
             quote_number=quote.quote_number,
             version=quote.version,
             status=quote.status,

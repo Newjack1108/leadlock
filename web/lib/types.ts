@@ -375,6 +375,7 @@ export interface QuoteItemCreate {
 export interface Quote {
   id: number;
   customer_id: number;
+  customer_name?: string;
   quote_number: string;
   version: number;
   status: QuoteStatus;

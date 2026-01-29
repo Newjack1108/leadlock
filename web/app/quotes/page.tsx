@@ -87,6 +87,9 @@ export default function QuotesPage() {
                         >
                           {quote.quote_number}
                         </Link>
+                        {quote.customer_name && (
+                          <span className="text-muted-foreground">— {quote.customer_name}</span>
+                        )}
                         <Badge className={statusColors[quote.status]}>
                           {quote.status}
                         </Badge>
