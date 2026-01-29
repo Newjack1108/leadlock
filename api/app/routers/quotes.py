@@ -24,6 +24,7 @@ def quote_item_to_response(item: QuoteItem) -> QuoteItemResponse:
         id=item.id,
         quote_id=item.quote_id,
         product_id=item.product_id,
+        parent_quote_item_id=item.parent_quote_item_id,
         description=item.description,
         quantity=item.quantity,
         unit_price=item.unit_price,
@@ -255,16 +256,30 @@ async def create_quote(
         session.commit()
         session.refresh(quote)
         
-        # Add items with quote_id
+        # Add items with quote_id (parent_quote_item_id set in next step after we have IDs)
         for item in items:
             item.quote_id = quote.id
+            item.parent_quote_item_id = None
             session.add(item)
         session.commit()
         
-        # Refresh to get items with IDs
+        # Refresh to get items with IDs in sort_order
         session.refresh(quote)
-        statement = select(QuoteItem).where(QuoteItem.quote_id == quote.id)
-        quote_items = session.exec(statement).all()
+        statement = select(QuoteItem).where(QuoteItem.quote_id == quote.id).order_by(QuoteItem.sort_order)
+        quote_items = list(session.exec(statement).all())
+        
+        # Set parent_quote_item_id for optional-extra items (parent_index from payload)
+        for i, db_item in enumerate(quote_items):
+            if i < len(quote_data.items):
+                item_data = quote_data.items[i]
+                parent_index = getattr(item_data, "parent_index", None)
+                if parent_index is not None and 0 <= parent_index < len(quote_items):
+                    db_item.parent_quote_item_id = quote_items[parent_index].id
+                    session.add(db_item)
+        if quote_items and any(getattr(quote_data.items[i], "parent_index", None) is not None for i in range(min(len(quote_data.items), len(quote_items)))):
+            session.commit()
+            statement = select(QuoteItem).where(QuoteItem.quote_id == quote.id).order_by(QuoteItem.sort_order)
+            quote_items = list(session.exec(statement).all())
         
         # Apply discounts if provided
         discount_total = Decimal(0)

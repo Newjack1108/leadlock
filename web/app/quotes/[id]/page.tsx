@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Header from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -143,37 +143,80 @@ export default function QuoteDetailPage() {
                       </thead>
                       <tbody>
                         {quote.items && quote.items.length > 0 ? (
-                          quote.items.map((item: QuoteItem) => {
-                            const hasDiscount = item.discount_amount > 0;
-                            return (
-                              <tr key={item.id} className="border-b">
-                                <td className="py-2 px-3">
-                                  {item.description}
-                                  {hasDiscount && (
-                                    <Badge variant="outline" className="ml-2 text-xs">
-                                      Discounted
-                                    </Badge>
-                                  )}
-                                </td>
-                                <td className="text-right py-2 px-3">{Number(item.quantity).toFixed(2)}</td>
-                                <td className="text-right py-2 px-3">£{Number(item.unit_price).toFixed(2)}</td>
-                                <td className="text-right py-2 px-3">
-                                  {hasDiscount ? (
-                                    <div>
-                                      <div className="text-muted-foreground line-through text-sm">
-                                        £{Number(item.line_total).toFixed(2)}
+                          (() => {
+                            const mainItems = quote.items
+                              .filter((i: QuoteItem) => i.parent_quote_item_id == null)
+                              .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+                            const getChildren = (parentId: number) =>
+                              quote.items!
+                                .filter((i: QuoteItem) => i.parent_quote_item_id === parentId)
+                                .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+                            return mainItems.flatMap((item: QuoteItem) => {
+                              const children = getChildren(item.id);
+                              const hasDiscount = item.discount_amount > 0;
+                              const rows: ReactNode[] = [
+                                <tr key={item.id} className="border-b">
+                                  <td className="py-2 px-3">
+                                    {item.description}
+                                    {hasDiscount && (
+                                      <Badge variant="outline" className="ml-2 text-xs">
+                                        Discounted
+                                      </Badge>
+                                    )}
+                                  </td>
+                                  <td className="text-right py-2 px-3">{Number(item.quantity).toFixed(2)}</td>
+                                  <td className="text-right py-2 px-3">£{Number(item.unit_price).toFixed(2)}</td>
+                                  <td className="text-right py-2 px-3">
+                                    {hasDiscount ? (
+                                      <div>
+                                        <div className="text-muted-foreground line-through text-sm">
+                                          £{Number(item.line_total).toFixed(2)}
+                                        </div>
+                                        <div className="font-medium text-destructive">
+                                          £{Number(item.final_line_total).toFixed(2)}
+                                        </div>
                                       </div>
-                                      <div className="font-medium text-destructive">
-                                        £{Number(item.final_line_total).toFixed(2)}
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <span className="font-medium">£{Number(item.line_total).toFixed(2)}</span>
-                                  )}
-                                </td>
-                              </tr>
-                            );
-                          })
+                                    ) : (
+                                      <span className="font-medium">£{Number(item.line_total).toFixed(2)}</span>
+                                    )}
+                                  </td>
+                                </tr>,
+                              ];
+                              children.forEach((child: QuoteItem) => {
+                                const childDiscount = child.discount_amount > 0;
+                                rows.push(
+                                  <tr key={child.id} className="border-b bg-muted/30">
+                                    <td className="py-2 px-3 pl-8 text-muted-foreground">
+                                      <span className="text-muted-foreground/80">— </span>
+                                      {child.description}
+                                      {childDiscount && (
+                                        <Badge variant="outline" className="ml-2 text-xs">
+                                          Discounted
+                                        </Badge>
+                                      )}
+                                    </td>
+                                    <td className="text-right py-2 px-3">{Number(child.quantity).toFixed(2)}</td>
+                                    <td className="text-right py-2 px-3">£{Number(child.unit_price).toFixed(2)}</td>
+                                    <td className="text-right py-2 px-3">
+                                      {childDiscount ? (
+                                        <div>
+                                          <div className="text-muted-foreground line-through text-sm">
+                                            £{Number(child.line_total).toFixed(2)}
+                                          </div>
+                                          <div className="font-medium text-destructive">
+                                            £{Number(child.final_line_total).toFixed(2)}
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <span className="font-medium">£{Number(child.line_total).toFixed(2)}</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                );
+                              });
+                              return rows;
+                            });
+                          })()
                         ) : (
                           <tr>
                             <td colSpan={4} className="text-center py-4 text-muted-foreground">

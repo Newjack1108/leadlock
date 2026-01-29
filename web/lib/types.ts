@@ -358,6 +358,7 @@ export interface QuoteItem {
   final_line_total: number;
   sort_order: number;
   is_custom: boolean;
+  parent_quote_item_id?: number | null;
 }
 
 export interface QuoteItemCreate {
@@ -367,6 +368,7 @@ export interface QuoteItemCreate {
   unit_price: number;
   is_custom?: boolean;
   sort_order?: number;
+  parent_index?: number | null;
 }
 
 export interface Quote {

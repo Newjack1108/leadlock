@@ -415,12 +415,14 @@ class QuoteItemCreate(BaseModel):
     unit_price: Decimal
     is_custom: bool = False
     sort_order: int = 0
+    parent_index: Optional[int] = None  # Index of parent item (0-based) when this is an optional extra; backend sets parent_quote_item_id
 
 
 class QuoteItemResponse(BaseModel):
     id: int
     quote_id: int
     product_id: Optional[int]
+    parent_quote_item_id: Optional[int] = None
     description: str
     quantity: Decimal
     unit_price: Decimal

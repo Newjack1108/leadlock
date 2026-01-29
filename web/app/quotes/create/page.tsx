@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { createQuote, getProducts, getCompanySettings, getDiscountTemplates } from '@/lib/api';
+import { createQuote, getProducts, getProduct, getCompanySettings, getDiscountTemplates } from '@/lib/api';
 import api from '@/lib/api';
 import { Customer, Product, QuoteItemCreate, DiscountTemplate } from '@/lib/types';
 import { toast } from 'sonner';
@@ -78,6 +78,7 @@ function CreateQuoteContent() {
   const [companySettings, setCompanySettings] = useState<any>(null);
   const [availableDiscounts, setAvailableDiscounts] = useState<DiscountTemplate[]>([]);
   const [selectedDiscountIds, setSelectedDiscountIds] = useState<number[]>([]);
+  const [productDetails, setProductDetails] = useState<Record<number, Product>>({});
 
   useEffect(() => {
     if (customerId) {
@@ -170,55 +171,73 @@ function CreateQuoteContent() {
   };
 
   const removeItem = (index: number) => {
-    setItems(items.filter((_, i) => i !== index).map((item, i) => ({ ...item, sort_order: i })));
+    const newItems = items
+      .filter((_, i) => i !== index)
+      .map((item, i) => {
+        let parent_index = item.parent_index;
+        if (parent_index !== undefined && parent_index !== null) {
+          if (parent_index === index) parent_index = undefined;
+          else if (parent_index > index) parent_index = parent_index - 1;
+        }
+        return { ...item, sort_order: i, parent_index };
+      });
+    setItems(newItems);
   };
 
-  const updateItem = (index: number, field: keyof QuoteItemCreate, value: any) => {
+  const updateItem = async (index: number, field: keyof QuoteItemCreate, value: any) => {
     const newItems = [...items];
     if (field === 'product_id') {
       if (value === 'custom' || !value) {
-        // Clear product selection - custom item
         newItems[index] = {
           ...newItems[index],
           product_id: undefined,
           is_custom: true,
         };
-      } else {
-        // Product selected
-        const product = products.find((p) => p.id === parseInt(value));
-        if (product) {
-          newItems[index] = {
-            ...newItems[index],
-            product_id: product.id,
-            description: product.name,
-            unit_price: Number(product.base_price),
-            is_custom: false,
-          };
-        }
+        setItems(newItems);
+        return;
       }
-    } else {
-      newItems[index] = { ...newItems[index], [field]: value };
+      const productId = parseInt(value, 10);
+      const product = products.find((p) => p.id === productId);
+      if (product) {
+        newItems[index] = {
+          ...newItems[index],
+          product_id: product.id,
+          description: product.name,
+          unit_price: Number(product.base_price),
+          is_custom: false,
+        };
+        setItems(newItems);
+        try {
+          const detailed = await getProduct(productId);
+          setProductDetails((prev) => ({ ...prev, [productId]: detailed }));
+        } catch {
+          setProductDetails((prev) => ({ ...prev, [productId]: product }));
+        }
+        return;
+      }
     }
+    newItems[index] = { ...newItems[index], [field]: value };
     setItems(newItems);
   };
 
-  const addOptionalExtra = (productId: number, extra: Product) => {
+  const addOptionalExtra = (parentIndex: number, extra: Product) => {
     const newItem: QuoteItemCreate = {
       product_id: extra.id,
       description: extra.name,
       quantity: 1,
       unit_price: Number(extra.base_price),
       is_custom: false,
-      sort_order: items.length,
+      sort_order: parentIndex + 1,
+      parent_index: parentIndex,
     };
-    setItems([...items, newItem]);
+    const newItems = [...items];
+    newItems.splice(parentIndex + 1, 0, newItem);
+    setItems(newItems.map((it, i) => ({ ...it, sort_order: i })));
   };
 
   const getSelectedProduct = (item: QuoteItemCreate) => {
-    if (item.product_id) {
-      return products.find((p) => p.id === item.product_id);
-    }
-    return null;
+    if (!item.product_id) return null;
+    return productDetails[item.product_id] ?? products.find((p) => p.id === item.product_id) ?? null;
   };
 
   const calculateInstallCost = (product: Product) => {
@@ -273,18 +292,31 @@ function CreateQuoteContent() {
       return;
     }
 
+    const originalIndices = items
+      .map((_, i) => i)
+      .filter((i) => {
+        const it = items[i];
+        return it.description.trim() && (it.quantity ?? 0) > 0 && (it.unit_price ?? 0) >= 0;
+      });
+
     setLoading(true);
     try {
       const quoteData: any = {
         customer_id: customer.id,
-        items: validItems.map((item, index) => ({
-          product_id: item.product_id || null,
-          description: item.description,
-          quantity: Number(item.quantity),
-          unit_price: Number(item.unit_price),
-          is_custom: item.is_custom !== undefined ? item.is_custom : (item.product_id === undefined || item.product_id === null),
-          sort_order: index,
-        })),
+        items: validItems.map((item, index) => {
+          const parentInItems = item.parent_index;
+          const parentIndexInPayload =
+            parentInItems != null ? originalIndices.indexOf(parentInItems) : -1;
+          return {
+            product_id: item.product_id ?? null,
+            description: item.description,
+            quantity: Number(item.quantity),
+            unit_price: Number(item.unit_price),
+            is_custom: item.is_custom !== undefined ? item.is_custom : (item.product_id === undefined || item.product_id === null),
+            sort_order: index,
+            parent_index: parentIndexInPayload >= 0 ? parentIndexInPayload : undefined,
+          };
+        }),
         discount_template_ids: selectedDiscountIds.length > 0 ? selectedDiscountIds : undefined,
       };
 
@@ -490,7 +522,7 @@ function CreateQuoteContent() {
                                       type="button"
                                       variant="outline"
                                       size="sm"
-                                      onClick={() => addOptionalExtra(selectedProduct.id, extra)}
+                                      onClick={() => addOptionalExtra(index, extra)}
                                     >
                                       <Plus className="h-3 w-3 mr-1" />
                                       Add

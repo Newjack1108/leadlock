@@ -443,18 +443,29 @@ def generate_quote_pdf(
             elements.append(Paragraph(info, normal_style))
     elements.append(Spacer(1, 20))
     
-    # Quote Items Table
+    # Quote Items Table (grouped: main items first, then optional extras indented under parent)
     elements.append(Paragraph("Items:", heading_style))
     
     table_data = [["Description", "Quantity", "Unit Price", "Total"]]
     
-    for item in quote_items:
+    main_items = [i for i in quote_items if getattr(i, "parent_quote_item_id", None) is None]
+    main_items.sort(key=lambda i: getattr(i, "sort_order", 0) or 0)
+    for main_item in main_items:
         table_data.append([
-            item.description or "",
-            str(item.quantity),
-            format_currency(item.unit_price, quote.currency),
-            format_currency(item.final_line_total, quote.currency)
+            main_item.description or "",
+            str(main_item.quantity),
+            format_currency(main_item.unit_price, quote.currency),
+            format_currency(main_item.final_line_total, quote.currency),
         ])
+        children = [i for i in quote_items if getattr(i, "parent_quote_item_id", None) == main_item.id]
+        children.sort(key=lambda i: getattr(i, "sort_order", 0) or 0)
+        for child in children:
+            table_data.append([
+                "    — " + (child.description or ""),
+                str(child.quantity),
+                format_currency(child.unit_price, quote.currency),
+                format_currency(child.final_line_total, quote.currency),
+            ])
     
     # Add totals (no HTML tags; use table styling for emphasis)
     subtotal_row_index = len(table_data)

@@ -333,6 +333,7 @@ class Quote(SQLModel, table=True):
 class QuoteItem(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     quote_id: int = Field(foreign_key="quote.id")
+    parent_quote_item_id: Optional[int] = Field(default=None, foreign_key="quoteitem.id")  # Optional extra under this parent line
     product_id: Optional[int] = Field(default=None, foreign_key="product.id")  # Reference to product
     description: str  # Can be from product or custom
     quantity: Decimal = Field(default=1, sa_column=Column(Numeric(10, 2)))

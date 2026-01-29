@@ -546,6 +546,21 @@ def create_db_and_tables():
                     if "already exists" not in error_str and "duplicate" not in error_str:
                         print(f"Error adding is_giveaway column: {e}", file=sys.stderr, flush=True)
         
+        # Step 12: Add parent_quote_item_id to QuoteItem table
+        has_quoteitem_table = inspector.has_table("quoteitem")
+        if has_quoteitem_table:
+            quoteitem_columns = [col['name'] for col in inspector.get_columns("quoteitem")]
+            if "parent_quote_item_id" not in quoteitem_columns:
+                print("Adding parent_quote_item_id column to quoteitem table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE quoteitem ADD COLUMN parent_quote_item_id INTEGER REFERENCES quoteitem(id)"))
+                    print("Added parent_quote_item_id column to quoteitem table", file=sys.stderr, flush=True)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Error adding parent_quote_item_id column: {e}", file=sys.stderr, flush=True)
+        
         print("Migration check completed", file=sys.stderr, flush=True)
     except Exception as e:
         # Log error but don't crash - migration might have already run
