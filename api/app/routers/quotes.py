@@ -12,6 +12,7 @@ from app.schemas import (
 )
 from app.quote_email_service import send_quote_email
 from app.quote_pdf_service import generate_quote_pdf
+from app.constants import VAT_RATE_DECIMAL
 from datetime import datetime
 from decimal import Decimal
 
@@ -44,6 +45,13 @@ def build_quote_response(quote: Quote, quote_items: List[QuoteItem], session: Se
     if quote.customer_id:
         customer = session.exec(select(Customer).where(Customer.id == quote.customer_id)).first()
         customer_name = customer.name if customer else None
+
+    # Computed VAT (all stored amounts are Ex VAT @ 20%)
+    vat_amount = quote.total_amount * VAT_RATE_DECIMAL
+    total_amount_inc_vat = quote.total_amount + vat_amount
+    deposit_amount_inc_vat = quote.deposit_amount * VAT_RATE_DECIMAL + quote.deposit_amount
+    balance_amount_inc_vat = quote.balance_amount * VAT_RATE_DECIMAL + quote.balance_amount
+
     return QuoteResponse(
         id=quote.id,
         customer_id=quote.customer_id,
@@ -66,6 +74,10 @@ def build_quote_response(quote: Quote, quote_items: List[QuoteItem], session: Se
         accepted_at=quote.accepted_at,
         created_at=quote.created_at,
         updated_at=quote.updated_at,
+        vat_amount=vat_amount,
+        total_amount_inc_vat=total_amount_inc_vat,
+        deposit_amount_inc_vat=deposit_amount_inc_vat,
+        balance_amount_inc_vat=balance_amount_inc_vat,
         items=[quote_item_to_response(item) for item in quote_items],
         discounts=[QuoteDiscountResponse(**discount.dict()) for discount in quote_discounts],
         opportunity_stage=quote.opportunity_stage,
@@ -521,43 +533,7 @@ async def get_quote(
     
     statement = select(QuoteItem).where(QuoteItem.quote_id == quote.id).order_by(QuoteItem.sort_order)
     quote_items = session.exec(statement).all()
-    
-    customer_name = None
-    if quote.customer_id:
-        customer = session.exec(select(Customer).where(Customer.id == quote.customer_id)).first()
-        customer_name = customer.name if customer else None
-    return QuoteResponse(
-        id=quote.id,
-        customer_id=quote.customer_id,
-        customer_name=customer_name,
-        quote_number=quote.quote_number,
-        version=quote.version,
-        status=quote.status,
-        subtotal=quote.subtotal,
-        discount_total=quote.discount_total,
-        total_amount=quote.total_amount,
-        deposit_amount=quote.deposit_amount,
-        balance_amount=quote.balance_amount,
-        currency=quote.currency,
-        valid_until=quote.valid_until,
-        terms_and_conditions=quote.terms_and_conditions,
-        notes=quote.notes,
-        created_by_id=quote.created_by_id,
-        sent_at=quote.sent_at,
-        viewed_at=quote.viewed_at,
-        accepted_at=quote.accepted_at,
-        created_at=quote.created_at,
-        updated_at=quote.updated_at,
-        items=[quote_item_to_response(item) for item in quote_items],
-        opportunity_stage=quote.opportunity_stage,
-        close_probability=quote.close_probability,
-        expected_close_date=quote.expected_close_date,
-        next_action=quote.next_action,
-        next_action_due_date=quote.next_action_due_date,
-        loss_reason=quote.loss_reason,
-        loss_category=quote.loss_category,
-        owner_id=quote.owner_id
-    )
+    return build_quote_response(quote, list(quote_items), session)
 
 
 @router.get("/customers/{customer_id}", response_model=List[QuoteResponse])
@@ -576,40 +552,8 @@ async def get_customer_quotes(
     for quote in quotes:
         item_statement = select(QuoteItem).where(QuoteItem.quote_id == quote.id).order_by(QuoteItem.sort_order)
         quote_items = session.exec(item_statement).all()
-        
-        result.append(QuoteResponse(
-            id=quote.id,
-            customer_id=quote.customer_id,
-            customer_name=customer_name,
-            quote_number=quote.quote_number,
-            version=quote.version,
-            status=quote.status,
-            subtotal=quote.subtotal,
-            discount_total=quote.discount_total,
-            total_amount=quote.total_amount,
-            deposit_amount=quote.deposit_amount,
-            balance_amount=quote.balance_amount,
-            currency=quote.currency,
-            valid_until=quote.valid_until,
-            terms_and_conditions=quote.terms_and_conditions,
-            notes=quote.notes,
-            created_by_id=quote.created_by_id,
-            sent_at=quote.sent_at,
-            viewed_at=quote.viewed_at,
-            accepted_at=quote.accepted_at,
-            created_at=quote.created_at,
-            updated_at=quote.updated_at,
-            items=[quote_item_to_response(item) for item in quote_items],
-            opportunity_stage=quote.opportunity_stage,
-            close_probability=quote.close_probability,
-            expected_close_date=quote.expected_close_date,
-            next_action=quote.next_action,
-            next_action_due_date=quote.next_action_due_date,
-            loss_reason=quote.loss_reason,
-            loss_category=quote.loss_category,
-            owner_id=quote.owner_id
-        ))
-    
+        result.append(build_quote_response(quote, list(quote_items), session))
+
     return result
 
 

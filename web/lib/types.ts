@@ -385,6 +385,12 @@ export interface Quote {
   deposit_amount: number;
   balance_amount: number;
   currency: string;
+  /** Computed: VAT @ 20% on total_amount (Ex VAT). */
+  vat_amount?: number;
+  /** Computed: total_amount + vat_amount. */
+  total_amount_inc_vat?: number;
+  deposit_amount_inc_vat?: number;
+  balance_amount_inc_vat?: number;
   valid_until?: string;
   terms_and_conditions?: string;
   notes?: string;

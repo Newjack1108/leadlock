@@ -485,6 +485,11 @@ class QuoteResponse(BaseModel):
     accepted_at: Optional[datetime]
     created_at: datetime
     updated_at: datetime
+    # Computed VAT (all amounts above are Ex VAT @ 20%)
+    vat_amount: Optional[Decimal] = None
+    total_amount_inc_vat: Optional[Decimal] = None
+    deposit_amount_inc_vat: Optional[Decimal] = None
+    balance_amount_inc_vat: Optional[Decimal] = None
     items: List[QuoteItemResponse] = []
     discounts: List["QuoteDiscountResponse"] = []
     # Opportunity fields

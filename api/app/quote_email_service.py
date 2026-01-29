@@ -9,6 +9,8 @@ from sqlmodel import Session, select
 from app.models import Quote, QuoteTemplate, Customer, CompanySettings, QuoteItem
 from app.email_service import send_email
 from app.quote_pdf_service import generate_quote_pdf
+from app.constants import VAT_RATE_DECIMAL
+from decimal import Decimal
 
 
 def get_default_email_template() -> Tuple[str, str]:
@@ -19,9 +21,11 @@ def get_default_email_template() -> Tuple[str, str]:
     
     <p>Please find attached your quote {{ quote.quote_number }}.</p>
     
-    <p>Quote Summary:</p>
+    <p>Quote Summary (all prices Ex VAT @ 20%):</p>
     <ul>
-        <li>Total Amount: {{ currency_symbol }}{{ quote.total_amount|round(2) }}</li>
+        <li>Total (Ex VAT): {{ currency_symbol }}{{ quote.total_amount|round(2) }}</li>
+        <li>VAT @ 20%: {{ currency_symbol }}{{ vat_amount|round(2) }}</li>
+        <li>Total (inc VAT): {{ currency_symbol }}{{ total_amount_inc_vat|round(2) }}</li>
         <li>Valid Until: {{ quote.valid_until.strftime('%d %B %Y') if quote.valid_until else 'N/A' }}</li>
     </ul>
     
@@ -46,13 +50,17 @@ def render_email_template(
 ) -> str:
     """Render email template with quote data."""
     currency_symbol = "£" if quote.currency == "GBP" else quote.currency + " "
-    
+    vat_amount = (quote.total_amount or Decimal(0)) * VAT_RATE_DECIMAL
+    total_amount_inc_vat = (quote.total_amount or Decimal(0)) + vat_amount
+
     return template.render(
         quote=quote,
         customer=customer,
         company_settings=company_settings,
         custom_message=custom_message,
-        currency_symbol=currency_symbol
+        currency_symbol=currency_symbol,
+        vat_amount=vat_amount,
+        total_amount_inc_vat=total_amount_inc_vat
     )
 
 

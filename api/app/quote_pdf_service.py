@@ -12,6 +12,7 @@ from io import BytesIO
 from datetime import datetime
 from decimal import Decimal
 from app.models import Quote, Customer, QuoteItem, CompanySettings
+from app.constants import VAT_RATE_DECIMAL
 from sqlmodel import Session, select
 import os
 import urllib.request
@@ -445,8 +446,8 @@ def generate_quote_pdf(
     
     # Quote Items Table (grouped: main items first, then optional extras indented under parent)
     elements.append(Paragraph("Items:", heading_style))
-    
-    table_data = [["Description", "Quantity", "Unit Price", "Total"]]
+    elements.append(Paragraph("All prices Ex VAT @ 20%.", ParagraphStyle("TableNote", parent=normal_style, fontSize=9, textColor=colors.HexColor("#666666"), spaceAfter=4)))
+    table_data = [["Description", "Quantity", "Unit Price (Ex VAT)", "Total (Ex VAT)"]]
     
     main_items = [i for i in quote_items if getattr(i, "parent_quote_item_id", None) is None]
     main_items.sort(key=lambda i: getattr(i, "sort_order", 0) or 0)
@@ -467,22 +468,28 @@ def generate_quote_pdf(
                 format_currency(child.final_line_total, quote.currency),
             ])
     
-    # Add totals (no HTML tags; use table styling for emphasis)
+    # Add totals (no HTML tags; use table styling for emphasis). All amounts Ex VAT.
     subtotal_row_index = len(table_data)
-    table_data.append(["", "", "Subtotal:", format_currency(quote.subtotal, quote.currency)])
+    table_data.append(["", "", "Subtotal (Ex VAT):", format_currency(quote.subtotal, quote.currency)])
     if quote.discount_total > 0:
         table_data.append(["", "", "Discount:", format_currency(quote.discount_total, quote.currency)])
+    total_ex_vat_row_index = len(table_data)
+    table_data.append(["", "", "Total (Ex VAT):", format_currency(quote.total_amount, quote.currency)])
+    vat_amount = quote.total_amount * VAT_RATE_DECIMAL
+    total_inc_vat = quote.total_amount + vat_amount
+    vat_row_index = len(table_data)
+    table_data.append(["", "", "VAT @ 20%:", format_currency(vat_amount, quote.currency)])
     total_row_index = len(table_data)
-    table_data.append(["", "", "Total:", format_currency(quote.total_amount, quote.currency)])
-    
-    # Add deposit and balance rows (always show if total > 0)
+    table_data.append(["", "", "Total (inc VAT):", format_currency(total_inc_vat, quote.currency)])
+
+    # Add deposit and balance rows (always show if total > 0) — Ex VAT
     deposit_row_index = None
     balance_row_index = None
     if quote.total_amount > 0:
         deposit_row_index = len(table_data)
-        table_data.append(["", "", "Deposit (on order):", format_currency(quote.deposit_amount, quote.currency)])
+        table_data.append(["", "", "Deposit (on order, Ex VAT):", format_currency(quote.deposit_amount, quote.currency)])
         balance_row_index = len(table_data)
-        table_data.append(["", "", "Balance:", format_currency(quote.balance_amount, quote.currency)])
+        table_data.append(["", "", "Balance (Ex VAT):", format_currency(quote.balance_amount, quote.currency)])
     
     # Build table style list
     table_style_list = [
@@ -503,6 +510,7 @@ def generate_quote_pdf(
         ("LINEBELOW", (0, total_row_index), (-1, total_row_index), 1.5, brand_color),
         ("LINEABOVE", (0, total_row_index), (-1, total_row_index), 0.5, colors.HexColor("#e0e0e0")),
         ("FONTNAME", (2, subtotal_row_index), (3, subtotal_row_index), "Helvetica-Bold"),
+        ("FONTNAME", (2, vat_row_index), (3, vat_row_index), "Helvetica-Bold"),
         ("FONTNAME", (2, total_row_index), (3, total_row_index), "Helvetica-Bold"),
     ]
     # Add deposit and balance styling if they exist
@@ -552,6 +560,10 @@ def generate_quote_pdf(
                 company_settings.postcode
             ]
             footer_lines.append(", ".join([p for p in address_parts if p]))
+        if company_settings.company_registration_number:
+            footer_lines.append(f"Company No: {company_settings.company_registration_number}")
+        if company_settings.vat_number:
+            footer_lines.append(f"VAT No: {company_settings.vat_number}")
         if company_settings.phone or company_settings.email:
             contact = []
             if company_settings.phone:
@@ -559,7 +571,7 @@ def generate_quote_pdf(
             if company_settings.email:
                 contact.append(f"Email: {company_settings.email}")
             footer_lines.append(" | ".join(contact))
-        
+
         for line in footer_lines:
             elements.append(Paragraph(line, footer_style))
     

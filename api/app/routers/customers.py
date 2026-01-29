@@ -216,41 +216,18 @@ async def get_customer_quotes(
     current_user: User = Depends(get_current_user)
 ):
     """Get all quotes for a customer."""
-    from app.schemas import QuoteResponse
+    from app.routers.quotes import build_quote_response
     from app.models import QuoteItem
-    
+
     statement = select(Quote).where(Quote.customer_id == customer_id).order_by(Quote.created_at.desc())
     quotes = session.exec(statement).all()
-    
+
     result = []
     for quote in quotes:
         item_statement = select(QuoteItem).where(QuoteItem.quote_id == quote.id).order_by(QuoteItem.sort_order)
         quote_items = session.exec(item_statement).all()
-        
-        result.append(QuoteResponse(
-            id=quote.id,
-            customer_id=quote.customer_id,
-            quote_number=quote.quote_number,
-            version=quote.version,
-            status=quote.status,
-            subtotal=quote.subtotal,
-            discount_total=quote.discount_total,
-            total_amount=quote.total_amount,
-            deposit_amount=quote.deposit_amount,
-            balance_amount=quote.balance_amount,
-            currency=quote.currency,
-            valid_until=quote.valid_until,
-            terms_and_conditions=quote.terms_and_conditions,
-            notes=quote.notes,
-            created_by_id=quote.created_by_id,
-            sent_at=quote.sent_at,
-            viewed_at=quote.viewed_at,
-            accepted_at=quote.accepted_at,
-            created_at=quote.created_at,
-            updated_at=quote.updated_at,
-            items=[quote_item_to_response(item) for item in quote_items]
-        ))
-    
+        result.append(build_quote_response(quote, list(quote_items), session))
+
     return result
 
 

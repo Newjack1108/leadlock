@@ -24,7 +24,7 @@ A non-refundable deposit is required to secure your order.
 Ownership of goods passes only once full payment has been received.
 
 Prices
-Prices are in GBP (£) and may exclude VAT unless stated.
+All prices are Ex VAT @ 20%. VAT will be added at 20% with a breakdown on the quote.
 Delivery and installation are not included unless clearly specified.
 Drawings and plans are for guidance only.
 
@@ -539,7 +539,7 @@ function CreateQuoteContent() {
                 ))}
                 <div className="p-4 bg-muted rounded-md space-y-2">
                   <div className="flex justify-between items-center">
-                    <span className="font-semibold">Subtotal:</span>
+                    <span className="font-semibold">Subtotal (Ex VAT):</span>
                     <span className="font-semibold">£{calculateSubtotal().toFixed(2)}</span>
                   </div>
                   {selectedDiscountIds.length > 0 && (
@@ -548,8 +548,16 @@ function CreateQuoteContent() {
                     </div>
                   )}
                   <div className="flex justify-between items-center border-t pt-2">
-                    <span className="font-semibold text-lg">Total:</span>
-                    <span className="font-semibold text-lg">£{calculateTotal().toFixed(2)}</span>
+                    <span className="font-semibold">Total (Ex VAT):</span>
+                    <span className="font-semibold">£{calculateTotal().toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">VAT @ 20%:</span>
+                    <span>£{(calculateTotal() * 0.2).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between items-center border-t pt-2">
+                    <span className="font-semibold text-lg">Total (inc VAT):</span>
+                    <span className="font-semibold text-lg">£{(calculateTotal() * 1.2).toFixed(2)}</span>
                   </div>
                 </div>
               </CardContent>

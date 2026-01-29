@@ -230,7 +230,7 @@ export default function QuoteDetailPage() {
                   
                   <div className="border-t pt-4 space-y-2">
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Subtotal:</span>
+                      <span className="text-muted-foreground">Subtotal (Ex VAT):</span>
                       <span className="font-medium">£{Number(quote.subtotal).toFixed(2)}</span>
                     </div>
                     {Number(quote.discount_total) > 0 && (
@@ -239,18 +239,26 @@ export default function QuoteDetailPage() {
                         <span>-£{Number(quote.discount_total).toFixed(2)}</span>
                       </div>
                     )}
-                    <div className="flex justify-between text-lg font-semibold border-t pt-2">
-                      <span>Total:</span>
+                    <div className="flex justify-between font-semibold border-t pt-2">
+                      <span>Total (Ex VAT):</span>
                       <span>£{Number(quote.total_amount).toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">VAT @ 20%:</span>
+                      <span className="font-medium">£{(quote.vat_amount ?? Number(quote.total_amount) * 0.2).toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-lg font-semibold border-t pt-2">
+                      <span>Total (inc VAT):</span>
+                      <span>£{(quote.total_amount_inc_vat ?? Number(quote.total_amount) * 1.2).toFixed(2)}</span>
                     </div>
                     {Number(quote.deposit_amount) > 0 && (
                       <>
                         <div className="flex justify-between border-t pt-2">
-                          <span className="font-medium">Deposit (on order):</span>
+                          <span className="font-medium">Deposit (on order, Ex VAT):</span>
                           <span className="font-medium">£{Number(quote.deposit_amount).toFixed(2)}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="font-medium">Balance:</span>
+                          <span className="font-medium">Balance (Ex VAT):</span>
                           <span className="font-medium">£{Number(quote.balance_amount).toFixed(2)}</span>
                         </div>
                       </>
