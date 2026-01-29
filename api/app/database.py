@@ -345,6 +345,17 @@ def create_db_and_tables():
                         print(f"Error adding default_terms_and_conditions column: {e}", file=sys.stderr, flush=True)
                         import traceback
                         print(traceback.format_exc(), file=sys.stderr, flush=True)
+            
+            if "hourly_install_rate" not in company_columns:
+                print("Adding hourly_install_rate column to companysettings table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text('ALTER TABLE companysettings ADD COLUMN hourly_install_rate NUMERIC(10, 2)'))
+                    print("Added hourly_install_rate column to companysettings table", file=sys.stderr, flush=True)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Error adding hourly_install_rate column: {e}", file=sys.stderr, flush=True)
 
         # Step 7: Add email settings columns to User table
         has_user_table = inspector.has_table("user")
