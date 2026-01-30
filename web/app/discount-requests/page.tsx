@@ -20,9 +20,10 @@ import {
   approveDiscountRequest,
   rejectDiscountRequest,
 } from '@/lib/api';
-import { DiscountRequest, DiscountType, DiscountScope } from '@/lib/types';
+import { DiscountRequest, DiscountType, DiscountScope, DiscountRequestStatus } from '@/lib/types';
 import { toast } from 'sonner';
-import { Check, X, Loader2, FileText } from 'lucide-react';
+import { Check, X, Loader2, FileText, ExternalLink } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import api from '@/lib/api';
 
 export default function DiscountRequestsPage() {
@@ -41,7 +42,9 @@ export default function DiscountRequestsPage() {
   const fetchRequests = async () => {
     try {
       setLoading(true);
-      const list = await getDiscountRequests({ status: 'PENDING' });
+      const list = canApprove
+        ? await getDiscountRequests({ status: 'PENDING' })
+        : await getDiscountRequests();
       setRequests(list);
     } catch (error: any) {
       if (error.response?.status === 401) {
@@ -68,8 +71,9 @@ export default function DiscountRequestsPage() {
   }, []);
 
   useEffect(() => {
+    if (userRole == null) return;
     fetchRequests();
-  }, []);
+  }, [userRole]);
 
   const handleApprove = async (id: number) => {
     try {
@@ -113,7 +117,7 @@ export default function DiscountRequestsPage() {
       dr.discount_type === DiscountType.PERCENTAGE
         ? `${dr.discount_value}%`
         : `£${Number(dr.discount_value).toFixed(2)}`;
-    const scope = dr.scope === DiscountScope.QUOTE ? 'quote' : 'products';
+    const scope = dr.scope === DiscountScope.QUOTE ? 'entire quote' : 'building items only';
     return `${value} off ${scope}`;
   };
 
@@ -135,17 +139,77 @@ export default function DiscountRequestsPage() {
         <div className="mb-6">
           <h1 className="text-3xl font-semibold mb-2">Discount requests</h1>
           <p className="text-muted-foreground">
-            Review and approve or reject discount requests from sales
+            {canApprove
+              ? 'Review and approve or reject discount requests from sales'
+              : 'View your discount requests and submit new ones from a draft quote'}
           </p>
         </div>
 
         {!canApprove ? (
-          <Card>
-            <CardContent className="py-8 text-center text-muted-foreground">
-              You do not have permission to approve discount requests. You can submit requests from
-              a quote edit or detail page.
-            </CardContent>
-          </Card>
+          <>
+            <Card className="mb-4">
+              <CardContent className="py-4">
+                <p className="text-sm text-muted-foreground mb-3">
+                  To submit a new request, open a <strong>draft quote</strong> (edit or view) and use{' '}
+                  <strong>Request a discount</strong> in the Discounts section.
+                </p>
+                <Button variant="outline" size="sm" asChild>
+                  <Link href="/quotes">
+                    <ExternalLink className="h-4 w-4 mr-2" />
+                    Go to Quotes
+                  </Link>
+                </Button>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Your discount requests</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {requests.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-4">You have not submitted any discount requests yet.</p>
+                ) : (
+                  <div className="space-y-4">
+                    {requests.map((dr) => (
+                      <div
+                        key={dr.id}
+                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 border rounded-lg"
+                      >
+                        <div className="flex-1 space-y-1">
+                          <Link
+                            href={`/quotes/${dr.quote_id}`}
+                            className="font-medium text-primary hover:underline flex items-center gap-1"
+                          >
+                            <FileText className="h-4 w-4" />
+                            {dr.quote_number ?? `Quote #${dr.quote_id}`}
+                          </Link>
+                          <p className="text-sm font-medium">{formatDiscount(dr)}</p>
+                          {dr.reason && (
+                            <p className="text-sm text-muted-foreground">{dr.reason}</p>
+                          )}
+                          {dr.status === DiscountRequestStatus.REJECTED && dr.rejection_reason && (
+                            <p className="text-sm text-destructive mt-1">{dr.rejection_reason}</p>
+                          )}
+                        </div>
+                        <Badge
+                          variant={
+                            dr.status === DiscountRequestStatus.APPROVED
+                              ? 'default'
+                              : dr.status === DiscountRequestStatus.REJECTED
+                                ? 'destructive'
+                                : 'secondary'
+                          }
+                          className="shrink-0"
+                        >
+                          {dr.status}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </>
         ) : requests.length === 0 ? (
           <Card>
             <CardContent className="py-8 text-center text-muted-foreground">

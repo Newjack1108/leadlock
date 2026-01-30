@@ -211,7 +211,7 @@ export default function DiscountsPage() {
                           <Badge variant="outline">Giveaway</Badge>
                         )}
                         <Badge variant="outline">
-                          {discount.scope === DiscountScope.PRODUCT ? 'Product' : 'Quote'}
+                          {discount.scope === DiscountScope.PRODUCT ? 'Product (Building Only)' : 'Entire Quote'}
                         </Badge>
                       </div>
                     </div>
@@ -347,7 +347,7 @@ export default function DiscountsPage() {
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
-                  Product: Applied to each product item. Quote: Applied to entire quote total.
+                  Product: Applied to building/main items only (not optional extras). Quote: Applied to entire quote total.
                 </p>
               </div>
               <div className="flex items-center space-x-2">
@@ -481,7 +481,7 @@ export default function DiscountsPage() {
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
-                  Product: Applied to each product item. Quote: Applied to entire quote total.
+                  Product: Applied to building/main items only (not optional extras). Quote: Applied to entire quote total.
                 </p>
               </div>
               <div className="flex items-center space-x-2">

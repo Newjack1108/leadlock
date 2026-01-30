@@ -310,12 +310,12 @@ export default function QuoteDetailPage() {
                             <p className="font-medium">{discount.description}</p>
                             {discount.scope === 'PRODUCT' && (
                               <Badge variant="outline" className="text-xs">
-                                Product Level
+                                Building Only
                               </Badge>
                             )}
                             {discount.scope === 'QUOTE' && (
                               <Badge variant="outline" className="text-xs">
-                                Quote Level
+                                Entire Quote
                               </Badge>
                             )}
                           </div>
@@ -367,7 +367,7 @@ export default function QuoteDetailPage() {
                             {dr.discount_type === 'PERCENTAGE'
                               ? `${dr.discount_value}%`
                               : `£${Number(dr.discount_value).toFixed(2)}`}{' '}
-                            off {dr.scope === 'PRODUCT' ? 'products' : 'quote'}
+                            off {dr.scope === 'PRODUCT' ? 'building items only' : 'entire quote'}
                           </span>
                           {dr.reason && (
                             <p className="text-muted-foreground mt-1">{dr.reason}</p>

@@ -632,7 +632,7 @@ function EditQuoteContent() {
                             {discount.discount_type === 'PERCENTAGE'
                               ? `${discount.discount_value}%`
                               : `£${discount.discount_value}`}{' '}
-                            ({discount.scope === 'PRODUCT' ? 'Product' : 'Quote'})
+                            ({discount.scope === 'PRODUCT' ? 'Product (Building Only)' : 'Entire Quote'})
                             {discount.is_giveaway && ' 🎁'}
                           </SelectItem>
                         ))}
@@ -660,7 +660,7 @@ function EditQuoteContent() {
                                 {discount.discount_type === 'PERCENTAGE'
                                   ? `${discount.discount_value}%`
                                   : `£${discount.discount_value}`}{' '}
-                                off {discount.scope === 'PRODUCT' ? 'products' : 'entire quote'}
+                                off {discount.scope === 'PRODUCT' ? 'building items only' : 'entire quote'}
                               </p>
                             </div>
                             <Button
@@ -683,6 +683,9 @@ function EditQuoteContent() {
                 )}
                 <div className="border-t pt-4 mt-4 space-y-3">
                   <Label>Discount requests (require approval)</Label>
+                  <p className="text-sm text-muted-foreground">
+                    No suitable discount? Request one for manager approval.
+                  </p>
                   <Button
                     type="button"
                     variant="outline"
@@ -704,7 +707,7 @@ function EditQuoteContent() {
                               {dr.discount_type === 'PERCENTAGE'
                                 ? `${dr.discount_value}%`
                                 : `£${Number(dr.discount_value).toFixed(2)}`}{' '}
-                              off {dr.scope === 'PRODUCT' ? 'products' : 'quote'}
+                              off {dr.scope === 'PRODUCT' ? 'building items only' : 'entire quote'}
                             </span>
                             {dr.reason && (
                               <p className="text-muted-foreground mt-1">{dr.reason}</p>

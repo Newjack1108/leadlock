@@ -116,8 +116,8 @@ export default function RequestDiscountDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={DiscountScope.QUOTE}>Entire quote</SelectItem>
-                <SelectItem value={DiscountScope.PRODUCT}>Per product</SelectItem>
+                <SelectItem value={DiscountScope.QUOTE}>Entire Quote</SelectItem>
+                <SelectItem value={DiscountScope.PRODUCT}>Product (Building Only)</SelectItem>
               </SelectContent>
             </Select>
           </div>

@@ -166,23 +166,21 @@ export default function Header() {
               </span>
             )}
           </Link>
-          {canApproveDiscounts && (
-            <Link href="/discount-requests" className="relative">
-              <Button
-                variant={pathname?.startsWith('/discount-requests') ? 'default' : 'ghost'}
-                size="sm"
-                className="text-muted-foreground hover:text-foreground"
-              >
-                <Send className="h-4 w-4 mr-2" />
-                Discount requests
-              </Button>
-              {pendingDiscountCount > 0 && (
-                <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-red-500 text-white text-xs font-semibold flex items-center justify-center">
-                  {pendingDiscountCount > 99 ? '99+' : pendingDiscountCount}
-                </span>
-              )}
-            </Link>
-          )}
+          <Link href="/discount-requests" className="relative">
+            <Button
+              variant={pathname?.startsWith('/discount-requests') ? 'default' : 'ghost'}
+              size="sm"
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <Send className="h-4 w-4 mr-2" />
+              Discount requests
+            </Button>
+            {canApproveDiscounts && pendingDiscountCount > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-red-500 text-white text-xs font-semibold flex items-center justify-center">
+                {pendingDiscountCount > 99 ? '99+' : pendingDiscountCount}
+              </span>
+            )}
+          </Link>
 
           {/* Profile Dropdown */}
           <DropdownMenu>

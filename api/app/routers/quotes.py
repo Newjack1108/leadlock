@@ -105,8 +105,10 @@ def apply_discount_to_quote(
     total_discount = Decimal(0)
     
     if discount_template.scope == DiscountScope.PRODUCT:
-        # Apply discount to each quote item (building products)
+        # Apply discount only to main/building items (exclude optional extras: parent_quote_item_id is set)
         for item in quote_items:
+            if item.parent_quote_item_id is not None:
+                continue  # Skip optional extras
             if item.line_total > 0:  # Only apply to items with value
                 # Calculate discount based on current line total (before other discounts)
                 base_amount = item.line_total + item.discount_amount  # Original line total
@@ -182,6 +184,8 @@ def apply_custom_discount_to_quote(
 
     if scope == DiscountScope.PRODUCT:
         for item in quote_items:
+            if item.parent_quote_item_id is not None:
+                continue  # Skip optional extras (building-only discount)
             if item.line_total > 0:
                 base_amount = item.line_total + item.discount_amount
                 if discount_type == DiscountType.PERCENTAGE:
@@ -395,8 +399,10 @@ async def create_quote(
                     if discount_template.is_giveaway:
                         # For giveaways, we expect the product to already be in the items
                         # with a 100% discount applied. The discount template just marks it.
-                        # Apply 100% discount to matching products if needed
+                        # Apply 100% discount to matching products if needed (building items only, not extras)
                         for item in quote_items:
+                            if item.parent_quote_item_id is not None:
+                                continue
                             if item.product_id and discount_template.scope == DiscountScope.PRODUCT:
                                 # Apply 100% discount to this item
                                 item.discount_amount = item.line_total
@@ -727,6 +733,8 @@ async def update_draft_quote(
             quote_items = list(session.exec(statement).all())
             if discount_template.is_giveaway:
                 for item in quote_items:
+                    if item.parent_quote_item_id is not None:
+                        continue
                     if item.product_id and discount_template.scope == DiscountScope.PRODUCT:
                         item.discount_amount = item.line_total
                         item.final_line_total = Decimal(0)
@@ -1033,8 +1041,10 @@ async def apply_discount_to_quote_endpoint(
     
     # Apply discount
     if discount_template.is_giveaway:
-        # Handle giveaway - apply 100% discount to products
+        # Handle giveaway - apply 100% discount to building products only (not optional extras)
         for item in quote_items:
+            if item.parent_quote_item_id is not None:
+                continue
             if item.product_id and discount_template.scope == DiscountScope.PRODUCT:
                 item.discount_amount = item.line_total
                 item.final_line_total = Decimal(0)

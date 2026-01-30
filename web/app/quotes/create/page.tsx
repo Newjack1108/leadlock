@@ -624,7 +624,7 @@ function CreateQuoteContent() {
                         .filter((d) => !selectedDiscountIds.includes(d.id))
                         .map((discount) => (
                           <SelectItem key={discount.id} value={discount.id.toString()}>
-                            {discount.name} - {discount.discount_type === 'PERCENTAGE' ? `${discount.discount_value}%` : `£${discount.discount_value}`} ({discount.scope === 'PRODUCT' ? 'Product' : 'Quote'})
+                            {discount.name} - {discount.discount_type === 'PERCENTAGE' ? `${discount.discount_value}%` : `£${discount.discount_value}`} ({discount.scope === 'PRODUCT' ? 'Product (Building Only)' : 'Entire Quote'})
                             {discount.is_giveaway && ' 🎁'}
                           </SelectItem>
                         ))}
@@ -652,7 +652,7 @@ function CreateQuoteContent() {
                                 {discount.discount_type === 'PERCENTAGE'
                                   ? `${discount.discount_value}%`
                                   : `£${discount.discount_value}`}{' '}
-                                off {discount.scope === 'PRODUCT' ? 'products' : 'entire quote'}
+                                off {discount.scope === 'PRODUCT' ? 'building items only' : 'entire quote'}
                               </p>
                             </div>
                             <Button
