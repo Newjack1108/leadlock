@@ -52,6 +52,7 @@ def _build_header_flowables(
         try:
             # Use ImageReader + fresh BytesIO so ReportLab can read the image reliably
             buf = BytesIO(logo_bytes)
+            buf.seek(0)
             reader = ImageReader(buf)
             logo = Image(reader, width=50*mm, height=None)
             if logo.imageHeight > 0:
@@ -178,12 +179,13 @@ def _resolve_logo(company_settings: CompanySettings) -> Tuple[Optional[str], Opt
     # URL fallback (needed when API runs separately from frontend, e.g. on Railway).
     # Set LOGO_URL on the API service to the full image URL (e.g. https://your-frontend.up.railway.app/logo1.jpg)
     # or FRONTEND_URL to the frontend origin (e.g. https://your-frontend.up.railway.app).
+    DEFAULT_LOGO_BASE = "https://leadlock-frontend-production.up.railway.app"
     url_candidates = []
     env_logo_url = (os.getenv("LOGO_URL") or "").strip()
     env_logo_base = os.getenv("LOGO_BASE_URL")
     env_frontend_url = (os.getenv("FRONTEND_URL") or os.getenv("PUBLIC_FRONTEND_URL") or "").strip()
     if not env_frontend_url:
-        env_frontend_url = "https://leadlock-frontend-production.up.railway.app"
+        env_frontend_url = DEFAULT_LOGO_BASE
     cors_origins = os.getenv("CORS_ORIGINS", "")
     if env_logo_url:
         url_candidates.append(env_logo_url)
@@ -199,15 +201,24 @@ def _resolve_logo(company_settings: CompanySettings) -> Tuple[Optional[str], Opt
                 url_candidates.append(frontend_origin.rstrip("/") + "/" + fn)
             elif origins:
                 url_candidates.append(origins[0].rstrip("/") + "/" + fn)
+    # Always try the known production logo URL so PDFs get the logo even if env vars differ
+    for fn in filenames_to_try:
+        url_candidates.append(f"{DEFAULT_LOGO_BASE.rstrip('/')}/{fn}")
+    # JPEG and PNG magic bytes so we don't accept HTML error pages
+    JPEG_MAGIC = b"\xff\xd8\xff"
+    PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+
     for logo_url in url_candidates:
         try:
             req = urllib.request.Request(
                 logo_url,
                 headers={"User-Agent": "LeadLock-API/1.0 (Quote PDF)"},
             )
-            with urllib.request.urlopen(req, timeout=10) as response:
+            with urllib.request.urlopen(req, timeout=15) as response:
                 data = response.read()
-            if data and len(data) > 100:
+            if not data or len(data) < 100:
+                continue
+            if data.startswith(JPEG_MAGIC) or data.startswith(PNG_MAGIC):
                 return (None, data)
         except Exception:
             continue
@@ -286,6 +297,14 @@ def generate_quote_pdf(
         textColor=colors.HexColor("#888888"),
         alignment=1,
     )
+    table_header_style = ParagraphStyle(
+        "TableHeader",
+        parent=styles["Normal"],
+        fontSize=8,
+        textColor=colors.white,
+        fontName="Helvetica-Bold",
+        alignment=0,
+    )
     terms_style = ParagraphStyle(
         "Terms",
         parent=normal_style,
@@ -361,7 +380,15 @@ def generate_quote_pdf(
     
     # Quote Items Table (grouped: main items first, then optional extras indented under parent)
     elements.append(Paragraph("Items:", heading_style))
-    table_data = [["Description", "Quantity", "Unit Price (Ex VAT)", "Total (Ex VAT)"]]
+    # Header row: smaller font so headings fit; "(Ex VAT)" in smaller size
+    table_data = [
+        [
+            Paragraph("Description", table_header_style),
+            Paragraph("Quantity", table_header_style),
+            Paragraph("Unit Price <font size='6'>(Ex VAT)</font>", table_header_style),
+            Paragraph("Total <font size='6'>(Ex VAT)</font>", table_header_style),
+        ]
+    ]
     
     main_items = [i for i in quote_items if getattr(i, "parent_quote_item_id", None) is None]
     main_items.sort(key=lambda i: getattr(i, "sort_order", 0) or 0)
@@ -412,8 +439,6 @@ def generate_quote_pdf(
         ("ALIGN", (0, 0), (-1, -1), "LEFT"),
         ("ALIGN", (1, 0), (1, -1), "CENTER"),
         ("ALIGN", (2, 0), (-1, -1), "RIGHT"),
-        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, 0), 10),
         ("FONTSIZE", (0, 1), (-1, -2), 9),
         ("FONTSIZE", (0, -3), (-1, -1), 9),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
