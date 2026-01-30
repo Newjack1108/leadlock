@@ -472,6 +472,37 @@ export interface QuoteDiscount {
   applied_by_id: number;
 }
 
+export enum DiscountRequestStatus {
+  PENDING = "PENDING",
+  APPROVED = "APPROVED",
+  REJECTED = "REJECTED",
+}
+
+export interface DiscountRequest {
+  id: number;
+  quote_id: number;
+  requested_by_id: number;
+  requested_by_name?: string;
+  discount_type: DiscountType;
+  discount_value: number;
+  scope: DiscountScope;
+  reason?: string;
+  status: DiscountRequestStatus;
+  approved_by_id?: number;
+  responded_at?: string;
+  rejection_reason?: string;
+  created_at: string;
+  updated_at: string;
+  quote_number?: string;
+}
+
+export interface DiscountRequestCreate {
+  discount_type: DiscountType;
+  discount_value: number;
+  scope: DiscountScope;
+  reason?: string;
+}
+
 export enum ReminderPriority {
   LOW = "LOW",
   MEDIUM = "MEDIUM",

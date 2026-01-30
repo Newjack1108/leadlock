@@ -5,9 +5,9 @@ from decimal import Decimal
 from enum import Enum
 from app.models import (
     LeadStatus, ActivityType, Timeframe, UserRole, ProductCategory,
-    QuoteStatus, DiscountType, DiscountScope, LeadType, LeadSource,
-    EmailDirection, ReminderPriority, ReminderType, SuggestedAction,
-    OpportunityStage, LossCategory
+    QuoteStatus, DiscountType, DiscountScope, DiscountRequestStatus,
+    LeadType, LeadSource, EmailDirection, ReminderPriority, ReminderType,
+    SuggestedAction, OpportunityStage, LossCategory
 )
 
 
@@ -601,6 +601,35 @@ class QuoteDiscountResponse(BaseModel):
     description: str
     applied_at: datetime
     applied_by_id: int
+
+
+class DiscountRequestCreate(BaseModel):
+    discount_type: DiscountType
+    discount_value: Decimal
+    scope: DiscountScope
+    reason: Optional[str] = None
+
+
+class DiscountRequestResponse(BaseModel):
+    id: int
+    quote_id: int
+    requested_by_id: int
+    requested_by_name: Optional[str] = None
+    discount_type: DiscountType
+    discount_value: Decimal
+    scope: DiscountScope
+    reason: Optional[str]
+    status: DiscountRequestStatus
+    approved_by_id: Optional[int]
+    responded_at: Optional[datetime]
+    rejection_reason: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+    quote_number: Optional[str] = None
+
+
+class DiscountRequestReject(BaseModel):
+    rejection_reason: Optional[str] = None
 
 
 class ReminderResponse(BaseModel):

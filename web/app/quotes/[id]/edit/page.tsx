@@ -4,16 +4,18 @@ import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Header from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { getQuote, updateDraftQuote, getProducts, getProduct, getCompanySettings, getDiscountTemplates } from '@/lib/api';
+import { getQuote, updateDraftQuote, getProducts, getProduct, getCompanySettings, getDiscountTemplates, getDiscountRequestsForQuote } from '@/lib/api';
 import api from '@/lib/api';
-import { Customer, Product, QuoteItemCreate, DiscountTemplate, Quote, QuoteItem, QuoteDiscount } from '@/lib/types';
+import { Customer, Product, QuoteItemCreate, DiscountTemplate, Quote, QuoteItem, QuoteDiscount, DiscountRequest, DiscountRequestStatus } from '@/lib/types';
 import { toast } from 'sonner';
-import { Plus, Trash2, ArrowLeft, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, Trash2, ArrowLeft, X, ChevronDown, ChevronUp, Send } from 'lucide-react';
+import RequestDiscountDialog from '@/components/RequestDiscountDialog';
 
 const DEFAULT_TERMS_AND_CONDITIONS = `Key Terms Summary (For Quotations)
 
@@ -87,8 +89,20 @@ function EditQuoteContent() {
   const [companySettings, setCompanySettings] = useState<any>(null);
   const [availableDiscounts, setAvailableDiscounts] = useState<DiscountTemplate[]>([]);
   const [selectedDiscountIds, setSelectedDiscountIds] = useState<number[]>([]);
+  const [discountRequests, setDiscountRequests] = useState<DiscountRequest[]>([]);
+  const [requestDialogOpen, setRequestDialogOpen] = useState(false);
   const [productDetails, setProductDetails] = useState<Record<number, Product>>({});
   const [termsExpanded, setTermsExpanded] = useState(false);
+
+  const fetchDiscountRequests = async () => {
+    if (!quoteId) return;
+    try {
+      const list = await getDiscountRequestsForQuote(quoteId);
+      setDiscountRequests(list);
+    } catch {
+      setDiscountRequests([]);
+    }
+  };
 
   useEffect(() => {
     if (quoteId) {
@@ -125,13 +139,15 @@ function EditQuoteContent() {
       setDepositAmount(quoteData.deposit_amount ?? '');
       setSelectedDiscountIds(
         (quoteData.discounts ?? [])
-          .map((d: QuoteDiscount) => d.template_id)
+          .filter((d: QuoteDiscount) => d.template_id != null)
+          .map((d: QuoteDiscount) => d.template_id!)
           .filter((id: number | undefined): id is number => id != null) ?? []
       );
       if (quoteData.customer_id) {
         const customerResponse = await api.get(`/api/customers/${quoteData.customer_id}`);
         setCustomer(customerResponse.data);
       }
+      await fetchDiscountRequests();
     } catch (error: any) {
       toast.error('Failed to load quote');
       if (error.response?.status === 401) router.push('/login');
@@ -665,8 +681,60 @@ function EditQuoteContent() {
                     </div>
                   </div>
                 )}
+                <div className="border-t pt-4 mt-4 space-y-3">
+                  <Label>Discount requests (require approval)</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setRequestDialogOpen(true)}
+                  >
+                    <Send className="h-4 w-4 mr-2" />
+                    Request a discount
+                  </Button>
+                  {discountRequests.length > 0 && (
+                    <div className="space-y-2">
+                      {discountRequests.map((dr) => (
+                        <div
+                          key={dr.id}
+                          className="flex items-center justify-between p-3 border rounded-md text-sm"
+                        >
+                          <div>
+                            <span className="font-medium">
+                              {dr.discount_type === 'PERCENTAGE'
+                                ? `${dr.discount_value}%`
+                                : `£${Number(dr.discount_value).toFixed(2)}`}{' '}
+                              off {dr.scope === 'PRODUCT' ? 'products' : 'quote'}
+                            </span>
+                            {dr.reason && (
+                              <p className="text-muted-foreground mt-1">{dr.reason}</p>
+                            )}
+                          </div>
+                          <Badge
+                            variant={
+                              dr.status === DiscountRequestStatus.APPROVED
+                                ? 'default'
+                                : dr.status === DiscountRequestStatus.REJECTED
+                                  ? 'destructive'
+                                  : 'secondary'
+                            }
+                          >
+                            {dr.status}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </CardContent>
             </Card>
+
+            <RequestDiscountDialog
+              quoteId={quoteId!}
+              open={requestDialogOpen}
+              onOpenChange={setRequestDialogOpen}
+              onSuccess={fetchDiscountRequests}
+            />
 
             <Card>
               <CardHeader>

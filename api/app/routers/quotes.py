@@ -163,6 +163,89 @@ def apply_discount_to_quote(
     return total_discount
 
 
+def apply_custom_discount_to_quote(
+    quote: Quote,
+    discount_type: DiscountType,
+    discount_value: Decimal,
+    scope: DiscountScope,
+    description: str,
+    quote_items: List[QuoteItem],
+    session: Session,
+    current_user: User
+) -> Decimal:
+    """
+    Apply an ad-hoc (custom) discount to a quote (no template).
+    Creates QuoteDiscount records with template_id=None.
+    Returns the total discount amount applied.
+    """
+    total_discount = Decimal(0)
+
+    if scope == DiscountScope.PRODUCT:
+        for item in quote_items:
+            if item.line_total > 0:
+                base_amount = item.line_total + item.discount_amount
+                if discount_type == DiscountType.PERCENTAGE:
+                    discount_amount = base_amount * (discount_value / Decimal(100))
+                else:
+                    discount_amount = min(discount_value, base_amount)
+
+                item.discount_amount += discount_amount
+                item.final_line_total = item.line_total - item.discount_amount
+                if item.final_line_total < 0:
+                    item.final_line_total = Decimal(0)
+                total_discount += discount_amount
+
+                quote_discount = QuoteDiscount(
+                    quote_id=quote.id,
+                    quote_item_id=item.id,
+                    template_id=None,
+                    discount_type=discount_type,
+                    discount_value=discount_value,
+                    scope=scope,
+                    discount_amount=discount_amount,
+                    description=description,
+                    applied_by_id=current_user.id
+                )
+                session.add(quote_discount)
+    else:
+        if discount_type == DiscountType.PERCENTAGE:
+            discount_amount = quote.subtotal * (discount_value / Decimal(100))
+        else:
+            discount_amount = min(discount_value, quote.subtotal)
+        total_discount = discount_amount
+
+        quote_discount = QuoteDiscount(
+            quote_id=quote.id,
+            quote_item_id=None,
+            template_id=None,
+            discount_type=discount_type,
+            discount_value=discount_value,
+            scope=scope,
+            discount_amount=discount_amount,
+            description=description,
+            applied_by_id=current_user.id
+        )
+        session.add(quote_discount)
+
+    # Recalculate quote totals
+    item_discount_total = sum(item.discount_amount for item in quote_items)
+    discount_statement = select(QuoteDiscount).where(
+        QuoteDiscount.quote_id == quote.id,
+        QuoteDiscount.quote_item_id.is_(None)
+    )
+    quote_level_discounts = session.exec(discount_statement).all()
+    quote_level_discount_total = sum(d.discount_amount for d in quote_level_discounts)
+    quote.discount_total = item_discount_total + quote_level_discount_total
+    quote.total_amount = quote.subtotal - quote.discount_total
+    if quote.total_amount < 0:
+        quote.total_amount = Decimal(0)
+    if quote.deposit_amount > quote.total_amount:
+        quote.deposit_amount = quote.total_amount
+    quote.balance_amount = quote.total_amount - quote.deposit_amount
+    session.add(quote)
+    return total_discount
+
+
 def generate_quote_number(session: Session) -> str:
     """Generate a unique quote number like QT-2024-001."""
     from datetime import date

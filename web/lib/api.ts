@@ -401,3 +401,39 @@ export const applyDiscountToQuote = async (quoteId: number, templateId: number) 
   const response = await api.post(`/api/quotes/${quoteId}/discounts?template_id=${templateId}`);
   return response.data;
 };
+
+// Discount requests
+export const getDiscountRequestsForQuote = async (quoteId: number) => {
+  const response = await api.get(`/api/quotes/${quoteId}/discount-requests`);
+  return response.data;
+};
+
+export const getDiscountRequests = async (params?: { status?: string; quote_id?: number }) => {
+  const searchParams = new URLSearchParams();
+  if (params?.status) searchParams.set('status', params.status);
+  if (params?.quote_id != null) searchParams.set('quote_id', String(params.quote_id));
+  const qs = searchParams.toString();
+  const url = qs ? `/api/discount-requests?${qs}` : '/api/discount-requests';
+  const response = await api.get(url);
+  return response.data;
+};
+
+export const createDiscountRequest = async (
+  quoteId: number,
+  body: { discount_type: string; discount_value: number; scope: string; reason?: string }
+) => {
+  const response = await api.post(`/api/quotes/${quoteId}/discount-requests`, body);
+  return response.data;
+};
+
+export const approveDiscountRequest = async (requestId: number) => {
+  const response = await api.patch(`/api/discount-requests/${requestId}/approve`);
+  return response.data;
+};
+
+export const rejectDiscountRequest = async (requestId: number, rejectionReason?: string) => {
+  const response = await api.patch(`/api/discount-requests/${requestId}/reject`, {
+    rejection_reason: rejectionReason ?? undefined,
+  });
+  return response.data;
+};

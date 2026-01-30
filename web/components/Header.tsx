@@ -5,9 +5,9 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Logo from './Logo';
 import { Button } from '@/components/ui/button';
-import { LogOut, Users, Settings, Package, User, Mail, Bell, FileText, ShoppingCart, ChevronDown, Gift } from 'lucide-react';
+import { LogOut, Users, Settings, Package, User, Mail, Bell, FileText, ShoppingCart, ChevronDown, Gift, Send } from 'lucide-react';
 import api from '@/lib/api';
-import { getStaleSummary } from '@/lib/api';
+import { getStaleSummary, getDiscountRequests } from '@/lib/api';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,6 +22,7 @@ export default function Header() {
   const [userRole, setUserRole] = useState<string | null>(null);
   const [reminderCount, setReminderCount] = useState<number>(0);
   const [newLeadsCount, setNewLeadsCount] = useState<number>(0);
+  const [pendingDiscountCount, setPendingDiscountCount] = useState<number>(0);
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -56,10 +57,22 @@ export default function Header() {
     }
   };
 
+  const fetchPendingDiscountCount = async () => {
+    try {
+      const list = await getDiscountRequests({ status: 'PENDING' });
+      setPendingDiscountCount(Array.isArray(list) ? list.length : 0);
+    } catch {
+      setPendingDiscountCount(0);
+    }
+  };
+
   useEffect(() => {
     fetchReminderCount();
     fetchNewLeadsCount();
-  }, [pathname]);
+    if (userRole === 'DIRECTOR' || userRole === 'SALES_MANAGER') {
+      fetchPendingDiscountCount();
+    }
+  }, [pathname, userRole]);
 
   const handleLogout = () => {
     // Clear token from localStorage
@@ -73,6 +86,7 @@ export default function Header() {
   };
 
   const isDirector = userRole === 'DIRECTOR';
+  const canApproveDiscounts = userRole === 'DIRECTOR' || userRole === 'SALES_MANAGER';
 
   return (
     <header className="border-b border-border bg-card shadow-sm">
@@ -152,6 +166,23 @@ export default function Header() {
               </span>
             )}
           </Link>
+          {canApproveDiscounts && (
+            <Link href="/discount-requests" className="relative">
+              <Button
+                variant={pathname?.startsWith('/discount-requests') ? 'default' : 'ghost'}
+                size="sm"
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <Send className="h-4 w-4 mr-2" />
+                Discount requests
+              </Button>
+              {pendingDiscountCount > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-red-500 text-white text-xs font-semibold flex items-center justify-center">
+                  {pendingDiscountCount > 99 ? '99+' : pendingDiscountCount}
+                </span>
+              )}
+            </Link>
+          )}
 
           {/* Profile Dropdown */}
           <DropdownMenu>

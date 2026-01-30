@@ -6,12 +6,13 @@ import Header from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import api, { getQuote, previewQuotePdf } from '@/lib/api';
-import { Quote, QuoteItem, Customer, QuoteDiscount } from '@/lib/types';
+import api, { getQuote, previewQuotePdf, getDiscountRequestsForQuote } from '@/lib/api';
+import { Quote, QuoteItem, Customer, QuoteDiscount, DiscountRequest, DiscountRequestStatus } from '@/lib/types';
 import { toast } from 'sonner';
 import SendQuoteEmailDialog from '@/components/SendQuoteEmailDialog';
 import Link from 'next/link';
-import { ArrowLeft, Mail, Eye, Tag, Pencil, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowLeft, Mail, Eye, Tag, Pencil, ChevronDown, ChevronUp, Send } from 'lucide-react';
+import RequestDiscountDialog from '@/components/RequestDiscountDialog';
 
 export default function QuoteDetailPage() {
   const router = useRouter();
@@ -23,12 +24,23 @@ export default function QuoteDetailPage() {
   const [loading, setLoading] = useState(true);
   const [sendEmailDialogOpen, setSendEmailDialogOpen] = useState(false);
   const [termsExpanded, setTermsExpanded] = useState(false);
+  const [discountRequests, setDiscountRequests] = useState<DiscountRequest[]>([]);
+  const [requestDialogOpen, setRequestDialogOpen] = useState(false);
 
   useEffect(() => {
     if (quoteId) {
       fetchQuote();
     }
   }, [quoteId]);
+
+  const fetchDiscountRequests = async () => {
+    try {
+      const list = await getDiscountRequestsForQuote(quoteId);
+      setDiscountRequests(list);
+    } catch {
+      setDiscountRequests([]);
+    }
+  };
 
   const fetchQuote = async () => {
     try {
@@ -45,6 +57,7 @@ export default function QuoteDetailPage() {
           console.error('Failed to load customer');
         }
       }
+      await fetchDiscountRequests();
     } catch (error: any) {
       toast.error('Failed to load quote');
       if (error.response?.status === 401) {
@@ -309,7 +322,7 @@ export default function QuoteDetailPage() {
                           <p className="text-sm text-muted-foreground mt-1">
                             {discount.discount_type === 'PERCENTAGE'
                               ? `${discount.discount_value}%`
-                              : `£${discount.discount_value.toFixed(2)}`}{' '}
+                              : `£${Number(discount.discount_value).toFixed(2)}`}{' '}
                             discount
                           </p>
                         </div>
@@ -324,6 +337,74 @@ export default function QuoteDetailPage() {
                 </CardContent>
               </Card>
             )}
+
+            {/* Discount requests */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Discount requests</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {quote.status === 'DRAFT' && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setRequestDialogOpen(true)}
+                  >
+                    <Send className="h-4 w-4 mr-2" />
+                    Request a discount (requires approval)
+                  </Button>
+                )}
+                {discountRequests.length > 0 ? (
+                  <div className="space-y-2">
+                    {discountRequests.map((dr) => (
+                      <div
+                        key={dr.id}
+                        className="flex items-center justify-between p-3 border rounded-md text-sm"
+                      >
+                        <div>
+                          <span className="font-medium">
+                            {dr.discount_type === 'PERCENTAGE'
+                              ? `${dr.discount_value}%`
+                              : `£${Number(dr.discount_value).toFixed(2)}`}{' '}
+                            off {dr.scope === 'PRODUCT' ? 'products' : 'quote'}
+                          </span>
+                          {dr.reason && (
+                            <p className="text-muted-foreground mt-1">{dr.reason}</p>
+                          )}
+                          {dr.status === DiscountRequestStatus.REJECTED && dr.rejection_reason && (
+                            <p className="text-destructive text-xs mt-1">{dr.rejection_reason}</p>
+                          )}
+                        </div>
+                        <Badge
+                          variant={
+                            dr.status === DiscountRequestStatus.APPROVED
+                              ? 'default'
+                              : dr.status === DiscountRequestStatus.REJECTED
+                                ? 'destructive'
+                                : 'secondary'
+                          }
+                        >
+                          {dr.status}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No discount requests for this quote.</p>
+                )}
+              </CardContent>
+            </Card>
+
+            <RequestDiscountDialog
+              quoteId={quoteId}
+              open={requestDialogOpen}
+              onOpenChange={setRequestDialogOpen}
+              onSuccess={() => {
+                fetchDiscountRequests();
+                fetchQuote();
+              }}
+            />
 
             {/* Terms and Conditions */}
             {quote.terms_and_conditions && (

@@ -288,6 +288,12 @@ class DiscountScope(str, Enum):
     QUOTE = "QUOTE"  # Applied to entire quote total
 
 
+class DiscountRequestStatus(str, Enum):
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+
+
 class Quote(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     customer_id: Optional[int] = Field(default=None, foreign_key="customer.id")  # Temporarily nullable for migration
@@ -324,6 +330,7 @@ class Quote(SQLModel, table=True):
     customer: Optional["Customer"] = Relationship(back_populates="quotes")
     items: List["QuoteItem"] = Relationship(back_populates="quote")
     discounts: List["QuoteDiscount"] = Relationship(back_populates="quote")
+    discount_requests: List["DiscountRequest"] = Relationship(back_populates="quote")
     # Explicitly specify created_by_id as the foreign key since we also have owner_id
     # SQLAlchemy needs explicit foreign_keys when multiple FKs point to same table
     # Use sa_relationship_kwargs to pass SQLAlchemy-specific parameters
@@ -433,6 +440,27 @@ class QuoteDiscount(SQLModel, table=True):
     quote_item: Optional[QuoteItem] = Relationship(back_populates="discounts")
     template: Optional[DiscountTemplate] = Relationship(back_populates="quote_discounts")
     applied_by: User = Relationship()
+
+
+class DiscountRequest(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    quote_id: int = Field(foreign_key="quote.id")
+    requested_by_id: int = Field(foreign_key="user.id")
+    discount_type: DiscountType
+    discount_value: Decimal = Field(sa_column=Column(Numeric(10, 2)))
+    scope: DiscountScope
+    reason: Optional[str] = None
+    status: DiscountRequestStatus = Field(default=DiscountRequestStatus.PENDING)
+    approved_by_id: Optional[int] = Field(default=None, foreign_key="user.id")
+    responded_at: Optional[datetime] = None
+    rejection_reason: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+    # Relationships
+    quote: "Quote" = Relationship(back_populates="discount_requests")
+    requested_by: User = Relationship(sa_relationship_kwargs={"foreign_keys": "[DiscountRequest.requested_by_id]"})
+    approved_by: Optional[User] = Relationship(sa_relationship_kwargs={"foreign_keys": "[DiscountRequest.approved_by_id]"})
 
 
 class ReminderPriority(str, Enum):
