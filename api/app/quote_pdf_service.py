@@ -175,18 +175,19 @@ def _resolve_logo(company_settings: CompanySettings) -> Tuple[Optional[str], Opt
         if os.path.exists(fn):
             logo_path = fn
             return (logo_path, None)
-    # URL fallback (needed when API runs separately from frontend, e.g. on Railway)
+    # URL fallback (needed when API runs separately from frontend, e.g. on Railway).
+    # Set LOGO_URL on the API service to the full image URL (e.g. https://your-frontend.up.railway.app/logo1.jpg)
+    # or FRONTEND_URL to the frontend origin (e.g. https://your-frontend.up.railway.app).
     url_candidates = []
-    env_logo_url = os.getenv("LOGO_URL")
+    env_logo_url = (os.getenv("LOGO_URL") or "").strip()
     env_logo_base = os.getenv("LOGO_BASE_URL")
-    env_frontend_url = os.getenv("FRONTEND_URL") or os.getenv("PUBLIC_FRONTEND_URL")
-    # Always try production frontend URL if no env URL set (Railway may not set RAILWAY_ENVIRONMENT)
+    env_frontend_url = (os.getenv("FRONTEND_URL") or os.getenv("PUBLIC_FRONTEND_URL") or "").strip()
     if not env_frontend_url:
         env_frontend_url = "https://leadlock-frontend-production.up.railway.app"
     cors_origins = os.getenv("CORS_ORIGINS", "")
+    if env_logo_url:
+        url_candidates.append(env_logo_url)
     for fn in filenames_to_try:
-        if env_logo_url and fn == primary_filename:
-            url_candidates.append(env_logo_url)
         if env_logo_base:
             url_candidates.append(env_logo_base.rstrip("/") + "/" + fn)
         if env_frontend_url:
