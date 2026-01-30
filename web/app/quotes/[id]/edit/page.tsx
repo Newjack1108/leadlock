@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import Header from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,13 +9,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { createQuote, getProducts, getProduct, getCompanySettings, getDiscountTemplates } from '@/lib/api';
+import { getQuote, updateDraftQuote, getProducts, getProduct, getCompanySettings, getDiscountTemplates } from '@/lib/api';
 import api from '@/lib/api';
-import { Customer, Product, QuoteItemCreate, DiscountTemplate } from '@/lib/types';
+import { Customer, Product, QuoteItemCreate, DiscountTemplate, Quote, QuoteItem } from '@/lib/types';
 import { toast } from 'sonner';
 import { Plus, Trash2, ArrowLeft, X, ChevronDown, ChevronUp } from 'lucide-react';
 
-// Default terms and conditions constant (fallback if not set in company settings)
 const DEFAULT_TERMS_AND_CONDITIONS = `Key Terms Summary (For Quotations)
 
 Orders & Payment
@@ -53,24 +52,34 @@ We are not liable for third-party installation, access damage, weather events, o
 Full Terms & Conditions available on request or on our website.
 Statutory consumer rights are not affected.`;
 
-function CreateQuoteContent() {
+function quoteItemsToFormItems(items: QuoteItem[]): QuoteItemCreate[] {
+  const sorted = [...items].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+  const idToIndex: Record<number, number> = {};
+  sorted.forEach((item, i) => {
+    if (item.id != null) idToIndex[item.id] = i;
+  });
+  return sorted.map((item) => ({
+    product_id: item.product_id ?? undefined,
+    description: item.description,
+    quantity: Number(item.quantity),
+    unit_price: Number(item.unit_price),
+    is_custom: item.is_custom ?? false,
+    sort_order: item.sort_order ?? 0,
+    parent_index: item.parent_quote_item_id != null ? idToIndex[item.parent_quote_item_id] : undefined,
+  }));
+}
+
+function EditQuoteContent() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const customerId = searchParams.get('customer_id') ? parseInt(searchParams.get('customer_id')!) : null;
+  const params = useParams();
+  const quoteId = params.id ? parseInt(params.id as string) : null;
 
   const [loading, setLoading] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);
+  const [quote, setQuote] = useState<Quote | null>(null);
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
-  const [items, setItems] = useState<QuoteItemCreate[]>([
-    {
-      description: '',
-      quantity: 1,
-      unit_price: 0,
-      is_custom: false,
-      sort_order: 0,
-    },
-  ]);
+  const [items, setItems] = useState<QuoteItemCreate[]>([]);
   const [validUntil, setValidUntil] = useState('');
   const [termsAndConditions, setTermsAndConditions] = useState('');
   const [notes, setNotes] = useState('');
@@ -82,35 +91,51 @@ function CreateQuoteContent() {
   const [termsExpanded, setTermsExpanded] = useState(false);
 
   useEffect(() => {
-    if (customerId) {
-      fetchCustomer();
+    if (quoteId) {
+      fetchQuoteAndCustomer();
       fetchProducts();
-      fetchDefaultTerms();
       fetchCompanySettings();
       fetchDiscounts();
-      // Set default valid until to 30 days from now
-      const date = new Date();
-      date.setDate(date.getDate() + 30);
-      setValidUntil(date.toISOString().split('T')[0]);
     } else {
       setPageLoading(false);
-      toast.error('Customer ID is required');
-      router.push('/customers');
     }
-  }, [customerId]);
+  }, [quoteId]);
 
-  const fetchCustomer = async () => {
-    if (!customerId) return;
+  const fetchQuoteAndCustomer = async () => {
+    if (!quoteId) return;
     try {
-      const response = await api.get(`/api/customers/${customerId}`);
-      setCustomer(response.data);
-    } catch (error: any) {
-      toast.error('Failed to load customer');
-      if (error.response?.status === 401) {
-        router.push('/login');
-      } else if (error.response?.status === 404) {
-        router.push('/customers');
+      setPageLoading(true);
+      const quoteData = await getQuote(quoteId);
+      if (quoteData.status !== 'DRAFT') {
+        toast.error('Only draft quotes can be edited');
+        router.push(`/quotes/${quoteId}`);
+        return;
       }
+      setQuote(quoteData);
+      setItems(
+        quoteData.items?.length
+          ? quoteItemsToFormItems(quoteData.items)
+          : [{ description: '', quantity: 1, unit_price: 0, is_custom: false, sort_order: 0 }]
+      );
+      setValidUntil(
+        quoteData.valid_until ? new Date(quoteData.valid_until).toISOString().split('T')[0] : ''
+      );
+      setTermsAndConditions(quoteData.terms_and_conditions ?? '');
+      setNotes(quoteData.notes ?? '');
+      setDepositAmount(quoteData.deposit_amount ?? '');
+      setSelectedDiscountIds(
+        (quoteData.discounts ?? [])
+          .map((d) => d.template_id)
+          .filter((id): id is number => id != null) ?? []
+      );
+      if (quoteData.customer_id) {
+        const customerResponse = await api.get(`/api/customers/${quoteData.customer_id}`);
+        setCustomer(customerResponse.data);
+      }
+    } catch (error: any) {
+      toast.error('Failed to load quote');
+      if (error.response?.status === 401) router.push('/login');
+      else if (error.response?.status === 404) router.push('/quotes');
     } finally {
       setPageLoading(false);
     }
@@ -119,25 +144,9 @@ function CreateQuoteContent() {
   const fetchProducts = async () => {
     try {
       const response = await getProducts();
-      // Only main products in dropdown; extras are added via Optional Extras section per product
       setProducts(response.filter((p: Product) => p.is_active && !p.is_extra));
     } catch (error) {
       console.error('Failed to load products');
-    }
-  };
-
-  const fetchDefaultTerms = async () => {
-    try {
-      const settings = await getCompanySettings();
-      if (settings?.default_terms_and_conditions) {
-        setTermsAndConditions(settings.default_terms_and_conditions);
-      } else {
-        setTermsAndConditions(DEFAULT_TERMS_AND_CONDITIONS);
-      }
-    } catch (error) {
-      // If settings don't exist or error, use hardcoded default
-      console.error('Failed to load company settings, using default terms');
-      setTermsAndConditions(DEFAULT_TERMS_AND_CONDITIONS);
     }
   };
 
@@ -152,7 +161,7 @@ function CreateQuoteContent() {
 
   const fetchDiscounts = async () => {
     try {
-      const discounts = await getDiscountTemplates(true); // Only active discounts
+      const discounts = await getDiscountTemplates(true);
       setAvailableDiscounts(discounts);
     } catch (error) {
       console.error('Failed to load discounts');
@@ -186,7 +195,7 @@ function CreateQuoteContent() {
     setItems(newItems);
   };
 
-  const updateItem = async (index: number, field: keyof QuoteItemCreate, value: any) => {
+  const updateItem = async (index: number, field: keyof QuoteItemCreate, value: unknown) => {
     const newItems = [...items];
     if (field === 'product_id') {
       if (value === 'custom' || !value) {
@@ -198,7 +207,7 @@ function CreateQuoteContent() {
         setItems(newItems);
         return;
       }
-      const productId = parseInt(value, 10);
+      const productId = parseInt(value as string, 10);
       const product = products.find((p) => p.id === productId);
       if (product) {
         newItems[index] = {
@@ -243,9 +252,7 @@ function CreateQuoteContent() {
   };
 
   const calculateInstallCost = (product: Product) => {
-    if (!product.installation_hours || !companySettings?.hourly_install_rate) {
-      return null;
-    }
+    if (!product.installation_hours || !companySettings?.hourly_install_rate) return null;
     return product.installation_hours * companySettings.hourly_install_rate;
   };
 
@@ -257,42 +264,18 @@ function CreateQuoteContent() {
     );
   };
 
-  const calculateTotal = () => {
-    // Note: Discounts are calculated on the backend
-    // This is just the subtotal for preview
-    return calculateSubtotal();
-  };
-
-  const calculateDefaultDeposit = () => {
-    return calculateTotal() * 0.5;
-  };
-
-  const getDepositAmount = () => {
-    if (depositAmount === '') {
-      return calculateDefaultDeposit();
-    }
-    return Number(depositAmount);
-  };
-
-  const getBalanceAmount = () => {
-    const total = calculateTotal();
-    const deposit = getDepositAmount();
-    return Math.max(0, total - deposit);
-  };
+  const calculateDefaultDeposit = () => calculateSubtotal() * 0.5;
+  const getDepositAmount = () =>
+    depositAmount === '' ? calculateDefaultDeposit() : Number(depositAmount);
+  const getBalanceAmount = () => Math.max(0, calculateSubtotal() - getDepositAmount());
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!quoteId || !quote) return;
 
-    if (!customer) {
-      toast.error('Customer information is missing');
-      return;
-    }
-
-    // Validate items
     const validItems = items.filter(
-      (item) => item.description.trim() && item.quantity > 0 && item.unit_price >= 0
+      (item) => item.description.trim() && (item.quantity ?? 0) > 0 && (item.unit_price ?? 0) >= 0
     );
-
     if (validItems.length === 0) {
       toast.error('Please add at least one valid quote item');
       return;
@@ -307,8 +290,7 @@ function CreateQuoteContent() {
 
     setLoading(true);
     try {
-      const quoteData: any = {
-        customer_id: customer.id,
+      const payload = {
         items: validItems.map((item, index) => {
           const parentInItems = item.parent_index;
           const parentIndexInPayload =
@@ -318,38 +300,28 @@ function CreateQuoteContent() {
             description: item.description,
             quantity: Number(item.quantity),
             unit_price: Number(item.unit_price),
-            is_custom: item.is_custom !== undefined ? item.is_custom : (item.product_id === undefined || item.product_id === null),
+            is_custom: item.is_custom !== undefined ? item.is_custom : (item.product_id == null),
             sort_order: index,
             parent_index: parentIndexInPayload >= 0 ? parentIndexInPayload : undefined,
           };
         }),
-        discount_template_ids: selectedDiscountIds.length > 0 ? selectedDiscountIds : undefined,
-      };
+        discount_template_ids:
+          selectedDiscountIds.length > 0 ? selectedDiscountIds : undefined,
+      } as Parameters<typeof updateDraftQuote>[1];
 
-      // Only include optional fields if they have values
-      if (validUntil) {
-        quoteData.valid_until = new Date(validUntil).toISOString();
-      }
-      if (termsAndConditions && termsAndConditions.trim()) {
-        quoteData.terms_and_conditions = termsAndConditions.trim();
-      }
-      if (notes && notes.trim()) {
-        quoteData.notes = notes.trim();
-      }
-      // Include deposit_amount if explicitly set, otherwise let backend default to 50%
-      if (depositAmount !== '') {
-        quoteData.deposit_amount = Number(depositAmount);
-      }
+      if (validUntil) payload.valid_until = new Date(validUntil).toISOString();
+      if (termsAndConditions?.trim()) payload.terms_and_conditions = termsAndConditions.trim();
+      if (notes?.trim()) payload.notes = notes.trim();
+      if (depositAmount !== '') payload.deposit_amount = Number(depositAmount);
 
-      const newQuote = await createQuote(quoteData);
-      toast.success('Quote created successfully');
-      
-      // Redirect to the newly created quote detail page
-      router.push(`/quotes/${newQuote.id}`);
+      await updateDraftQuote(quoteId, payload);
+      toast.success('Draft quote updated');
+      router.push(`/quotes/${quoteId}`);
     } catch (error: any) {
-      const errorMessage = error.response?.data?.detail || error.message || 'Failed to create quote';
-      toast.error(errorMessage);
-      console.error('Quote creation error:', error);
+      const msg =
+        error.response?.data?.detail || error.message || 'Failed to update draft quote';
+      toast.error(msg);
+      console.error('Update draft error:', error);
     } finally {
       setLoading(false);
     }
@@ -366,17 +338,31 @@ function CreateQuoteContent() {
     );
   }
 
-  if (!customer) {
+  if (!quote || !quoteId) {
     return (
       <div className="min-h-screen bg-background">
         <Header />
         <div className="container mx-auto px-6 py-8">
-          <div className="text-center py-12 text-muted-foreground">Customer not found</div>
-          <div className="text-center mt-4">
-            <Button variant="outline" onClick={() => router.push('/customers')}>
-              Back to Customers
-            </Button>
+          <div className="text-center py-12 text-muted-foreground">Quote not found</div>
+          <Button variant="outline" onClick={() => router.push('/quotes')}>
+            Back to Quotes
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (quote.status !== 'DRAFT') {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <div className="container mx-auto px-6 py-8">
+          <div className="text-center py-12 text-muted-foreground">
+            Only draft quotes can be edited.
           </div>
+          <Button variant="outline" onClick={() => router.push(`/quotes/${quoteId}`)}>
+            View Quote
+          </Button>
         </div>
       </div>
     );
@@ -387,28 +373,31 @@ function CreateQuoteContent() {
       <Header />
       <main className="container mx-auto px-6 py-8">
         <div className="mb-6">
-          <Button variant="ghost" onClick={() => router.push(`/customers/${customer.id}`)} className="mb-4">
+          <Button
+            variant="ghost"
+            onClick={() => router.push(`/quotes/${quoteId}`)}
+            className="mb-4"
+          >
             <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Customer
+            Back to Quote
           </Button>
           <div>
-            <h1 className="text-3xl font-semibold">Create New Quote</h1>
-            <p className="text-muted-foreground mt-1">
-              For {customer.name}
-            </p>
+            <h1 className="text-3xl font-semibold">Edit Draft: {quote.quote_number}</h1>
+            {customer && (
+              <p className="text-muted-foreground mt-1">For {customer.name}</p>
+            )}
           </div>
         </div>
 
         <form onSubmit={handleSubmit}>
           <div className="space-y-6">
-            {/* Quote Items */}
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <div>
                     <CardTitle>Quote Items</CardTitle>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Add a product, then add optional extras to it. You can add multiple products, each with their own extras.
+                      Add or change products and optional extras.
                     </p>
                   </div>
                   <Button type="button" variant="outline" size="sm" onClick={addItem}>
@@ -447,25 +436,27 @@ function CreateQuoteContent() {
                         <Label>Product (Optional)</Label>
                         <Select
                           value={item.product_id?.toString() || 'custom'}
-                          onValueChange={(value) => updateItem(index, 'product_id', value === 'custom' ? undefined : value)}
+                          onValueChange={(value) =>
+                            updateItem(index, 'product_id', value === 'custom' ? undefined : value)
+                          }
                         >
                           <SelectTrigger>
                             <SelectValue placeholder="Select product or enter custom" />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="custom">Custom Item</SelectItem>
-                            {[...products].sort((a, b) => a.name.localeCompare(b.name)).map((product) => (
-                              <SelectItem key={product.id} value={product.id.toString()}>
-                                {product.name} - £{Number(product.base_price).toFixed(2)}
-                              </SelectItem>
-                            ))}
+                            {[...products]
+                              .sort((a, b) => a.name.localeCompare(b.name))
+                              .map((product) => (
+                                <SelectItem key={product.id} value={product.id.toString()}>
+                                  {product.name} - £{Number(product.base_price).toFixed(2)}
+                                </SelectItem>
+                              ))}
                           </SelectContent>
                         </Select>
                       </div>
                       <div className="space-y-2">
-                        <Label>
-                          Description <span className="text-destructive">*</span>
-                        </Label>
+                        <Label>Description <span className="text-destructive">*</span></Label>
                         <Input
                           value={item.description}
                           onChange={(e) => updateItem(index, 'description', e.target.value)}
@@ -474,28 +465,28 @@ function CreateQuoteContent() {
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label>
-                          Quantity <span className="text-destructive">*</span>
-                        </Label>
+                        <Label>Quantity <span className="text-destructive">*</span></Label>
                         <Input
                           type="number"
                           step="0.01"
                           min="0"
                           value={item.quantity}
-                          onChange={(e) => updateItem(index, 'quantity', parseFloat(e.target.value) || 0)}
+                          onChange={(e) =>
+                            updateItem(index, 'quantity', parseFloat(e.target.value) || 0)
+                          }
                           required
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label>
-                          Unit Price (£) <span className="text-destructive">*</span>
-                        </Label>
+                        <Label>Unit Price (£) <span className="text-destructive">*</span></Label>
                         <Input
                           type="number"
                           step="0.01"
                           min="0"
                           value={item.unit_price}
-                          onChange={(e) => updateItem(index, 'unit_price', parseFloat(e.target.value) || 0)}
+                          onChange={(e) =>
+                            updateItem(index, 'unit_price', parseFloat(e.target.value) || 0)
+                          }
                           required
                         />
                       </div>
@@ -510,11 +501,11 @@ function CreateQuoteContent() {
                     {(() => {
                       const selectedProduct = getSelectedProduct(item);
                       if (!selectedProduct) return null;
-                      
                       const installCost = calculateInstallCost(selectedProduct);
-                      const hasExtras = selectedProduct.optional_extras && selectedProduct.optional_extras.length > 0;
+                      const hasExtras =
+                        selectedProduct.optional_extras &&
+                        selectedProduct.optional_extras.length > 0;
                       const extrasLoaded = productDetails[item.product_id!] != null;
-                      
                       return (
                         <div className="mt-4 pt-4 border-t space-y-2">
                           {selectedProduct.installation_hours && (
@@ -532,34 +523,40 @@ function CreateQuoteContent() {
                           <div className="mt-2">
                             <Label className="text-sm font-medium">Optional Extras</Label>
                             {!extrasLoaded ? (
-                              <p className="text-sm text-muted-foreground mt-1">Loading optional extras…</p>
+                              <p className="text-sm text-muted-foreground mt-1">
+                                Loading optional extras…
+                              </p>
                             ) : hasExtras ? (
                               <div className="mt-2 space-y-2">
-                                {[...selectedProduct.optional_extras!].sort((a, b) => a.name.localeCompare(b.name)).map((extra) => (
-                                  <div
-                                    key={extra.id}
-                                    className="flex items-center justify-between p-2 border rounded-md hover:bg-muted/50"
-                                  >
-                                    <div className="flex-1">
-                                      <p className="text-sm font-medium">{extra.name}</p>
-                                      <p className="text-xs text-muted-foreground">
-                                        £{Number(extra.base_price).toFixed(2)}
-                                      </p>
-                                    </div>
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() => addOptionalExtra(index, extra)}
+                                {[...(selectedProduct.optional_extras ?? [])]
+                                  .sort((a, b) => a.name.localeCompare(b.name))
+                                  .map((extra) => (
+                                    <div
+                                      key={extra.id}
+                                      className="flex items-center justify-between p-2 border rounded-md hover:bg-muted/50"
                                     >
-                                      <Plus className="h-3 w-3 mr-1" />
-                                      Add
-                                    </Button>
-                                  </div>
-                                ))}
+                                      <div className="flex-1">
+                                        <p className="text-sm font-medium">{extra.name}</p>
+                                        <p className="text-xs text-muted-foreground">
+                                          £{Number(extra.base_price).toFixed(2)}
+                                        </p>
+                                      </div>
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => addOptionalExtra(index, extra)}
+                                      >
+                                        <Plus className="h-3 w-3 mr-1" />
+                                        Add
+                                      </Button>
+                                    </div>
+                                  ))}
                               </div>
                             ) : (
-                              <p className="text-sm text-muted-foreground mt-1">No optional extras for this product.</p>
+                              <p className="text-sm text-muted-foreground mt-1">
+                                No optional extras for this product.
+                              </p>
                             )}
                           </div>
                         </div>
@@ -574,26 +571,17 @@ function CreateQuoteContent() {
                   </div>
                   {selectedDiscountIds.length > 0 && (
                     <div className="flex justify-between items-center text-sm text-muted-foreground">
-                      <span>Discounts will be calculated on submission</span>
+                      <span>Discounts will be recalculated on save</span>
                     </div>
                   )}
                   <div className="flex justify-between items-center border-t pt-2">
                     <span className="font-semibold">Total (Ex VAT):</span>
-                    <span className="font-semibold">£{calculateTotal().toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-muted-foreground">VAT @ 20%:</span>
-                    <span>£{(calculateTotal() * 0.2).toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between items-center border-t pt-2">
-                    <span className="font-semibold text-lg">Total (inc VAT):</span>
-                    <span className="font-semibold text-lg">£{(calculateTotal() * 1.2).toFixed(2)}</span>
+                    <span className="font-semibold">£{calculateSubtotal().toFixed(2)}</span>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Discounts Selection */}
             <Card>
               <CardHeader>
                 <CardTitle>Discounts & Giveaways</CardTitle>
@@ -617,7 +605,11 @@ function CreateQuoteContent() {
                         .filter((d) => !selectedDiscountIds.includes(d.id))
                         .map((discount) => (
                           <SelectItem key={discount.id} value={discount.id.toString()}>
-                            {discount.name} - {discount.discount_type === 'PERCENTAGE' ? `${discount.discount_value}%` : `£${discount.discount_value}`} ({discount.scope === 'PRODUCT' ? 'Product' : 'Quote'})
+                            {discount.name} -{' '}
+                            {discount.discount_type === 'PERCENTAGE'
+                              ? `${discount.discount_value}%`
+                              : `£${discount.discount_value}`}{' '}
+                            ({discount.scope === 'PRODUCT' ? 'Product' : 'Quote'})
                             {discount.is_giveaway && ' 🎁'}
                           </SelectItem>
                         ))}
@@ -669,7 +661,6 @@ function CreateQuoteContent() {
               </CardContent>
             </Card>
 
-            {/* Quote Details */}
             <Card>
               <CardHeader>
                 <CardTitle>Quote Details</CardTitle>
@@ -677,25 +668,21 @@ function CreateQuoteContent() {
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <Label>Deposit Amount (£)</Label>
-                  <div className="space-y-2">
-                    <Input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={depositAmount}
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        setDepositAmount(value === '' ? '' : parseFloat(value) || 0);
-                      }}
-                      placeholder={`Default: £${calculateDefaultDeposit().toFixed(2)} (50%)`}
-                    />
-                    <div className="text-sm text-muted-foreground">
-                      {depositAmount === '' ? (
-                        <>Default deposit: £{calculateDefaultDeposit().toFixed(2)} (50% of total)</>
-                      ) : (
-                        <>Balance: £{getBalanceAmount().toFixed(2)}</>
-                      )}
-                    </div>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={depositAmount}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setDepositAmount(value === '' ? '' : parseFloat(value) || 0);
+                    }}
+                    placeholder={`Default: £${calculateDefaultDeposit().toFixed(2)} (50%)`}
+                  />
+                  <div className="text-sm text-muted-foreground">
+                    {depositAmount === ''
+                      ? `Default deposit: £${calculateDefaultDeposit().toFixed(2)} (50% of total)`
+                      : `Balance: £${getBalanceAmount().toFixed(2)}`}
                   </div>
                 </div>
                 <div className="space-y-2">
@@ -740,18 +727,17 @@ function CreateQuoteContent() {
               </CardContent>
             </Card>
 
-            {/* Action Buttons */}
             <div className="flex items-center justify-end gap-4 pb-6">
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => router.push(`/customers/${customer.id}`)}
+                onClick={() => router.push(`/quotes/${quoteId}`)}
                 disabled={loading}
               >
                 Cancel
               </Button>
               <Button type="submit" disabled={loading}>
-                {loading ? 'Creating...' : 'Create Quote'}
+                {loading ? 'Saving...' : 'Save Draft'}
               </Button>
             </div>
           </div>
@@ -761,17 +747,19 @@ function CreateQuoteContent() {
   );
 }
 
-export default function CreateQuotePage() {
+export default function EditQuotePage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-background">
-        <Header />
-        <div className="container mx-auto px-6 py-8">
-          <div className="text-center py-12 text-muted-foreground">Loading...</div>
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-background">
+          <Header />
+          <div className="container mx-auto px-6 py-8">
+            <div className="text-center py-12 text-muted-foreground">Loading...</div>
+          </div>
         </div>
-      </div>
-    }>
-      <CreateQuoteContent />
+      }
+    >
+      <EditQuoteContent />
     </Suspense>
   );
 }

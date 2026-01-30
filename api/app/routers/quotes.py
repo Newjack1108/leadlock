@@ -6,7 +6,7 @@ from app.database import get_session
 from app.models import Quote, QuoteItem, Customer, User, QuoteEmail, Email, EmailDirection, Activity, ActivityType, CompanySettings, Lead, LeadStatus, QuoteStatus, OpportunityStage, LossCategory, DiscountTemplate, QuoteDiscount, DiscountType, DiscountScope
 from app.auth import get_current_user
 from app.schemas import (
-    QuoteCreate, QuoteUpdate, QuoteResponse, QuoteItemCreate, QuoteItemResponse,
+    QuoteCreate, QuoteUpdate, QuoteDraftUpdate, QuoteResponse, QuoteItemCreate, QuoteItemResponse,
     QuoteEmailSendRequest, QuoteEmailSendResponse, OpportunityWonRequest, OpportunityLostRequest,
     QuoteDiscountResponse
 )
@@ -534,6 +534,162 @@ async def get_quote(
     statement = select(QuoteItem).where(QuoteItem.quote_id == quote.id).order_by(QuoteItem.sort_order)
     quote_items = session.exec(statement).all()
     return build_quote_response(quote, list(quote_items), session)
+
+
+@router.put("/{quote_id}/draft", response_model=QuoteResponse)
+async def update_draft_quote(
+    quote_id: int,
+    quote_data: QuoteDraftUpdate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    """Update a draft quote (items, metadata, discounts). Only allowed when status is DRAFT."""
+    statement = select(Quote).where(Quote.id == quote_id)
+    quote = session.exec(statement).first()
+    
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    
+    if quote.status != QuoteStatus.DRAFT:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Only draft quotes can be edited. This quote has status: {quote.status}"
+        )
+    
+    # Delete existing items and discounts for this quote
+    existing_items = session.exec(select(QuoteItem).where(QuoteItem.quote_id == quote_id)).all()
+    for item in existing_items:
+        session.delete(item)
+    discount_statement = select(QuoteDiscount).where(QuoteDiscount.quote_id == quote_id)
+    for discount in session.exec(discount_statement).all():
+        session.delete(discount)
+    session.commit()
+    
+    # Build new items (same logic as create)
+    subtotal = Decimal(0)
+    items = []
+    for item_data in quote_data.items:
+        quantity = Decimal(str(item_data.quantity))
+        unit_price = Decimal(str(item_data.unit_price))
+        line_total = quantity * unit_price
+        subtotal += line_total
+        item = QuoteItem(
+            quote_id=quote_id,
+            product_id=item_data.product_id,
+            description=item_data.description,
+            quantity=quantity,
+            unit_price=unit_price,
+            line_total=line_total,
+            discount_amount=Decimal(0),
+            final_line_total=line_total,
+            sort_order=item_data.sort_order or 0,
+            is_custom=item_data.is_custom if item_data.is_custom is not None else False,
+        )
+        items.append(item)
+    
+    for item in items:
+        session.add(item)
+    session.commit()
+    
+    # Refresh to get item IDs, then set parent_quote_item_id
+    statement = select(QuoteItem).where(QuoteItem.quote_id == quote_id).order_by(QuoteItem.sort_order)
+    quote_items = list(session.exec(statement).all())
+    for i, db_item in enumerate(quote_items):
+        if i < len(quote_data.items):
+            item_data = quote_data.items[i]
+            parent_index = getattr(item_data, "parent_index", None)
+            if parent_index is not None and 0 <= parent_index < len(quote_items):
+                db_item.parent_quote_item_id = quote_items[parent_index].id
+                session.add(db_item)
+    if quote_items and any(getattr(quote_data.items[i], "parent_index", None) is not None for i in range(min(len(quote_data.items), len(quote_items)))):
+        session.commit()
+        statement = select(QuoteItem).where(QuoteItem.quote_id == quote_id).order_by(QuoteItem.sort_order)
+        quote_items = list(session.exec(statement).all())
+    
+    # Update quote metadata
+    quote.subtotal = subtotal
+    quote.discount_total = Decimal(0)
+    quote.total_amount = subtotal
+    if quote_data.valid_until is not None:
+        quote.valid_until = quote_data.valid_until
+    if quote_data.terms_and_conditions is not None:
+        quote.terms_and_conditions = quote_data.terms_and_conditions
+    if quote_data.notes is not None:
+        quote.notes = quote_data.notes
+    
+    if quote_data.deposit_amount is not None:
+        deposit_amount = Decimal(str(quote_data.deposit_amount))
+    else:
+        deposit_amount = quote.total_amount * Decimal("0.5")
+    if deposit_amount > quote.total_amount:
+        deposit_amount = quote.total_amount
+    quote.deposit_amount = deposit_amount
+    quote.balance_amount = quote.total_amount - deposit_amount
+    quote.updated_at = datetime.utcnow()
+    session.add(quote)
+    session.commit()
+    session.refresh(quote)
+    
+    # Apply discounts if provided
+    if quote_data.discount_template_ids:
+        for template_id in quote_data.discount_template_ids:
+            template_statement = select(DiscountTemplate).where(
+                DiscountTemplate.id == template_id,
+                DiscountTemplate.is_active == True
+            )
+            discount_template = session.exec(template_statement).first()
+            if not discount_template:
+                continue
+            statement = select(QuoteItem).where(QuoteItem.quote_id == quote_id)
+            quote_items = list(session.exec(statement).all())
+            if discount_template.is_giveaway:
+                for item in quote_items:
+                    if item.product_id and discount_template.scope == DiscountScope.PRODUCT:
+                        item.discount_amount = item.line_total
+                        item.final_line_total = Decimal(0)
+                        session.add(item)
+                        quote_discount = QuoteDiscount(
+                            quote_id=quote.id,
+                            quote_item_id=item.id,
+                            template_id=discount_template.id,
+                            discount_type=DiscountType.PERCENTAGE,
+                            discount_value=Decimal(100),
+                            scope=discount_template.scope,
+                            discount_amount=item.line_total,
+                            description=discount_template.name,
+                            applied_by_id=current_user.id
+                        )
+                        session.add(quote_discount)
+            else:
+                apply_discount_to_quote(quote, discount_template, quote_items, session, current_user)
+            for item in quote_items:
+                session.add(item)
+    
+    session.commit()
+    session.refresh(quote)
+    statement = select(QuoteItem).where(QuoteItem.quote_id == quote_id)
+    quote_items = list(session.exec(statement).all())
+    item_discount_total = sum(item.discount_amount for item in quote_items)
+    discount_statement = select(QuoteDiscount).where(
+        QuoteDiscount.quote_id == quote_id,
+        QuoteDiscount.quote_item_id.is_(None)
+    )
+    quote_level_discounts = session.exec(discount_statement).all()
+    quote_level_discount_total = sum(d.discount_amount for d in quote_level_discounts)
+    quote.discount_total = item_discount_total + quote_level_discount_total
+    quote.total_amount = quote.subtotal - quote.discount_total
+    if quote.total_amount < 0:
+        quote.total_amount = Decimal(0)
+    if quote.deposit_amount > quote.total_amount:
+        quote.deposit_amount = quote.total_amount
+    quote.balance_amount = quote.total_amount - quote.deposit_amount
+    quote.updated_at = datetime.utcnow()
+    session.add(quote)
+    session.commit()
+    session.refresh(quote)
+    statement = select(QuoteItem).where(QuoteItem.quote_id == quote_id).order_by(QuoteItem.sort_order)
+    quote_items = session.exec(statement).all()
+    return build_quote_response(quote, quote_items, session)
 
 
 @router.get("/customers/{customer_id}", response_model=List[QuoteResponse])

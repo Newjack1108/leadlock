@@ -10,7 +10,7 @@ import api, { getQuotes, previewQuotePdf } from '@/lib/api';
 import { Quote, QuoteStatus } from '@/lib/types';
 import { toast } from 'sonner';
 import Link from 'next/link';
-import { FileText, Eye } from 'lucide-react';
+import { FileText, Eye, Pencil } from 'lucide-react';
 
 const statusColors: Record<QuoteStatus, string> = {
   DRAFT: 'bg-gray-100 text-gray-700',
@@ -110,6 +110,16 @@ export default function QuotesPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 ml-4">
+                      {quote.status === 'DRAFT' && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => router.push(`/quotes/${quote.id}/edit`)}
+                        >
+                          <Pencil className="h-4 w-4 mr-2" />
+                          Edit
+                        </Button>
+                      )}
                       <Button
                         variant="outline"
                         size="sm"

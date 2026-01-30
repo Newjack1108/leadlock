@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Settings, Save } from 'lucide-react';
+import { Settings, Save, ChevronDown, ChevronUp } from 'lucide-react';
 import api from '@/lib/api';
 import { CompanySettings } from '@/lib/types';
 import { toast } from 'sonner';
@@ -18,6 +18,7 @@ export default function CompanySettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [settings, setSettings] = useState<CompanySettings | null>(null);
+  const [termsExpanded, setTermsExpanded] = useState(false);
   const [formData, setFormData] = useState({
     company_name: '',
     trading_name: '',
@@ -296,19 +297,36 @@ export default function CompanySettingsPage() {
             </div>
 
             <div className="space-y-2 border-t pt-6">
-              <Label htmlFor="default_terms_and_conditions">Default Terms and Conditions</Label>
-              <Textarea
-                id="default_terms_and_conditions"
-                value={formData.default_terms_and_conditions}
-                onChange={(e) => setFormData({ ...formData, default_terms_and_conditions: e.target.value })}
-                placeholder="Enter default terms and conditions that will be pre-filled when creating quotes..."
-                rows={12}
-                disabled={saving}
-                className="font-mono text-sm"
-              />
-              <p className="text-sm text-muted-foreground">
-                These terms will be automatically pre-filled when creating new quotes. Users can still edit them before submitting.
-              </p>
+              <button
+                type="button"
+                className="flex items-center justify-between w-full text-left font-medium leading-none hover:opacity-80 py-2"
+                onClick={() => setTermsExpanded((prev) => !prev)}
+              >
+                <Label htmlFor="default_terms_and_conditions" className="cursor-pointer">
+                  Default Terms and Conditions
+                </Label>
+                {termsExpanded ? (
+                  <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" />
+                ) : (
+                  <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+                )}
+              </button>
+              {termsExpanded && (
+                <>
+                  <Textarea
+                    id="default_terms_and_conditions"
+                    value={formData.default_terms_and_conditions}
+                    onChange={(e) => setFormData({ ...formData, default_terms_and_conditions: e.target.value })}
+                    placeholder="Enter default terms and conditions that will be pre-filled when creating quotes..."
+                    rows={12}
+                    disabled={saving}
+                    className="font-mono text-sm"
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    These terms will be automatically pre-filled when creating new quotes. Users can still edit them before submitting.
+                  </p>
+                </>
+              )}
             </div>
 
             <div className="flex justify-end pt-4">

@@ -10,7 +10,8 @@ import api, { getQuote, previewQuotePdf } from '@/lib/api';
 import { Quote, QuoteItem, Customer, QuoteDiscount } from '@/lib/types';
 import { toast } from 'sonner';
 import SendQuoteEmailDialog from '@/components/SendQuoteEmailDialog';
-import { ArrowLeft, Mail, Eye, Tag, Gift } from 'lucide-react';
+import Link from 'next/link';
+import { ArrowLeft, Mail, Eye, Tag, Pencil, ChevronDown, ChevronUp } from 'lucide-react';
 
 export default function QuoteDetailPage() {
   const router = useRouter();
@@ -21,6 +22,7 @@ export default function QuoteDetailPage() {
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [loading, setLoading] = useState(true);
   const [sendEmailDialogOpen, setSendEmailDialogOpen] = useState(false);
+  const [termsExpanded, setTermsExpanded] = useState(false);
 
   useEffect(() => {
     if (quoteId) {
@@ -97,6 +99,14 @@ export default function QuoteDetailPage() {
             </div>
             <div className="flex items-center gap-3">
               <Badge className="text-sm">{quote.status}</Badge>
+              {quote.status === 'DRAFT' && (
+                <Button variant="outline" asChild>
+                  <Link href={`/quotes/${quote.id}/edit`}>
+                    <Pencil className="h-4 w-4 mr-2" />
+                    Edit Draft
+                  </Link>
+                </Button>
+              )}
               <Button
                 variant="outline"
                 onClick={async () => {
@@ -318,14 +328,26 @@ export default function QuoteDetailPage() {
             {/* Terms and Conditions */}
             {quote.terms_and_conditions && (
               <Card>
-                <CardHeader>
-                  <CardTitle>Terms and Conditions</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="whitespace-pre-wrap text-sm">
-                    {quote.terms_and_conditions}
+                <CardHeader
+                  className="cursor-pointer hover:bg-muted/50 transition-colors rounded-t-lg"
+                  onClick={() => setTermsExpanded((prev) => !prev)}
+                >
+                  <div className="flex items-center justify-between">
+                    <CardTitle>Terms and Conditions</CardTitle>
+                    {termsExpanded ? (
+                      <ChevronUp className="h-5 w-5 text-muted-foreground shrink-0" />
+                    ) : (
+                      <ChevronDown className="h-5 w-5 text-muted-foreground shrink-0" />
+                    )}
                   </div>
-                </CardContent>
+                </CardHeader>
+                {termsExpanded && (
+                  <CardContent>
+                    <div className="whitespace-pre-wrap text-sm">
+                      {quote.terms_and_conditions}
+                    </div>
+                  </CardContent>
+                )}
               </Card>
             )}
 

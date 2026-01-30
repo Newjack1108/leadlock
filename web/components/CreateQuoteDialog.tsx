@@ -17,7 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { createQuote, getProducts, getProduct } from '@/lib/api';
 import { Customer, Product, QuoteItemCreate } from '@/lib/types';
 import { toast } from 'sonner';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface CreateQuoteDialogProps {
   open: boolean;
@@ -48,6 +48,7 @@ export default function CreateQuoteDialog({
   const [notes, setNotes] = useState('');
   const [depositAmount, setDepositAmount] = useState<number | ''>('');
   const [productDetails, setProductDetails] = useState<Record<number, Product>>({});
+  const [termsExpanded, setTermsExpanded] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -473,13 +474,26 @@ export default function CreateQuoteDialog({
                 />
               </div>
               <div className="space-y-2">
-                <Label>Terms and Conditions</Label>
-                <Textarea
-                  value={termsAndConditions}
-                  onChange={(e) => setTermsAndConditions(e.target.value)}
-                  placeholder="Enter terms and conditions..."
-                  rows={4}
-                />
+                <button
+                  type="button"
+                  className="flex items-center justify-between w-full text-left font-medium leading-none hover:opacity-80"
+                  onClick={() => setTermsExpanded((prev) => !prev)}
+                >
+                  <Label className="cursor-pointer">Terms and Conditions</Label>
+                  {termsExpanded ? (
+                    <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+                  )}
+                </button>
+                {termsExpanded && (
+                  <Textarea
+                    value={termsAndConditions}
+                    onChange={(e) => setTermsAndConditions(e.target.value)}
+                    placeholder="Enter terms and conditions..."
+                    rows={4}
+                  />
+                )}
               </div>
               <div className="space-y-2">
                 <Label>Notes</Label>

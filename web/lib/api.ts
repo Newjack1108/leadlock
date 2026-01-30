@@ -196,6 +196,26 @@ export const getQuote = async (quoteId: number) => {
   return response.data;
 };
 
+export const updateDraftQuote = async (quoteId: number, quoteData: {
+  valid_until?: string;
+  terms_and_conditions?: string;
+  notes?: string;
+  deposit_amount?: number;
+  items: Array<{
+    product_id?: number;
+    description: string;
+    quantity: number;
+    unit_price: number;
+    is_custom?: boolean;
+    sort_order?: number;
+    parent_index?: number;
+  }>;
+  discount_template_ids?: number[];
+}) => {
+  const response = await api.put(`/api/quotes/${quoteId}/draft`, quoteData);
+  return response.data;
+};
+
 export const getCustomerQuotes = async (customerId: number) => {
   const response = await api.get(`/api/quotes/customers/${customerId}`);
   return response.data;

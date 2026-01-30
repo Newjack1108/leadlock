@@ -448,6 +448,16 @@ class QuoteCreate(BaseModel):
     discount_template_ids: Optional[List[int]] = None  # List of discount template IDs to apply
 
 
+class QuoteDraftUpdate(BaseModel):
+    """Update draft quote: items, metadata, and discounts. Only allowed when status is DRAFT."""
+    valid_until: Optional[datetime] = None
+    terms_and_conditions: Optional[str] = None
+    notes: Optional[str] = None
+    deposit_amount: Optional[Decimal] = None
+    items: List[QuoteItemCreate]
+    discount_template_ids: Optional[List[int]] = None
+
+
 class QuoteUpdate(BaseModel):
     status: Optional["QuoteStatus"] = None
     valid_until: Optional[datetime] = None
