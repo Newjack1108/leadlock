@@ -245,11 +245,11 @@ export default function QuoteDetailPage() {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">VAT @ 20%:</span>
-                      <span className="font-medium">£{(quote.vat_amount ?? Number(quote.total_amount) * 0.2).toFixed(2)}</span>
+                      <span className="font-medium">£{Number(quote.vat_amount ?? Number(quote.total_amount) * 0.2).toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between text-lg font-semibold border-t pt-2">
                       <span>Total (inc VAT):</span>
-                      <span>£{(quote.total_amount_inc_vat ?? Number(quote.total_amount) * 1.2).toFixed(2)}</span>
+                      <span>£{Number(quote.total_amount_inc_vat ?? Number(quote.total_amount) * 1.2).toFixed(2)}</span>
                     </div>
                     {Number(quote.deposit_amount) > 0 && (
                       <>
