@@ -62,7 +62,8 @@ export default function CreateQuoteDialog({
   const fetchProducts = async () => {
     try {
       const response = await getProducts();
-      setProducts(response.filter((p: Product) => p.is_active));
+      // Only main products in dropdown; extras are added via Optional Extras section per product
+      setProducts(response.filter((p: Product) => p.is_active && !p.is_extra));
     } catch (error) {
       console.error('Failed to load products');
     }
@@ -383,36 +384,44 @@ export default function CreateQuoteDialog({
                   </div>
                   {(() => {
                     const selectedProduct = getSelectedProduct(item);
-                    if (!selectedProduct?.optional_extras?.length) return null;
+                    if (!selectedProduct) return null;
+                    const hasExtras = selectedProduct.optional_extras && selectedProduct.optional_extras.length > 0;
+                    const extrasLoaded = productDetails[item.product_id!] != null;
                     return (
                       <div className="mt-4 pt-4 border-t space-y-2">
-                        <Label className="text-sm font-medium">Optional Extras:</Label>
-                        <div className="mt-2 space-y-2">
-                          {[...selectedProduct.optional_extras]
-                            .sort((a, b) => a.name.localeCompare(b.name))
-                            .map((extra) => (
-                              <div
-                                key={extra.id}
-                                className="flex items-center justify-between p-2 border rounded-md hover:bg-muted/50"
-                              >
-                                <div className="flex-1">
-                                  <p className="text-sm font-medium">{extra.name}</p>
-                                  <p className="text-xs text-muted-foreground">
-                                    £{Number(extra.base_price).toFixed(2)}
-                                  </p>
-                                </div>
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => addOptionalExtra(index, extra)}
+                        <Label className="text-sm font-medium">Optional Extras</Label>
+                        {!extrasLoaded ? (
+                          <p className="text-sm text-muted-foreground mt-1">Loading optional extras…</p>
+                        ) : hasExtras ? (
+                          <div className="mt-2 space-y-2">
+                            {[...selectedProduct.optional_extras!]
+                              .sort((a, b) => a.name.localeCompare(b.name))
+                              .map((extra) => (
+                                <div
+                                  key={extra.id}
+                                  className="flex items-center justify-between p-2 border rounded-md hover:bg-muted/50"
                                 >
-                                  <Plus className="h-3 w-3 mr-1" />
-                                  Add
-                                </Button>
-                              </div>
-                            ))}
-                        </div>
+                                  <div className="flex-1">
+                                    <p className="text-sm font-medium">{extra.name}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                      £{Number(extra.base_price).toFixed(2)}
+                                    </p>
+                                  </div>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => addOptionalExtra(index, extra)}
+                                  >
+                                    <Plus className="h-3 w-3 mr-1" />
+                                    Add
+                                  </Button>
+                                </div>
+                              ))}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-muted-foreground mt-1">No optional extras for this product.</p>
+                        )}
                       </div>
                     );
                   })()}

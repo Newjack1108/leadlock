@@ -118,7 +118,8 @@ function CreateQuoteContent() {
   const fetchProducts = async () => {
     try {
       const response = await getProducts();
-      setProducts(response.filter((p: Product) => p.is_active));
+      // Only main products in dropdown; extras are added via Optional Extras section per product
+      setProducts(response.filter((p: Product) => p.is_active && !p.is_extra));
     } catch (error) {
       console.error('Failed to load products');
     }
@@ -510,6 +511,8 @@ function CreateQuoteContent() {
                       if (!selectedProduct) return null;
                       
                       const installCost = calculateInstallCost(selectedProduct);
+                      const hasExtras = selectedProduct.optional_extras && selectedProduct.optional_extras.length > 0;
+                      const extrasLoaded = productDetails[item.product_id!] != null;
                       
                       return (
                         <div className="mt-4 pt-4 border-t space-y-2">
@@ -525,11 +528,13 @@ function CreateQuoteContent() {
                               <span className="font-medium">£{installCost.toFixed(2)}</span>
                             </div>
                           )}
-                          {selectedProduct.optional_extras && selectedProduct.optional_extras.length > 0 && (
-                            <div className="mt-2">
-                              <Label className="text-sm font-medium">Optional Extras:</Label>
+                          <div className="mt-2">
+                            <Label className="text-sm font-medium">Optional Extras</Label>
+                            {!extrasLoaded ? (
+                              <p className="text-sm text-muted-foreground mt-1">Loading optional extras…</p>
+                            ) : hasExtras ? (
                               <div className="mt-2 space-y-2">
-                                {[...selectedProduct.optional_extras].sort((a, b) => a.name.localeCompare(b.name)).map((extra) => (
+                                {[...selectedProduct.optional_extras!].sort((a, b) => a.name.localeCompare(b.name)).map((extra) => (
                                   <div
                                     key={extra.id}
                                     className="flex items-center justify-between p-2 border rounded-md hover:bg-muted/50"
@@ -552,8 +557,10 @@ function CreateQuoteContent() {
                                   </div>
                                 ))}
                               </div>
-                            </div>
-                          )}
+                            ) : (
+                              <p className="text-sm text-muted-foreground mt-1">No optional extras for this product.</p>
+                            )}
+                          </div>
                         </div>
                       );
                     })()}
