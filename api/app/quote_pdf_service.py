@@ -38,31 +38,31 @@ def _build_header_flowables(
     logo = None
     if logo_path and os.path.exists(logo_path):
         try:
-            logo = Image(logo_path, width=60*mm, height=None)
+            logo = Image(logo_path, width=50*mm, height=None)
             if logo.imageHeight > 0:
                 aspect_ratio = logo.imageWidth / logo.imageHeight
                 logo.height = logo.width / aspect_ratio
-                if logo.height > 25*mm:
-                    logo.height = 25*mm
+                if logo.height > 18*mm:
+                    logo.height = 18*mm
                     logo.width = logo.height * aspect_ratio
         except Exception:
             logo = None
     elif logo_bytes:
         try:
             logo_bytes.seek(0)
-            logo = Image(logo_bytes, width=60*mm, height=None)
+            logo = Image(logo_bytes, width=50*mm, height=None)
             if logo.imageHeight > 0:
                 aspect_ratio = logo.imageWidth / logo.imageHeight
                 logo.height = logo.width / aspect_ratio
-                if logo.height > 25*mm:
-                    logo.height = 25*mm
+                if logo.height > 18*mm:
+                    logo.height = 18*mm
                     logo.width = logo.height * aspect_ratio
         except Exception:
             logo = None
     if logo:
         company_info_lines = []
         trading_name = company_settings.trading_name or "Cheshire Stables"
-        company_info_lines.append(f"<font size='14'><b>{trading_name}</b></font>")
+        company_info_lines.append(f"<font size='12'><b>{trading_name}</b></font>")
         if company_settings.address_line1:
             address_parts = [
                 company_settings.address_line1,
@@ -73,10 +73,6 @@ def _build_header_flowables(
             ]
             address = ", ".join([p for p in address_parts if p])
             company_info_lines.append(address)
-        if company_settings.company_registration_number:
-            company_info_lines.append(f"Company Reg: {company_settings.company_registration_number}")
-        if company_settings.vat_number:
-            company_info_lines.append(f"VAT Number: {company_settings.vat_number}")
         if company_settings.phone:
             company_info_lines.append(f"Phone: {company_settings.phone}")
         if company_settings.email:
@@ -85,7 +81,7 @@ def _build_header_flowables(
             company_info_lines.append(f"Website: {company_settings.website}")
         company_info_text = "<br/>".join(company_info_lines)
         company_info_para = Paragraph(company_info_text, normal_style)
-        header_table = Table([[logo, company_info_para]], colWidths=[70*mm, 110*mm])
+        header_table = Table([[logo, company_info_para]], colWidths=[60*mm, 120*mm])
         header_table.setStyle(TableStyle([
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
             ("ALIGN", (0, 0), (0, 0), "LEFT"),
@@ -109,17 +105,13 @@ def _build_header_flowables(
             ]
             address = ", ".join([p for p in address_parts if p])
             result.append(Paragraph(address, normal_style))
-        if company_settings.company_registration_number:
-            result.append(Paragraph(f"Company Reg: {company_settings.company_registration_number}", normal_style))
-        if company_settings.vat_number:
-            result.append(Paragraph(f"VAT Number: {company_settings.vat_number}", normal_style))
         if company_settings.phone:
             result.append(Paragraph(f"Phone: {company_settings.phone}", normal_style))
         if company_settings.email:
             result.append(Paragraph(f"Email: {company_settings.email}", normal_style))
         if company_settings.website:
             result.append(Paragraph(f"Website: {company_settings.website}", normal_style))
-    result.append(Spacer(1, 15))
+    result.append(Spacer(1, 8))
     return result
 
 
@@ -156,11 +148,11 @@ def _build_footer_flowables(
 
 
 def _resolve_logo(company_settings: CompanySettings) -> Tuple[Optional[str], Optional[BytesIO]]:
-    """Resolve logo to file path or bytes. Tries company logo_filename then logo1.png fallback."""
+    """Resolve logo to file path or bytes. Tries company logo_filename then logo1.jpg / logo1.png fallback."""
     logo_path: Optional[str] = None
     logo_bytes: Optional[BytesIO] = None
     primary_filename = company_settings.logo_filename or "logo1.jpg"
-    # Build paths for primary filename and logo1.png fallback
+    # Build paths for primary filename and fallbacks
     base_dirs = [
         Path(__file__).parent.parent / "static",
         Path("static"),
@@ -169,6 +161,8 @@ def _resolve_logo(company_settings: CompanySettings) -> Tuple[Optional[str], Opt
     filenames_to_try = [primary_filename]
     if primary_filename != "logo1.png":
         filenames_to_try.append("logo1.png")
+    if primary_filename != "logo1.jpg":
+        filenames_to_try.append("logo1.jpg")
     for fn in filenames_to_try:
         for base in base_dirs:
             p = base / fn
@@ -178,11 +172,13 @@ def _resolve_logo(company_settings: CompanySettings) -> Tuple[Optional[str], Opt
         if os.path.exists(fn):
             logo_path = fn
             return (logo_path, None)
-    # URL fallback
+    # URL fallback (needed when API runs separately from frontend, e.g. on Railway)
     url_candidates = []
     env_logo_url = os.getenv("LOGO_URL")
     env_logo_base = os.getenv("LOGO_BASE_URL")
     env_frontend_url = os.getenv("FRONTEND_URL") or os.getenv("PUBLIC_FRONTEND_URL")
+    if not env_frontend_url and os.getenv("RAILWAY_ENVIRONMENT"):
+        env_frontend_url = "https://leadlock-frontend-production.up.railway.app"
     cors_origins = os.getenv("CORS_ORIGINS", "")
     for fn in filenames_to_try:
         if env_logo_url and fn == primary_filename:
@@ -234,7 +230,7 @@ def generate_quote_pdf(
         company_settings = session.exec(statement).first()
     
     buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=15*mm, bottomMargin=15*mm, leftMargin=20*mm, rightMargin=20*mm)
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=10*mm, bottomMargin=10*mm, leftMargin=15*mm, rightMargin=15*mm)
     
     # Container for the 'Flowable' objects
     elements = []
@@ -245,32 +241,32 @@ def generate_quote_pdf(
     title_style = ParagraphStyle(
         "CustomTitle",
         parent=styles["Heading1"],
-        fontSize=28,
+        fontSize=22,
         textColor=brand_color,
-        spaceAfter=12,
+        spaceAfter=4,
         fontName="Helvetica-Bold",
     )
     heading_style = ParagraphStyle(
         "CustomHeading",
         parent=styles["Heading2"],
-        fontSize=14,
+        fontSize=12,
         textColor=brand_color,
-        spaceAfter=8,
-        spaceBefore=12,
+        spaceAfter=3,
+        spaceBefore=6,
         fontName="Helvetica-Bold",
     )
     normal_style = ParagraphStyle(
         "Normal",
         parent=styles["Normal"],
-        fontSize=10,
+        fontSize=9,
         textColor=colors.HexColor("#555555"),
     )
     company_name_style = ParagraphStyle(
         "CompanyName",
         parent=styles["Heading1"],
-        fontSize=20,
+        fontSize=16,
         textColor=brand_color,
-        spaceAfter=6,
+        spaceAfter=2,
         fontName="Helvetica-Bold",
     )
     footer_style = ParagraphStyle(
@@ -283,9 +279,9 @@ def generate_quote_pdf(
     terms_style = ParagraphStyle(
         "Terms",
         parent=normal_style,
-        fontSize=9,
-        leftIndent=5*mm,
-        spaceAfter=6,
+        fontSize=8,
+        leftIndent=4*mm,
+        spaceAfter=3,
     )
 
     # Header - Company Info with Logo
@@ -317,19 +313,19 @@ def generate_quote_pdf(
         ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
     ]))
     elements.append(quote_header_table)
-    elements.append(Spacer(1, 8))
+    elements.append(Spacer(1, 4))
     
     quote_table = Table(quote_details, colWidths=[50*mm, 130*mm])
     quote_table.setStyle(TableStyle([
         ("ALIGN", (0, 0), (0, -1), "LEFT"),
         ("ALIGN", (1, 0), (1, -1), "LEFT"),
         ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, -1), 10),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-        ("TOPPADDING", (0, 0), (-1, -1), 2),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+        ("TOPPADDING", (0, 0), (-1, -1), 1),
     ]))
     elements.append(quote_table)
-    elements.append(Spacer(1, 15))
+    elements.append(Spacer(1, 8))
     
     # Customer Details
     elements.append(Paragraph("Bill To:", heading_style))
@@ -351,11 +347,10 @@ def generate_quote_pdf(
     for info in customer_info:
         if info:
             elements.append(Paragraph(info, normal_style))
-    elements.append(Spacer(1, 20))
+    elements.append(Spacer(1, 8))
     
     # Quote Items Table (grouped: main items first, then optional extras indented under parent)
     elements.append(Paragraph("Items:", heading_style))
-    elements.append(Paragraph("All prices Ex VAT @ 20%.", ParagraphStyle("TableNote", parent=normal_style, fontSize=9, textColor=colors.HexColor("#666666"), spaceAfter=4)))
     table_data = [["Description", "Quantity", "Unit Price (Ex VAT)", "Total (Ex VAT)"]]
     
     main_items = [i for i in quote_items if getattr(i, "parent_quote_item_id", None) is None]
@@ -408,13 +403,13 @@ def generate_quote_pdf(
         ("ALIGN", (1, 0), (1, -1), "CENTER"),
         ("ALIGN", (2, 0), (-1, -1), "RIGHT"),
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, 0), 11),
-        ("FONTSIZE", (0, 1), (-1, -2), 10),
-        ("FONTSIZE", (0, -3), (-1, -1), 10),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-        ("TOPPADDING", (0, 0), (-1, -1), 6),
-        ("LEFTPADDING", (0, 0), (-1, -1), 4),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+        ("FONTSIZE", (0, 0), (-1, 0), 10),
+        ("FONTSIZE", (0, 1), (-1, -2), 9),
+        ("FONTSIZE", (0, -3), (-1, -1), 9),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("LEFTPADDING", (0, 0), (-1, -1), 3),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 3),
         ("GRID", (0, 0), (-1, -2), 0.5, colors.HexColor("#e0e0e0")),
         ("LINEBELOW", (0, total_row_index), (-1, total_row_index), 1.5, brand_color),
         ("LINEABOVE", (0, total_row_index), (-1, total_row_index), 0.5, colors.HexColor("#e0e0e0")),
@@ -431,11 +426,11 @@ def generate_quote_pdf(
     items_table = Table(table_data, colWidths=[90*mm, 25*mm, 30*mm, 35*mm])
     items_table.setStyle(TableStyle(table_style_list))
     elements.append(items_table)
-    elements.append(Spacer(1, 20))
+    elements.append(Spacer(1, 8))
 
     # Footer with company details (page 1)
     if company_settings:
-        elements.append(Spacer(1, 20))
+        elements.append(Spacer(1, 8))
         elements.extend(_build_footer_flowables(company_settings, footer_style))
 
     # Page 2: Terms and Conditions from company settings (same header and footer)
@@ -446,7 +441,7 @@ def generate_quote_pdf(
         for line in company_settings.default_terms_and_conditions.split("\n"):
             if line.strip():
                 elements.append(Paragraph(line.strip(), terms_style))
-        elements.append(Spacer(1, 20))
+        elements.append(Spacer(1, 8))
         elements.extend(_build_footer_flowables(company_settings, footer_style))
     
     # Notes (Internal - typically not shown to customer, but included for completeness)
