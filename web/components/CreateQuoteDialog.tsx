@@ -114,7 +114,11 @@ export default function CreateQuoteDialog({
   };
 
   const calculateSubtotal = () => {
-    return items.reduce((sum, item) => sum + (item.quantity || 0) * (item.unit_price || 0), 0);
+    return items.reduce(
+      (sum, item) =>
+        sum + (Number(item.quantity) || 0) * (Math.max(0, Number(item.unit_price)) || 0),
+      0
+    );
   };
 
   const calculateTotal = () => {
@@ -142,11 +146,11 @@ export default function CreateQuoteDialog({
   const handleSaveAndRecalculate = () => {
     const normalized = items.map((item, i) => ({
       ...item,
-      quantity: Number(item.quantity) || 0,
-      unit_price: Number(item.unit_price) || 0,
+      quantity: Number(item.quantity) ?? 0,
+      unit_price: Math.max(0, Number(item.unit_price) ?? 0),
       sort_order: i,
     }));
-    setItems(normalized);
+    setItems([...normalized]);
     toast.success('Totals recalculated');
   };
 
@@ -323,7 +327,11 @@ export default function CreateQuoteDialog({
                     </div>
                   </div>
                   <div className="text-sm text-muted-foreground">
-                    Line Total: £{((item.quantity || 0) * (item.unit_price || 0)).toFixed(2)}
+                    Line Total: £
+                    {(
+                      (Number(item.quantity) || 0) *
+                      (Math.max(0, Number(item.unit_price)) || 0)
+                    ).toFixed(2)}
                   </div>
                 </div>
               ))}
@@ -402,7 +410,7 @@ export default function CreateQuoteDialog({
               onClick={handleSaveAndRecalculate}
               disabled={loading}
             >
-              Save & Recalculate
+              Save
             </Button>
             <Button type="submit" disabled={loading}>
               {loading ? 'Creating...' : 'Create Quote'}

@@ -248,7 +248,11 @@ function CreateQuoteContent() {
   };
 
   const calculateSubtotal = () => {
-    return items.reduce((sum, item) => sum + (item.quantity || 0) * (item.unit_price || 0), 0);
+    return items.reduce(
+      (sum, item) =>
+        sum + (Number(item.quantity) || 0) * (Math.max(0, Number(item.unit_price)) || 0),
+      0
+    );
   };
 
   const calculateTotal = () => {
@@ -278,11 +282,12 @@ function CreateQuoteContent() {
   const handleSaveAndRecalculate = () => {
     const normalized = items.map((item, i) => ({
       ...item,
-      quantity: Number(item.quantity) || 0,
-      unit_price: Number(item.unit_price) || 0,
+      quantity: Number(item.quantity) ?? 0,
+      unit_price: Math.max(0, Number(item.unit_price) ?? 0),
       sort_order: i,
+      parent_index: item.parent_index != null ? item.parent_index : undefined,
     }));
-    setItems(normalized);
+    setItems([...normalized]);
     toast.success('Totals recalculated');
   };
 
@@ -493,7 +498,11 @@ function CreateQuoteContent() {
                       </div>
                     </div>
                     <div className="text-sm text-muted-foreground">
-                      Line Total: £{((item.quantity || 0) * (item.unit_price || 0)).toFixed(2)}
+                      Line Total: £
+                      {(
+                        (Number(item.quantity) || 0) *
+                        (Math.max(0, Number(item.unit_price)) || 0)
+                      ).toFixed(2)}
                     </div>
                     {(() => {
                       const selectedProduct = getSelectedProduct(item);
@@ -728,6 +737,14 @@ function CreateQuoteContent() {
                 disabled={loading}
               >
                 Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={handleSaveAndRecalculate}
+                disabled={loading}
+              >
+                Save & Recalculate
               </Button>
               <Button type="submit" disabled={loading}>
                 {loading ? 'Creating...' : 'Create Quote'}
