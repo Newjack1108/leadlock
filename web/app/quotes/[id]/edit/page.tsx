@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getQuote, updateDraftQuote, getProducts, getProduct, getCompanySettings, getDiscountTemplates } from '@/lib/api';
 import api from '@/lib/api';
-import { Customer, Product, QuoteItemCreate, DiscountTemplate, Quote, QuoteItem } from '@/lib/types';
+import { Customer, Product, QuoteItemCreate, DiscountTemplate, Quote, QuoteItem, QuoteDiscount } from '@/lib/types';
 import { toast } from 'sonner';
 import { Plus, Trash2, ArrowLeft, X, ChevronDown, ChevronUp } from 'lucide-react';
 
@@ -125,7 +125,7 @@ function EditQuoteContent() {
       setDepositAmount(quoteData.deposit_amount ?? '');
       setSelectedDiscountIds(
         (quoteData.discounts ?? [])
-          .map((d) => d.template_id)
+          .map((d: QuoteDiscount) => d.template_id)
           .filter((id): id is number => id != null) ?? []
       );
       if (quoteData.customer_id) {
