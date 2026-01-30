@@ -7,6 +7,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak, Image, KeepTogether
 from reportlab.pdfgen import canvas
+from reportlab.lib.utils import ImageReader
 from typing import Optional, Tuple, List, Any
 from io import BytesIO
 from datetime import datetime
@@ -29,7 +30,7 @@ def format_currency(amount: Decimal, currency: str = "GBP") -> str:
 def _build_header_flowables(
     company_settings: CompanySettings,
     logo_path: Optional[str],
-    logo_bytes: Optional[BytesIO],
+    logo_bytes: Optional[bytes],
     normal_style: ParagraphStyle,
     company_name_style: ParagraphStyle,
 ) -> List[Any]:
@@ -49,8 +50,10 @@ def _build_header_flowables(
             logo = None
     elif logo_bytes:
         try:
-            logo_bytes.seek(0)
-            logo = Image(logo_bytes, width=50*mm, height=None)
+            # Use ImageReader + fresh BytesIO so ReportLab can read the image reliably
+            buf = BytesIO(logo_bytes)
+            reader = ImageReader(buf)
+            logo = Image(reader, width=50*mm, height=None)
             if logo.imageHeight > 0:
                 aspect_ratio = logo.imageWidth / logo.imageHeight
                 logo.height = logo.width / aspect_ratio
@@ -147,10 +150,10 @@ def _build_footer_flowables(
     return result
 
 
-def _resolve_logo(company_settings: CompanySettings) -> Tuple[Optional[str], Optional[BytesIO]]:
-    """Resolve logo to file path or bytes. Tries company logo_filename then logo1.jpg / logo1.png fallback."""
+def _resolve_logo(company_settings: CompanySettings) -> Tuple[Optional[str], Optional[bytes]]:
+    """Resolve logo to file path or raw bytes. Tries company logo_filename then logo1.jpg / logo1.png fallback."""
     logo_path: Optional[str] = None
-    logo_bytes: Optional[BytesIO] = None
+    logo_bytes: Optional[bytes] = None
     primary_filename = company_settings.logo_filename or "logo1.jpg"
     # Build paths for primary filename and fallbacks
     base_dirs = [
@@ -177,7 +180,8 @@ def _resolve_logo(company_settings: CompanySettings) -> Tuple[Optional[str], Opt
     env_logo_url = os.getenv("LOGO_URL")
     env_logo_base = os.getenv("LOGO_BASE_URL")
     env_frontend_url = os.getenv("FRONTEND_URL") or os.getenv("PUBLIC_FRONTEND_URL")
-    if not env_frontend_url and os.getenv("RAILWAY_ENVIRONMENT"):
+    # Always try production frontend URL if no env URL set (Railway may not set RAILWAY_ENVIRONMENT)
+    if not env_frontend_url:
         env_frontend_url = "https://leadlock-frontend-production.up.railway.app"
     cors_origins = os.getenv("CORS_ORIGINS", "")
     for fn in filenames_to_try:
@@ -196,9 +200,14 @@ def _resolve_logo(company_settings: CompanySettings) -> Tuple[Optional[str], Opt
                 url_candidates.append(origins[0].rstrip("/") + "/" + fn)
     for logo_url in url_candidates:
         try:
-            with urllib.request.urlopen(logo_url, timeout=5) as response:
-                logo_bytes = BytesIO(response.read())
-            return (None, logo_bytes)
+            req = urllib.request.Request(
+                logo_url,
+                headers={"User-Agent": "LeadLock-API/1.0 (Quote PDF)"},
+            )
+            with urllib.request.urlopen(req, timeout=10) as response:
+                data = response.read()
+            if data and len(data) > 100:
+                return (None, data)
         except Exception:
             continue
     return (None, None)
@@ -286,7 +295,7 @@ def generate_quote_pdf(
 
     # Header - Company Info with Logo
     logo_path: Optional[str] = None
-    logo_bytes: Optional[BytesIO] = None
+    logo_bytes: Optional[bytes] = None
     if company_settings:
         logo_path, logo_bytes = _resolve_logo(company_settings)
         elements.extend(_build_header_flowables(company_settings, logo_path, logo_bytes, normal_style, company_name_style))
