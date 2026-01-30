@@ -180,19 +180,6 @@ export default function CreateQuoteDialog({
     return Math.max(0, total - deposit);
   };
 
-  /** Normalize all item numeric fields and refresh state so totals recalculate correctly. */
-  const handleSaveAndRecalculate = () => {
-    const normalized = items.map((item, i) => ({
-      ...item,
-      quantity: Number(item.quantity) ?? 0,
-      unit_price: Math.max(0, Number(item.unit_price) ?? 0),
-      sort_order: i,
-      parent_index: item.parent_index != null ? item.parent_index : undefined,
-    }));
-    setItems([...normalized]);
-    toast.success('Totals recalculated');
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -499,14 +486,6 @@ export default function CreateQuoteDialog({
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
               Cancel
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={handleSaveAndRecalculate}
-              disabled={loading}
-            >
-              Save
             </Button>
             <Button type="submit" disabled={loading}>
               {loading ? 'Creating...' : 'Create Quote'}
