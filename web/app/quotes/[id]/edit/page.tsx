@@ -126,7 +126,7 @@ function EditQuoteContent() {
       setSelectedDiscountIds(
         (quoteData.discounts ?? [])
           .map((d: QuoteDiscount) => d.template_id)
-          .filter((id): id is number => id != null) ?? []
+          .filter((id: number | undefined): id is number => id != null) ?? []
       );
       if (quoteData.customer_id) {
         const customerResponse = await api.get(`/api/customers/${quoteData.customer_id}`);
