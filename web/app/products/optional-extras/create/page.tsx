@@ -8,10 +8,19 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { createProduct } from '@/lib/api';
 import { ProductCategory } from '@/lib/types';
 import { toast } from 'sonner';
 import { ArrowLeft } from 'lucide-react';
+
+const PRODUCT_UNIT_OPTIONS = ['Per Box', 'Unit', 'Set'] as const;
 
 export default function CreateOptionalExtraPage() {
   const router = useRouter();
@@ -20,7 +29,7 @@ export default function CreateOptionalExtraPage() {
     name: '',
     description: '',
     base_price: '',
-    unit: 'unit',
+    unit: 'Unit',
     sku: '',
     specifications: '',
     installation_hours: '',
@@ -43,7 +52,7 @@ export default function CreateOptionalExtraPage() {
         category: ProductCategory.STABLES,
         is_extra: true,
         base_price: parseFloat(formData.base_price),
-        unit: formData.unit.trim() || 'unit',
+        unit: formData.unit.trim() || 'Unit',
         sku: formData.sku.trim() || undefined,
         specifications: formData.specifications.trim() || undefined,
         installation_hours: formData.installation_hours
@@ -140,15 +149,24 @@ export default function CreateOptionalExtraPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="unit">Unit</Label>
-                    <Input
-                      id="unit"
+                    <Select
                       value={formData.unit}
-                      onChange={(e) =>
-                        setFormData({ ...formData, unit: e.target.value })
+                      onValueChange={(value) =>
+                        setFormData({ ...formData, unit: value })
                       }
-                      placeholder="unit, sqft, etc."
                       disabled={loading}
-                    />
+                    >
+                      <SelectTrigger id="unit">
+                        <SelectValue placeholder="Select unit" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PRODUCT_UNIT_OPTIONS.map((opt) => (
+                          <SelectItem key={opt} value={opt}>
+                            {opt}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="sku">SKU</Label>

@@ -30,6 +30,8 @@ import api from '@/lib/api';
 import { Product, ProductCategory } from '@/lib/types';
 import { toast } from 'sonner';
 
+const PRODUCT_UNIT_OPTIONS = ['Per Box', 'Unit', 'Set'] as const;
+
 export default function ProductsPage() {
   const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
@@ -46,7 +48,7 @@ export default function ProductsPage() {
     subcategory: '',
     is_extra: false,
     base_price: '',
-    unit: 'unit',
+    unit: 'Unit',
     sku: '',
     image_url: '',
     specifications: '',
@@ -346,13 +348,22 @@ export default function ProductsPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="edit-unit">Unit</Label>
-                  <Input
-                    id="edit-unit"
+                  <Select
                     value={newProduct.unit}
-                    onChange={(e) => setNewProduct({ ...newProduct, unit: e.target.value })}
-                    placeholder="unit, sqft, etc."
+                    onValueChange={(value) => setNewProduct({ ...newProduct, unit: value })}
                     disabled={saving}
-                  />
+                  >
+                    <SelectTrigger id="edit-unit">
+                      <SelectValue placeholder="Select unit" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PRODUCT_UNIT_OPTIONS.map((opt) => (
+                        <SelectItem key={opt} value={opt}>
+                          {opt}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="edit-sku">SKU</Label>

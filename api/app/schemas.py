@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 from typing import Optional, List
 from datetime import datetime
 from decimal import Decimal
@@ -293,6 +293,9 @@ class DashboardStats(BaseModel):
     qualified_percentage: float
 
 
+PRODUCT_UNIT_VALUES = ("Per Box", "Unit", "Set")
+
+
 class ProductCreate(BaseModel):
     name: str
     description: Optional[str] = None
@@ -300,13 +303,20 @@ class ProductCreate(BaseModel):
     subcategory: Optional[str] = None
     is_extra: bool = False
     base_price: Decimal
-    unit: str = "unit"
+    unit: str = "Unit"
     sku: Optional[str] = None
     image_url: Optional[str] = None
     specifications: Optional[str] = None
     installation_hours: Optional[Decimal] = None
     boxes_per_product: Optional[int] = None  # Number of boxes per product (optional; used in installation calculation)
     optional_extras: Optional[List[int]] = None  # List of product IDs that are optional extras
+
+    @field_validator("unit")
+    @classmethod
+    def unit_must_be_allowed(cls, v: str) -> str:
+        if v not in PRODUCT_UNIT_VALUES:
+            raise ValueError(f'unit must be one of: {", ".join(PRODUCT_UNIT_VALUES)}')
+        return v
 
 
 class ProductUpdate(BaseModel):
@@ -324,6 +334,15 @@ class ProductUpdate(BaseModel):
     installation_hours: Optional[Decimal] = None
     boxes_per_product: Optional[int] = None
     optional_extras: Optional[List[int]] = None  # List of product IDs that are optional extras
+
+    @field_validator("unit")
+    @classmethod
+    def unit_must_be_allowed(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        if v not in PRODUCT_UNIT_VALUES:
+            raise ValueError(f'unit must be one of: {", ".join(PRODUCT_UNIT_VALUES)}')
+        return v
 
 
 class ProductResponse(BaseModel):

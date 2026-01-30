@@ -21,6 +21,8 @@ import { ProductCategory, Product } from '@/lib/types';
 import { toast } from 'sonner';
 import { ArrowLeft, X } from 'lucide-react';
 
+const PRODUCT_UNIT_OPTIONS = ['Per Box', 'Unit', 'Set'] as const;
+
 export default function CreateProductPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -33,7 +35,7 @@ export default function CreateProductPage() {
     subcategory: '',
     is_extra: false,
     base_price: '',
-    unit: 'unit',
+    unit: 'Unit',
     sku: '',
     image_url: '',
     specifications: '',
@@ -218,15 +220,24 @@ export default function CreateProductPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="unit">Unit</Label>
-                    <Input
-                      id="unit"
+                    <Select
                       value={formData.unit}
-                      onChange={(e) =>
-                        setFormData({ ...formData, unit: e.target.value })
+                      onValueChange={(value) =>
+                        setFormData({ ...formData, unit: value })
                       }
-                      placeholder="unit, sqft, etc."
                       disabled={loading}
-                    />
+                    >
+                      <SelectTrigger id="unit">
+                        <SelectValue placeholder="Select unit" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PRODUCT_UNIT_OPTIONS.map((opt) => (
+                          <SelectItem key={opt} value={opt}>
+                            {opt}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="sku">SKU</Label>

@@ -223,10 +223,17 @@ function CreateQuoteContent() {
   };
 
   const addOptionalExtra = (parentIndex: number, extra: Product) => {
+    const parentItem = items[parentIndex];
+    const parentProduct = getSelectedProduct(parentItem);
+    const parentQty = Number(parentItem?.quantity) || 1;
+    const boxesPerProduct = parentProduct?.boxes_per_product ?? 1;
+    const quantity =
+      extra.unit === 'Per Box' ? parentQty * boxesPerProduct : parentQty;
+
     const newItem: QuoteItemCreate = {
       product_id: extra.id,
       description: extra.name,
-      quantity: 1,
+      quantity,
       unit_price: Number(extra.base_price),
       is_custom: false,
       sort_order: parentIndex + 1,
