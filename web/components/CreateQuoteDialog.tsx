@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { createQuote, getProducts } from '@/lib/api';
+import { createQuote, getProducts, getProduct } from '@/lib/api';
 import { Customer, Product, QuoteItemCreate } from '@/lib/types';
 import { toast } from 'sonner';
 import { Plus, Trash2 } from 'lucide-react';
@@ -47,6 +47,7 @@ export default function CreateQuoteDialog({
   const [termsAndConditions, setTermsAndConditions] = useState('');
   const [notes, setNotes] = useState('');
   const [depositAmount, setDepositAmount] = useState<number | ''>('');
+  const [productDetails, setProductDetails] = useState<Record<number, Product>>({});
 
   useEffect(() => {
     if (open) {
@@ -81,36 +82,73 @@ export default function CreateQuoteDialog({
   };
 
   const removeItem = (index: number) => {
-    setItems(items.filter((_, i) => i !== index).map((item, i) => ({ ...item, sort_order: i })));
+    const newItems = items
+      .filter((_, i) => i !== index)
+      .map((item, i) => {
+        let parent_index = item.parent_index;
+        if (parent_index !== undefined && parent_index !== null) {
+          if (parent_index === index) parent_index = undefined;
+          else if (parent_index > index) parent_index = parent_index - 1;
+        }
+        return { ...item, sort_order: i, parent_index };
+      });
+    setItems(newItems);
   };
 
-  const updateItem = (index: number, field: keyof QuoteItemCreate, value: any) => {
+  const updateItem = async (index: number, field: keyof QuoteItemCreate, value: any) => {
     const newItems = [...items];
     if (field === 'product_id') {
       if (value === 'custom' || !value) {
-        // Clear product selection - custom item
         newItems[index] = {
           ...newItems[index],
           product_id: undefined,
           is_custom: true,
         };
-      } else {
-        // Product selected
-        const product = products.find((p) => p.id === parseInt(value));
-        if (product) {
-          newItems[index] = {
-            ...newItems[index],
-            product_id: product.id,
-            description: product.name,
-            unit_price: Number(product.base_price),
-            is_custom: false,
-          };
-        }
+        setItems(newItems);
+        return;
       }
-    } else {
-      newItems[index] = { ...newItems[index], [field]: value };
+      const productId = parseInt(value, 10);
+      const product = products.find((p) => p.id === productId);
+      if (product) {
+        newItems[index] = {
+          ...newItems[index],
+          product_id: product.id,
+          description: product.name,
+          unit_price: Number(product.base_price),
+          is_custom: false,
+        };
+        setItems(newItems);
+        try {
+          const detailed = await getProduct(productId);
+          setProductDetails((prev) => ({ ...prev, [productId]: detailed }));
+        } catch {
+          setProductDetails((prev) => ({ ...prev, [productId]: product }));
+        }
+        return;
+      }
     }
+    newItems[index] = { ...newItems[index], [field]: value };
     setItems(newItems);
+  };
+
+  const addOptionalExtra = (parentIndex: number, extra: Product) => {
+    const newItem: QuoteItemCreate = {
+      product_id: extra.id,
+      description: extra.name,
+      quantity: 1,
+      unit_price: Number(extra.base_price),
+      is_custom: false,
+      sort_order: parentIndex + 1,
+      parent_index: parentIndex,
+    };
+    const newItems = [...items];
+    newItems.splice(parentIndex + 1, 0, newItem);
+    setItems(newItems.map((it, i) => ({ ...it, sort_order: i })));
+  };
+
+  const getSelectedProduct = (item: QuoteItemCreate) => {
+    if (!item.product_id) return null;
+    return productDetails[item.product_id] ?? products.find((p) => p.id === item.product_id) ?? null;
   };
 
   const calculateSubtotal = () => {
@@ -149,6 +187,7 @@ export default function CreateQuoteDialog({
       quantity: Number(item.quantity) ?? 0,
       unit_price: Math.max(0, Number(item.unit_price) ?? 0),
       sort_order: i,
+      parent_index: item.parent_index != null ? item.parent_index : undefined,
     }));
     setItems([...normalized]);
     toast.success('Totals recalculated');
@@ -167,18 +206,31 @@ export default function CreateQuoteDialog({
       return;
     }
 
+    const originalIndices = items
+      .map((_, i) => i)
+      .filter((i) => {
+        const it = items[i];
+        return it.description.trim() && (it.quantity ?? 0) > 0 && (it.unit_price ?? 0) >= 0;
+      });
+
     setLoading(true);
     try {
       const quoteData: any = {
         customer_id: customer.id,
-        items: validItems.map((item, index) => ({
-          product_id: item.product_id || null,
-          description: item.description,
-          quantity: Number(item.quantity),
-          unit_price: Number(item.unit_price),
-          is_custom: item.is_custom !== undefined ? item.is_custom : (item.product_id === undefined || item.product_id === null),
-          sort_order: index,
-        })),
+        items: validItems.map((item, index) => {
+          const parentInItems = item.parent_index;
+          const parentIndexInPayload =
+            parentInItems != null ? originalIndices.indexOf(parentInItems) : -1;
+          return {
+            product_id: item.product_id ?? null,
+            description: item.description,
+            quantity: Number(item.quantity),
+            unit_price: Number(item.unit_price),
+            is_custom: item.is_custom !== undefined ? item.is_custom : (item.product_id === undefined || item.product_id === null),
+            sort_order: index,
+            parent_index: parentIndexInPayload >= 0 ? parentIndexInPayload : undefined,
+          };
+        }),
       };
 
       // Only include optional fields if they have values
@@ -210,6 +262,7 @@ export default function CreateQuoteDialog({
           sort_order: 0,
         },
       ]);
+      setProductDetails({});
       const date = new Date();
       date.setDate(date.getDate() + 30);
       setValidUntil(date.toISOString().split('T')[0]);
@@ -247,14 +300,22 @@ export default function CreateQuoteDialog({
             {/* Quote Items */}
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <Label className="text-base font-semibold">Quote Items</Label>
+                <div>
+                  <Label className="text-base font-semibold">Quote Items</Label>
+                  <p className="text-sm text-muted-foreground mt-0.5">
+                    Add a product, then add optional extras to it. You can add multiple products, each with their own extras.
+                  </p>
+                </div>
                 <Button type="button" variant="outline" size="sm" onClick={addItem}>
                   <Plus className="h-4 w-4 mr-2" />
-                  Add Item
+                  Add Product
                 </Button>
               </div>
               {items.map((item, index) => (
-                <div key={index} className="p-4 border rounded-md space-y-3">
+                <div
+                  key={index}
+                  className={`p-4 border rounded-md space-y-3 ${item.parent_index != null ? 'pl-6 border-l-4 border-l-muted-foreground/30 bg-muted/20' : ''}`}
+                >
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-medium">Item {index + 1}</span>
                     {items.length > 1 && (
@@ -333,6 +394,41 @@ export default function CreateQuoteDialog({
                       (Math.max(0, Number(item.unit_price)) || 0)
                     ).toFixed(2)}
                   </div>
+                  {(() => {
+                    const selectedProduct = getSelectedProduct(item);
+                    if (!selectedProduct?.optional_extras?.length) return null;
+                    return (
+                      <div className="mt-4 pt-4 border-t space-y-2">
+                        <Label className="text-sm font-medium">Optional Extras:</Label>
+                        <div className="mt-2 space-y-2">
+                          {[...selectedProduct.optional_extras]
+                            .sort((a, b) => a.name.localeCompare(b.name))
+                            .map((extra) => (
+                              <div
+                                key={extra.id}
+                                className="flex items-center justify-between p-2 border rounded-md hover:bg-muted/50"
+                              >
+                                <div className="flex-1">
+                                  <p className="text-sm font-medium">{extra.name}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    £{Number(extra.base_price).toFixed(2)}
+                                  </p>
+                                </div>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => addOptionalExtra(index, extra)}
+                                >
+                                  <Plus className="h-3 w-3 mr-1" />
+                                  Add
+                                </Button>
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               ))}
               <div className="p-3 bg-muted rounded-md space-y-2">

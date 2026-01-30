@@ -416,18 +416,32 @@ function CreateQuoteContent() {
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <CardTitle>Quote Items</CardTitle>
+                  <div>
+                    <CardTitle>Quote Items</CardTitle>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Add a product, then add optional extras to it. You can add multiple products, each with their own extras.
+                    </p>
+                  </div>
                   <Button type="button" variant="outline" size="sm" onClick={addItem}>
                     <Plus className="h-4 w-4 mr-2" />
-                    Add Item
+                    Add Product
                   </Button>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
                 {items.map((item, index) => (
-                  <div key={index} className="p-4 border rounded-md space-y-4">
+                  <div
+                    key={index}
+                    className={`p-4 border rounded-md space-y-4 ${item.parent_index != null ? 'pl-6 border-l-4 border-l-muted-foreground/30 bg-muted/20' : ''}`}
+                  >
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium">Item {index + 1}</span>
+                      <span className="text-sm font-medium">
+                        {item.parent_index != null ? (
+                          <>Optional extra</>
+                        ) : (
+                          <>Product {items.filter((_, i) => i <= index && items[i].parent_index == null).length}</>
+                        )}
+                      </span>
                       {items.length > 1 && (
                         <Button
                           type="button"
