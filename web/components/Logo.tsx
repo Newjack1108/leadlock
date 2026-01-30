@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 
 export default function Logo() {
-  const [imgSrc, setImgSrc] = useState('/logo.png');
+  const [imgSrc, setImgSrc] = useState('/logo1.jpg');
   const [imgError, setImgError] = useState(false);
 
   const handleImageLoad = () => {
