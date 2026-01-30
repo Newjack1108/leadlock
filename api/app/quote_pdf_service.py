@@ -7,7 +7,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak, Image, KeepTogether
 from reportlab.pdfgen import canvas
-from typing import Optional
+from typing import Optional, Tuple, List, Any
 from io import BytesIO
 from datetime import datetime
 from decimal import Decimal
@@ -24,6 +24,188 @@ def format_currency(amount: Decimal, currency: str = "GBP") -> str:
     if currency == "GBP":
         return f"£{amount:,.2f}"
     return f"{currency} {amount:,.2f}"
+
+
+def _build_header_flowables(
+    company_settings: CompanySettings,
+    logo_path: Optional[str],
+    logo_bytes: Optional[BytesIO],
+    normal_style: ParagraphStyle,
+    company_name_style: ParagraphStyle,
+) -> List[Any]:
+    """Build header flowables (logo + company info). Creates fresh flowables each time."""
+    result: List[Any] = []
+    logo = None
+    if logo_path and os.path.exists(logo_path):
+        try:
+            logo = Image(logo_path, width=60*mm, height=None)
+            if logo.imageHeight > 0:
+                aspect_ratio = logo.imageWidth / logo.imageHeight
+                logo.height = logo.width / aspect_ratio
+                if logo.height > 25*mm:
+                    logo.height = 25*mm
+                    logo.width = logo.height * aspect_ratio
+        except Exception:
+            logo = None
+    elif logo_bytes:
+        try:
+            logo_bytes.seek(0)
+            logo = Image(logo_bytes, width=60*mm, height=None)
+            if logo.imageHeight > 0:
+                aspect_ratio = logo.imageWidth / logo.imageHeight
+                logo.height = logo.width / aspect_ratio
+                if logo.height > 25*mm:
+                    logo.height = 25*mm
+                    logo.width = logo.height * aspect_ratio
+        except Exception:
+            logo = None
+    if logo:
+        company_info_lines = []
+        trading_name = company_settings.trading_name or "Cheshire Stables"
+        company_info_lines.append(f"<font size='14'><b>{trading_name}</b></font>")
+        if company_settings.address_line1:
+            address_parts = [
+                company_settings.address_line1,
+                company_settings.address_line2,
+                company_settings.city,
+                company_settings.county,
+                company_settings.postcode
+            ]
+            address = ", ".join([p for p in address_parts if p])
+            company_info_lines.append(address)
+        if company_settings.company_registration_number:
+            company_info_lines.append(f"Company Reg: {company_settings.company_registration_number}")
+        if company_settings.vat_number:
+            company_info_lines.append(f"VAT Number: {company_settings.vat_number}")
+        if company_settings.phone:
+            company_info_lines.append(f"Phone: {company_settings.phone}")
+        if company_settings.email:
+            company_info_lines.append(f"Email: {company_settings.email}")
+        if company_settings.website:
+            company_info_lines.append(f"Website: {company_settings.website}")
+        company_info_text = "<br/>".join(company_info_lines)
+        company_info_para = Paragraph(company_info_text, normal_style)
+        header_table = Table([[logo, company_info_para]], colWidths=[70*mm, 110*mm])
+        header_table.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("ALIGN", (0, 0), (0, 0), "LEFT"),
+            ("ALIGN", (1, 0), (1, 0), "LEFT"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 0),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+            ("TOPPADDING", (0, 0), (-1, -1), 0),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+        ]))
+        result.append(header_table)
+    else:
+        trading_name = company_settings.trading_name or "Cheshire Stables"
+        result.append(Paragraph(trading_name, company_name_style))
+        if company_settings.address_line1:
+            address_parts = [
+                company_settings.address_line1,
+                company_settings.address_line2,
+                company_settings.city,
+                company_settings.county,
+                company_settings.postcode
+            ]
+            address = ", ".join([p for p in address_parts if p])
+            result.append(Paragraph(address, normal_style))
+        if company_settings.company_registration_number:
+            result.append(Paragraph(f"Company Reg: {company_settings.company_registration_number}", normal_style))
+        if company_settings.vat_number:
+            result.append(Paragraph(f"VAT Number: {company_settings.vat_number}", normal_style))
+        if company_settings.phone:
+            result.append(Paragraph(f"Phone: {company_settings.phone}", normal_style))
+        if company_settings.email:
+            result.append(Paragraph(f"Email: {company_settings.email}", normal_style))
+        if company_settings.website:
+            result.append(Paragraph(f"Website: {company_settings.website}", normal_style))
+    result.append(Spacer(1, 15))
+    return result
+
+
+def _build_footer_flowables(
+    company_settings: CompanySettings,
+    footer_style: ParagraphStyle,
+) -> List[Any]:
+    """Build footer flowables (company details)."""
+    result: List[Any] = []
+    footer_lines = []
+    if company_settings.company_name:
+        footer_lines.append(company_settings.company_name)
+    if company_settings.address_line1:
+        address_parts = [
+            company_settings.address_line1,
+            company_settings.city,
+            company_settings.postcode
+        ]
+        footer_lines.append(", ".join([p for p in address_parts if p]))
+    if company_settings.company_registration_number:
+        footer_lines.append(f"Company No: {company_settings.company_registration_number}")
+    if company_settings.vat_number:
+        footer_lines.append(f"VAT No: {company_settings.vat_number}")
+    if company_settings.phone or company_settings.email:
+        contact = []
+        if company_settings.phone:
+            contact.append(f"Tel: {company_settings.phone}")
+        if company_settings.email:
+            contact.append(f"Email: {company_settings.email}")
+        footer_lines.append(" | ".join(contact))
+    for line in footer_lines:
+        result.append(Paragraph(line, footer_style))
+    return result
+
+
+def _resolve_logo(company_settings: CompanySettings) -> Tuple[Optional[str], Optional[BytesIO]]:
+    """Resolve logo to file path or bytes. Tries company logo_filename then logo1.png fallback."""
+    logo_path: Optional[str] = None
+    logo_bytes: Optional[BytesIO] = None
+    primary_filename = company_settings.logo_filename or "logo1.jpg"
+    # Build paths for primary filename and logo1.png fallback
+    base_dirs = [
+        Path(__file__).parent.parent / "static",
+        Path("static"),
+        Path(__file__).parent.parent.parent / "web" / "public",
+    ]
+    filenames_to_try = [primary_filename]
+    if primary_filename != "logo1.png":
+        filenames_to_try.append("logo1.png")
+    for fn in filenames_to_try:
+        for base in base_dirs:
+            p = base / fn
+            if p.exists():
+                logo_path = str(p)
+                return (logo_path, None)
+        if os.path.exists(fn):
+            logo_path = fn
+            return (logo_path, None)
+    # URL fallback
+    url_candidates = []
+    env_logo_url = os.getenv("LOGO_URL")
+    env_logo_base = os.getenv("LOGO_BASE_URL")
+    env_frontend_url = os.getenv("FRONTEND_URL") or os.getenv("PUBLIC_FRONTEND_URL")
+    cors_origins = os.getenv("CORS_ORIGINS", "")
+    for fn in filenames_to_try:
+        if env_logo_url and fn == primary_filename:
+            url_candidates.append(env_logo_url)
+        if env_logo_base:
+            url_candidates.append(env_logo_base.rstrip("/") + "/" + fn)
+        if env_frontend_url:
+            url_candidates.append(env_frontend_url.rstrip("/") + "/" + fn)
+        if cors_origins:
+            origins = [o.strip() for o in cors_origins.split(",") if o.strip()]
+            frontend_origin = next((o for o in origins if "frontend" in o), None)
+            if frontend_origin:
+                url_candidates.append(frontend_origin.rstrip("/") + "/" + fn)
+            elif origins:
+                url_candidates.append(origins[0].rstrip("/") + "/" + fn)
+    for logo_url in url_candidates:
+        try:
+            with urllib.request.urlopen(logo_url, timeout=5) as response:
+                logo_bytes = BytesIO(response.read())
+            return (None, logo_bytes)
+        except Exception:
+            continue
+    return (None, None)
 
 
 def generate_quote_pdf(
@@ -91,301 +273,28 @@ def generate_quote_pdf(
         spaceAfter=6,
         fontName="Helvetica-Bold",
     )
-    
+    footer_style = ParagraphStyle(
+        "Footer",
+        parent=normal_style,
+        fontSize=8,
+        textColor=colors.HexColor("#888888"),
+        alignment=1,
+    )
+    terms_style = ParagraphStyle(
+        "Terms",
+        parent=normal_style,
+        fontSize=9,
+        leftIndent=5*mm,
+        spaceAfter=6,
+    )
+
     # Header - Company Info with Logo
+    logo_path: Optional[str] = None
+    logo_bytes: Optional[BytesIO] = None
     if company_settings:
-        # Try to load logo
-        logo = None
-        logo_path = None
-        
-        # #region agent log
-        import json
-        log_data = {
-            "location": "quote_pdf_service.py:generate_quote_pdf",
-            "message": "Starting logo search",
-            "data": {
-                "logo_filename": company_settings.logo_filename,
-                "current_file": str(__file__),
-                "parent_parent": str(Path(__file__).parent.parent) if Path(__file__).exists() else "N/A"
-            },
-            "timestamp": int(datetime.now().timestamp() * 1000),
-            "sessionId": "debug-session",
-            "runId": "run1",
-            "hypothesisId": "E"
-        }
-        try:
-            with open("c:\\projects\\LeadLock\\.cursor\\debug.log", "a", encoding="utf-8") as f:
-                f.write(json.dumps(log_data) + "\n")
-        except: pass
-        # #endregion
-        
-        # Try multiple possible logo locations
-        possible_logo_paths = [
-            Path(__file__).parent.parent / "static" / company_settings.logo_filename,
-            Path("static") / company_settings.logo_filename,
-            Path(__file__).parent.parent.parent / "web" / "public" / company_settings.logo_filename,
-            company_settings.logo_filename,  # Absolute path
-        ]
-        
-        # #region agent log
-        checked_paths = []
-        for p in possible_logo_paths:
-            path_str = str(p) if not isinstance(p, str) else p
-            exists = os.path.exists(path_str) if isinstance(p, str) else p.exists()
-            checked_paths.append({"path": path_str, "exists": exists})
-        log_data2 = {
-            "location": "quote_pdf_service.py:generate_quote_pdf",
-            "message": "Checked file paths",
-            "data": {"checked_paths": checked_paths},
-            "timestamp": int(datetime.now().timestamp() * 1000),
-            "sessionId": "debug-session",
-            "runId": "run1",
-            "hypothesisId": "F"
-        }
-        try:
-            with open("c:\\projects\\LeadLock\\.cursor\\debug.log", "a", encoding="utf-8") as f:
-                f.write(json.dumps(log_data2) + "\n")
-        except: pass
-        # #endregion
-        
-        for path in possible_logo_paths:
-            if isinstance(path, str):
-                if os.path.exists(path):
-                    logo_path = path
-                    break
-            else:
-                if path.exists():
-                    logo_path = str(path)
-                    break
-        
-        if logo_path and os.path.exists(logo_path):
-            # #region agent log
-            log_data3 = {
-                "location": "quote_pdf_service.py:generate_quote_pdf",
-                "message": "Found logo file path",
-                "data": {"logo_path": logo_path, "file_exists": os.path.exists(logo_path)},
-                "timestamp": int(datetime.now().timestamp() * 1000),
-                "sessionId": "debug-session",
-                "runId": "run1",
-                "hypothesisId": "G"
-            }
-            try:
-                with open("c:\\projects\\LeadLock\\.cursor\\debug.log", "a", encoding="utf-8") as f:
-                    f.write(json.dumps(log_data3) + "\n")
-            except: pass
-            # #endregion
-            try:
-                # Load logo with appropriate size (max width 60mm, maintain aspect ratio)
-                logo = Image(logo_path, width=60*mm, height=None)
-                # Maintain aspect ratio
-                if logo.imageHeight > 0:
-                    aspect_ratio = logo.imageWidth / logo.imageHeight
-                    logo.height = logo.width / aspect_ratio
-                    # Limit height to 25mm max
-                    if logo.height > 25*mm:
-                        logo.height = 25*mm
-                        logo.width = logo.height * aspect_ratio
-                # #region agent log
-                log_data4 = {
-                    "location": "quote_pdf_service.py:generate_quote_pdf",
-                    "message": "Logo loaded successfully from file",
-                    "data": {"logo_path": logo_path, "width": logo.width, "height": logo.height},
-                    "timestamp": int(datetime.now().timestamp() * 1000),
-                    "sessionId": "debug-session",
-                    "runId": "run1",
-                    "hypothesisId": "H"
-                }
-                try:
-                    with open("c:\\projects\\LeadLock\\.cursor\\debug.log", "a", encoding="utf-8") as f:
-                        f.write(json.dumps(log_data4) + "\n")
-                except: pass
-                # #endregion
-            except Exception as e:
-                # #region agent log
-                log_data5 = {
-                    "location": "quote_pdf_service.py:generate_quote_pdf",
-                    "message": "Failed to load logo from file",
-                    "data": {"logo_path": logo_path, "error": str(e)},
-                    "timestamp": int(datetime.now().timestamp() * 1000),
-                    "sessionId": "debug-session",
-                    "runId": "run1",
-                    "hypothesisId": "I"
-                }
-                try:
-                    with open("c:\\projects\\LeadLock\\.cursor\\debug.log", "a", encoding="utf-8") as f:
-                        f.write(json.dumps(log_data5) + "\n")
-                except: pass
-                # #endregion
-                print(f"Warning: Could not load logo from {logo_path}: {e}", file=__import__('sys').stderr, flush=True)
-                logo = None
+        logo_path, logo_bytes = _resolve_logo(company_settings)
+        elements.extend(_build_header_flowables(company_settings, logo_path, logo_bytes, normal_style, company_name_style))
 
-        if not logo:
-            # Try loading logo from URL (e.g., frontend public URL)
-            logo_filename = company_settings.logo_filename or "logo1.jpg"
-            url_candidates = []
-            env_logo_url = os.getenv("LOGO_URL")
-            env_logo_base = os.getenv("LOGO_BASE_URL")
-            env_frontend_url = os.getenv("FRONTEND_URL") or os.getenv("PUBLIC_FRONTEND_URL")
-            cors_origins = os.getenv("CORS_ORIGINS", "")
-
-            if env_logo_url:
-                url_candidates.append(env_logo_url)
-            if env_logo_base:
-                url_candidates.append(env_logo_base.rstrip("/") + "/" + logo_filename)
-            if env_frontend_url:
-                url_candidates.append(env_frontend_url.rstrip("/") + "/" + logo_filename)
-
-            if cors_origins:
-                origins = [o.strip() for o in cors_origins.split(",") if o.strip()]
-                # Prefer frontend origin if present
-                frontend_origin = next((o for o in origins if "frontend" in o), None)
-                if frontend_origin:
-                    url_candidates.append(frontend_origin.rstrip("/") + "/" + logo_filename)
-                elif origins:
-                    url_candidates.append(origins[0].rstrip("/") + "/" + logo_filename)
-
-            # #region agent log
-            log_data6 = {
-                "location": "quote_pdf_service.py:generate_quote_pdf",
-                "message": "Trying URL fallback for logo",
-                "data": {
-                    "logo_filename": logo_filename,
-                    "url_candidates": url_candidates,
-                    "env_vars": {
-                        "LOGO_URL": bool(env_logo_url),
-                        "LOGO_BASE_URL": bool(env_logo_base),
-                        "FRONTEND_URL": bool(env_frontend_url),
-                        "CORS_ORIGINS": bool(cors_origins)
-                    }
-                },
-                "timestamp": int(datetime.now().timestamp() * 1000),
-                "sessionId": "debug-session",
-                "runId": "run1",
-                "hypothesisId": "J"
-            }
-            try:
-                with open("c:\\projects\\LeadLock\\.cursor\\debug.log", "a", encoding="utf-8") as f:
-                    f.write(json.dumps(log_data6) + "\n")
-            except: pass
-            # #endregion
-
-            for logo_url in url_candidates:
-                try:
-                    with urllib.request.urlopen(logo_url, timeout=5) as response:
-                        logo_bytes = BytesIO(response.read())
-                    logo = Image(logo_bytes, width=60*mm, height=None)
-                    if logo.imageHeight > 0:
-                        aspect_ratio = logo.imageWidth / logo.imageHeight
-                        logo.height = logo.width / aspect_ratio
-                        if logo.height > 25*mm:
-                            logo.height = 25*mm
-                            logo.width = logo.height * aspect_ratio
-                    # #region agent log
-                    log_data7 = {
-                        "location": "quote_pdf_service.py:generate_quote_pdf",
-                        "message": "Logo loaded successfully from URL",
-                        "data": {"logo_url": logo_url},
-                        "timestamp": int(datetime.now().timestamp() * 1000),
-                        "sessionId": "debug-session",
-                        "runId": "run1",
-                        "hypothesisId": "K"
-                    }
-                    try:
-                        with open("c:\\projects\\LeadLock\\.cursor\\debug.log", "a", encoding="utf-8") as f:
-                            f.write(json.dumps(log_data7) + "\n")
-                    except: pass
-                    # #endregion
-                    break
-                except Exception as e:
-                    # #region agent log
-                    log_data8 = {
-                        "location": "quote_pdf_service.py:generate_quote_pdf",
-                        "message": "Failed to load logo from URL",
-                        "data": {"logo_url": logo_url, "error": str(e)},
-                        "timestamp": int(datetime.now().timestamp() * 1000),
-                        "sessionId": "debug-session",
-                        "runId": "run1",
-                        "hypothesisId": "L"
-                    }
-                    try:
-                        with open("c:\\projects\\LeadLock\\.cursor\\debug.log", "a", encoding="utf-8") as f:
-                            f.write(json.dumps(log_data8) + "\n")
-                    except: pass
-                    # #endregion
-                    print(f"Warning: Could not load logo from URL {logo_url}: {e}", file=__import__('sys').stderr, flush=True)
-        
-        # Create header table with logo and company info
-        if logo:
-            # Logo on left, company info on right
-            # Build company info as HTML text with line breaks
-            company_info_lines = []
-            trading_name = company_settings.trading_name or "Cheshire Stables"
-            company_info_lines.append(f"<font size='14'><b>{trading_name}</b></font>")
-            
-            if company_settings.address_line1:
-                address_parts = [
-                    company_settings.address_line1,
-                    company_settings.address_line2,
-                    company_settings.city,
-                    company_settings.county,
-                    company_settings.postcode
-                ]
-                address = ", ".join([p for p in address_parts if p])
-                company_info_lines.append(address)
-            
-            if company_settings.company_registration_number:
-                company_info_lines.append(f"Company Reg: {company_settings.company_registration_number}")
-            if company_settings.vat_number:
-                company_info_lines.append(f"VAT Number: {company_settings.vat_number}")
-            
-            if company_settings.phone:
-                company_info_lines.append(f"Phone: {company_settings.phone}")
-            if company_settings.email:
-                company_info_lines.append(f"Email: {company_settings.email}")
-            if company_settings.website:
-                company_info_lines.append(f"Website: {company_settings.website}")
-            
-            company_info_text = "<br/>".join(company_info_lines)
-            company_info_para = Paragraph(company_info_text, normal_style)
-            
-            header_table = Table([[logo, company_info_para]], colWidths=[70*mm, 110*mm])
-            header_table.setStyle(TableStyle([
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ("ALIGN", (0, 0), (0, 0), "LEFT"),
-                ("ALIGN", (1, 0), (1, 0), "LEFT"),
-                ("LEFTPADDING", (0, 0), (-1, -1), 0),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-                ("TOPPADDING", (0, 0), (-1, -1), 0),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
-            ]))
-            elements.append(header_table)
-        else:
-            # No logo - just company info
-            trading_name = company_settings.trading_name or "Cheshire Stables"
-            elements.append(Paragraph(trading_name, company_name_style))
-            if company_settings.address_line1:
-                address_parts = [
-                    company_settings.address_line1,
-                    company_settings.address_line2,
-                    company_settings.city,
-                    company_settings.county,
-                    company_settings.postcode
-                ]
-                address = ", ".join([p for p in address_parts if p])
-                elements.append(Paragraph(address, normal_style))
-            if company_settings.company_registration_number:
-                elements.append(Paragraph(f"Company Reg: {company_settings.company_registration_number}", normal_style))
-            if company_settings.vat_number:
-                elements.append(Paragraph(f"VAT Number: {company_settings.vat_number}", normal_style))
-            if company_settings.phone:
-                elements.append(Paragraph(f"Phone: {company_settings.phone}", normal_style))
-            if company_settings.email:
-                elements.append(Paragraph(f"Email: {company_settings.email}", normal_style))
-            if company_settings.website:
-                elements.append(Paragraph(f"Website: {company_settings.website}", normal_style))
-        
-        elements.append(Spacer(1, 15))
-    
     # Quote Title and Details Section
     quote_header_data = [
         [Paragraph("<b>QUOTE</b>", title_style), ""],
@@ -523,57 +432,22 @@ def generate_quote_pdf(
     items_table.setStyle(TableStyle(table_style_list))
     elements.append(items_table)
     elements.append(Spacer(1, 20))
-    
-    # Terms and Conditions
-    if quote.terms_and_conditions:
-        elements.append(Paragraph("Terms and Conditions:", heading_style))
-        terms_style = ParagraphStyle(
-            "Terms",
-            parent=normal_style,
-            fontSize=9,
-            leftIndent=5*mm,
-            spaceAfter=6,
-        )
-        # Split terms by newlines and add each as a paragraph
-        for line in quote.terms_and_conditions.split('\n'):
-            if line.strip():
-                elements.append(Paragraph(line.strip(), terms_style))
-        elements.append(Spacer(1, 15))
-    
-    # Footer with company details
+
+    # Footer with company details (page 1)
     if company_settings:
         elements.append(Spacer(1, 20))
-        footer_style = ParagraphStyle(
-            "Footer",
-            parent=normal_style,
-            fontSize=8,
-            textColor=colors.HexColor("#888888"),
-            alignment=1,  # Center
-        )
-        footer_lines = []
-        if company_settings.company_name:
-            footer_lines.append(company_settings.company_name)
-        if company_settings.address_line1:
-            address_parts = [
-                company_settings.address_line1,
-                company_settings.city,
-                company_settings.postcode
-            ]
-            footer_lines.append(", ".join([p for p in address_parts if p]))
-        if company_settings.company_registration_number:
-            footer_lines.append(f"Company No: {company_settings.company_registration_number}")
-        if company_settings.vat_number:
-            footer_lines.append(f"VAT No: {company_settings.vat_number}")
-        if company_settings.phone or company_settings.email:
-            contact = []
-            if company_settings.phone:
-                contact.append(f"Tel: {company_settings.phone}")
-            if company_settings.email:
-                contact.append(f"Email: {company_settings.email}")
-            footer_lines.append(" | ".join(contact))
+        elements.extend(_build_footer_flowables(company_settings, footer_style))
 
-        for line in footer_lines:
-            elements.append(Paragraph(line, footer_style))
+    # Page 2: Terms and Conditions from company settings (same header and footer)
+    if company_settings and company_settings.default_terms_and_conditions and company_settings.default_terms_and_conditions.strip():
+        elements.append(PageBreak())
+        elements.extend(_build_header_flowables(company_settings, logo_path, logo_bytes, normal_style, company_name_style))
+        elements.append(Paragraph("Terms and Conditions:", heading_style))
+        for line in company_settings.default_terms_and_conditions.split("\n"):
+            if line.strip():
+                elements.append(Paragraph(line.strip(), terms_style))
+        elements.append(Spacer(1, 20))
+        elements.extend(_build_footer_flowables(company_settings, footer_style))
     
     # Notes (Internal - typically not shown to customer, but included for completeness)
     # Note: In a real scenario, you might want to exclude this from customer-facing PDFs
