@@ -434,7 +434,7 @@ function CreateQuoteContent() {
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="custom">Custom Item</SelectItem>
-                            {products.map((product) => (
+                            {[...products].sort((a, b) => a.name.localeCompare(b.name)).map((product) => (
                               <SelectItem key={product.id} value={product.id.toString()}>
                                 {product.name} - £{Number(product.base_price).toFixed(2)}
                               </SelectItem>
@@ -507,7 +507,7 @@ function CreateQuoteContent() {
                             <div className="mt-2">
                               <Label className="text-sm font-medium">Optional Extras:</Label>
                               <div className="mt-2 space-y-2">
-                                {selectedProduct.optional_extras.map((extra) => (
+                                {[...selectedProduct.optional_extras].sort((a, b) => a.name.localeCompare(b.name)).map((extra) => (
                                   <div
                                     key={extra.id}
                                     className="flex items-center justify-between p-2 border rounded-md hover:bg-muted/50"

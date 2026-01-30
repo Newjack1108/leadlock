@@ -264,7 +264,7 @@ export default function CreateQuoteDialog({
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="custom">Custom Item</SelectItem>
-                          {products.map((product) => (
+                          {[...products].sort((a, b) => a.name.localeCompare(b.name)).map((product) => (
                             <SelectItem key={product.id} value={product.id.toString()}>
                               {product.name} - £{Number(product.base_price).toFixed(2)}
                             </SelectItem>

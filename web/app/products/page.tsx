@@ -192,7 +192,7 @@ export default function ProductsPage() {
           <div className="text-center py-12 text-muted-foreground">No products found</div>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {products.map((product) => (
+            {[...products].sort((a, b) => a.name.localeCompare(b.name)).map((product) => (
               <Card key={product.id} className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => router.push(`/products/${product.id}`)}>
                 <CardHeader>
                   <div className="flex items-start justify-between">

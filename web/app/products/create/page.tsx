@@ -319,7 +319,7 @@ export default function CreateProductPage() {
                   </p>
                 ) : (
                   <div className="space-y-2">
-                    {optionalExtras.map((extra) => (
+                    {[...optionalExtras].sort((a, b) => a.name.localeCompare(b.name)).map((extra) => (
                       <div
                         key={extra.id}
                         className="flex items-center space-x-2 p-3 border rounded-md hover:bg-muted/50 cursor-pointer"

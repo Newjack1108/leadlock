@@ -228,7 +228,7 @@ export default function ProductDetailPage() {
             </CardHeader>
             <CardContent>
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {product.optional_extras.map((extra) => (
+                {[...product.optional_extras].sort((a, b) => a.name.localeCompare(b.name)).map((extra) => (
                   <div
                     key={extra.id}
                     className="p-4 border rounded-md hover:bg-muted/50 cursor-pointer"
