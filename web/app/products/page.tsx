@@ -85,6 +85,13 @@ export default function ProductsPage() {
     router.push(`/products/${product.id}/edit`);
   };
 
+  /** Normalize form values and refresh state so any displayed totals/calculations are correct. */
+  const handleSaveAndRecalculate = () => {
+    const basePrice = newProduct.base_price === '' ? '' : String(Number(newProduct.base_price) || 0);
+    setNewProduct((prev) => ({ ...prev, base_price: basePrice }));
+    toast.success('Product details recalculated');
+  };
+
   const handleUpdateProduct = async () => {
     if (!editingProduct || !newProduct.name.trim() || !newProduct.base_price) {
       toast.error('Name and base price are required');
@@ -390,6 +397,14 @@ export default function ProductsPage() {
                 disabled={saving}
               >
                 Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={handleSaveAndRecalculate}
+                disabled={saving}
+              >
+                Save & Recalculate
               </Button>
               <Button onClick={handleUpdateProduct} disabled={saving || !newProduct.name.trim() || !newProduct.base_price}>
                 {saving ? 'Updating...' : 'Update Product'}

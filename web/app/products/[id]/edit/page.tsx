@@ -144,6 +144,17 @@ export default function EditProductPage() {
     );
   };
 
+  /** Normalize form values and refresh state so displayed values and calculations are correct. */
+  const handleSaveAndRecalculate = () => {
+    setFormData((prev) => ({
+      ...prev,
+      base_price: prev.base_price === '' ? '' : String(Number(prev.base_price) || 0),
+      installation_hours: prev.installation_hours === '' ? '' : String(Number(prev.installation_hours) || ''),
+      boxes_per_product: prev.boxes_per_product === '' ? '' : String(parseInt(prev.boxes_per_product, 10) || ''),
+    }));
+    toast.success('Product details recalculated');
+  };
+
   if (pageLoading) {
     return (
       <div className="min-h-screen bg-background">
@@ -449,6 +460,14 @@ export default function EditProductPage() {
                 disabled={loading}
               >
                 Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={handleSaveAndRecalculate}
+                disabled={loading}
+              >
+                Save & Recalculate
               </Button>
               <Button type="submit" disabled={loading || !formData.name.trim() || !formData.base_price}>
                 {loading ? 'Updating...' : 'Update Product'}
