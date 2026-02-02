@@ -10,7 +10,7 @@ import api, { getQuotes, previewQuotePdf } from '@/lib/api';
 import { Quote, QuoteStatus } from '@/lib/types';
 import { toast } from 'sonner';
 import Link from 'next/link';
-import { FileText, Eye, Pencil } from 'lucide-react';
+import { FileText, Eye, Pencil, List, LayoutGrid } from 'lucide-react';
 
 const statusColors: Record<QuoteStatus, string> = {
   DRAFT: 'bg-gray-100 text-gray-700',
@@ -25,6 +25,7 @@ export default function QuotesPage() {
   const router = useRouter();
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState<'list' | 'tile'>('list');
 
   useEffect(() => {
     fetchQuotes();
@@ -62,6 +63,26 @@ export default function QuotesPage() {
       <main className="container mx-auto px-6 py-8">
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-3xl font-semibold">Quotes</h1>
+          {quotes.length > 0 && (
+            <div className="flex gap-1 border rounded-md p-1 bg-muted/30">
+              <Button
+                variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('list')}
+                title="List view"
+              >
+                <List className="h-4 w-4" />
+              </Button>
+              <Button
+                variant={viewMode === 'tile' ? 'secondary' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('tile')}
+                title="Tile view"
+              >
+                <LayoutGrid className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
         </div>
 
         {quotes.length === 0 ? (
@@ -72,6 +93,92 @@ export default function QuotesPage() {
                 <p>No quotes found</p>
               </div>
             </CardContent>
+          </Card>
+        ) : viewMode === 'list' ? (
+          <Card>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b bg-muted/50">
+                    <th className="text-left p-3 font-medium">Quote #</th>
+                    <th className="text-left p-3 font-medium">Customer</th>
+                    <th className="text-left p-3 font-medium">Status</th>
+                    <th className="text-left p-3 font-medium">Total</th>
+                    <th className="text-left p-3 font-medium">Valid until</th>
+                    <th className="text-left p-3 font-medium">Created</th>
+                    <th className="text-right p-3 font-medium w-[180px]">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {quotes.map((quote) => (
+                    <tr
+                      key={quote.id}
+                      className="border-b last:border-0 hover:bg-muted/30 cursor-pointer transition-colors"
+                      onClick={() => router.push(`/quotes/${quote.id}`)}
+                    >
+                      <td className="p-3">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold">{quote.quote_number}</span>
+                          {quote.version > 1 && (
+                            <span className="text-sm text-muted-foreground">v{quote.version}</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="p-3 text-muted-foreground">{quote.customer_name || '—'}</td>
+                      <td className="p-3">
+                        <Badge className={statusColors[quote.status]}>
+                          {quote.status}
+                        </Badge>
+                      </td>
+                      <td className="p-3 font-semibold">£{Number(quote.total_amount).toFixed(2)}</td>
+                      <td className="p-3 text-muted-foreground">
+                        {quote.valid_until
+                          ? new Date(quote.valid_until).toLocaleDateString()
+                          : '—'}
+                      </td>
+                      <td className="p-3 text-muted-foreground">
+                        {new Date(quote.created_at).toLocaleDateString()}
+                      </td>
+                      <td className="p-3 text-right" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex gap-2 justify-end">
+                          {quote.status === 'DRAFT' && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => router.push(`/quotes/${quote.id}/edit`)}
+                            >
+                              <Pencil className="h-4 w-4 mr-1" />
+                              Edit
+                            </Button>
+                          )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={async () => {
+                              try {
+                                await previewQuotePdf(quote.id);
+                              } catch (error: any) {
+                                toast.error(error.response?.data?.detail || error.message || 'Failed to preview PDF');
+                              }
+                            }}
+                          >
+                            <Eye className="h-4 w-4 mr-1" />
+                            Preview
+                          </Button>
+                          <Button
+                            variant="default"
+                            size="sm"
+                            onClick={() => router.push(`/quotes/${quote.id}`)}
+                          >
+                            View
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </Card>
         ) : (
           <div className="space-y-4">
