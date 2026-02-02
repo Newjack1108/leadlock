@@ -11,7 +11,6 @@ import api, { getStaleSummary, getCompanySettings } from '@/lib/api';
 import { DashboardStats, StaleSummary, CompanySettings } from '@/lib/types';
 import { toast } from 'sonner';
 import { TrendingUp, Users, CheckCircle2, DollarSign, Bell, ArrowRight, Clock } from 'lucide-react';
-import Link from 'next/link';
 
 export default function DashboardPage() {
   const router = useRouter();
