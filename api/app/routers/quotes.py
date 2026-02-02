@@ -955,8 +955,12 @@ async def send_quote_email_endpoint(
         )
         session.add(quote_email)
         
-        # Update quote sent_at
+        # Update quote: status to SENT and sent_at
+        quote.status = QuoteStatus.SENT
         quote.sent_at = datetime.utcnow()
+        quote.updated_at = datetime.utcnow()
+        if quote.opportunity_stage == OpportunityStage.CONCEPT:
+            quote.opportunity_stage = OpportunityStage.QUOTE_SENT
         session.add(quote)
         
         session.commit()
