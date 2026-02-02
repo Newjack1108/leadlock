@@ -319,6 +319,12 @@ export enum QuoteStatus {
   EXPIRED = "EXPIRED",
 }
 
+export enum QuoteTemperature {
+  HOT = "HOT",
+  WARM = "WARM",
+  COLD = "COLD",
+}
+
 export enum DiscountType {
   FIXED_AMOUNT = "FIXED_AMOUNT",
   PERCENTAGE = "PERCENTAGE",
@@ -411,6 +417,7 @@ export interface Quote {
   loss_reason?: string;
   loss_category?: LossCategory;
   owner_id?: number;
+  temperature?: QuoteTemperature;
 }
 
 export interface QuoteCreate {
@@ -423,6 +430,7 @@ export interface QuoteCreate {
   deposit_amount?: number;
   items: QuoteItemCreate[];
   discount_template_ids?: number[];
+  temperature?: QuoteTemperature;
 }
 
 export interface DiscountTemplate {

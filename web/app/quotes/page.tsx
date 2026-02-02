@@ -15,7 +15,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import api, { getQuotes, previewQuotePdf } from '@/lib/api';
-import { Quote, QuoteStatus } from '@/lib/types';
+import { Quote, QuoteStatus, QuoteTemperature } from '@/lib/types';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { FileText, Eye, Pencil, List, LayoutGrid } from 'lucide-react';
@@ -29,12 +29,19 @@ const statusColors: Record<QuoteStatus, string> = {
   EXPIRED: 'bg-orange-100 text-orange-700',
 };
 
+const temperatureColors: Record<QuoteTemperature, string> = {
+  HOT: 'bg-red-100 text-red-700',
+  WARM: 'bg-amber-100 text-amber-700',
+  COLD: 'bg-slate-100 text-slate-600',
+};
+
 export default function QuotesPage() {
   const router = useRouter();
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'list' | 'tile'>('list');
   const [statusFilter, setStatusFilter] = useState<QuoteStatus | 'ALL'>('ALL');
+  const [temperatureFilter, setTemperatureFilter] = useState<QuoteTemperature | 'ALL'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
@@ -61,6 +68,9 @@ export default function QuotesPage() {
     if (statusFilter !== 'ALL') {
       result = result.filter((q) => q.status === statusFilter);
     }
+    if (temperatureFilter !== 'ALL') {
+      result = result.filter((q) => q.temperature === temperatureFilter);
+    }
     if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase();
       result = result.filter(
@@ -70,7 +80,7 @@ export default function QuotesPage() {
       );
     }
     return result;
-  }, [quotes, statusFilter, searchQuery]);
+  }, [quotes, statusFilter, temperatureFilter, searchQuery]);
 
   if (loading) {
     return (
@@ -126,6 +136,19 @@ export default function QuotesPage() {
                 ))}
               </SelectContent>
             </Select>
+            <Select value={temperatureFilter} onValueChange={(v) => setTemperatureFilter(v as QuoteTemperature | 'ALL')}>
+              <SelectTrigger className="w-full md:w-[180px]">
+                <SelectValue placeholder="Temperature" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All temperatures</SelectItem>
+                {Object.values(QuoteTemperature).map((t) => (
+                  <SelectItem key={t} value={t}>
+                    {t}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Input
               placeholder="Search by quote # or customer..."
               value={searchQuery}
@@ -155,6 +178,7 @@ export default function QuotesPage() {
                   className="mt-4"
                   onClick={() => {
                     setStatusFilter('ALL');
+                    setTemperatureFilter('ALL');
                     setSearchQuery('');
                   }}
                 >
@@ -195,9 +219,16 @@ export default function QuotesPage() {
                       </td>
                       <td className="p-3 text-muted-foreground">{quote.customer_name || '—'}</td>
                       <td className="p-3">
-                        <Badge className={statusColors[quote.status]}>
-                          {quote.status}
-                        </Badge>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Badge className={statusColors[quote.status]}>
+                            {quote.status}
+                          </Badge>
+                          {quote.temperature && (
+                            <Badge className={temperatureColors[quote.temperature]}>
+                              {quote.temperature}
+                            </Badge>
+                          )}
+                        </div>
                       </td>
                       <td className="p-3 font-semibold">£{Number(quote.total_amount).toFixed(2)}</td>
                       <td className="p-3 text-muted-foreground">
@@ -269,6 +300,11 @@ export default function QuotesPage() {
                         <Badge className={statusColors[quote.status]}>
                           {quote.status}
                         </Badge>
+                        {quote.temperature && (
+                          <Badge className={temperatureColors[quote.temperature]}>
+                            {quote.temperature}
+                          </Badge>
+                        )}
                         {quote.version > 1 && (
                           <span className="text-sm text-muted-foreground">
                             v{quote.version}

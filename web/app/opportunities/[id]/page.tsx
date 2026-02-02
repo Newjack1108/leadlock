@@ -26,7 +26,7 @@ import {
 } from '@/components/ui/dialog';
 import { ArrowLeft, Save, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
 import api from '@/lib/api';
-import { Quote, OpportunityStage, LossCategory, Customer } from '@/lib/types';
+import { Quote, OpportunityStage, LossCategory, Customer, QuoteTemperature } from '@/lib/types';
 import { toast } from 'sonner';
 
 const stageColors: Record<OpportunityStage, string> = {
@@ -58,6 +58,7 @@ export default function OpportunityDetailPage() {
     next_action_due_date: '',
     loss_reason: '',
     loss_category: undefined as LossCategory | undefined,
+    temperature: undefined as QuoteTemperature | undefined,
   });
 
   useEffect(() => {
@@ -76,6 +77,7 @@ export default function OpportunityDetailPage() {
         next_action_due_date: opportunity.next_action_due_date ? opportunity.next_action_due_date.split('T')[0] : '',
         loss_reason: opportunity.loss_reason || '',
         loss_category: opportunity.loss_category,
+        temperature: opportunity.temperature,
       });
     }
   }, [opportunity]);
@@ -127,6 +129,7 @@ export default function OpportunityDetailPage() {
         expected_close_date: formData.expected_close_date || undefined,
         next_action: formData.next_action || undefined,
         next_action_due_date: formData.next_action_due_date || undefined,
+        temperature: formData.temperature,
       };
 
       await api.patch(`/api/quotes/${quoteId}`, updateData);
@@ -238,11 +241,16 @@ export default function OpportunityDetailPage() {
                 </p>
               )}
             </div>
-            {opportunity.opportunity_stage && (
-              <Badge className={stageColors[opportunity.opportunity_stage]}>
-                {opportunity.opportunity_stage.replace('_', ' ')}
-              </Badge>
-            )}
+            <div className="flex items-center gap-2">
+              {opportunity.opportunity_stage && (
+                <Badge className={stageColors[opportunity.opportunity_stage]}>
+                  {opportunity.opportunity_stage.replace('_', ' ')}
+                </Badge>
+              )}
+              {opportunity.temperature && (
+                <Badge variant="outline">{opportunity.temperature}</Badge>
+              )}
+            </div>
           </div>
         </div>
 
@@ -303,6 +311,23 @@ export default function OpportunityDetailPage() {
                       disabled
                       className="bg-muted"
                     />
+                  </div>
+                  <div>
+                    <Label>Temperature</Label>
+                    <Select
+                      value={formData.temperature || ''}
+                      onValueChange={(value) => setFormData({ ...formData, temperature: value ? (value as QuoteTemperature) : undefined })}
+                      disabled={saving}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select temperature" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={QuoteTemperature.HOT}>Hot</SelectItem>
+                        <SelectItem value={QuoteTemperature.WARM}>Warm</SelectItem>
+                        <SelectItem value={QuoteTemperature.COLD}>Cold</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
 

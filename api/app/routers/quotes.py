@@ -87,7 +87,8 @@ def build_quote_response(quote: Quote, quote_items: List[QuoteItem], session: Se
         next_action_due_date=quote.next_action_due_date,
         loss_reason=quote.loss_reason,
         loss_category=quote.loss_category,
-        owner_id=quote.owner_id
+        owner_id=quote.owner_id,
+        temperature=quote.temperature
     )
 
 
@@ -353,7 +354,8 @@ async def create_quote(
             valid_until=quote_data.valid_until,
             terms_and_conditions=quote_data.terms_and_conditions,
             notes=quote_data.notes,
-            created_by_id=current_user.id
+            created_by_id=current_user.id,
+            temperature=quote_data.temperature
         )
         session.add(quote)
         session.commit()
@@ -778,6 +780,8 @@ async def update_draft_quote(
         quote.terms_and_conditions = quote_data.terms_and_conditions
     if quote_data.notes is not None:
         quote.notes = quote_data.notes
+    if quote_data.temperature is not None:
+        quote.temperature = quote_data.temperature
     
     if quote_data.deposit_amount is not None:
         deposit_amount = Decimal(str(quote_data.deposit_amount))

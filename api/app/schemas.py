@@ -5,7 +5,7 @@ from decimal import Decimal
 from enum import Enum
 from app.models import (
     LeadStatus, ActivityType, Timeframe, UserRole, ProductCategory,
-    QuoteStatus, DiscountType, DiscountScope, DiscountRequestStatus,
+    QuoteStatus, QuoteTemperature, DiscountType, DiscountScope, DiscountRequestStatus,
     LeadType, LeadSource, EmailDirection, ReminderPriority, ReminderType,
     SuggestedAction, OpportunityStage, LossCategory
 )
@@ -465,6 +465,7 @@ class QuoteCreate(BaseModel):
     deposit_amount: Optional[Decimal] = None  # Optional deposit amount (defaults to 50% of total if not provided)
     items: List[QuoteItemCreate]
     discount_template_ids: Optional[List[int]] = None  # List of discount template IDs to apply
+    temperature: Optional[QuoteTemperature] = None
 
 
 class QuoteDraftUpdate(BaseModel):
@@ -475,6 +476,7 @@ class QuoteDraftUpdate(BaseModel):
     deposit_amount: Optional[Decimal] = None
     items: List[QuoteItemCreate]
     discount_template_ids: Optional[List[int]] = None
+    temperature: Optional[QuoteTemperature] = None
 
 
 class QuoteUpdate(BaseModel):
@@ -490,6 +492,7 @@ class QuoteUpdate(BaseModel):
     next_action: Optional[str] = None
     next_action_due_date: Optional[datetime] = None
     owner_id: Optional[int] = None
+    temperature: Optional[QuoteTemperature] = None
 
 
 class QuoteResponse(BaseModel):
@@ -530,6 +533,7 @@ class QuoteResponse(BaseModel):
     loss_reason: Optional[str] = None
     loss_category: Optional["LossCategory"] = None
     owner_id: Optional[int] = None
+    temperature: Optional[QuoteTemperature] = None
 
 
 class QuoteEmailResponse(BaseModel):

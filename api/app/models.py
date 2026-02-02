@@ -260,6 +260,12 @@ class QuoteStatus(str, Enum):
     EXPIRED = "EXPIRED"
 
 
+class QuoteTemperature(str, Enum):
+    HOT = "HOT"
+    WARM = "WARM"
+    COLD = "COLD"
+
+
 class OpportunityStage(str, Enum):
     DISCOVERY = "DISCOVERY"  # Discovery / Site Info
     CONCEPT = "CONCEPT"  # Concept / Configuration
@@ -315,6 +321,8 @@ class Quote(SQLModel, table=True):
     accepted_at: Optional[datetime] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+    
+    temperature: Optional[QuoteTemperature] = Field(default=None)
     
     # Opportunity management fields
     opportunity_stage: Optional["OpportunityStage"] = Field(default=None)

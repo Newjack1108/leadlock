@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { createQuote, getProducts, getProduct, getCompanySettings, getDiscountTemplates } from '@/lib/api';
 import api from '@/lib/api';
-import { Customer, Product, QuoteItemCreate, DiscountTemplate } from '@/lib/types';
+import { Customer, Product, QuoteItemCreate, DiscountTemplate, QuoteTemperature } from '@/lib/types';
 import { toast } from 'sonner';
 import { Plus, Trash2, ArrowLeft, X, ChevronDown, ChevronUp } from 'lucide-react';
 
@@ -74,6 +74,7 @@ function CreateQuoteContent() {
   const [validUntil, setValidUntil] = useState('');
   const [termsAndConditions, setTermsAndConditions] = useState('');
   const [notes, setNotes] = useState('');
+  const [temperature, setTemperature] = useState<QuoteTemperature | ''>(QuoteTemperature.WARM);
   const [depositAmount, setDepositAmount] = useState<number | ''>('');
   const [companySettings, setCompanySettings] = useState<any>(null);
   const [availableDiscounts, setAvailableDiscounts] = useState<DiscountTemplate[]>([]);
@@ -346,6 +347,9 @@ function CreateQuoteContent() {
       // Include deposit_amount if explicitly set, otherwise let backend default to 50%
       if (depositAmount !== '') {
         quoteData.deposit_amount = Number(depositAmount);
+      }
+      if (temperature) {
+        quoteData.temperature = temperature;
       }
 
       const newQuote = await createQuote(quoteData);
@@ -704,6 +708,22 @@ function CreateQuoteContent() {
                       )}
                     </div>
                   </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Deal temperature</Label>
+                  <Select
+                    value={temperature || ''}
+                    onValueChange={(v) => setTemperature(v ? (v as QuoteTemperature) : '')}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select temperature" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={QuoteTemperature.HOT}>Hot</SelectItem>
+                      <SelectItem value={QuoteTemperature.WARM}>Warm</SelectItem>
+                      <SelectItem value={QuoteTemperature.COLD}>Cold</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
                   <Label>Valid Until</Label>

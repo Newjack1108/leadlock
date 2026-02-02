@@ -7,12 +7,18 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import api, { getQuote, previewQuotePdf, getDiscountRequestsForQuote } from '@/lib/api';
-import { Quote, QuoteItem, Customer, QuoteDiscount, DiscountRequest, DiscountRequestStatus } from '@/lib/types';
+import { Quote, QuoteItem, Customer, QuoteDiscount, DiscountRequest, DiscountRequestStatus, QuoteTemperature } from '@/lib/types';
 import { toast } from 'sonner';
 import SendQuoteEmailDialog from '@/components/SendQuoteEmailDialog';
 import Link from 'next/link';
 import { ArrowLeft, Mail, Eye, Tag, Pencil, ChevronDown, ChevronUp, Send } from 'lucide-react';
 import RequestDiscountDialog from '@/components/RequestDiscountDialog';
+
+const temperatureColors: Record<QuoteTemperature, string> = {
+  HOT: 'bg-red-100 text-red-700',
+  WARM: 'bg-amber-100 text-amber-700',
+  COLD: 'bg-slate-100 text-slate-600',
+};
 
 export default function QuoteDetailPage() {
   const router = useRouter();
@@ -112,6 +118,11 @@ export default function QuoteDetailPage() {
             </div>
             <div className="flex items-center gap-3">
               <Badge className="text-sm">{quote.status}</Badge>
+              {quote.temperature && (
+                <Badge className={`text-sm ${temperatureColors[quote.temperature]}`}>
+                  {quote.temperature}
+                </Badge>
+              )}
               {quote.status === 'DRAFT' && (
                 <Button variant="outline" asChild>
                   <Link href={`/quotes/${quote.id}/edit`}>

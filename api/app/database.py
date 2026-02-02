@@ -317,6 +317,19 @@ def create_db_and_tables():
                         error_str = str(col_error).lower()
                         if "already exists" not in error_str and "duplicate" not in error_str:
                             print(f"Warning: Could not add {col_name} column: {col_error}", file=sys.stderr, flush=True)
+            
+            # Add temperature column to quote table (hot/warm/cold)
+            quote_columns = [col['name'] for col in inspector.get_columns("quote")]
+            if "temperature" not in quote_columns:
+                print("Adding temperature column to quote table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE quote ADD COLUMN temperature VARCHAR(20)"))
+                    print("Added temperature column to quote table", file=sys.stderr, flush=True)
+                except Exception as col_error:
+                    error_str = str(col_error).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Warning: Could not add temperature column: {col_error}", file=sys.stderr, flush=True)
         
         # Step 6: Add trading_name and default_terms_and_conditions to CompanySettings table
         has_company_settings = inspector.has_table("companysettings")

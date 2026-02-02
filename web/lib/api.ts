@@ -1,4 +1,5 @@
 import axios from 'axios';
+import type { QuoteTemperature } from '@/lib/types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -173,6 +174,7 @@ export const createQuote = async (quoteData: {
   valid_until?: string;
   terms_and_conditions?: string;
   notes?: string;
+  deposit_amount?: number;
   items: Array<{
     product_id?: number;
     description: string;
@@ -181,6 +183,8 @@ export const createQuote = async (quoteData: {
     is_custom?: boolean;
     sort_order?: number;
   }>;
+  discount_template_ids?: number[];
+  temperature?: QuoteTemperature;
 }) => {
   const response = await api.post('/api/quotes', quoteData);
   return response.data;
@@ -211,6 +215,7 @@ export const updateDraftQuote = async (quoteId: number, quoteData: {
     parent_index?: number;
   }>;
   discount_template_ids?: number[];
+  temperature?: QuoteTemperature;
 }) => {
   const response = await api.put(`/api/quotes/${quoteId}/draft`, quoteData);
   return response.data;

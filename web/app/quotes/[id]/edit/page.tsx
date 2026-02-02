@@ -12,7 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getQuote, updateDraftQuote, getProducts, getProduct, getCompanySettings, getDiscountTemplates, getDiscountRequestsForQuote } from '@/lib/api';
 import api from '@/lib/api';
-import { Customer, Product, QuoteItemCreate, DiscountTemplate, Quote, QuoteItem, QuoteDiscount, DiscountRequest, DiscountRequestStatus } from '@/lib/types';
+import { Customer, Product, QuoteItemCreate, DiscountTemplate, Quote, QuoteItem, QuoteDiscount, DiscountRequest, DiscountRequestStatus, QuoteTemperature } from '@/lib/types';
 import { toast } from 'sonner';
 import { Plus, Trash2, ArrowLeft, X, ChevronDown, ChevronUp, Send } from 'lucide-react';
 import RequestDiscountDialog from '@/components/RequestDiscountDialog';
@@ -85,6 +85,7 @@ function EditQuoteContent() {
   const [validUntil, setValidUntil] = useState('');
   const [termsAndConditions, setTermsAndConditions] = useState('');
   const [notes, setNotes] = useState('');
+  const [temperature, setTemperature] = useState<QuoteTemperature | ''>('');
   const [depositAmount, setDepositAmount] = useState<number | ''>('');
   const [companySettings, setCompanySettings] = useState<any>(null);
   const [availableDiscounts, setAvailableDiscounts] = useState<DiscountTemplate[]>([]);
@@ -136,6 +137,7 @@ function EditQuoteContent() {
       );
       setTermsAndConditions(quoteData.terms_and_conditions ?? '');
       setNotes(quoteData.notes ?? '');
+      setTemperature(quoteData.temperature ?? '');
       setDepositAmount(quoteData.deposit_amount ?? '');
       setSelectedDiscountIds(
         (quoteData.discounts ?? [])
@@ -335,6 +337,7 @@ function EditQuoteContent() {
       if (validUntil) payload.valid_until = new Date(validUntil).toISOString();
       if (termsAndConditions?.trim()) payload.terms_and_conditions = termsAndConditions.trim();
       if (notes?.trim()) payload.notes = notes.trim();
+      if (temperature) payload.temperature = temperature;
       if (depositAmount !== '') payload.deposit_amount = Number(depositAmount);
 
       await updateDraftQuote(quoteId, payload);
@@ -762,6 +765,22 @@ function EditQuoteContent() {
                       ? `Default deposit: £${calculateDefaultDeposit().toFixed(2)} (50% of total)`
                       : `Balance: £${getBalanceAmount().toFixed(2)}`}
                   </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Deal temperature</Label>
+                  <Select
+                    value={temperature || ''}
+                    onValueChange={(v) => setTemperature(v ? (v as QuoteTemperature) : '')}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select temperature" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={QuoteTemperature.HOT}>Hot</SelectItem>
+                      <SelectItem value={QuoteTemperature.WARM}>Warm</SelectItem>
+                      <SelectItem value={QuoteTemperature.COLD}>Cold</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
                   <Label>Valid Until</Label>
