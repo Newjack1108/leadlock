@@ -7,7 +7,7 @@ from app.models import (
     LeadStatus, ActivityType, Timeframe, UserRole, ProductCategory,
     QuoteStatus, QuoteTemperature, DiscountType, DiscountScope, DiscountRequestStatus,
     LeadType, LeadSource, EmailDirection, ReminderPriority, ReminderType,
-    SuggestedAction, OpportunityStage, LossCategory
+    SuggestedAction, OpportunityStage, LossCategory, InstallationLeadTime
 )
 
 
@@ -388,6 +388,7 @@ class CompanySettingsCreate(BaseModel):
     logo_filename: str = "logo1.jpg"
     default_terms_and_conditions: Optional[str] = None
     hourly_install_rate: Optional[Decimal] = None
+    installation_lead_time: Optional[InstallationLeadTime] = None
 
 
 class CompanySettingsUpdate(BaseModel):
@@ -407,6 +408,7 @@ class CompanySettingsUpdate(BaseModel):
     logo_filename: Optional[str] = None
     default_terms_and_conditions: Optional[str] = None
     hourly_install_rate: Optional[Decimal] = None
+    installation_lead_time: Optional[InstallationLeadTime] = None
 
 
 class CompanySettingsResponse(BaseModel):
@@ -427,6 +429,7 @@ class CompanySettingsResponse(BaseModel):
     logo_filename: str
     default_terms_and_conditions: Optional[str]
     hourly_install_rate: Optional[Decimal] = None
+    installation_lead_time: Optional[InstallationLeadTime] = None
     updated_at: datetime
 
 

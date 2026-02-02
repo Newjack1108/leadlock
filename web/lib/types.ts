@@ -193,6 +193,14 @@ export interface Product {
   updated_at: string;
 }
 
+export enum InstallationLeadTime {
+  ONE_TWO_WEEKS = '1-2 weeks',
+  TWO_THREE_WEEKS = '2-3 weeks',
+  THREE_FOUR_WEEKS = '3-4 weeks',
+  FOUR_FIVE_WEEKS = '4-5 weeks',
+  FIVE_SIX_WEEKS = '5-6 weeks',
+}
+
 export interface CompanySettings {
   id: number;
   company_name: string;
@@ -211,6 +219,7 @@ export interface CompanySettings {
   logo_filename: string;
   default_terms_and_conditions?: string;
   hourly_install_rate?: number;
+  installation_lead_time?: InstallationLeadTime;
   updated_at: string;
 }
 

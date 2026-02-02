@@ -7,14 +7,16 @@ import Header from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import ReminderList from '@/components/ReminderList';
-import api, { getStaleSummary } from '@/lib/api';
-import { DashboardStats, StaleSummary } from '@/lib/types';
+import api, { getStaleSummary, getCompanySettings } from '@/lib/api';
+import { DashboardStats, StaleSummary, CompanySettings } from '@/lib/types';
 import { toast } from 'sonner';
-import { TrendingUp, Users, CheckCircle2, DollarSign, Bell, ArrowRight } from 'lucide-react';
+import { TrendingUp, Users, CheckCircle2, DollarSign, Bell, ArrowRight, Clock } from 'lucide-react';
+import Link from 'next/link';
 
 export default function DashboardPage() {
   const router = useRouter();
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [companySettings, setCompanySettings] = useState<CompanySettings | null>(null);
   const [stuckLeads, setStuckLeads] = useState<any[]>([]);
   const [staleSummary, setStaleSummary] = useState<StaleSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -25,14 +27,16 @@ export default function DashboardPage() {
 
   const fetchDashboard = async () => {
     try {
-      const [statsRes, stuckRes, staleRes] = await Promise.all([
+      const [statsRes, stuckRes, staleRes, companyRes] = await Promise.all([
         api.get('/api/dashboard/stats'),
         api.get('/api/dashboard/stuck-leads'),
         getStaleSummary().catch(() => null), // Don't fail if reminders not available
+        getCompanySettings().catch(() => null), // Don't fail if settings not set up yet
       ]);
       setStats(statsRes.data);
       setStuckLeads(stuckRes.data);
       setStaleSummary(staleRes);
+      setCompanySettings(companyRes ?? null);
     } catch (error: any) {
       if (error.response?.status === 401) {
         router.push('/login');
@@ -64,6 +68,32 @@ export default function DashboardPage() {
       <Header />
       <main className="container mx-auto px-6 py-8">
         <h1 className="text-3xl font-semibold mb-8">Dashboard</h1>
+
+        {/* Installation lead time – clear indicator for sales */}
+        {companySettings?.installation_lead_time && (
+          <Card className="mb-8 border-primary/30 bg-primary/5">
+            <CardContent className="py-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                    <Clock className="h-5 w-5 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">
+                      Current installation lead time
+                    </p>
+                    <p className="text-2xl font-bold">{companySettings.installation_lead_time}</p>
+                  </div>
+                </div>
+                <Link href="/settings/company">
+                  <Button variant="outline" size="sm">
+                    Edit in Company Settings
+                  </Button>
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Metrics Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">

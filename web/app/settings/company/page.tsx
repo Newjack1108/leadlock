@@ -8,9 +8,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Settings, Save, ChevronDown, ChevronUp } from 'lucide-react';
 import api from '@/lib/api';
-import { CompanySettings } from '@/lib/types';
+import { CompanySettings, InstallationLeadTime } from '@/lib/types';
 import { toast } from 'sonner';
 
 export default function CompanySettingsPage() {
@@ -35,6 +36,7 @@ export default function CompanySettingsPage() {
     website: '',
     logo_filename: 'logo1.jpg',
     default_terms_and_conditions: '',
+    installation_lead_time: '' as InstallationLeadTime | '',
   });
 
   useEffect(() => {
@@ -62,6 +64,7 @@ export default function CompanySettingsPage() {
         website: response.data.website || '',
         logo_filename: response.data.logo_filename || 'logo1.jpg',
         default_terms_and_conditions: response.data.default_terms_and_conditions || '',
+        installation_lead_time: response.data.installation_lead_time || '',
       });
     } catch (error: any) {
       if (error.response?.status === 401) {
@@ -85,13 +88,17 @@ export default function CompanySettingsPage() {
 
     try {
       setSaving(true);
+      const payload = {
+        ...formData,
+        installation_lead_time: formData.installation_lead_time || undefined,
+      };
       if (settings) {
         // Update existing
-        await api.put('/api/settings/company', formData);
+        await api.put('/api/settings/company', payload);
         toast.success('Company settings updated successfully');
       } else {
         // Create new
-        await api.post('/api/settings/company', formData);
+        await api.post('/api/settings/company', payload);
         toast.success('Company settings created successfully');
       }
       fetchSettings();
@@ -293,6 +300,29 @@ export default function CompanySettingsPage() {
               />
               <p className="text-sm text-muted-foreground">
                 Logo file should be placed in <code className="text-xs bg-muted px-1 py-0.5 rounded">web/public/</code> directory
+              </p>
+            </div>
+
+            <div className="space-y-2 border-t pt-6">
+              <Label>Installation lead time</Label>
+              <Select
+                value={formData.installation_lead_time || ''}
+                onValueChange={(v) => setFormData({ ...formData, installation_lead_time: v ? (v as InstallationLeadTime) : '' })}
+                disabled={saving}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select lead time" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={InstallationLeadTime.ONE_TWO_WEEKS}>1–2 weeks</SelectItem>
+                  <SelectItem value={InstallationLeadTime.TWO_THREE_WEEKS}>2–3 weeks</SelectItem>
+                  <SelectItem value={InstallationLeadTime.THREE_FOUR_WEEKS}>3–4 weeks</SelectItem>
+                  <SelectItem value={InstallationLeadTime.FOUR_FIVE_WEEKS}>4–5 weeks</SelectItem>
+                  <SelectItem value={InstallationLeadTime.FIVE_SIX_WEEKS}>5–6 weeks</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-sm text-muted-foreground">
+                Amended by production. Shown clearly on the dashboard for sales.
               </p>
             </div>
 

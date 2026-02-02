@@ -226,6 +226,15 @@ class Product(SQLModel, table=True):
     quote_items: List["QuoteItem"] = Relationship(back_populates="product")
 
 
+class InstallationLeadTime(str, Enum):
+    """Installation lead time options for quotes. Amended by production, visible to sales."""
+    ONE_TWO_WEEKS = "1-2 weeks"
+    TWO_THREE_WEEKS = "2-3 weeks"
+    THREE_FOUR_WEEKS = "3-4 weeks"
+    FOUR_FIVE_WEEKS = "4-5 weeks"
+    FIVE_SIX_WEEKS = "5-6 weeks"
+
+
 class CompanySettings(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     company_name: str
@@ -244,6 +253,7 @@ class CompanySettings(SQLModel, table=True):
     logo_filename: str = Field(default="logo1.jpg")  # Company logo for quotes (different from app logo)
     default_terms_and_conditions: Optional[str] = None  # Default terms and conditions for quotes
     hourly_install_rate: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(10, 2)))  # Hourly rate for installation cost calculation
+    installation_lead_time: Optional[InstallationLeadTime] = Field(default=None)  # Current lead time; amended by production, visible to sales
     updated_by_id: int = Field(foreign_key="user.id")
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     

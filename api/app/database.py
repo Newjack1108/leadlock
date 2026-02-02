@@ -369,6 +369,19 @@ def create_db_and_tables():
                     error_str = str(e).lower()
                     if "already exists" not in error_str and "duplicate" not in error_str:
                         print(f"Error adding hourly_install_rate column: {e}", file=sys.stderr, flush=True)
+            
+            # Installation lead time (amendable by production, visible to sales on dashboard)
+            company_columns = [col['name'] for col in inspector.get_columns("companysettings")]
+            if "installation_lead_time" not in company_columns:
+                print("Adding installation_lead_time column to companysettings table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text('ALTER TABLE companysettings ADD COLUMN installation_lead_time VARCHAR(20)'))
+                    print("Added installation_lead_time column to companysettings table", file=sys.stderr, flush=True)
+                except Exception as col_error:
+                    error_str = str(col_error).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Warning: Could not add installation_lead_time column: {col_error}", file=sys.stderr, flush=True)
 
         # Step 7: Add email settings columns to User table
         has_user_table = inspector.has_table("user")
