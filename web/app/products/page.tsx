@@ -24,7 +24,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Plus, Edit, Trash2, Package } from 'lucide-react';
+import { Plus, Edit, Trash2, Package, List, LayoutGrid } from 'lucide-react';
 import Link from 'next/link';
 import api from '@/lib/api';
 import { Product, ProductCategory } from '@/lib/types';
@@ -37,7 +37,8 @@ export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [categoryFilter, setCategoryFilter] = useState<ProductCategory | 'ALL'>('ALL');
-  const [extrasFilter, setExtrasFilter] = useState<'ALL' | true | false>('ALL');
+  const [extrasFilter, setExtrasFilter] = useState<'ALL' | true | false>(false);
+  const [viewMode, setViewMode] = useState<'list' | 'tile'>('list');
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [saving, setSaving] = useState(false);
@@ -167,31 +168,51 @@ export default function ProductsPage() {
           </div>
         </div>
 
-        {/* Filters */}
-        <div className="flex flex-col md:flex-row gap-4 mb-6">
-          <Select value={categoryFilter} onValueChange={(value) => setCategoryFilter(value as ProductCategory | 'ALL')}>
-            <SelectTrigger className="w-full md:w-[200px]">
-              <SelectValue placeholder="Category" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">All Categories</SelectItem>
-              {Object.values(ProductCategory).map((cat) => (
-                <SelectItem key={cat} value={cat}>
-                  {cat}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={extrasFilter.toString()} onValueChange={(value) => setExtrasFilter(value === 'ALL' ? 'ALL' : value === 'true')}>
-            <SelectTrigger className="w-full md:w-[200px]">
-              <SelectValue placeholder="Type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">All Types</SelectItem>
-              <SelectItem value="false">Regular Products</SelectItem>
-              <SelectItem value="true">Extras Only</SelectItem>
-            </SelectContent>
-          </Select>
+        {/* Filters and view toggle */}
+        <div className="flex flex-col md:flex-row gap-4 mb-6 items-start md:items-center justify-between">
+          <div className="flex flex-col md:flex-row gap-4">
+            <Select value={categoryFilter} onValueChange={(value) => setCategoryFilter(value as ProductCategory | 'ALL')}>
+              <SelectTrigger className="w-full md:w-[200px]">
+                <SelectValue placeholder="Category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All Categories</SelectItem>
+                {Object.values(ProductCategory).map((cat) => (
+                  <SelectItem key={cat} value={cat}>
+                    {cat}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={extrasFilter.toString()} onValueChange={(value) => setExtrasFilter(value === 'ALL' ? 'ALL' : value === 'true')}>
+              <SelectTrigger className="w-full md:w-[200px]">
+                <SelectValue placeholder="Type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All Types</SelectItem>
+                <SelectItem value="false">Regular Products</SelectItem>
+                <SelectItem value="true">Extras Only</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex gap-1 border rounded-md p-1 bg-muted/30">
+            <Button
+              variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('list')}
+              title="List view"
+            >
+              <List className="h-4 w-4" />
+            </Button>
+            <Button
+              variant={viewMode === 'tile' ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('tile')}
+              title="Tile view"
+            >
+              <LayoutGrid className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
 
         {/* Products List */}
@@ -199,6 +220,73 @@ export default function ProductsPage() {
           <div className="text-center py-12 text-muted-foreground">Loading...</div>
         ) : products.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground">No products found</div>
+        ) : viewMode === 'list' ? (
+          <Card>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b bg-muted/50">
+                    <th className="text-left p-3 font-medium">Name</th>
+                    <th className="text-left p-3 font-medium">Category</th>
+                    <th className="text-left p-3 font-medium">Price</th>
+                    <th className="text-left p-3 font-medium">Unit</th>
+                    <th className="text-left p-3 font-medium">SKU</th>
+                    <th className="text-right p-3 font-medium w-[100px]">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...products].sort((a, b) => a.name.localeCompare(b.name)).map((product) => (
+                    <tr
+                      key={product.id}
+                      className="border-b last:border-0 hover:bg-muted/30 cursor-pointer transition-colors"
+                      onClick={() => router.push(`/products/${product.id}`)}
+                    >
+                      <td className="p-3">
+                        <div>
+                          <span className="font-medium">{product.name}</span>
+                          {product.subcategory && (
+                            <span className="text-muted-foreground text-sm ml-2">({product.subcategory})</span>
+                          )}
+                        </div>
+                        {product.description && (
+                          <p className="text-sm text-muted-foreground truncate max-w-md mt-0.5">{product.description}</p>
+                        )}
+                      </td>
+                      <td className="p-3">
+                        <div className="flex gap-1 flex-wrap">
+                          <Badge className={categoryColors[product.category]}>
+                            {product.category}
+                          </Badge>
+                          {product.is_extra && <Badge variant="outline">Extra</Badge>}
+                        </div>
+                      </td>
+                      <td className="p-3 font-semibold">£{Number(product.base_price).toFixed(2)}</td>
+                      <td className="p-3 text-muted-foreground">{product.unit || '—'}</td>
+                      <td className="p-3 text-muted-foreground">{product.sku || '—'}</td>
+                      <td className="p-3 text-right" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex gap-1 justify-end">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEditProduct(product)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteProduct(product.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {[...products].sort((a, b) => a.name.localeCompare(b.name)).map((product) => (
