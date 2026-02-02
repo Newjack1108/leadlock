@@ -332,6 +332,8 @@ def generate_quote_pdf(
     ]
     if quote.valid_until:
         quote_details.append(["Valid Until:", quote.valid_until.strftime("%d %B %Y")])
+    if company_settings and company_settings.installation_lead_time:
+        quote_details.append(["Installation lead time:", company_settings.installation_lead_time.value])
     
     # Combine title and details in a table
     quote_header_table = Table(quote_header_data, colWidths=[100*mm, 80*mm])
