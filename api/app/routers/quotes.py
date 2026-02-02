@@ -607,6 +607,79 @@ async def get_opportunity(
     return build_quote_response(quote, quote_items, session)
 
 
+@router.post("/opportunities/{quote_id}/won", response_model=QuoteResponse)
+async def mark_opportunity_won(
+    quote_id: int,
+    body: OpportunityWonRequest,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    """Mark an opportunity as WON (quote accepted)."""
+    statement = select(Quote).where(Quote.id == quote_id)
+    quote = session.exec(statement).first()
+    if not quote:
+        raise HTTPException(status_code=404, detail="Opportunity not found")
+    if quote.opportunity_stage is None:
+        raise HTTPException(status_code=404, detail="Quote is not an opportunity")
+    old_status = quote.status
+    quote.status = QuoteStatus.ACCEPTED
+    quote.opportunity_stage = OpportunityStage.WON
+    quote.accepted_at = datetime.utcnow()
+    quote.updated_at = datetime.utcnow()
+    session.add(quote)
+    session.commit()
+    session.refresh(quote)
+    if quote.customer_id and old_status != QuoteStatus.ACCEPTED:
+        from app.workflow import auto_transition_lead_status, find_leads_by_customer_id
+        leads = find_leads_by_customer_id(quote.customer_id, session)
+        for lead in leads:
+            if lead.status == LeadStatus.QUOTED:
+                auto_transition_lead_status(
+                    lead.id, LeadStatus.WON, session, current_user.id,
+                    "Automatic transition: Quote accepted"
+                )
+    statement = select(QuoteItem).where(QuoteItem.quote_id == quote.id).order_by(QuoteItem.sort_order)
+    quote_items = session.exec(statement).all()
+    return build_quote_response(quote, quote_items, session)
+
+
+@router.post("/opportunities/{quote_id}/lost", response_model=QuoteResponse)
+async def mark_opportunity_lost(
+    quote_id: int,
+    body: OpportunityLostRequest,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    """Mark an opportunity as LOST (quote rejected)."""
+    statement = select(Quote).where(Quote.id == quote_id)
+    quote = session.exec(statement).first()
+    if not quote:
+        raise HTTPException(status_code=404, detail="Opportunity not found")
+    if quote.opportunity_stage is None:
+        raise HTTPException(status_code=404, detail="Quote is not an opportunity")
+    old_status = quote.status
+    quote.status = QuoteStatus.REJECTED
+    quote.opportunity_stage = OpportunityStage.LOST
+    quote.loss_reason = body.loss_reason
+    quote.loss_category = body.loss_category
+    quote.updated_at = datetime.utcnow()
+    session.add(quote)
+    session.commit()
+    session.refresh(quote)
+    if quote.customer_id and old_status != QuoteStatus.REJECTED:
+        from app.workflow import auto_transition_lead_status, find_leads_by_customer_id
+        leads = find_leads_by_customer_id(quote.customer_id, session)
+        for lead in leads:
+            if lead.status == LeadStatus.QUOTED:
+                auto_transition_lead_status(
+                    lead.id, LeadStatus.LOST, session, current_user.id,
+                    "Automatic transition: Quote rejected"
+                )
+    statement = select(QuoteItem).where(QuoteItem.quote_id == quote.id).order_by(QuoteItem.sort_order)
+    quote_items = session.exec(statement).all()
+    return build_quote_response(quote, quote_items, session)
+
+
 @router.get("/{quote_id}", response_model=QuoteResponse)
 async def get_quote(
     quote_id: int,
@@ -937,6 +1010,27 @@ async def update_quote(
     for field, value in update_data.items():
         setattr(quote, field, value)
     
+    # Sync quote status from opportunity_stage when stage is WON/LOST (so status updates when only stage is sent)
+    if quote.opportunity_stage == OpportunityStage.WON and quote.status != QuoteStatus.ACCEPTED:
+        quote.status = QuoteStatus.ACCEPTED
+        quote.accepted_at = datetime.utcnow()
+    elif quote.opportunity_stage == OpportunityStage.LOST and quote.status != QuoteStatus.REJECTED:
+        quote.status = QuoteStatus.REJECTED
+    
+    # Update opportunity stage from quote status when status was sent but stage was not
+    if quote_data.status and not quote_data.opportunity_stage:
+        if quote_data.status == QuoteStatus.ACCEPTED:
+            quote.opportunity_stage = OpportunityStage.WON
+        elif quote_data.status == QuoteStatus.REJECTED:
+            quote.opportunity_stage = OpportunityStage.LOST
+        elif quote_data.status == QuoteStatus.SENT and quote.opportunity_stage == OpportunityStage.CONCEPT:
+            quote.opportunity_stage = OpportunityStage.QUOTE_SENT
+    
+    # Set accepted_at if status changed to ACCEPTED (when status was sent explicitly)
+    if quote.status == QuoteStatus.ACCEPTED and old_status != QuoteStatus.ACCEPTED:
+        if not quote.accepted_at:
+            quote.accepted_at = datetime.utcnow()
+    
     # Mandatory next action validation (for open opportunities)
     if quote.opportunity_stage and quote.opportunity_stage not in [OpportunityStage.WON, OpportunityStage.LOST]:
         if not quote.next_action or not quote.next_action_due_date:
@@ -945,40 +1039,17 @@ async def update_quote(
                 detail="next_action and next_action_due_date are required for open opportunities"
             )
     
-    # Set accepted_at if status changes to ACCEPTED
-    if quote_data.status == QuoteStatus.ACCEPTED and old_status != QuoteStatus.ACCEPTED:
-        quote.accepted_at = datetime.utcnow()
-    
-    # Update opportunity stage based on quote status if stage not explicitly set
-    if quote_data.status and not quote_data.opportunity_stage:
-        if quote_data.status == QuoteStatus.ACCEPTED:
-            quote.opportunity_stage = OpportunityStage.WON
-        elif quote_data.status == QuoteStatus.REJECTED:
-            quote.opportunity_stage = OpportunityStage.LOST
-        elif quote_data.status == QuoteStatus.SENT and quote.opportunity_stage == OpportunityStage.CONCEPT:
-            quote.opportunity_stage = OpportunityStage.QUOTE_SENT
-    
     quote.updated_at = datetime.utcnow()
     session.add(quote)
     session.commit()
     session.refresh(quote)
     
-    # Update opportunity stage based on quote status if stage not explicitly set
-    if quote_data.status and not quote_data.opportunity_stage:
-        if quote_data.status == QuoteStatus.ACCEPTED:
-            quote.opportunity_stage = OpportunityStage.WON
-        elif quote_data.status == QuoteStatus.REJECTED:
-            quote.opportunity_stage = OpportunityStage.LOST
-        elif quote_data.status == QuoteStatus.SENT and quote.opportunity_stage == OpportunityStage.CONCEPT:
-            quote.opportunity_stage = OpportunityStage.QUOTE_SENT
-    
-    # QUOTED → WON/LOST: Transition lead when quote status changes
-    if quote_data.status and quote.customer_id:
+    # QUOTED → WON/LOST: Transition lead when quote status changed to ACCEPTED or REJECTED
+    if quote.customer_id and (quote.status == QuoteStatus.ACCEPTED or quote.status == QuoteStatus.REJECTED):
         from app.workflow import auto_transition_lead_status, find_leads_by_customer_id
         leads = find_leads_by_customer_id(quote.customer_id, session)
         
-        if quote_data.status == QuoteStatus.ACCEPTED:
-            # Transition QUOTED → WON
+        if quote.status == QuoteStatus.ACCEPTED and old_status != QuoteStatus.ACCEPTED:
             for lead in leads:
                 if lead.status == LeadStatus.QUOTED:
                     auto_transition_lead_status(
@@ -988,8 +1059,7 @@ async def update_quote(
                         current_user.id,
                         "Automatic transition: Quote accepted"
                     )
-        elif quote_data.status == QuoteStatus.REJECTED:
-            # Transition QUOTED → LOST
+        elif quote.status == QuoteStatus.REJECTED and old_status != QuoteStatus.REJECTED:
             for lead in leads:
                 if lead.status == LeadStatus.QUOTED:
                     auto_transition_lead_status(

@@ -3,12 +3,13 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Header from '@/components/Header';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import api from '@/lib/api';
 import { Customer } from '@/lib/types';
 import { toast } from 'sonner';
+import { Search, ChevronRight } from 'lucide-react';
 
 export default function CustomersPage() {
   const router = useRouter();
@@ -44,6 +45,13 @@ export default function CustomersPage() {
     return () => clearTimeout(timeoutId);
   }, [search]);
 
+  function locationText(c: Customer): string {
+    if (c.city && c.county) return `${c.city}, ${c.county}`;
+    if (c.city) return c.city;
+    if (c.postcode) return c.postcode;
+    return '—';
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background">
@@ -59,66 +67,80 @@ export default function CustomersPage() {
     <div className="min-h-screen bg-background">
       <Header />
       <main className="container mx-auto px-6 py-8">
-        <div className="mb-6 flex items-center justify-between">
+        <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <h1 className="text-3xl font-semibold">Customers</h1>
-          <div className="w-64">
+          <div className="relative w-full sm:w-72">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search customers..."
+              placeholder="Search by name, email, phone..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              className="pl-9"
             />
           </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {customers.length === 0 ? (
-            <div className="col-span-full text-center py-12 text-muted-foreground">
-              No customers found
-            </div>
-          ) : (
-            customers.map((customer) => (
-              <Card
-                key={customer.id}
-                className="cursor-pointer hover:shadow-lg transition-shadow"
-                onClick={() => router.push(`/customers/${customer.id}`)}
-              >
-                <CardHeader>
-                  <CardTitle className="flex items-center justify-between">
-                    <span>{customer.name}</span>
-                    <span className="text-sm font-normal text-muted-foreground">
-                      {customer.customer_number}
-                    </span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2 text-sm">
-                    {customer.email && (
-                      <div>
-                        <span className="text-muted-foreground">Email: </span>
-                        {customer.email}
-                      </div>
-                    )}
-                    {customer.phone && (
-                      <div>
-                        <span className="text-muted-foreground">Phone: </span>
-                        {customer.phone}
-                      </div>
-                    )}
-                    {customer.city && (
-                      <div>
-                        <span className="text-muted-foreground">Location: </span>
-                        {customer.city}, {customer.county}
-                      </div>
-                    )}
-                    <div className="text-xs text-muted-foreground mt-2">
-                      Customer since: {new Date(customer.customer_since).toLocaleDateString()}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))
-          )}
-        </div>
+        <Card>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b bg-muted/50">
+                  <th className="text-left p-3 font-medium">Customer #</th>
+                  <th className="text-left p-3 font-medium">Name</th>
+                  <th className="text-left p-3 font-medium">Email</th>
+                  <th className="text-left p-3 font-medium">Phone</th>
+                  <th className="text-left p-3 font-medium">Location</th>
+                  <th className="text-left p-3 font-medium">Customer since</th>
+                  <th className="text-right p-3 font-medium w-16" aria-hidden />
+                </tr>
+              </thead>
+              <tbody>
+                {customers.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="p-8 text-center text-muted-foreground">
+                      No customers found
+                    </td>
+                  </tr>
+                ) : (
+                  customers.map((customer) => (
+                    <tr
+                      key={customer.id}
+                      className="border-b last:border-0 hover:bg-muted/30 cursor-pointer transition-colors"
+                      onClick={() => router.push(`/customers/${customer.id}`)}
+                    >
+                      <td className="p-3 text-muted-foreground font-mono text-sm">
+                        {customer.customer_number}
+                      </td>
+                      <td className="p-3 font-semibold">{customer.name}</td>
+                      <td className="p-3 text-muted-foreground">
+                        {customer.email || '—'}
+                      </td>
+                      <td className="p-3 text-muted-foreground">
+                        {customer.phone || '—'}
+                      </td>
+                      <td className="p-3 text-muted-foreground">
+                        {locationText(customer)}
+                      </td>
+                      <td className="p-3 text-muted-foreground">
+                        {new Date(customer.customer_since).toLocaleDateString()}
+                      </td>
+                      <td className="p-3 text-right" onClick={(e) => e.stopPropagation()}>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => router.push(`/customers/${customer.id}`)}
+                        >
+                          <ChevronRight className="h-4 w-4" />
+                        </Button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
       </main>
     </div>
   );
