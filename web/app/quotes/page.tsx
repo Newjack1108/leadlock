@@ -1,11 +1,19 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Header from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import api, { getQuotes, previewQuotePdf } from '@/lib/api';
 import { Quote, QuoteStatus } from '@/lib/types';
 import { toast } from 'sonner';
@@ -26,6 +34,8 @@ export default function QuotesPage() {
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'list' | 'tile'>('list');
+  const [statusFilter, setStatusFilter] = useState<QuoteStatus | 'ALL'>('ALL');
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     fetchQuotes();
@@ -46,6 +56,22 @@ export default function QuotesPage() {
     }
   };
 
+  const filteredQuotes = useMemo(() => {
+    let result = quotes;
+    if (statusFilter !== 'ALL') {
+      result = result.filter((q) => q.status === statusFilter);
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      result = result.filter(
+        (quote) =>
+          quote.quote_number?.toLowerCase().includes(q) ||
+          quote.customer_name?.toLowerCase().includes(q)
+      );
+    }
+    return result;
+  }, [quotes, statusFilter, searchQuery]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background">
@@ -61,7 +87,7 @@ export default function QuotesPage() {
     <div className="min-h-screen bg-background">
       <Header />
       <main className="container mx-auto px-6 py-8">
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between mb-6">
           <h1 className="text-3xl font-semibold">Quotes</h1>
           {quotes.length > 0 && (
             <div className="flex gap-1 border rounded-md p-1 bg-muted/30">
@@ -85,12 +111,55 @@ export default function QuotesPage() {
           )}
         </div>
 
+        {quotes.length > 0 && (
+          <div className="flex flex-col md:flex-row gap-4 mb-6">
+            <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as QuoteStatus | 'ALL')}>
+              <SelectTrigger className="w-full md:w-[200px]">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All statuses</SelectItem>
+                {Object.values(QuoteStatus).map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {s}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Input
+              placeholder="Search by quote # or customer..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full md:w-[260px]"
+            />
+          </div>
+        )}
+
         {quotes.length === 0 ? (
           <Card>
             <CardContent className="p-6">
               <div className="text-center text-muted-foreground py-12">
                 <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
                 <p>No quotes found</p>
+              </div>
+            </CardContent>
+          </Card>
+        ) : filteredQuotes.length === 0 ? (
+          <Card>
+            <CardContent className="p-6">
+              <div className="text-center text-muted-foreground py-12">
+                <p>No quotes match your filters</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-4"
+                  onClick={() => {
+                    setStatusFilter('ALL');
+                    setSearchQuery('');
+                  }}
+                >
+                  Clear filters
+                </Button>
               </div>
             </CardContent>
           </Card>
@@ -110,7 +179,7 @@ export default function QuotesPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {quotes.map((quote) => (
+                  {filteredQuotes.map((quote) => (
                     <tr
                       key={quote.id}
                       className="border-b last:border-0 hover:bg-muted/30 cursor-pointer transition-colors"
@@ -182,7 +251,7 @@ export default function QuotesPage() {
           </Card>
         ) : (
           <div className="space-y-4">
-            {quotes.map((quote) => (
+            {filteredQuotes.map((quote) => (
               <Card key={quote.id} className="hover:shadow-md transition-shadow">
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
