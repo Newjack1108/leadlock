@@ -4,6 +4,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
 from sqlmodel import Session, select
+from typing import Optional
 from app.database import get_session
 from app.models import (
     Lead,
@@ -17,12 +18,15 @@ from app.models import (
     SmsDirection,
     Activity,
     ActivityType,
+    MessengerMessage,
+    MessengerDirection,
 )
 from app.schemas import LeadCreate, LeadResponse
 from app.auth import get_webhook_api_key
 from app.workflow import check_sla_overdue
 from app.routers.leads import enrich_lead_response
 from app.sms_service import validate_twilio_webhook, normalize_phone, get_twilio_config
+from app.messenger_service import parse_webhook_payload, get_user_profile, get_page_access_token
 
 router = APIRouter(prefix="/api/webhooks", tags=["webhooks"])
 
@@ -254,3 +258,121 @@ async def twilio_inbound_sms(request: Request, session: Session = Depends(get_se
     session.commit()
 
     return Response(content="<Response></Response>", media_type="application/xml")
+
+
+# --- Facebook Messenger webhook ---
+
+def _get_activity_user_id(session) -> Optional[int]:
+    """Resolve a valid user ID for Activity records (e.g. FACEBOOK_ACTIVITY_USER_ID or first user)."""
+    try:
+        preferred_id = int(os.getenv("FACEBOOK_ACTIVITY_USER_ID", "1"))
+        u = session.get(User, preferred_id)
+        if u:
+            return u.id
+    except (ValueError, TypeError):
+        pass
+    first_user = session.exec(select(User).limit(1)).first()
+    return first_user.id if first_user else None
+
+
+@router.get("/facebook/messenger")
+async def facebook_messenger_verify(request: Request):
+    """Facebook webhook verification: return hub.challenge if verify_token matches."""
+    hub_mode = request.query_params.get("hub.mode")
+    hub_verify_token = request.query_params.get("hub.verify_token")
+    hub_challenge = request.query_params.get("hub.challenge")
+    verify_token = os.getenv("FACEBOOK_VERIFY_TOKEN")
+    if not verify_token or hub_mode != "subscribe" or hub_verify_token != verify_token or not hub_challenge:
+        raise HTTPException(status_code=403, detail="Verification failed")
+    return Response(content=hub_challenge, media_type="text/plain")
+
+
+@router.post("/facebook/messenger")
+async def facebook_messenger_webhook(request: Request, session: Session = Depends(get_session)):
+    """
+    Process incoming Facebook Messenger webhook events.
+    Match by messenger_psid (Customer first, then Lead with customer_id); unknown users get Lead + Customer created.
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        return Response(status_code=200)
+    events = parse_webhook_payload(body)
+    if not events:
+        return Response(status_code=200)
+    activity_user_id = _get_activity_user_id(session)
+    now = datetime.utcnow()
+    for ev in events:
+        sender_psid = ev["sender_id"]
+        text = ev.get("text", "")
+        mid = ev.get("mid")
+        if not text:
+            continue
+        customer = None
+        lead = None
+        # Match: Customer first by messenger_psid
+        stmt = select(Customer).where(Customer.messenger_psid == sender_psid)
+        customer = session.exec(stmt).first()
+        if not customer:
+            stmt = select(Lead).where(Lead.messenger_psid == sender_psid)
+            lead = session.exec(stmt).first()
+            if lead and lead.customer_id:
+                customer = session.get(Customer, lead.customer_id)
+        if not customer:
+            # Unknown user: create Lead + Customer
+            ok, first_name, last_name, err = get_user_profile(sender_psid, get_page_access_token())
+            name = " ".join(filter(None, [first_name, last_name])) if (first_name or last_name) else f"Facebook {sender_psid[:8]}"
+            from datetime import date
+            year = date.today().year
+            num_stmt = select(Customer).where(Customer.customer_number.like(f"CUST-{year}-%"))
+            existing = list(session.exec(num_stmt).all())
+            numbers = []
+            for c in existing:
+                try:
+                    num = int(c.customer_number.split("-")[-1])
+                    numbers.append(num)
+                except (ValueError, IndexError):
+                    continue
+            next_num = max(numbers) + 1 if numbers else 1
+            customer_number = f"CUST-{year}-{next_num:03d}"
+            customer = Customer(
+                customer_number=customer_number,
+                name=name,
+                messenger_psid=sender_psid,
+                customer_since=now,
+            )
+            session.add(customer)
+            session.flush()
+            lead = Lead(
+                name=name,
+                lead_source=LeadSource.FACEBOOK,
+                messenger_psid=sender_psid,
+                customer_id=customer.id,
+            )
+            session.add(lead)
+            session.flush()
+        msg = MessengerMessage(
+            customer_id=customer.id,
+            lead_id=lead.id if lead else None,
+            direction=MessengerDirection.RECEIVED,
+            from_psid=sender_psid,
+            to_psid=None,
+            body=text,
+            facebook_mid=mid,
+            received_at=now,
+        )
+        session.add(msg)
+        if activity_user_id:
+            activity = Activity(
+                customer_id=customer.id,
+                activity_type=ActivityType.MESSENGER_RECEIVED,
+                notes=f"Messenger received: {text[:50]}...",
+                created_by_id=activity_user_id,
+            )
+            session.add(activity)
+    try:
+        session.commit()
+    except Exception as e:
+        print(f"Facebook Messenger webhook commit error: {e}", file=sys.stderr, flush=True)
+        session.rollback()
+    return Response(status_code=200)

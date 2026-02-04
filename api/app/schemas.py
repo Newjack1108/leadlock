@@ -8,7 +8,7 @@ from app.models import (
     QuoteStatus, QuoteTemperature, DiscountType, DiscountScope, DiscountRequestStatus,
     LeadType, LeadSource, EmailDirection, ReminderPriority, ReminderType,
     SuggestedAction, OpportunityStage, LossCategory, InstallationLeadTime,
-    SmsDirection, ScheduledSmsStatus
+    SmsDirection, ScheduledSmsStatus, MessengerDirection
 )
 
 
@@ -101,6 +101,7 @@ class CustomerResponse(BaseModel):
     customer_since: datetime
     created_at: datetime
     updated_at: datetime
+    messenger_psid: Optional[str] = None
 
 
 class EmailCreate(BaseModel):
@@ -390,6 +391,43 @@ class UnreadSmsMessageItem(BaseModel):
 class UnreadSmsSummary(BaseModel):
     count: int
     messages: List[UnreadSmsMessageItem] = []
+
+
+class MessengerCreate(BaseModel):
+    customer_id: int
+    to_psid: Optional[str] = None  # If omitted, use customer's messenger_psid
+    body: str
+
+
+class MessengerResponse(BaseModel):
+    id: int
+    customer_id: int
+    lead_id: Optional[int] = None
+    direction: MessengerDirection
+    from_psid: str
+    to_psid: Optional[str] = None
+    body: str
+    facebook_mid: Optional[str] = None
+    sent_at: Optional[datetime] = None
+    received_at: Optional[datetime] = None
+    read_at: Optional[datetime] = None
+    created_by_id: Optional[int] = None
+    created_at: datetime
+    created_by_name: Optional[str] = None
+
+
+class UnreadMessengerMessageItem(BaseModel):
+    id: int
+    customer_id: int
+    customer_name: str
+    body: str
+    received_at: Optional[datetime] = None
+    from_psid: str
+
+
+class UnreadMessengerSummary(BaseModel):
+    count: int
+    messages: List[UnreadMessengerMessageItem] = []
 
 
 PRODUCT_UNIT_VALUES = ("Per Box", "Unit", "Set")

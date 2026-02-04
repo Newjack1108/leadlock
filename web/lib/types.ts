@@ -17,6 +17,8 @@ export enum ActivityType {
   LIVE_CALL = "LIVE_CALL",
   WHATSAPP_SENT = "WHATSAPP_SENT",
   WHATSAPP_RECEIVED = "WHATSAPP_RECEIVED",
+  MESSENGER_SENT = "MESSENGER_SENT",
+  MESSENGER_RECEIVED = "MESSENGER_RECEIVED",
   NOTE = "NOTE",
 }
 
@@ -111,6 +113,7 @@ export interface Customer {
   customer_since: string;
   created_at: string;
   updated_at: string;
+  messenger_psid?: string | null;
 }
 
 export interface Lead {
@@ -301,6 +304,42 @@ export interface UnreadSmsMessageItem {
 export interface UnreadSmsSummary {
   count: number;
   messages: UnreadSmsMessageItem[];
+}
+
+export enum MessengerDirection {
+  SENT = "SENT",
+  RECEIVED = "RECEIVED",
+}
+
+export interface MessengerMessage {
+  id: number;
+  customer_id: number;
+  lead_id?: number | null;
+  direction: MessengerDirection;
+  from_psid: string;
+  to_psid?: string | null;
+  body: string;
+  facebook_mid?: string | null;
+  sent_at?: string | null;
+  received_at?: string | null;
+  read_at?: string | null;
+  created_by_id?: number | null;
+  created_at: string;
+  created_by_name?: string | null;
+}
+
+export interface UnreadMessengerMessageItem {
+  id: number;
+  customer_id: number;
+  customer_name: string;
+  body: string;
+  received_at: string | null;
+  from_psid: string;
+}
+
+export interface UnreadMessengerSummary {
+  count: number;
+  messages: UnreadMessengerMessageItem[];
 }
 
 export interface SmsCreate {

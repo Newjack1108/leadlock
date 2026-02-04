@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends
 from sqlmodel import Session, select, func
 from app.database import get_session
-from app.models import Lead, LeadStatus, Activity, SmsMessage, SmsDirection, Customer
+from app.models import Lead, LeadStatus, Activity, SmsMessage, SmsDirection, Customer, MessengerMessage, MessengerDirection
 from app.auth import get_current_user
-from app.schemas import DashboardStats, UnreadSmsSummary, UnreadSmsMessageItem
+from app.schemas import DashboardStats, UnreadSmsSummary, UnreadSmsMessageItem, UnreadMessengerSummary, UnreadMessengerMessageItem
 from datetime import datetime, timedelta
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
@@ -104,3 +104,39 @@ async def get_unread_sms(
         )
 
     return UnreadSmsSummary(count=count, messages=items)
+
+
+@router.get("/unread-messenger", response_model=UnreadMessengerSummary)
+async def get_unread_messenger(
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_user),
+):
+    """Get count and list of unread received Messenger messages for the dashboard."""
+    statement = (
+        select(MessengerMessage)
+        .where(MessengerMessage.direction == MessengerDirection.RECEIVED, MessengerMessage.read_at.is_(None))
+        .order_by(MessengerMessage.created_at.desc())
+        .limit(10)
+    )
+    messages = list(session.exec(statement).all())
+    count_statement = select(func.count(MessengerMessage.id)).where(
+        MessengerMessage.direction == MessengerDirection.RECEIVED, MessengerMessage.read_at.is_(None)
+    )
+    count = session.exec(count_statement).one()
+    items = []
+    for msg in messages:
+        customer = session.get(Customer, msg.customer_id)
+        customer_name = customer.name if customer else ""
+        received_at = msg.received_at or msg.created_at
+        body_snippet = (msg.body[:80] + "...") if len(msg.body) > 80 else msg.body
+        items.append(
+            UnreadMessengerMessageItem(
+                id=msg.id,
+                customer_id=msg.customer_id,
+                customer_name=customer_name,
+                body=body_snippet,
+                received_at=received_at,
+                from_psid=msg.from_psid or "",
+            )
+        )
+    return UnreadMessengerSummary(count=count, messages=items)

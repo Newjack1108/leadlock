@@ -135,6 +135,31 @@ export const cancelScheduledSms = async (id: number) => {
   return response.data;
 };
 
+// Messenger API functions
+export const sendMessengerMessage = async (data: {
+  customer_id: number;
+  to_psid?: string;
+  body: string;
+}) => {
+  const response = await api.post('/api/messenger', data);
+  return response.data;
+};
+
+export const getCustomerMessenger = async (customerId: number) => {
+  const response = await api.get(`/api/messenger/customers/${customerId}`);
+  return response.data;
+};
+
+export const markCustomerMessengerRead = async (customerId: number) => {
+  const response = await api.post(`/api/messenger/customers/${customerId}/mark-read`);
+  return response.data;
+};
+
+export const getUnreadMessenger = async () => {
+  const response = await api.get('/api/dashboard/unread-messenger');
+  return response.data;
+};
+
 // SMS Template API functions
 export const getSmsTemplates = async () => {
   const response = await api.get('/api/sms-templates');

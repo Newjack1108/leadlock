@@ -32,6 +32,8 @@ class ActivityType(str, Enum):
     LIVE_CALL = "LIVE_CALL"
     WHATSAPP_SENT = "WHATSAPP_SENT"
     WHATSAPP_RECEIVED = "WHATSAPP_RECEIVED"
+    MESSENGER_SENT = "MESSENGER_SENT"
+    MESSENGER_RECEIVED = "MESSENGER_RECEIVED"
     NOTE = "NOTE"
 
 
@@ -114,6 +116,7 @@ class Customer(SQLModel, table=True):
     customer_since: datetime = Field(default_factory=datetime.utcnow)  # When first qualified
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+    messenger_psid: Optional[str] = Field(default=None, unique=True, index=True)  # Facebook Page-Scoped ID for Messenger
     
     # Relationships
     leads: List["Lead"] = Relationship(back_populates="customer")
@@ -121,6 +124,7 @@ class Customer(SQLModel, table=True):
     activities: List["Activity"] = Relationship(back_populates="customer")
     emails: List["Email"] = Relationship(back_populates="customer")
     sms_messages: List["SmsMessage"] = Relationship(back_populates="customer")
+    messenger_messages: List["MessengerMessage"] = Relationship(back_populates="customer")
 
 
 class Lead(SQLModel, table=True):
@@ -139,6 +143,7 @@ class Lead(SQLModel, table=True):
     lead_source: LeadSource = Field(default=LeadSource.UNKNOWN)
     assigned_to_id: Optional[int] = Field(default=None, foreign_key="user.id")
     customer_id: Optional[int] = Field(default=None, foreign_key="customer.id")  # Link to Customer when qualified
+    messenger_psid: Optional[str] = Field(default=None, index=True)  # Facebook Page-Scoped ID for Messenger
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     
@@ -213,6 +218,31 @@ class SmsMessage(SQLModel, table=True):
 
     # Relationships
     customer: "Customer" = Relationship(back_populates="sms_messages")
+    created_by: Optional["User"] = Relationship()
+
+
+class MessengerDirection(str, Enum):
+    SENT = "SENT"
+    RECEIVED = "RECEIVED"
+
+
+class MessengerMessage(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    customer_id: int = Field(foreign_key="customer.id")
+    lead_id: Optional[int] = Field(default=None, foreign_key="lead.id")
+    direction: MessengerDirection
+    from_psid: str  # Sender PSID (user for RECEIVED, our page for SENT)
+    to_psid: Optional[str] = None  # Recipient PSID (our page for RECEIVED, user for SENT)
+    body: str
+    facebook_mid: Optional[str] = Field(default=None, index=True)  # Facebook message ID
+    sent_at: Optional[datetime] = None
+    received_at: Optional[datetime] = None
+    read_at: Optional[datetime] = None  # When RECEIVED message was read (null = unread)
+    created_by_id: Optional[int] = Field(default=None, foreign_key="user.id")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    # Relationships
+    customer: "Customer" = Relationship(back_populates="messenger_messages")
     created_by: Optional["User"] = Relationship()
 
 

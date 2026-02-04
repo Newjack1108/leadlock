@@ -43,6 +43,8 @@ const activityIcons: Record<ActivityType, any> = {
   LIVE_CALL: PhoneCall,
   WHATSAPP_SENT: MessageSquare,
   WHATSAPP_RECEIVED: MessageSquare,
+  MESSENGER_SENT: MessageSquare,
+  MESSENGER_RECEIVED: MessageSquare,
   NOTE: MessageSquare,
 };
 
@@ -55,6 +57,8 @@ const activityColors: Record<ActivityType, string> = {
   LIVE_CALL: 'text-green-600',
   WHATSAPP_SENT: 'text-blue-600',
   WHATSAPP_RECEIVED: 'text-green-600',
+  MESSENGER_SENT: 'text-blue-600',
+  MESSENGER_RECEIVED: 'text-green-600',
   NOTE: 'text-muted-foreground',
 };
 
@@ -494,8 +498,8 @@ export default function CustomerDetailPage() {
               </CardContent>
             </Card>
 
-            {/* Emails & SMS Cards - side by side */}
-            <div className="grid gap-4 sm:grid-cols-2">
+            {/* Emails, SMS & Messenger Cards - side by side */}
+            <div className="grid gap-4 sm:grid-cols-3">
               <Card>
                 <CardHeader>
                   <CardTitle>Emails</CardTitle>
@@ -531,6 +535,21 @@ export default function CustomerDetailPage() {
                   >
                     <MessageSquare className="h-4 w-4 mr-2" />
                     View SMS
+                  </Button>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Messenger</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => router.push(`/customers/${customerId}/messenger`)}
+                  >
+                    <MessageSquare className="h-4 w-4 mr-2" />
+                    View Messenger
                   </Button>
                 </CardContent>
               </Card>

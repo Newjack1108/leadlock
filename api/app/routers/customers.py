@@ -70,7 +70,8 @@ async def get_customers(
             country=customer.country,
             customer_since=customer.customer_since,
             created_at=customer.created_at,
-            updated_at=customer.updated_at
+            updated_at=customer.updated_at,
+            messenger_psid=customer.messenger_psid,
         )
         for customer in customers
     ]
@@ -103,7 +104,8 @@ async def get_customer(
         country=customer.country,
         customer_since=customer.customer_since,
         created_at=customer.created_at,
-        updated_at=customer.updated_at
+        updated_at=customer.updated_at,
+        messenger_psid=customer.messenger_psid,
     )
 
 
@@ -205,7 +207,8 @@ async def update_customer(
         country=customer.country,
         customer_since=customer.customer_since,
         created_at=customer.created_at,
-        updated_at=customer.updated_at
+        updated_at=customer.updated_at,
+        messenger_psid=customer.messenger_psid,
     )
 
 
