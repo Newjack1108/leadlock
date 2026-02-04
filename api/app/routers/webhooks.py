@@ -1,4 +1,5 @@
 import os
+import sys
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
@@ -168,6 +169,7 @@ async def twilio_inbound_sms(request: Request, session: Session = Depends(get_se
     # Use TWILIO_SMS_WEBHOOK_URL when behind a proxy (e.g. Railway) so signature validation uses the public URL
     url = os.getenv("TWILIO_SMS_WEBHOOK_URL") or str(request.url)
     if not validate_twilio_webhook(url, params, signature, auth_token):
+        print("Twilio SMS webhook signature validation failed; set TWILIO_SMS_WEBHOOK_URL if behind a proxy", file=sys.stderr, flush=True)
         return Response(content="Invalid signature", status_code=403)
 
     from_phone = params.get("From", "")
@@ -204,13 +206,29 @@ async def twilio_inbound_sms(request: Request, session: Session = Depends(get_se
             pass
         if not customer:
             # Unknown number: return 200 so Twilio doesn't retry; don't store
+            mask = from_normalized[-4:] if len(from_normalized) >= 4 else "****"
+            print(f"Twilio SMS: no customer/lead match for From=...{mask}", file=sys.stderr, flush=True)
             return Response(content="<Response></Response>", media_type="application/xml")
 
-    # If we found only a lead with no customer, we still need a customer_id for SmsMessage. Plan says customer_id required.
-    # So we only store when we have a customer. If lead exists but no customer, we could add lead_id and customer_id nullable
-    # for SmsMessage - but model has customer_id required. So only store when customer found.
+    # If we found only a lead with no customer, we still need a customer_id for SmsMessage.
     if not customer:
+        mask = from_normalized[-4:] if len(from_normalized) >= 4 else "****"
+        print(f"Twilio SMS: no customer/lead match for From=...{mask}", file=sys.stderr, flush=True)
         return Response(content="<Response></Response>", media_type="application/xml")
+
+    # Resolve a valid user for Activity (avoid FK failure if user id 1 does not exist)
+    activity_user_id = None
+    try:
+        preferred_id = int(os.getenv("TWILIO_ACTIVITY_USER_ID", "1"))
+        u = session.get(User, preferred_id)
+        if u:
+            activity_user_id = u.id
+    except (ValueError, TypeError):
+        pass
+    if activity_user_id is None:
+        first_user = session.exec(select(User).limit(1)).first()
+        if first_user:
+            activity_user_id = first_user.id
 
     msg = SmsMessage(
         customer_id=customer.id,
@@ -223,13 +241,14 @@ async def twilio_inbound_sms(request: Request, session: Session = Depends(get_se
         received_at=datetime.utcnow(),
     )
     session.add(msg)
-    activity = Activity(
-        customer_id=customer.id,
-        activity_type=ActivityType.SMS_RECEIVED,
-        notes=f"SMS received from {from_phone}: {body[:50]}...",
-        created_by_id=1,
-    )
-    session.add(activity)
+    if activity_user_id is not None:
+        activity = Activity(
+            customer_id=customer.id,
+            activity_type=ActivityType.SMS_RECEIVED,
+            notes=f"SMS received from {from_phone}: {body[:50]}...",
+            created_by_id=activity_user_id,
+        )
+        session.add(activity)
     session.commit()
 
     return Response(content="<Response></Response>", media_type="application/xml")
