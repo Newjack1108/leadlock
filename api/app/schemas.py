@@ -7,7 +7,8 @@ from app.models import (
     LeadStatus, ActivityType, Timeframe, UserRole, ProductCategory,
     QuoteStatus, QuoteTemperature, DiscountType, DiscountScope, DiscountRequestStatus,
     LeadType, LeadSource, EmailDirection, ReminderPriority, ReminderType,
-    SuggestedAction, OpportunityStage, LossCategory, InstallationLeadTime
+    SuggestedAction, OpportunityStage, LossCategory, InstallationLeadTime,
+    SmsDirection, ScheduledSmsStatus
 )
 
 
@@ -140,6 +141,54 @@ class EmailReplyRequest(BaseModel):
     body_text: Optional[str] = None
     cc: Optional[str] = None
     bcc: Optional[str] = None
+
+
+class SmsCreate(BaseModel):
+    customer_id: int
+    to_phone: Optional[str] = None
+    body: str
+    lead_id: Optional[int] = None
+
+
+class SmsResponse(BaseModel):
+    id: int
+    customer_id: int
+    lead_id: Optional[int] = None
+    direction: SmsDirection
+    from_phone: str
+    to_phone: str
+    body: str
+    twilio_sid: Optional[str] = None
+    sent_at: Optional[datetime] = None
+    received_at: Optional[datetime] = None
+    created_by_id: Optional[int] = None
+    created_at: datetime
+    created_by_name: Optional[str] = None
+
+
+class SmsScheduledCreate(BaseModel):
+    customer_id: int
+    to_phone: str
+    body: str
+    scheduled_at: datetime
+
+
+class SmsScheduledResponse(BaseModel):
+    id: int
+    customer_id: int
+    to_phone: str
+    body: str
+    scheduled_at: datetime
+    status: ScheduledSmsStatus
+    created_by_id: int
+    created_at: datetime
+    sent_at: Optional[datetime] = None
+    twilio_sid: Optional[str] = None
+
+
+class SmsScheduledUpdate(BaseModel):
+    scheduled_at: Optional[datetime] = None
+    status: Optional[ScheduledSmsStatus] = None
 
 
 class EmailTemplateCreate(BaseModel):

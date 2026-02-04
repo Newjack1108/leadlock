@@ -120,6 +120,7 @@ class Customer(SQLModel, table=True):
     quotes: List["Quote"] = Relationship(back_populates="customer")
     activities: List["Activity"] = Relationship(back_populates="customer")
     emails: List["Email"] = Relationship(back_populates="customer")
+    sms_messages: List["SmsMessage"] = Relationship(back_populates="customer")
 
 
 class Lead(SQLModel, table=True):
@@ -188,6 +189,52 @@ class Email(SQLModel, table=True):
     # Relationships
     customer: "Customer" = Relationship(back_populates="emails")
     created_by: Optional["User"] = Relationship()
+
+
+class SmsDirection(str, Enum):
+    SENT = "SENT"
+    RECEIVED = "RECEIVED"
+
+
+class SmsMessage(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    customer_id: int = Field(foreign_key="customer.id")
+    lead_id: Optional[int] = Field(default=None, foreign_key="lead.id")
+    direction: SmsDirection
+    from_phone: str
+    to_phone: str
+    body: str
+    twilio_sid: Optional[str] = Field(default=None, index=True)
+    sent_at: Optional[datetime] = None
+    received_at: Optional[datetime] = None
+    created_by_id: Optional[int] = Field(default=None, foreign_key="user.id")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    # Relationships
+    customer: "Customer" = Relationship(back_populates="sms_messages")
+    created_by: Optional["User"] = Relationship()
+
+
+class ScheduledSmsStatus(str, Enum):
+    PENDING = "PENDING"
+    SENT = "SENT"
+    CANCELLED = "CANCELLED"
+
+
+class ScheduledSms(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    customer_id: int = Field(foreign_key="customer.id")
+    to_phone: str
+    body: str
+    scheduled_at: datetime
+    status: ScheduledSmsStatus = Field(default=ScheduledSmsStatus.PENDING)
+    created_by_id: int = Field(foreign_key="user.id")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    sent_at: Optional[datetime] = None
+    twilio_sid: Optional[str] = None
+
+    # Relationships
+    created_by: "User" = Relationship()
 
 
 class StatusHistory(SQLModel, table=True):

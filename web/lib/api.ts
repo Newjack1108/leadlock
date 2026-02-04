@@ -79,6 +79,52 @@ export const getEmailThread = async (emailId: number) => {
   return response.data;
 };
 
+// SMS API functions
+export const sendSms = async (data: {
+  customer_id: number;
+  to_phone?: string;
+  body: string;
+  lead_id?: number;
+}) => {
+  const response = await api.post('/api/sms', data);
+  return response.data;
+};
+
+export const getCustomerSms = async (customerId: number) => {
+  const response = await api.get(`/api/sms/customers/${customerId}`);
+  return response.data;
+};
+
+export const getSms = async (smsId: number) => {
+  const response = await api.get(`/api/sms/${smsId}`);
+  return response.data;
+};
+
+export const createScheduledSms = async (data: {
+  customer_id: number;
+  to_phone: string;
+  body: string;
+  scheduled_at: string;
+}) => {
+  const response = await api.post('/api/sms/scheduled', data);
+  return response.data;
+};
+
+export const getScheduledSms = async (params?: { customer_id?: number; status?: string }) => {
+  const response = await api.get('/api/sms/scheduled', { params });
+  return response.data;
+};
+
+export const updateScheduledSms = async (id: number, data: { scheduled_at?: string; status?: string }) => {
+  const response = await api.patch(`/api/sms/scheduled/${id}`, data);
+  return response.data;
+};
+
+export const cancelScheduledSms = async (id: number) => {
+  const response = await api.delete(`/api/sms/scheduled/${id}`);
+  return response.data;
+};
+
 export const sendQuoteEmail = async (quoteId: number, emailData: {
   template_id?: number;
   to_email: string;

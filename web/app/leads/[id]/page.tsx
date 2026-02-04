@@ -91,19 +91,6 @@ export default function LeadDetailPage() {
     }
   };
 
-  const handleQuickLog = async (activityType: ActivityType) => {
-    try {
-      await api.post(`/api/leads/${leadId}/activities`, {
-        activity_type: activityType,
-      });
-      toast.success('Activity logged');
-      fetchLead();
-      fetchActivities();
-    } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Failed to log activity');
-    }
-  };
-
   const handleUpdateLead = async (field: string, value: any) => {
     try {
       await api.patch(`/api/leads/${leadId}`, {
@@ -148,9 +135,7 @@ export default function LeadDetailPage() {
           <h1 className="text-3xl font-semibold">{lead.name}</h1>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-3">
-          {/* Main Content */}
-          <div className="lg:col-span-2 space-y-6">
+        <div className="space-y-6">
             {/* Header Card */}
             <Card>
               <CardHeader>
@@ -352,52 +337,6 @@ export default function LeadDetailPage() {
               </CardContent>
             </Card>
           </div>
-
-          {/* Sidebar */}
-          <div className="space-y-6">
-            {/* Quick Log */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Quick Log</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <Button
-                  variant="outline"
-                  className="w-full justify-start"
-                  onClick={() => handleQuickLog(ActivityType.CALL_ATTEMPTED)}
-                >
-                  <Phone className="h-4 w-4 mr-2" />
-                  Call Attempted
-                </Button>
-                <Button
-                  variant="outline"
-                  className="w-full justify-start"
-                  onClick={() => handleQuickLog(ActivityType.SMS_SENT)}
-                >
-                  <MessageSquare className="h-4 w-4 mr-2" />
-                  SMS Sent
-                </Button>
-                <Button
-                  variant="outline"
-                  className="w-full justify-start"
-                  onClick={() => handleQuickLog(ActivityType.SMS_RECEIVED)}
-                >
-                  <MessageSquare className="h-4 w-4 mr-2" />
-                  SMS Received
-                </Button>
-                <Button
-                  variant="outline"
-                  className="w-full justify-start"
-                  onClick={() => handleQuickLog(ActivityType.LIVE_CALL)}
-                >
-                  <PhoneCall className="h-4 w-4 mr-2" />
-                  Live Call
-                </Button>
-              </CardContent>
-            </Card>
-
-          </div>
-        </div>
       </main>
     </div>
   );

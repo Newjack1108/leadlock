@@ -1,12 +1,27 @@
-from fastapi import APIRouter, Depends, HTTPException
+import os
+from datetime import datetime
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import Response
 from sqlmodel import Session, select
 from app.database import get_session
-from app.models import Lead, User, StatusHistory, LeadStatus, LeadType, LeadSource
+from app.models import (
+    Lead,
+    User,
+    StatusHistory,
+    LeadStatus,
+    LeadType,
+    LeadSource,
+    Customer,
+    SmsMessage,
+    SmsDirection,
+    Activity,
+    ActivityType,
+)
 from app.schemas import LeadCreate, LeadResponse
 from app.auth import get_webhook_api_key
 from app.workflow import check_sla_overdue
 from app.routers.leads import enrich_lead_response
-import os
+from app.sms_service import validate_twilio_webhook, normalize_phone, get_twilio_config
 
 router = APIRouter(prefix="/api/webhooks", tags=["webhooks"])
 
@@ -135,3 +150,85 @@ async def create_lead_webhook(
             quote_lock_reason=quote_lock_reason,
             customer=customer_response
         )
+
+
+@router.post("/twilio/sms")
+async def twilio_inbound_sms(request: Request, session: Session = Depends(get_session)):
+    """
+    Twilio webhook for incoming SMS. No JWT; validated via X-Twilio-Signature.
+    Configure in Twilio: A MESSAGE COMES IN -> POST to this URL.
+    """
+    form = await request.form()
+    params = dict(form)
+    signature = request.headers.get("X-Twilio-Signature", "")
+    _, auth_token, _ = get_twilio_config()
+    if not auth_token:
+        return Response(content="Twilio not configured", status_code=503)
+
+    url = str(request.url)
+    if not validate_twilio_webhook(url, params, signature, auth_token):
+        return Response(content="Invalid signature", status_code=403)
+
+    from_phone = params.get("From", "")
+    to_phone = params.get("To", "")
+    body = params.get("Body", "")
+    message_sid = params.get("MessageSid", "")
+    if not from_phone or not body:
+        return Response(content="<Response></Response>", media_type="application/xml")
+
+    from_normalized = normalize_phone(from_phone)
+    lead = None
+
+    # Find customer by phone, then lead by phone
+    stmt = select(Customer).where(Customer.phone.isnot(None))
+    customers = list(session.exec(stmt).all())
+    customer = None
+    for c in customers:
+        if c.phone and normalize_phone(c.phone) == from_normalized:
+            customer = c
+            break
+
+    if not customer:
+        stmt = select(Lead).where(Lead.phone.isnot(None))
+        leads = list(session.exec(stmt).all())
+        lead = None
+        for l in leads:
+            if l.phone and normalize_phone(l.phone) == from_normalized:
+                lead = l
+                break
+        if lead and lead.customer_id:
+            customer = session.get(Customer, lead.customer_id)
+        if not customer and lead:
+            # Attach to lead's customer if qualified, else skip storing (MVP: only known customers/leads)
+            pass
+        if not customer:
+            # Unknown number: return 200 so Twilio doesn't retry; don't store
+            return Response(content="<Response></Response>", media_type="application/xml")
+
+    # If we found only a lead with no customer, we still need a customer_id for SmsMessage. Plan says customer_id required.
+    # So we only store when we have a customer. If lead exists but no customer, we could add lead_id and customer_id nullable
+    # for SmsMessage - but model has customer_id required. So only store when customer found.
+    if not customer:
+        return Response(content="<Response></Response>", media_type="application/xml")
+
+    msg = SmsMessage(
+        customer_id=customer.id,
+        lead_id=lead.id if lead else None,
+        direction=SmsDirection.RECEIVED,
+        from_phone=from_phone,
+        to_phone=to_phone,
+        body=body,
+        twilio_sid=message_sid,
+        received_at=datetime.utcnow(),
+    )
+    session.add(msg)
+    activity = Activity(
+        customer_id=customer.id,
+        activity_type=ActivityType.SMS_RECEIVED,
+        notes=f"SMS received from {from_phone}: {body[:50]}...",
+        created_by_id=1,
+    )
+    session.add(activity)
+    session.commit()
+
+    return Response(content="<Response></Response>", media_type="application/xml")

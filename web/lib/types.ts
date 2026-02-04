@@ -267,6 +267,65 @@ export interface EmailReplyRequest {
   bcc?: string;
 }
 
+export enum SmsDirection {
+  SENT = "SENT",
+  RECEIVED = "RECEIVED",
+}
+
+export interface SmsMessage {
+  id: number;
+  customer_id: number;
+  lead_id?: number;
+  direction: SmsDirection;
+  from_phone: string;
+  to_phone: string;
+  body: string;
+  twilio_sid?: string;
+  sent_at?: string;
+  received_at?: string;
+  created_by_id?: number;
+  created_at: string;
+  created_by_name?: string;
+}
+
+export interface SmsCreate {
+  customer_id: number;
+  to_phone?: string;
+  body: string;
+  lead_id?: number;
+}
+
+export enum ScheduledSmsStatus {
+  PENDING = "PENDING",
+  SENT = "SENT",
+  CANCELLED = "CANCELLED",
+}
+
+export interface SmsScheduled {
+  id: number;
+  customer_id: number;
+  to_phone: string;
+  body: string;
+  scheduled_at: string;
+  status: ScheduledSmsStatus;
+  created_by_id: number;
+  created_at: string;
+  sent_at?: string;
+  twilio_sid?: string;
+}
+
+export interface SmsScheduledCreate {
+  customer_id: number;
+  to_phone: string;
+  body: string;
+  scheduled_at: string;
+}
+
+export interface SmsScheduledUpdate {
+  scheduled_at?: string;
+  status?: ScheduledSmsStatus;
+}
+
 export interface QuoteEmailSendRequest {
   template_id?: number;
   to_email: string;

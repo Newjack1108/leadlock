@@ -4,7 +4,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from app.database import create_db_and_tables, engine
 from sqlmodel import Session
-from app.routers import auth, leads, dashboard, webhooks, products, settings, quotes, customers, emails, email_templates, reminders, discounts, discount_requests
+from app.routers import auth, leads, dashboard, webhooks, products, settings, quotes, customers, emails, email_templates, reminders, discounts, discount_requests, sms
 from sqlmodel import Session, select
 from app.models import User
 import os
@@ -99,6 +99,7 @@ app.include_router(email_templates.router)
 app.include_router(reminders.router)
 app.include_router(discounts.router)
 app.include_router(discount_requests.router)
+app.include_router(sms.router)
 
 
 @app.on_event("startup")
@@ -215,6 +216,64 @@ def on_startup():
     imap_thread = threading.Thread(target=poll_imap, daemon=True)
     imap_thread.start()
     print("IMAP polling thread started", file=__import__('sys').stderr, flush=True)
+
+    # Scheduled SMS worker: send due messages every 45 seconds
+    from app.models import ScheduledSms, SmsMessage, SmsDirection, ScheduledSmsStatus
+    from app.sms_service import send_sms, normalize_phone
+    from datetime import datetime as dt
+
+    def poll_scheduled_sms():
+        poll_interval = int(os.getenv("SMS_SCHEDULER_INTERVAL", "45"))
+        while True:
+            try:
+                time.sleep(poll_interval)
+                with Session(engine) as session:
+                    statement = (
+                        select(ScheduledSms)
+                        .where(ScheduledSms.status == ScheduledSmsStatus.PENDING)
+                        .where(ScheduledSms.scheduled_at <= dt.utcnow())
+                    )
+                    due = list(session.exec(statement).all())
+                    for scheduled in due:
+                        try:
+                            success, sid, err = send_sms(scheduled.to_phone, scheduled.body)
+                            if success:
+                                from_phone = os.getenv("TWILIO_PHONE_NUMBER", "")
+                                msg = SmsMessage(
+                                    customer_id=scheduled.customer_id,
+                                    direction=SmsDirection.SENT,
+                                    from_phone=from_phone,
+                                    to_phone=normalize_phone(scheduled.to_phone),
+                                    body=scheduled.body,
+                                    twilio_sid=sid,
+                                    sent_at=dt.utcnow(),
+                                    created_by_id=scheduled.created_by_id,
+                                )
+                                session.add(msg)
+                                activity = Activity(
+                                    customer_id=scheduled.customer_id,
+                                    activity_type=ActivityType.SMS_SENT,
+                                    notes=f"Scheduled SMS sent to {scheduled.to_phone}",
+                                    created_by_id=scheduled.created_by_id,
+                                )
+                                session.add(activity)
+                                scheduled.status = ScheduledSmsStatus.SENT
+                                scheduled.sent_at = dt.utcnow()
+                                scheduled.twilio_sid = sid
+                                session.add(scheduled)
+                            else:
+                                print(f"Scheduled SMS {scheduled.id} send failed: {err}", file=__import__("sys").stderr, flush=True)
+                            session.commit()
+                        except Exception as e:
+                            print(f"Error processing scheduled SMS {scheduled.id}: {e}", file=__import__("sys").stderr, flush=True)
+                            session.rollback()
+            except Exception as e:
+                print(f"Error in scheduled SMS worker: {e}", file=__import__("sys").stderr, flush=True)
+                time.sleep(60)
+
+    sms_scheduler_thread = threading.Thread(target=poll_scheduled_sms, daemon=True)
+    sms_scheduler_thread.start()
+    print("Scheduled SMS worker started", file=__import__("sys").stderr, flush=True)
 
 
 @app.get("/")
