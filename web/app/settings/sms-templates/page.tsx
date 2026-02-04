@@ -53,7 +53,7 @@ export default function SmsTemplatesPage() {
       const data = await getSmsTemplates();
       setTemplates(data);
     } catch (error: unknown) {
-      const err = error as { response?: { status?: number }; response?: { data?: { detail?: string } } };
+      const err = error as { response?: { status?: number; data?: { detail?: string } } };
       if (err.response?.status === 401) {
         router.push('/login');
       } else {
