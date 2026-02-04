@@ -205,23 +205,6 @@ export default function CustomerDetailPage() {
     }
   };
 
-  const handleQuickLog = async (activityType: ActivityType) => {
-    try {
-      await api.post(`/api/customers/${customerId}/activities`, {
-        activity_type: activityType,
-      });
-      toast.success('Activity logged');
-      fetchActivities();
-      fetchHistory();
-      // Add small delay to ensure database transaction is committed
-      setTimeout(() => {
-        checkQuotePrerequisites();
-      }, 200);
-    } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Failed to log activity');
-    }
-  };
-
   const handleUpdateCustomer = async (field: string, value: any) => {
     try {
       await api.patch(`/api/customers/${customerId}`, {
@@ -268,9 +251,7 @@ export default function CustomerDetailPage() {
           <h1 className="text-3xl font-semibold">{customer.name}</h1>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-3">
-          {/* Main Content */}
-          <div className="lg:col-span-2 space-y-6">
+        <div className="space-y-6">
             {/* Customer Profile Card */}
             <Card>
               <CardHeader>
@@ -513,30 +494,47 @@ export default function CustomerDetailPage() {
               </CardContent>
             </Card>
 
-            {/* Emails Card */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Emails</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <Button
-                  variant="default"
-                  className="w-full"
-                  onClick={() => setComposeEmailDialogOpen(true)}
-                >
-                  <Send className="h-4 w-4 mr-2" />
-                  Compose Email
-                </Button>
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => router.push(`/customers/${customerId}/emails`)}
-                >
-                  <Mail className="h-4 w-4 mr-2" />
-                  View All Emails
-                </Button>
-              </CardContent>
-            </Card>
+            {/* Emails & SMS Cards - side by side */}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Emails</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <Button
+                    variant="default"
+                    className="w-full"
+                    onClick={() => setComposeEmailDialogOpen(true)}
+                  >
+                    <Send className="h-4 w-4 mr-2" />
+                    Compose Email
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => router.push(`/customers/${customerId}/emails`)}
+                  >
+                    <Mail className="h-4 w-4 mr-2" />
+                    View All Emails
+                  </Button>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle>SMS</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => router.push(`/customers/${customerId}/sms`)}
+                  >
+                    <MessageSquare className="h-4 w-4 mr-2" />
+                    View SMS
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
 
             {/* Related Leads Card */}
             <Card>
@@ -681,51 +679,6 @@ export default function CustomerDetailPage() {
               </CardContent>
             </Card>
           </div>
-
-          {/* Sidebar */}
-          <div className="space-y-6">
-            {/* Quick Log */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Quick Log</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <Button
-                  variant="outline"
-                  className="w-full justify-start"
-                  onClick={() => handleQuickLog(ActivityType.CALL_ATTEMPTED)}
-                >
-                  <Phone className="h-4 w-4 mr-2" />
-                  Call Attempted
-                </Button>
-                <Button
-                  variant="outline"
-                  className="w-full justify-start"
-                  onClick={() => handleQuickLog(ActivityType.SMS_SENT)}
-                >
-                  <MessageSquare className="h-4 w-4 mr-2" />
-                  SMS Sent
-                </Button>
-                <Button
-                  variant="outline"
-                  className="w-full justify-start"
-                  onClick={() => handleQuickLog(ActivityType.SMS_RECEIVED)}
-                >
-                  <MessageSquare className="h-4 w-4 mr-2" />
-                  SMS Received
-                </Button>
-                <Button
-                  variant="outline"
-                  className="w-full justify-start"
-                  onClick={() => handleQuickLog(ActivityType.LIVE_CALL)}
-                >
-                  <PhoneCall className="h-4 w-4 mr-2" />
-                  Live Call
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
       </main>
 
       {customer && selectedQuoteId && (
