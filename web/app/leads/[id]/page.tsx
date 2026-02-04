@@ -37,6 +37,8 @@ const activityIcons: Record<ActivityType, any> = {
   LIVE_CALL: PhoneCall,
   WHATSAPP_SENT: MessageSquare,
   WHATSAPP_RECEIVED: MessageSquare,
+  MESSENGER_SENT: MessageSquare,
+  MESSENGER_RECEIVED: MessageSquare,
   NOTE: MessageSquare,
 };
 
@@ -49,6 +51,8 @@ const activityColors: Record<ActivityType, string> = {
   LIVE_CALL: 'text-green-600',
   WHATSAPP_SENT: 'text-blue-600',
   WHATSAPP_RECEIVED: 'text-green-600',
+  MESSENGER_SENT: 'text-blue-600',
+  MESSENGER_RECEIVED: 'text-green-600',
   NOTE: 'text-muted-foreground',
 };
 
