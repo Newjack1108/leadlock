@@ -27,11 +27,12 @@ import {
   Building,
   Eye,
 } from 'lucide-react';
-import api, { getCustomerHistory, logCallAndOpenTel } from '@/lib/api';
+import api, { getCustomerHistory } from '@/lib/api';
 import { Customer, Activity, ActivityType, Lead, OpportunityStage, CustomerHistoryEvent, CustomerHistoryEventType } from '@/lib/types';
-import { toast } from 'sonner';
 import SendQuoteEmailDialog from '@/components/SendQuoteEmailDialog';
 import ComposeEmailDialog from '@/components/ComposeEmailDialog';
+import CallNotesDialog from '@/components/CallNotesDialog';
+import { toast } from 'sonner';
 
 const activityIcons: Record<ActivityType, any> = {
   SMS_SENT: MessageSquare,
@@ -110,6 +111,7 @@ export default function CustomerDetailPage() {
   const [sendEmailDialogOpen, setSendEmailDialogOpen] = useState(false);
   const [selectedQuoteId, setSelectedQuoteId] = useState<number | null>(null);
   const [composeEmailDialogOpen, setComposeEmailDialogOpen] = useState(false);
+  const [callNotesDialogOpen, setCallNotesDialogOpen] = useState(false);
 
   useEffect(() => {
     if (customerId) {
@@ -312,16 +314,7 @@ export default function CustomerDetailPage() {
                           size="icon"
                           className="shrink-0"
                           title="Call"
-                          onClick={async () => {
-                            try {
-                              await logCallAndOpenTel(customerId, customer.phone!, () => {
-                                fetchHistory();
-                                fetchActivities();
-                              });
-                            } catch {
-                              toast.error('Failed to log call');
-                            }
-                          }}
+                          onClick={() => setCallNotesDialogOpen(true)}
                         >
                           <Phone className="h-4 w-4" />
                         </Button>
@@ -761,6 +754,20 @@ export default function CustomerDetailPage() {
             setTimeout(() => {
               checkQuotePrerequisites();
             }, 200);
+          }}
+        />
+      )}
+
+      {customer && customer.phone && (
+        <CallNotesDialog
+          open={callNotesDialogOpen}
+          onOpenChange={setCallNotesDialogOpen}
+          customerId={customerId}
+          customerName={customer.name}
+          phone={customer.phone}
+          onSuccess={() => {
+            fetchHistory();
+            fetchActivities();
           }}
         />
       )}

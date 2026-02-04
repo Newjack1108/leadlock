@@ -493,6 +493,7 @@ class ReminderType(str, Enum):
     QUOTE_STALE = "QUOTE_STALE"
     QUOTE_EXPIRING = "QUOTE_EXPIRING"
     QUOTE_EXPIRED = "QUOTE_EXPIRED"
+    MANUAL = "MANUAL"  # User-created follow-up (e.g. call back)
 
 
 class SuggestedAction(str, Enum):

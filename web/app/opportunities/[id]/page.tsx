@@ -25,9 +25,9 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { ArrowLeft, Save, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
-import api, { logCallAndOpenTel } from '@/lib/api';
+import api from '@/lib/api';
 import { Quote, OpportunityStage, LossCategory, Customer, QuoteTemperature } from '@/lib/types';
-import { getTelUrl } from '@/lib/utils';
+import CallNotesDialog from '@/components/CallNotesDialog';
 import { toast } from 'sonner';
 
 const stageColors: Record<OpportunityStage, string> = {
@@ -51,6 +51,7 @@ export default function OpportunityDetailPage() {
   const [saving, setSaving] = useState(false);
   const [wonDialogOpen, setWonDialogOpen] = useState(false);
   const [lostDialogOpen, setLostDialogOpen] = useState(false);
+  const [callNotesOpen, setCallNotesOpen] = useState(false);
   const [formData, setFormData] = useState({
     opportunity_stage: undefined as OpportunityStage | undefined,
     close_probability: undefined as number | undefined,
@@ -449,20 +450,13 @@ export default function OpportunityDetailPage() {
                   {customer.email && <p className="text-sm text-muted-foreground">{customer.email}</p>}
                   {customer.phone && (
                     <p className="text-sm text-muted-foreground">
-                      <a
-                        href={getTelUrl(customer.phone)}
-                        className="text-primary hover:underline"
-                        onClick={async (e) => {
-                          e.preventDefault();
-                          try {
-                            await logCallAndOpenTel(customer.id, customer.phone!);
-                          } catch {
-                            toast.error('Failed to log call');
-                          }
-                        }}
+                      <button
+                        type="button"
+                        className="text-primary hover:underline text-left"
+                        onClick={() => setCallNotesOpen(true)}
                       >
                         {customer.phone}
-                      </a>
+                      </button>
                     </p>
                   )}
                   <Button
@@ -550,6 +544,16 @@ export default function OpportunityDetailPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {customer && customer.phone && (
+          <CallNotesDialog
+            open={callNotesOpen}
+            onOpenChange={setCallNotesOpen}
+            customerId={customer.id}
+            customerName={customer.name}
+            phone={customer.phone}
+          />
+        )}
       </main>
     </div>
   );

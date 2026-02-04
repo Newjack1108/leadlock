@@ -6,17 +6,66 @@ from sqlmodel import Session, select, and_, or_, func
 from typing import List, Optional
 from app.database import get_session
 from app.auth import get_current_user
+from datetime import date as date_type
 from app.models import (
     Reminder, ReminderRule, User, Lead, Quote, Customer,
-    ReminderType, ReminderPriority
+    ReminderType, ReminderPriority, SuggestedAction
 )
 from app.schemas import (
     ReminderResponse, ReminderDismissRequest, ReminderActRequest,
-    ReminderRuleResponse, ReminderRuleUpdate, StaleSummaryResponse
+    ReminderRuleResponse, ReminderRuleUpdate, StaleSummaryResponse,
+    ManualReminderCreate
 )
 from app.reminder_service import generate_reminders
 
 router = APIRouter(prefix="/api/reminders", tags=["reminders"])
+
+
+@router.post("", response_model=ReminderResponse)
+async def create_manual_reminder(
+    body: ManualReminderCreate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    """Create a manual reminder (e.g. call back) for a customer."""
+    customer = session.exec(select(Customer).where(Customer.id == body.customer_id)).first()
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    today = date_type.today()
+    delta = (body.reminder_date - today).days
+    days_stale = max(0, delta)
+    reminder = Reminder(
+        reminder_type=ReminderType.MANUAL,
+        lead_id=None,
+        quote_id=None,
+        customer_id=body.customer_id,
+        assigned_to_id=current_user.id,
+        priority=ReminderPriority.MEDIUM,
+        title=body.title,
+        message=body.message,
+        suggested_action=SuggestedAction.CONTACT_CUSTOMER,
+        days_stale=days_stale,
+    )
+    session.add(reminder)
+    session.commit()
+    session.refresh(reminder)
+    return ReminderResponse(
+        id=reminder.id,
+        reminder_type=reminder.reminder_type,
+        lead_id=reminder.lead_id,
+        quote_id=reminder.quote_id,
+        customer_id=reminder.customer_id,
+        assigned_to_id=reminder.assigned_to_id,
+        priority=reminder.priority,
+        title=reminder.title,
+        message=reminder.message,
+        suggested_action=reminder.suggested_action,
+        days_stale=reminder.days_stale,
+        created_at=reminder.created_at,
+        dismissed_at=reminder.dismissed_at,
+        acted_upon_at=reminder.acted_upon_at,
+        customer_name=customer.name,
+    )
 
 
 @router.get("", response_model=List[ReminderResponse])

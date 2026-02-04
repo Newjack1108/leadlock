@@ -532,6 +532,7 @@ export enum ReminderType {
   QUOTE_STALE = "QUOTE_STALE",
   QUOTE_EXPIRING = "QUOTE_EXPIRING",
   QUOTE_EXPIRED = "QUOTE_EXPIRED",
+  MANUAL = "MANUAL",
 }
 
 export enum SuggestedAction {

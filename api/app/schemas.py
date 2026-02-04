@@ -1,6 +1,6 @@
 from pydantic import BaseModel, EmailStr, field_validator
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, date
 from decimal import Decimal
 from enum import Enum
 from app.models import (
@@ -657,6 +657,14 @@ class ReminderResponse(BaseModel):
     lead_name: Optional[str] = None
     quote_number: Optional[str] = None
     customer_name: Optional[str] = None
+
+
+class ManualReminderCreate(BaseModel):
+    """Create a user-defined reminder (e.g. call back)."""
+    customer_id: int
+    title: str
+    message: str
+    reminder_date: date  # Day to be reminded
 
 
 class ReminderDismissRequest(BaseModel):

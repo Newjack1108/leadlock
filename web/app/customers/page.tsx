@@ -6,17 +6,20 @@ import Header from '@/components/Header';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import api, { logCallAndOpenTel } from '@/lib/api';
+import api from '@/lib/api';
 import { Customer } from '@/lib/types';
 import { getTelUrl } from '@/lib/utils';
 import { toast } from 'sonner';
 import { Search, ChevronRight } from 'lucide-react';
+import CallNotesDialog from '@/components/CallNotesDialog';
 
 export default function CustomersPage() {
   const router = useRouter();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [callNotesOpen, setCallNotesOpen] = useState(false);
+  const [callNotesCustomer, setCallNotesCustomer] = useState<{ id: number; name: string; phone: string } | null>(null);
 
   useEffect(() => {
     fetchCustomers();
@@ -118,20 +121,17 @@ export default function CustomersPage() {
                       </td>
                       <td className="p-3 text-muted-foreground" onClick={(e) => e.stopPropagation()}>
                         {customer.phone ? (
-                          <a
-                            href={getTelUrl(customer.phone)}
-                            className="text-primary hover:underline"
-                            onClick={async (e) => {
+                          <button
+                            type="button"
+                            className="text-primary hover:underline text-left"
+                            onClick={(e) => {
                               e.preventDefault();
-                              try {
-                                await logCallAndOpenTel(customer.id, customer.phone!);
-                              } catch {
-                                toast.error('Failed to log call');
-                              }
+                              setCallNotesCustomer({ id: customer.id, name: customer.name, phone: customer.phone! });
+                              setCallNotesOpen(true);
                             }}
                           >
                             {customer.phone}
-                          </a>
+                          </button>
                         ) : (
                           '—'
                         )}
@@ -160,6 +160,16 @@ export default function CustomersPage() {
           </div>
         </Card>
       </main>
+
+      {callNotesCustomer && (
+        <CallNotesDialog
+          open={callNotesOpen}
+          onOpenChange={setCallNotesOpen}
+          customerId={callNotesCustomer.id}
+          customerName={callNotesCustomer.name}
+          phone={callNotesCustomer.phone}
+        />
+      )}
     </div>
   );
 }

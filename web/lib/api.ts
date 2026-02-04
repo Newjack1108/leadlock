@@ -361,20 +361,44 @@ export const getCustomerHistory = async (customerId: number) => {
   return response.data;
 };
 
-/** Log a call activity for the customer and open the tel: URL (dialer). */
-export const logCallAndOpenTel = async (
+/** Log a call activity for the customer (no dialer). */
+export const logCallActivity = async (
   customerId: number,
-  phone: string,
-  onSuccess?: () => void
+  notes?: string
 ): Promise<void> => {
   await api.post(`/api/customers/${customerId}/activities`, {
     activity_type: 'CALL_ATTEMPTED',
+    notes: notes || undefined,
+  });
+};
+
+/** Log a call activity and open the tel: URL (dialer). */
+export const logCallAndOpenTel = async (
+  customerId: number,
+  phone: string,
+  onSuccess?: () => void,
+  notes?: string
+): Promise<void> => {
+  await api.post(`/api/customers/${customerId}/activities`, {
+    activity_type: 'CALL_ATTEMPTED',
+    notes: notes || undefined,
   });
   onSuccess?.();
   const telUrl = getTelUrl(phone);
   if (telUrl && typeof window !== 'undefined') {
     window.location.href = telUrl;
   }
+};
+
+/** Create a manual reminder for a customer (e.g. call back). */
+export const createManualReminder = async (data: {
+  customer_id: number;
+  title: string;
+  message: string;
+  reminder_date: string; // YYYY-MM-DD
+}) => {
+  const response = await api.post('/api/reminders', data);
+  return response.data;
 };
 
 // Discount Template API functions
