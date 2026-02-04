@@ -17,7 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { MessageSquare, ArrowLeft, Send, CalendarClock } from 'lucide-react';
+import { MessageSquare, ArrowLeft, Send, CalendarClock, RefreshCw } from 'lucide-react';
 import {
   getCustomerSms,
   sendSms,
@@ -64,12 +64,17 @@ export default function CustomerSmsPage() {
   const [loadingScheduleTemplate, setLoadingScheduleTemplate] = useState(false);
 
   useEffect(() => {
-    if (customerId) {
-      fetchCustomer();
+    if (!customerId) return;
+    fetchCustomer();
+    fetchMessages();
+    fetchScheduled();
+    fetchSmsTemplates();
+    const pollMs = 25 * 1000;
+    const interval = setInterval(() => {
       fetchMessages();
       fetchScheduled();
-      fetchSmsTemplates();
-    }
+    }, pollMs);
+    return () => clearInterval(interval);
   }, [customerId]);
 
   const fetchSmsTemplates = async () => {
@@ -328,7 +333,17 @@ export default function CustomerSmsPage() {
 
             <Card>
               <CardHeader>
-                <CardTitle>Conversation</CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Conversation</CardTitle>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => { fetchMessages(); fetchScheduled(); }}
+                    title="Refresh messages"
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
                 {messages.length === 0 ? (
