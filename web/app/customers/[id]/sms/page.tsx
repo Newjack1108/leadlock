@@ -26,6 +26,7 @@ import {
   cancelScheduledSms,
   getSmsTemplates,
   previewSmsTemplate,
+  markCustomerSmsRead,
 } from '@/lib/api';
 import {
   SmsMessage,
@@ -101,6 +102,8 @@ export default function CustomerSmsPage() {
     try {
       const data = await getCustomerSms(customerId);
       setMessages(data);
+      // Mark received messages as read so dashboard unread count updates
+      markCustomerSmsRead(customerId).catch(() => {});
     } catch (error: unknown) {
       toast.error('Failed to load messages');
       if (error && typeof error === 'object' && 'response' in error) {

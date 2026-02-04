@@ -597,6 +597,21 @@ def create_db_and_tables():
                     if "already exists" not in error_str and "duplicate" not in error_str:
                         print(f"Error adding parent_quote_item_id column: {e}", file=sys.stderr, flush=True)
         
+        # Step 13: Add read_at to SmsMessage table (unread tracking for received SMS)
+        has_smsmessage_table = inspector.has_table("smsmessage")
+        if has_smsmessage_table:
+            sms_columns = [col['name'] for col in inspector.get_columns("smsmessage")]
+            if "read_at" not in sms_columns:
+                print("Adding read_at column to smsmessage table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE smsmessage ADD COLUMN read_at TIMESTAMP"))
+                    print("Added read_at column to smsmessage table", file=sys.stderr, flush=True)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Error adding read_at column: {e}", file=sys.stderr, flush=True)
+        
         print("Migration check completed", file=sys.stderr, flush=True)
     except Exception as e:
         # Log error but don't crash - migration might have already run

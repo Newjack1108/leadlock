@@ -161,6 +161,7 @@ class SmsResponse(BaseModel):
     twilio_sid: Optional[str] = None
     sent_at: Optional[datetime] = None
     received_at: Optional[datetime] = None
+    read_at: Optional[datetime] = None
     created_by_id: Optional[int] = None
     created_at: datetime
     created_by_name: Optional[str] = None
@@ -374,6 +375,21 @@ class DashboardStats(BaseModel):
     lost_count: int
     engaged_percentage: float
     qualified_percentage: float
+
+
+class UnreadSmsMessageItem(BaseModel):
+    """Single unread SMS for dashboard list."""
+    id: int
+    customer_id: int
+    customer_name: str
+    body: str  # snippet, full or truncated
+    received_at: Optional[datetime] = None
+    from_phone: str
+
+
+class UnreadSmsSummary(BaseModel):
+    count: int
+    messages: List[UnreadSmsMessageItem] = []
 
 
 PRODUCT_UNIT_VALUES = ("Per Box", "Unit", "Set")

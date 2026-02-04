@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends
 from sqlmodel import Session, select, func
 from app.database import get_session
-from app.models import Lead, LeadStatus, Activity
+from app.models import Lead, LeadStatus, Activity, SmsMessage, SmsDirection, Customer
 from app.auth import get_current_user
-from app.schemas import DashboardStats
+from app.schemas import DashboardStats, UnreadSmsSummary, UnreadSmsMessageItem
 from datetime import datetime, timedelta
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
@@ -65,3 +65,42 @@ async def get_stuck_leads(
             })
     
     return stuck_leads
+
+
+@router.get("/unread-sms", response_model=UnreadSmsSummary)
+async def get_unread_sms(
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_user),
+):
+    """Get count and list of unread received SMS for the dashboard."""
+    # Unread = RECEIVED messages with read_at IS NULL
+    statement = (
+        select(SmsMessage)
+        .where(SmsMessage.direction == SmsDirection.RECEIVED, SmsMessage.read_at.is_(None))
+        .order_by(SmsMessage.created_at.desc())
+        .limit(10)
+    )
+    messages = list(session.exec(statement).all())
+    count_statement = select(func.count(SmsMessage.id)).where(
+        SmsMessage.direction == SmsDirection.RECEIVED, SmsMessage.read_at.is_(None)
+    )
+    count = session.exec(count_statement).one()
+
+    items = []
+    for msg in messages:
+        customer = session.get(Customer, msg.customer_id)
+        customer_name = customer.name if customer else ""
+        received_at = msg.received_at or msg.created_at
+        body_snippet = (msg.body[:80] + "...") if len(msg.body) > 80 else msg.body
+        items.append(
+            UnreadSmsMessageItem(
+                id=msg.id,
+                customer_id=msg.customer_id,
+                customer_name=customer_name,
+                body=body_snippet,
+                received_at=received_at,
+                from_phone=msg.from_phone or "",
+            )
+        )
+
+    return UnreadSmsSummary(count=count, messages=items)

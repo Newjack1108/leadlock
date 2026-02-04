@@ -43,6 +43,7 @@ def _sms_to_response(msg: SmsMessage, created_by_name: Optional[str] = None) -> 
         twilio_sid=msg.twilio_sid,
         sent_at=msg.sent_at,
         received_at=msg.received_at,
+        read_at=msg.read_at,
         created_by_id=msg.created_by_id,
         created_at=msg.created_at,
         created_by_name=created_by_name,
@@ -131,6 +132,32 @@ async def get_customer_sms(
             name = u.full_name if u else None
         result.append(_sms_to_response(msg, name))
     return result
+
+
+@router.post("/customers/{customer_id}/mark-read")
+async def mark_customer_sms_read(
+    customer_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Mark all received SMS for this customer as read."""
+    statement = select(Customer).where(Customer.id == customer_id)
+    customer = session.exec(statement).first()
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+
+    statement = select(SmsMessage).where(
+        SmsMessage.customer_id == customer_id,
+        SmsMessage.direction == SmsDirection.RECEIVED,
+        SmsMessage.read_at.is_(None),
+    )
+    messages = list(session.exec(statement).all())
+    now = datetime.utcnow()
+    for msg in messages:
+        msg.read_at = now
+        session.add(msg)
+    session.commit()
+    return {"marked_count": len(messages)}
 
 
 # Scheduled SMS (must be before /{sms_id} so /scheduled is not captured as sms_id)

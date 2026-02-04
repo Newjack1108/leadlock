@@ -7,10 +7,10 @@ import Header from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import ReminderList from '@/components/ReminderList';
-import api, { getStaleSummary, getCompanySettings } from '@/lib/api';
-import { DashboardStats, StaleSummary, CompanySettings } from '@/lib/types';
+import api, { getStaleSummary, getCompanySettings, getUnreadSms } from '@/lib/api';
+import { DashboardStats, StaleSummary, CompanySettings, UnreadSmsSummary } from '@/lib/types';
 import { toast } from 'sonner';
-import { TrendingUp, Users, CheckCircle2, DollarSign, Bell, ArrowRight, Clock } from 'lucide-react';
+import { TrendingUp, Users, CheckCircle2, DollarSign, Bell, ArrowRight, Clock, MessageSquare } from 'lucide-react';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -18,6 +18,7 @@ export default function DashboardPage() {
   const [companySettings, setCompanySettings] = useState<CompanySettings | null>(null);
   const [stuckLeads, setStuckLeads] = useState<any[]>([]);
   const [staleSummary, setStaleSummary] = useState<StaleSummary | null>(null);
+  const [unreadSms, setUnreadSms] = useState<UnreadSmsSummary | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -26,16 +27,18 @@ export default function DashboardPage() {
 
   const fetchDashboard = async () => {
     try {
-      const [statsRes, stuckRes, staleRes, companyRes] = await Promise.all([
+      const [statsRes, stuckRes, staleRes, companyRes, unreadSmsRes] = await Promise.all([
         api.get('/api/dashboard/stats'),
         api.get('/api/dashboard/stuck-leads'),
         getStaleSummary().catch(() => null), // Don't fail if reminders not available
         getCompanySettings().catch(() => null), // Don't fail if settings not set up yet
+        getUnreadSms().catch(() => ({ count: 0, messages: [] })),
       ]);
       setStats(statsRes.data);
       setStuckLeads(stuckRes.data);
       setStaleSummary(staleRes);
       setCompanySettings(companyRes ?? null);
+      setUnreadSms(unreadSmsRes ?? { count: 0, messages: [] });
     } catch (error: any) {
       if (error.response?.status === 401) {
         router.push('/login');
@@ -208,6 +211,45 @@ export default function DashboardPage() {
                   <div className="text-sm text-muted-foreground">Stale Quotes</div>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Unread SMS */}
+        {unreadSms && unreadSms.count > 0 && (
+          <Card className="mb-8">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <MessageSquare className="h-5 w-5" />
+                Unread SMS
+              </CardTitle>
+              <span className="text-sm text-muted-foreground">{unreadSms.count} to deal with</span>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {unreadSms.messages.slice(0, 5).map((msg) => (
+                  <div
+                    key={msg.id}
+                    className="flex items-center justify-between p-3 rounded-lg bg-card border border-border"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium truncate">{msg.customer_name}</p>
+                      <p className="text-sm text-muted-foreground truncate">{msg.body}</p>
+                    </div>
+                    <Link href={`/customers/${msg.customer_id}/sms`}>
+                      <Button variant="outline" size="sm">
+                        View
+                        <ArrowRight className="h-4 w-4 ml-1" />
+                      </Button>
+                    </Link>
+                  </div>
+                ))}
+              </div>
+              {unreadSms.messages.length > 5 && (
+                <p className="text-sm text-muted-foreground mt-2">
+                  +{unreadSms.count - 5} more — open a conversation above to clear them
+                </p>
+              )}
             </CardContent>
           </Card>
         )}

@@ -207,6 +207,7 @@ class SmsMessage(SQLModel, table=True):
     twilio_sid: Optional[str] = Field(default=None, index=True)
     sent_at: Optional[datetime] = None
     received_at: Optional[datetime] = None
+    read_at: Optional[datetime] = None  # When RECEIVED message was read (null = unread)
     created_by_id: Optional[int] = Field(default=None, foreign_key="user.id")
     created_at: datetime = Field(default_factory=datetime.utcnow)
 

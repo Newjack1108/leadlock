@@ -283,9 +283,24 @@ export interface SmsMessage {
   twilio_sid?: string;
   sent_at?: string;
   received_at?: string;
+  read_at?: string | null;
   created_by_id?: number;
   created_at: string;
   created_by_name?: string;
+}
+
+export interface UnreadSmsMessageItem {
+  id: number;
+  customer_id: number;
+  customer_name: string;
+  body: string;
+  received_at: string | null;
+  from_phone: string;
+}
+
+export interface UnreadSmsSummary {
+  count: number;
+  messages: UnreadSmsMessageItem[];
 }
 
 export interface SmsCreate {

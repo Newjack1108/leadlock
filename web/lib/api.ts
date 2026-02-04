@@ -95,6 +95,16 @@ export const getCustomerSms = async (customerId: number) => {
   return response.data;
 };
 
+export const getUnreadSms = async () => {
+  const response = await api.get('/api/dashboard/unread-sms');
+  return response.data;
+};
+
+export const markCustomerSmsRead = async (customerId: number) => {
+  const response = await api.post(`/api/sms/customers/${customerId}/mark-read`);
+  return response.data;
+};
+
 export const getSms = async (smsId: number) => {
   const response = await api.get(`/api/sms/${smsId}`);
   return response.data;
