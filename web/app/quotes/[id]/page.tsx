@@ -10,6 +10,7 @@ import api, { getQuote, previewQuotePdf, getDiscountRequestsForQuote } from '@/l
 import { Quote, QuoteItem, Customer, QuoteDiscount, DiscountRequest, DiscountRequestStatus, QuoteTemperature } from '@/lib/types';
 import SendQuoteEmailDialog from '@/components/SendQuoteEmailDialog';
 import CallNotesDialog from '@/components/CallNotesDialog';
+import { toast } from 'sonner';
 import Link from 'next/link';
 import { ArrowLeft, Mail, Eye, Tag, Pencil, ChevronDown, ChevronUp, Send } from 'lucide-react';
 import RequestDiscountDialog from '@/components/RequestDiscountDialog';
