@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, select, or_
 from typing import Optional, List
 from app.database import get_session
-from app.models import Customer, User, Activity, Quote, Lead, QuoteItem, StatusHistory, Email, QuoteEmail, EmailDirection, QuoteStatus
+from app.models import Customer, User, Activity, Quote, Lead, LeadStatus, QuoteItem, StatusHistory, Email, QuoteEmail, EmailDirection, QuoteStatus
 from app.auth import get_current_user
 from app.schemas import (
     CustomerResponse, CustomerUpdate, ActivityCreate, ActivityResponse, QuoteResponse, QuoteItemResponse,
