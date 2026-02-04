@@ -25,8 +25,9 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { ArrowLeft, Save, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
-import api from '@/lib/api';
+import api, { logCallAndOpenTel } from '@/lib/api';
 import { Quote, OpportunityStage, LossCategory, Customer, QuoteTemperature } from '@/lib/types';
+import { getTelUrl } from '@/lib/utils';
 import { toast } from 'sonner';
 
 const stageColors: Record<OpportunityStage, string> = {
@@ -446,7 +447,24 @@ export default function OpportunityDetailPage() {
                 <CardContent>
                   <p className="font-semibold">{customer.name}</p>
                   {customer.email && <p className="text-sm text-muted-foreground">{customer.email}</p>}
-                  {customer.phone && <p className="text-sm text-muted-foreground">{customer.phone}</p>}
+                  {customer.phone && (
+                    <p className="text-sm text-muted-foreground">
+                      <a
+                        href={getTelUrl(customer.phone)}
+                        className="text-primary hover:underline"
+                        onClick={async (e) => {
+                          e.preventDefault();
+                          try {
+                            await logCallAndOpenTel(customer.id, customer.phone!);
+                          } catch {
+                            toast.error('Failed to log call');
+                          }
+                        }}
+                      >
+                        {customer.phone}
+                      </a>
+                    </p>
+                  )}
                   <Button
                     variant="outline"
                     className="w-full mt-4"

@@ -27,7 +27,7 @@ import {
   Building,
   Eye,
 } from 'lucide-react';
-import api, { getCustomerHistory } from '@/lib/api';
+import api, { getCustomerHistory, logCallAndOpenTel } from '@/lib/api';
 import { Customer, Activity, ActivityType, Lead, OpportunityStage, CustomerHistoryEvent, CustomerHistoryEventType } from '@/lib/types';
 import { toast } from 'sonner';
 import SendQuoteEmailDialog from '@/components/SendQuoteEmailDialog';
@@ -298,11 +298,35 @@ export default function CustomerDetailPage() {
                   </div>
                   <div>
                     <Label>Phone <span className="text-destructive">*</span></Label>
-                    <Input
-                      value={customer.phone || ''}
-                      onChange={(e) => handleUpdateCustomer('phone', e.target.value)}
-                      onBlur={(e) => handleUpdateCustomer('phone', e.target.value)}
-                    />
+                    <div className="flex gap-2 items-center">
+                      <Input
+                        className="flex-1"
+                        value={customer.phone || ''}
+                        onChange={(e) => handleUpdateCustomer('phone', e.target.value)}
+                        onBlur={(e) => handleUpdateCustomer('phone', e.target.value)}
+                      />
+                      {customer.phone && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className="shrink-0"
+                          title="Call"
+                          onClick={async () => {
+                            try {
+                              await logCallAndOpenTel(customerId, customer.phone!, () => {
+                                fetchHistory();
+                                fetchActivities();
+                              });
+                            } catch {
+                              toast.error('Failed to log call');
+                            }
+                          }}
+                        >
+                          <Phone className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
                   <div className="col-span-2">
                     <Label>Address Line 1 <span className="text-destructive">*</span></Label>

@@ -6,8 +6,9 @@ import Header from '@/components/Header';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import api from '@/lib/api';
+import api, { logCallAndOpenTel } from '@/lib/api';
 import { Customer } from '@/lib/types';
+import { getTelUrl } from '@/lib/utils';
 import { toast } from 'sonner';
 import { Search, ChevronRight } from 'lucide-react';
 
@@ -115,8 +116,25 @@ export default function CustomersPage() {
                       <td className="p-3 text-muted-foreground">
                         {customer.email || '—'}
                       </td>
-                      <td className="p-3 text-muted-foreground">
-                        {customer.phone || '—'}
+                      <td className="p-3 text-muted-foreground" onClick={(e) => e.stopPropagation()}>
+                        {customer.phone ? (
+                          <a
+                            href={getTelUrl(customer.phone)}
+                            className="text-primary hover:underline"
+                            onClick={async (e) => {
+                              e.preventDefault();
+                              try {
+                                await logCallAndOpenTel(customer.id, customer.phone!);
+                              } catch {
+                                toast.error('Failed to log call');
+                              }
+                            }}
+                          >
+                            {customer.phone}
+                          </a>
+                        ) : (
+                          '—'
+                        )}
                       </td>
                       <td className="p-3 text-muted-foreground">
                         {locationText(customer)}

@@ -1,5 +1,6 @@
 import axios from 'axios';
 import type { QuoteTemperature } from '@/lib/types';
+import { getTelUrl } from '@/lib/utils';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -358,6 +359,22 @@ export const generateReminders = async () => {
 export const getCustomerHistory = async (customerId: number) => {
   const response = await api.get(`/api/customers/${customerId}/history`);
   return response.data;
+};
+
+/** Log a call activity for the customer and open the tel: URL (dialer). */
+export const logCallAndOpenTel = async (
+  customerId: number,
+  phone: string,
+  onSuccess?: () => void
+): Promise<void> => {
+  await api.post(`/api/customers/${customerId}/activities`, {
+    activity_type: 'CALL_ATTEMPTED',
+  });
+  onSuccess?.();
+  const telUrl = getTelUrl(phone);
+  if (telUrl && typeof window !== 'undefined') {
+    window.location.href = telUrl;
+  }
 };
 
 // Discount Template API functions

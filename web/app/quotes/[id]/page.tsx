@@ -6,8 +6,9 @@ import Header from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import api, { getQuote, previewQuotePdf, getDiscountRequestsForQuote } from '@/lib/api';
+import api, { getQuote, previewQuotePdf, getDiscountRequestsForQuote, logCallAndOpenTel } from '@/lib/api';
 import { Quote, QuoteItem, Customer, QuoteDiscount, DiscountRequest, DiscountRequestStatus, QuoteTemperature } from '@/lib/types';
+import { getTelUrl } from '@/lib/utils';
 import { toast } from 'sonner';
 import SendQuoteEmailDialog from '@/components/SendQuoteEmailDialog';
 import Link from 'next/link';
@@ -544,7 +545,20 @@ export default function QuoteDetailPage() {
                     {customer.phone && (
                       <div>
                         <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Phone</div>
-                        <div className="text-sm">{customer.phone}</div>
+                        <a
+                          href={getTelUrl(customer.phone)}
+                          className="text-sm text-primary hover:underline"
+                          onClick={async (e) => {
+                            e.preventDefault();
+                            try {
+                              await logCallAndOpenTel(customer.id, customer.phone!);
+                            } catch {
+                              toast.error('Failed to log call');
+                            }
+                          }}
+                        >
+                          {customer.phone}
+                        </a>
                       </div>
                     )}
                     <Button
