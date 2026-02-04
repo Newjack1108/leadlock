@@ -167,7 +167,7 @@ async def twilio_inbound_sms(request: Request, session: Session = Depends(get_se
         return Response(content="Twilio not configured", status_code=503)
 
     # Use TWILIO_SMS_WEBHOOK_URL when behind a proxy (e.g. Railway) so signature validation uses the public URL
-    url = os.getenv("TWILIO_SMS_WEBHOOK_URL") or str(request.url)
+    url = (os.getenv("TWILIO_SMS_WEBHOOK_URL") or str(request.url)).rstrip("/")
     if not validate_twilio_webhook(url, params, signature, auth_token):
         print("Twilio SMS webhook signature validation failed; set TWILIO_SMS_WEBHOOK_URL if behind a proxy", file=sys.stderr, flush=True)
         return Response(content="Invalid signature", status_code=403)
@@ -177,6 +177,7 @@ async def twilio_inbound_sms(request: Request, session: Session = Depends(get_se
     body = params.get("Body", "")
     message_sid = params.get("MessageSid", "")
     if not from_phone or not body:
+        print("Twilio SMS webhook: missing From or Body in request (params empty or incomplete)", file=sys.stderr, flush=True)
         return Response(content="<Response></Response>", media_type="application/xml")
 
     from_normalized = normalize_phone(from_phone)
@@ -249,6 +250,7 @@ async def twilio_inbound_sms(request: Request, session: Session = Depends(get_se
             created_by_id=activity_user_id,
         )
         session.add(activity)
+    print(f"Twilio SMS: stored inbound message for customer_id={customer.id}", file=sys.stderr, flush=True)
     session.commit()
 
     return Response(content="<Response></Response>", media_type="application/xml")

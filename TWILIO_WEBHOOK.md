@@ -66,3 +66,15 @@ Set these in your API environment (e.g. Railway):
 | **403 Invalid signature** | App is behind a reverse proxy; request URL used for validation does not match the URL Twilio calls. | Set **`TWILIO_SMS_WEBHOOK_URL`** to the exact public HTTPS URL (e.g. `https://your-api.railway.app/api/webhooks/twilio/sms`), no trailing slash. |
 | **500** or replies not stored (no error in Twilio) | Activity requires a valid `created_by_id` (user). If no user exists or user id 1 is missing, the commit fails. | Ensure at least one user exists in the app (e.g. run seed). Optionally set **`TWILIO_ACTIVITY_USER_ID`** to a valid user id (default is 1). |
 | **200 OK but reply never appears** | Sender number did not match any Customer or Lead phone, or matched a Lead that has no Customer yet. | Replies are only stored when the sender phone matches a **Customer** or a **Lead** that has a **customer_id**. Check that the contact’s phone in LeadLock matches the number they’re texting from (format can vary; the app normalizes for comparison). Check API logs for a line like `Twilio SMS: no customer/lead match for From=...****` to confirm the webhook was hit. |
+
+### Still no replies?
+
+1. **Check Railway logs** (or your API logs) when someone sends a reply. Look for one of these lines:
+   - **`Twilio SMS webhook signature validation failed`** → Set `TWILIO_SMS_WEBHOOK_URL` to the exact URL Twilio uses (no trailing slash).
+   - **`Twilio SMS webhook: missing From or Body`** → The request reached the app but the body was empty. Check that Twilio is POSTing to the correct URL and that no proxy is stripping the body.
+   - **`Twilio SMS: no customer/lead match for From=...`** → The sender number did not match any Customer or Lead phone. Ensure the contact's phone in LeadLock is the number they're texting from (the app normalizes formats; try with and without spaces or leading zero).
+   - **`Twilio SMS: stored inbound message for customer_id=...`** → The reply was stored. If the UI still doesn't show it, check you're viewing the correct customer or refresh the SMS page.
+
+2. **Confirm** `TWILIO_SMS_WEBHOOK_URL` is exactly `https://leadlock-production.up.railway.app/api/webhooks/twilio/sms` (no trailing slash).
+
+3. **Confirm** the contact replying has that phone number stored on the **Customer** (or on a **Lead** that has a **customer_id**) in LeadLock.

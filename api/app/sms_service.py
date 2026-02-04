@@ -21,6 +21,8 @@ def normalize_phone(phone: str) -> str:
         return "+" + s[2:]
     if s.startswith("0") and len(s) >= 10:
         return "+44" + s[1:]
+    if s.startswith("44") and len(s) == 12 and s.isdigit():
+        return "+" + s
     if len(s) >= 10 and s.isdigit():
         return "+44" + s
     return s
