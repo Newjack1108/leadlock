@@ -34,7 +34,7 @@ def _build_header_flowables(
     normal_style: ParagraphStyle,
     company_name_style: ParagraphStyle,
 ) -> List[Any]:
-    """Build header flowables (logo + company info). Creates fresh flowables each time."""
+    """Build header flowables (logo + company info). When no logo is found, a placeholder is shown."""
     result: List[Any] = []
     logo = None
     if logo_path and os.path.exists(logo_path):
@@ -63,28 +63,30 @@ def _build_header_flowables(
                     logo.width = logo.height * aspect_ratio
         except Exception:
             logo = None
+    # Company info (used with or without logo)
+    company_info_lines = []
+    trading_name = company_settings.trading_name or "Cheshire Stables"
+    company_info_lines.append(f"<font size='12'><b>{trading_name}</b></font>")
+    if company_settings.address_line1:
+        address_parts = [
+            company_settings.address_line1,
+            company_settings.address_line2,
+            company_settings.city,
+            company_settings.county,
+            company_settings.postcode
+        ]
+        address = ", ".join([p for p in address_parts if p])
+        company_info_lines.append(address)
+    if company_settings.phone:
+        company_info_lines.append(f"Phone: {company_settings.phone}")
+    if company_settings.email:
+        company_info_lines.append(f"Email: {company_settings.email}")
+    if company_settings.website:
+        company_info_lines.append(f"Website: {company_settings.website}")
+    company_info_text = "<br/>".join(company_info_lines)
+    company_info_para = Paragraph(company_info_text, normal_style)
+
     if logo:
-        company_info_lines = []
-        trading_name = company_settings.trading_name or "Cheshire Stables"
-        company_info_lines.append(f"<font size='12'><b>{trading_name}</b></font>")
-        if company_settings.address_line1:
-            address_parts = [
-                company_settings.address_line1,
-                company_settings.address_line2,
-                company_settings.city,
-                company_settings.county,
-                company_settings.postcode
-            ]
-            address = ", ".join([p for p in address_parts if p])
-            company_info_lines.append(address)
-        if company_settings.phone:
-            company_info_lines.append(f"Phone: {company_settings.phone}")
-        if company_settings.email:
-            company_info_lines.append(f"Email: {company_settings.email}")
-        if company_settings.website:
-            company_info_lines.append(f"Website: {company_settings.website}")
-        company_info_text = "<br/>".join(company_info_lines)
-        company_info_para = Paragraph(company_info_text, normal_style)
         header_table = Table([[logo, company_info_para]], colWidths=[60*mm, 120*mm])
         header_table.setStyle(TableStyle([
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
@@ -97,24 +99,40 @@ def _build_header_flowables(
         ]))
         result.append(header_table)
     else:
-        trading_name = company_settings.trading_name or "Cheshire Stables"
-        result.append(Paragraph(trading_name, company_name_style))
-        if company_settings.address_line1:
-            address_parts = [
-                company_settings.address_line1,
-                company_settings.address_line2,
-                company_settings.city,
-                company_settings.county,
-                company_settings.postcode
-            ]
-            address = ", ".join([p for p in address_parts if p])
-            result.append(Paragraph(address, normal_style))
-        if company_settings.phone:
-            result.append(Paragraph(f"Phone: {company_settings.phone}", normal_style))
-        if company_settings.email:
-            result.append(Paragraph(f"Email: {company_settings.email}", normal_style))
-        if company_settings.website:
-            result.append(Paragraph(f"Website: {company_settings.website}", normal_style))
+        # Placeholder so layout matches and you know where to put the logo
+        placeholder_style = ParagraphStyle(
+            "LogoPlaceholder",
+            parent=normal_style,
+            fontSize=8,
+            textColor=colors.HexColor("#888888"),
+            alignment=1,  # center
+        )
+        placeholder_para = Paragraph(
+            "<b>Your logo here</b><br/><font size='6'>See QUOTE_PDF_LOGO.md</font>",
+            placeholder_style,
+        )
+        placeholder_table = Table([[placeholder_para]], colWidths=[50*mm])
+        placeholder_table.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f0f0f0")),
+            ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#cccccc")),
+            ("LEFTPADDING", (0, 0), (-1, -1), 4),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+            ("TOPPADDING", (0, 0), (-1, -1), 12),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 12),
+        ]))
+        header_table = Table([[placeholder_table, company_info_para]], colWidths=[60*mm, 120*mm])
+        header_table.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("ALIGN", (0, 0), (0, 0), "LEFT"),
+            ("ALIGN", (1, 0), (1, 0), "LEFT"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 0),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+            ("TOPPADDING", (0, 0), (-1, -1), 0),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+        ]))
+        result.append(header_table)
     result.append(Spacer(1, 8))
     return result
 
