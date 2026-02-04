@@ -24,6 +24,8 @@ import {
   createScheduledSms,
   getScheduledSms,
   cancelScheduledSms,
+  getSmsTemplates,
+  previewSmsTemplate,
 } from '@/lib/api';
 import {
   SmsMessage,
@@ -31,7 +33,10 @@ import {
   Customer,
   SmsScheduled,
   ScheduledSmsStatus,
+  SmsTemplate,
 } from '@/lib/types';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import Link from 'next/link';
 import { toast } from 'sonner';
 import api from '@/lib/api';
 
@@ -52,14 +57,29 @@ export default function CustomerSmsPage() {
   const [scheduleBody, setScheduleBody] = useState('');
   const [scheduleDatetime, setScheduleDatetime] = useState('');
   const [scheduling, setScheduling] = useState(false);
+  const [smsTemplates, setSmsTemplates] = useState<SmsTemplate[]>([]);
+  const [selectedComposeTemplateId, setSelectedComposeTemplateId] = useState<string>('none');
+  const [selectedScheduleTemplateId, setSelectedScheduleTemplateId] = useState<string>('none');
+  const [loadingComposeTemplate, setLoadingComposeTemplate] = useState(false);
+  const [loadingScheduleTemplate, setLoadingScheduleTemplate] = useState(false);
 
   useEffect(() => {
     if (customerId) {
       fetchCustomer();
       fetchMessages();
       fetchScheduled();
+      fetchSmsTemplates();
     }
   }, [customerId]);
+
+  const fetchSmsTemplates = async () => {
+    try {
+      const data = await getSmsTemplates();
+      setSmsTemplates(data);
+    } catch {
+      setSmsTemplates([]);
+    }
+  };
 
   const fetchCustomer = async () => {
     try {
@@ -143,6 +163,7 @@ export default function CustomerSmsPage() {
       setScheduleDialogOpen(false);
       setScheduleBody('');
       setScheduleDatetime('');
+      setSelectedScheduleTemplateId('none');
       fetchScheduled();
     } catch (error: unknown) {
       const msg = error && typeof error === 'object' && 'response' in error
@@ -161,6 +182,44 @@ export default function CustomerSmsPage() {
       fetchScheduled();
     } catch {
       toast.error('Failed to cancel');
+    }
+  };
+
+  const handleComposeTemplateChange = async (value: string) => {
+    setSelectedComposeTemplateId(value);
+    if (value === 'none') {
+      setComposeBody('');
+      return;
+    }
+    setLoadingComposeTemplate(true);
+    try {
+      const preview = await previewSmsTemplate(parseInt(value, 10), {
+        customer_id: customerId,
+      });
+      setComposeBody(preview.body);
+    } catch {
+      toast.error('Failed to load template');
+    } finally {
+      setLoadingComposeTemplate(false);
+    }
+  };
+
+  const handleScheduleTemplateChange = async (value: string) => {
+    setSelectedScheduleTemplateId(value);
+    if (value === 'none') {
+      setScheduleBody('');
+      return;
+    }
+    setLoadingScheduleTemplate(true);
+    try {
+      const preview = await previewSmsTemplate(parseInt(value, 10), {
+        customer_id: customerId,
+      });
+      setScheduleBody(preview.body);
+    } catch {
+      toast.error('Failed to load template');
+    } finally {
+      setLoadingScheduleTemplate(false);
     }
   };
 
@@ -218,6 +277,37 @@ export default function CustomerSmsPage() {
                     onChange={(e) => setComposeToPhone(e.target.value)}
                     placeholder="+44 7700 900000"
                   />
+                </div>
+                <div>
+                  <div className="flex items-center justify-between gap-2">
+                    <Label>Template</Label>
+                    <Link
+                      href="/settings/sms-templates"
+                      className="text-xs text-primary hover:underline"
+                    >
+                      Manage templates
+                    </Link>
+                  </div>
+                  <Select
+                    value={selectedComposeTemplateId}
+                    onValueChange={handleComposeTemplateChange}
+                    disabled={loadingComposeTemplate}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="No template" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No template</SelectItem>
+                      {smsTemplates.map((t) => (
+                        <SelectItem key={t.id} value={String(t.id)}>
+                          {t.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {loadingComposeTemplate && (
+                    <p className="text-xs text-muted-foreground mt-1">Loading template...</p>
+                  )}
                 </div>
                 <div>
                   <Label htmlFor="body">Message</Label>
@@ -340,6 +430,29 @@ export default function CustomerSmsPage() {
                 onChange={(e) => setScheduleToPhone(e.target.value)}
                 placeholder="+44 7700 900000"
               />
+            </div>
+            <div>
+              <Label>Template</Label>
+              <Select
+                value={selectedScheduleTemplateId}
+                onValueChange={handleScheduleTemplateChange}
+                disabled={loadingScheduleTemplate}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="No template" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No template</SelectItem>
+                  {smsTemplates.map((t) => (
+                    <SelectItem key={t.id} value={String(t.id)}>
+                      {t.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {loadingScheduleTemplate && (
+                <p className="text-xs text-muted-foreground mt-1">Loading template...</p>
+              )}
             </div>
             <div>
               <Label htmlFor="schedule_body">Message</Label>

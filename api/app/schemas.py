@@ -191,6 +191,40 @@ class SmsScheduledUpdate(BaseModel):
     status: Optional[ScheduledSmsStatus] = None
 
 
+class SmsTemplateCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    body_template: str
+    is_default: Optional[bool] = False
+
+
+class SmsTemplateUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    body_template: Optional[str] = None
+    is_default: Optional[bool] = None
+
+
+class SmsTemplateResponse(BaseModel):
+    id: int
+    name: str
+    description: Optional[str] = None
+    body_template: str
+    is_default: bool
+    created_by_id: int
+    created_at: datetime
+    updated_at: datetime
+    created_by_name: Optional[str] = None
+
+
+class SmsTemplatePreviewRequest(BaseModel):
+    customer_id: Optional[int] = None
+
+
+class SmsTemplatePreviewResponse(BaseModel):
+    body: str
+
+
 class EmailTemplateCreate(BaseModel):
     name: str
     description: Optional[str] = None

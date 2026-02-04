@@ -165,7 +165,8 @@ async def twilio_inbound_sms(request: Request, session: Session = Depends(get_se
     if not auth_token:
         return Response(content="Twilio not configured", status_code=503)
 
-    url = str(request.url)
+    # Use TWILIO_SMS_WEBHOOK_URL when behind a proxy (e.g. Railway) so signature validation uses the public URL
+    url = os.getenv("TWILIO_SMS_WEBHOOK_URL") or str(request.url)
     if not validate_twilio_webhook(url, params, signature, auth_token):
         return Response(content="Invalid signature", status_code=403)
 

@@ -326,6 +326,40 @@ export interface SmsScheduledUpdate {
   status?: ScheduledSmsStatus;
 }
 
+export interface SmsTemplate {
+  id: number;
+  name: string;
+  description?: string;
+  body_template: string;
+  is_default: boolean;
+  created_by_id: number;
+  created_at: string;
+  updated_at: string;
+  created_by_name?: string;
+}
+
+export interface SmsTemplateCreate {
+  name: string;
+  description?: string;
+  body_template: string;
+  is_default?: boolean;
+}
+
+export interface SmsTemplateUpdate {
+  name?: string;
+  description?: string;
+  body_template?: string;
+  is_default?: boolean;
+}
+
+export interface SmsTemplatePreviewRequest {
+  customer_id?: number;
+}
+
+export interface SmsTemplatePreviewResponse {
+  body: string;
+}
+
 export interface QuoteEmailSendRequest {
   template_id?: number;
   to_email: string;

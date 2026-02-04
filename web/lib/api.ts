@@ -125,6 +125,49 @@ export const cancelScheduledSms = async (id: number) => {
   return response.data;
 };
 
+// SMS Template API functions
+export const getSmsTemplates = async () => {
+  const response = await api.get('/api/sms-templates');
+  return response.data;
+};
+
+export const getSmsTemplate = async (templateId: number) => {
+  const response = await api.get(`/api/sms-templates/${templateId}`);
+  return response.data;
+};
+
+export const createSmsTemplate = async (data: {
+  name: string;
+  description?: string;
+  body_template: string;
+  is_default?: boolean;
+}) => {
+  const response = await api.post('/api/sms-templates', data);
+  return response.data;
+};
+
+export const updateSmsTemplate = async (templateId: number, data: {
+  name?: string;
+  description?: string;
+  body_template?: string;
+  is_default?: boolean;
+}) => {
+  const response = await api.put(`/api/sms-templates/${templateId}`, data);
+  return response.data;
+};
+
+export const deleteSmsTemplate = async (templateId: number) => {
+  const response = await api.delete(`/api/sms-templates/${templateId}`);
+  return response.data;
+};
+
+export const previewSmsTemplate = async (templateId: number, previewData?: {
+  customer_id?: number;
+}) => {
+  const response = await api.post(`/api/sms-templates/${templateId}/preview`, previewData || {});
+  return response.data;
+};
+
 export const sendQuoteEmail = async (quoteId: number, emailData: {
   template_id?: number;
   to_email: string;
