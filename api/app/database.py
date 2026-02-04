@@ -30,6 +30,33 @@ def create_db_and_tables():
         has_activity_table = inspector.has_table("activity")
         has_quote_table = inspector.has_table("quote")
         
+        # Step 0: Facebook Messenger - messenger_psid on Customer/Lead (run first so it's never skipped)
+        if has_customer_table:
+            customer_columns = [col['name'] for col in inspector.get_columns("customer")]
+            if "messenger_psid" not in customer_columns:
+                print("Adding messenger_psid column to customer table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE customer ADD COLUMN messenger_psid VARCHAR(255)"))
+                        conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_customer_messenger_psid ON customer (messenger_psid) WHERE messenger_psid IS NOT NULL"))
+                    print("Added messenger_psid column to customer table", file=sys.stderr, flush=True)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Error adding messenger_psid to customer: {e}", file=sys.stderr, flush=True)
+        if has_lead_table:
+            lead_columns = [col['name'] for col in inspector.get_columns("lead")]
+            if "messenger_psid" not in lead_columns:
+                print("Adding messenger_psid column to lead table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE lead ADD COLUMN messenger_psid VARCHAR(255)"))
+                    print("Added messenger_psid column to lead table", file=sys.stderr, flush=True)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Error adding messenger_psid to lead: {e}", file=sys.stderr, flush=True)
+        
         # Step 1: Add customer_id to Lead table if it doesn't exist
         if has_lead_table:
             lead_columns = [col['name'] for col in inspector.get_columns("lead")]
@@ -612,32 +639,6 @@ def create_db_and_tables():
                     if "already exists" not in error_str and "duplicate" not in error_str:
                         print(f"Error adding read_at column: {e}", file=sys.stderr, flush=True)
 
-        # Step 14: Facebook Messenger - messenger_psid on Customer/Lead, messenger_message table
-        if has_customer_table:
-            customer_columns = [col['name'] for col in inspector.get_columns("customer")]
-            if "messenger_psid" not in customer_columns:
-                print("Adding messenger_psid column to customer table...", file=sys.stderr, flush=True)
-                try:
-                    with engine.begin() as conn:
-                        conn.execute(text("ALTER TABLE customer ADD COLUMN messenger_psid VARCHAR(255)"))
-                        conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_customer_messenger_psid ON customer (messenger_psid) WHERE messenger_psid IS NOT NULL"))
-                    print("Added messenger_psid column to customer table", file=sys.stderr, flush=True)
-                except Exception as e:
-                    error_str = str(e).lower()
-                    if "already exists" not in error_str and "duplicate" not in error_str:
-                        print(f"Error adding messenger_psid to customer: {e}", file=sys.stderr, flush=True)
-        if has_lead_table:
-            lead_columns = [col['name'] for col in inspector.get_columns("lead")]
-            if "messenger_psid" not in lead_columns:
-                print("Adding messenger_psid column to lead table...", file=sys.stderr, flush=True)
-                try:
-                    with engine.begin() as conn:
-                        conn.execute(text("ALTER TABLE lead ADD COLUMN messenger_psid VARCHAR(255)"))
-                    print("Added messenger_psid column to lead table", file=sys.stderr, flush=True)
-                except Exception as e:
-                    error_str = str(e).lower()
-                    if "already exists" not in error_str and "duplicate" not in error_str:
-                        print(f"Error adding messenger_psid to lead: {e}", file=sys.stderr, flush=True)
         # messenger_message table is created by SQLModel.metadata.create_all() when MessengerMessage model is imported
         
         print("Migration check completed", file=sys.stderr, flush=True)
