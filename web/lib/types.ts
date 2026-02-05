@@ -220,6 +220,7 @@ export interface CompanySettings {
   email?: string;
   website?: string;
   logo_filename: string;
+  logo_url?: string;
   default_terms_and_conditions?: string;
   hourly_install_rate?: number;
   installation_lead_time?: InstallationLeadTime;

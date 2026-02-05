@@ -329,6 +329,7 @@ class CompanySettings(SQLModel, table=True):
     email: Optional[str] = None
     website: Optional[str] = None
     logo_filename: str = Field(default="logo1.jpg")  # Company logo for quotes (different from app logo)
+    logo_url: Optional[str] = None  # Uploaded logo URL (Cloudinary or /static/...); preferred over logo_filename for PDFs
     default_terms_and_conditions: Optional[str] = None  # Default terms and conditions for quotes
     hourly_install_rate: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(10, 2)))  # Hourly rate for installation cost calculation
     installation_lead_time: Optional[InstallationLeadTime] = Field(default=None)  # Current lead time; amended by production, visible to sales

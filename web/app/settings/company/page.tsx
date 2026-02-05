@@ -9,7 +9,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Settings, Save, ChevronDown, ChevronUp } from 'lucide-react';
+import { Save, ChevronDown, ChevronUp } from 'lucide-react';
+import ImageUpload from '@/components/ImageUpload';
 import api from '@/lib/api';
 import { CompanySettings, InstallationLeadTime } from '@/lib/types';
 import { toast } from 'sonner';
@@ -35,6 +36,7 @@ export default function CompanySettingsPage() {
     email: '',
     website: '',
     logo_filename: 'logo1.jpg',
+    logo_url: '',
     default_terms_and_conditions: '',
     installation_lead_time: '' as InstallationLeadTime | '',
   });
@@ -63,6 +65,7 @@ export default function CompanySettingsPage() {
         email: response.data.email || '',
         website: response.data.website || '',
         logo_filename: response.data.logo_filename || 'logo1.jpg',
+        logo_url: response.data.logo_url || '',
         default_terms_and_conditions: response.data.default_terms_and_conditions || '',
         installation_lead_time: response.data.installation_lead_time || '',
       });
@@ -88,12 +91,13 @@ export default function CompanySettingsPage() {
 
     try {
       setSaving(true);
-      const payload = {
+      const payload: Record<string, unknown> = {
         ...formData,
         installation_lead_time: formData.installation_lead_time || undefined,
       };
       if (settings) {
-        // Update existing
+        // Update existing: omit logo_filename so existing value is unchanged
+        delete payload.logo_filename;
         await api.put('/api/settings/company', payload);
         toast.success('Company settings updated successfully');
       } else {
@@ -289,19 +293,12 @@ export default function CompanySettingsPage() {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="logo_filename">Logo Filename</Label>
-              <Input
-                id="logo_filename"
-                value={formData.logo_filename}
-                onChange={(e) => setFormData({ ...formData, logo_filename: e.target.value })}
-                placeholder="logo1.jpg"
-                disabled={saving}
-              />
-              <p className="text-sm text-muted-foreground">
-                Logo file should be placed in <code className="text-xs bg-muted px-1 py-0.5 rounded">web/public/</code> directory
-              </p>
-            </div>
+            <ImageUpload
+              label="Company logo (for quote PDFs)"
+              value={formData.logo_url}
+              onChange={(url) => setFormData({ ...formData, logo_url: url })}
+              disabled={saving}
+            />
 
             <div className="space-y-2 border-t pt-6">
               <Label>Installation lead time</Label>

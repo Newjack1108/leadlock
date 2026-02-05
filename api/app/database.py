@@ -410,6 +410,19 @@ def create_db_and_tables():
                     if "already exists" not in error_str and "duplicate" not in error_str:
                         print(f"Warning: Could not add installation_lead_time column: {col_error}", file=sys.stderr, flush=True)
 
+            # Logo URL (uploaded image URL for quote PDFs)
+            company_columns = [col['name'] for col in inspector.get_columns("companysettings")]
+            if "logo_url" not in company_columns:
+                print("Adding logo_url column to companysettings table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text('ALTER TABLE companysettings ADD COLUMN logo_url VARCHAR(2048)'))
+                    print("Added logo_url column to companysettings table", file=sys.stderr, flush=True)
+                except Exception as col_error:
+                    error_str = str(col_error).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Warning: Could not add logo_url column: {col_error}", file=sys.stderr, flush=True)
+
         # Step 7: Add email settings columns to User table
         has_user_table = inspector.has_table("user")
         if has_user_table:

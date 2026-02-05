@@ -523,6 +523,7 @@ class CompanySettingsCreate(BaseModel):
     email: Optional[str] = None
     website: Optional[str] = None
     logo_filename: str = "logo1.jpg"
+    logo_url: Optional[str] = None
     default_terms_and_conditions: Optional[str] = None
     hourly_install_rate: Optional[Decimal] = None
     installation_lead_time: Optional[InstallationLeadTime] = None
@@ -543,6 +544,7 @@ class CompanySettingsUpdate(BaseModel):
     email: Optional[str] = None
     website: Optional[str] = None
     logo_filename: Optional[str] = None
+    logo_url: Optional[str] = None
     default_terms_and_conditions: Optional[str] = None
     hourly_install_rate: Optional[Decimal] = None
     installation_lead_time: Optional[InstallationLeadTime] = None
@@ -564,6 +566,7 @@ class CompanySettingsResponse(BaseModel):
     email: Optional[str]
     website: Optional[str]
     logo_filename: str
+    logo_url: Optional[str] = None
     default_terms_and_conditions: Optional[str]
     hourly_install_rate: Optional[Decimal] = None
     installation_lead_time: Optional[InstallationLeadTime] = None

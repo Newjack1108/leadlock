@@ -11,9 +11,10 @@ interface ImageUploadProps {
   value?: string;
   onChange: (url: string) => void;
   disabled?: boolean;
+  label?: string;
 }
 
-export default function ImageUpload({ value, onChange, disabled }: ImageUploadProps) {
+export default function ImageUpload({ value, onChange, disabled, label = 'Product Image' }: ImageUploadProps) {
   const [uploading, setUploading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -78,7 +79,7 @@ export default function ImageUpload({ value, onChange, disabled }: ImageUploadPr
 
   return (
     <div className="space-y-2">
-      <Label>Product Image</Label>
+      <Label>{label}</Label>
       {value ? (
         <div className="relative">
           <div className="relative w-full h-64 border rounded-md overflow-hidden bg-muted">

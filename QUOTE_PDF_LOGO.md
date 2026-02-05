@@ -1,8 +1,14 @@
 # Quote PDF logo not showing
 
-The API generates quote PDFs and needs to load your logo. On Railway the API and frontend are separate services, so the API must fetch the logo from a URL.
+The API generates quote PDFs and needs to load your logo.
 
-## Fix: set a variable on the **API** service
+## Preferred: upload your logo in the app
+
+Go to **Settings → Company** and use **Company logo (for quote PDFs)** to upload an image. The logo is stored and used for all quote PDFs; no environment variables or file placement needed. This is the recommended way to set the quote PDF logo.
+
+The options below (logo filename and env vars) remain as a fallback for existing deployments.
+
+## Fallback: set a variable on the **API** service
 
 1. In **Railway**, open your **API/backend** service (not the frontend).
 2. Go to **Variables**.

@@ -170,11 +170,40 @@ def _build_footer_flowables(
 
 
 def _resolve_logo(company_settings: CompanySettings) -> Tuple[Optional[str], Optional[bytes]]:
-    """Resolve logo to file path or raw bytes. Tries company logo_filename then logo1.jpg / logo1.png fallback."""
+    """Resolve logo to file path or raw bytes. Prefers company logo_url (upload); else logo_filename + static/env fallback."""
     logo_path: Optional[str] = None
     logo_bytes: Optional[bytes] = None
+    JPEG_MAGIC = b"\xff\xd8\xff"
+    PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+
+    # Prefer uploaded logo URL (from Settings -> Company -> upload)
+    logo_url = (company_settings.logo_url or "").strip()
+    if logo_url:
+        if logo_url.startswith("http://") or logo_url.startswith("https://"):
+            try:
+                req = urllib.request.Request(
+                    logo_url,
+                    headers={"User-Agent": "LeadLock-API/1.0 (Quote PDF)"},
+                )
+                with urllib.request.urlopen(req, timeout=15) as response:
+                    data = response.read()
+                if data and len(data) >= 100 and (data.startswith(JPEG_MAGIC) or data.startswith(PNG_MAGIC)):
+                    return (None, data)
+            except Exception:
+                pass
+        elif logo_url.startswith("/static/"):
+            # API static path e.g. /static/products/uuid.jpg
+            static_base = Path(__file__).parent.parent
+            local_path = static_base / logo_url.lstrip("/")
+            if local_path.exists():
+                try:
+                    with open(local_path, "rb") as f:
+                        return (None, f.read())
+                except Exception:
+                    pass
+
+    # Fallback: logo_filename + local paths + env URL candidates
     primary_filename = company_settings.logo_filename or "logo1.jpg"
-    # Build paths for primary filename and fallbacks
     base_dirs = [
         Path(__file__).parent.parent / "static",
         Path("static"),
@@ -222,14 +251,11 @@ def _resolve_logo(company_settings: CompanySettings) -> Tuple[Optional[str], Opt
     # Always try the known production logo URL so PDFs get the logo even if env vars differ
     for fn in filenames_to_try:
         url_candidates.append(f"{DEFAULT_LOGO_BASE.rstrip('/')}/{fn}")
-    # JPEG and PNG magic bytes so we don't accept HTML error pages
-    JPEG_MAGIC = b"\xff\xd8\xff"
-    PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 
-    for logo_url in url_candidates:
+    for candidate_url in url_candidates:
         try:
             req = urllib.request.Request(
-                logo_url,
+                candidate_url,
                 headers={"User-Agent": "LeadLock-API/1.0 (Quote PDF)"},
             )
             with urllib.request.urlopen(req, timeout=15) as response:
