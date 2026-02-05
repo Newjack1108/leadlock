@@ -687,6 +687,34 @@ class QuoteEmailResponse(BaseModel):
     sent_at: datetime
     opened_at: Optional[datetime]
     clicked_at: Optional[datetime]
+    open_count: int = 0
+
+
+class PublicQuoteViewItemResponse(BaseModel):
+    """Line item for public quote view (no internal IDs)."""
+    description: str
+    quantity: Decimal
+    unit_price: Decimal
+    line_total: Decimal
+    final_line_total: Decimal
+    sort_order: int
+
+
+class PublicQuoteViewResponse(BaseModel):
+    """Quote payload for public view page (no auth)."""
+    quote_number: str
+    customer_name: str
+    currency: str
+    valid_until: Optional[datetime]
+    subtotal: Decimal
+    discount_total: Decimal
+    total_amount: Decimal
+    deposit_amount: Decimal
+    balance_amount: Decimal
+    vat_amount: Optional[Decimal] = None
+    total_amount_inc_vat: Optional[Decimal] = None
+    items: List[PublicQuoteViewItemResponse]
+    terms_and_conditions: Optional[str] = None
 
 
 class QuoteSendRequest(BaseModel):

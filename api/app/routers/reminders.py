@@ -206,7 +206,7 @@ async def get_stale_summary(
         select(func.count(Reminder.id)).where(
             and_(
                 Reminder.assigned_to_id == current_user.id,
-                Reminder.reminder_type.in_([ReminderType.QUOTE_STALE, ReminderType.QUOTE_EXPIRED, ReminderType.QUOTE_EXPIRING]),
+                Reminder.reminder_type.in_([ReminderType.QUOTE_STALE, ReminderType.QUOTE_EXPIRED, ReminderType.QUOTE_EXPIRING, ReminderType.QUOTE_NOT_OPENED, ReminderType.QUOTE_OPENED_NO_REPLY]),
                 Reminder.dismissed_at.is_(None)
             )
         )

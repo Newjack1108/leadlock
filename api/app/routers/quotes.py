@@ -15,6 +15,8 @@ from app.quote_pdf_service import generate_quote_pdf
 from app.constants import VAT_RATE_DECIMAL
 from datetime import datetime
 from decimal import Decimal
+import os
+import uuid
 
 router = APIRouter(prefix="/api/quotes", tags=["quotes"])
 
@@ -910,7 +912,11 @@ async def send_quote_email_endpoint(
         # Check if user has email
         if not current_user.email:
             raise HTTPException(status_code=400, detail="User email is not configured")
-        
+
+        # Generate view token for "View your quote" link (open tracking)
+        view_token = uuid.uuid4().hex
+        frontend_base_url = os.getenv("FRONTEND_BASE_URL", "").strip() or None
+
         # Send quote email
         success, message_id, error, pdf_buffer, email_subject, email_body_html = send_quote_email(
             quote=quote,
@@ -921,7 +927,9 @@ async def send_quote_email_endpoint(
             cc=email_data.cc,
             bcc=email_data.bcc,
             custom_message=email_data.custom_message,
-            user_id=current_user.id
+            user_id=current_user.id,
+            view_token=view_token,
+            frontend_base_url=frontend_base_url,
         )
         
         if not success:
@@ -949,13 +957,14 @@ async def send_quote_email_endpoint(
         session.commit()
         session.refresh(email_record)
         
-        # Create QuoteEmail record
+        # Create QuoteEmail record (view_token for public view link / open tracking)
         quote_email = QuoteEmail(
             quote_id=quote.id,
             to_email=email_data.to_email,
             subject=final_subject,
             body_html=final_body_html,  # Template rendered content
-            tracking_id=message_id or f"quote-{quote.id}-{datetime.utcnow().timestamp()}"
+            tracking_id=message_id or f"quote-{quote.id}-{datetime.utcnow().timestamp()}",
+            view_token=view_token,
         )
         session.add(quote_email)
         

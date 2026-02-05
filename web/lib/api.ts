@@ -214,6 +214,12 @@ export const sendQuoteEmail = async (quoteId: number, emailData: {
   return response.data;
 };
 
+/** Public quote view by token (no auth). Used when customer opens "View your quote" link. */
+export const getPublicQuoteView = async (viewToken: string) => {
+  const response = await api.get(`/api/public/quotes/view/${viewToken}`);
+  return response.data;
+};
+
 // Email Template API functions
 export const getEmailTemplates = async () => {
   const response = await api.get('/api/email-templates');

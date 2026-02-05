@@ -5,7 +5,7 @@ from sqlmodel import Session, select, func, and_, or_
 from datetime import datetime, timedelta
 from typing import List, Optional, Tuple
 from app.models import (
-    Lead, Quote, Activity, Reminder, ReminderRule, ReminderType, 
+    Lead, Quote, QuoteEmail, Activity, Reminder, ReminderRule, ReminderType,
     ReminderPriority, SuggestedAction, LeadStatus, QuoteStatus, OpportunityStage
 )
 
@@ -177,7 +177,27 @@ def detect_stale_quotes(session: Session) -> List[Tuple[Quote, ReminderRule, int
             elif rule.check_type == "STATUS_DURATION":
                 # Check time since status change (updated_at)
                 days_stale = calculate_days_stale(quote.updated_at)
-            
+            elif rule.check_type == "SENT_NOT_OPENED":
+                # Quote sent but view link never opened (nudge after 48h)
+                if not quote.sent_at:
+                    continue
+                # Any QuoteEmail for this quote with opened_at set?
+                open_stmt = select(QuoteEmail).where(
+                    and_(QuoteEmail.quote_id == quote.id, QuoteEmail.opened_at.isnot(None))
+                )
+                if session.exec(open_stmt).first() is not None:
+                    continue  # Already opened
+                days_stale = calculate_days_stale(quote.sent_at)
+            elif rule.check_type == "OPENED_NO_REPLY":
+                # Quote was opened but no reply (phone call reminder after X days)
+                if quote.status != QuoteStatus.SENT:
+                    continue
+                if quote.viewed_at is None:
+                    continue  # Not opened
+                days_stale = calculate_days_stale(quote.viewed_at)
+            else:
+                continue  # Unknown check_type, skip
+
             # Check if stale based on threshold
             if days_stale >= rule.threshold_days:
                 stale_items.append((quote, rule, days_stale))
@@ -321,12 +341,16 @@ def generate_reminders(session: Session, user_id: Optional[int] = None) -> int:
         # Determine reminder type
         if rule.check_type == "VALID_UNTIL" and quote.valid_until and quote.valid_until < now:
             reminder_type = ReminderType.QUOTE_EXPIRED
+        elif rule.check_type == "SENT_NOT_OPENED":
+            reminder_type = ReminderType.QUOTE_NOT_OPENED
+        elif rule.check_type == "OPENED_NO_REPLY":
+            reminder_type = ReminderType.QUOTE_OPENED_NO_REPLY
         elif days_stale >= 7:
             reminder_type = ReminderType.QUOTE_STALE
         else:
             reminder_type = ReminderType.QUOTE_EXPIRING
-        
-        # Check if reminder already exists for this quote and type
+
+        # Check if reminder already exists for this quote, type, and rule (by message pattern or rule)
         existing = session.exec(
             select(Reminder).where(
                 and_(
@@ -336,7 +360,7 @@ def generate_reminders(session: Session, user_id: Optional[int] = None) -> int:
                 )
             )
         ).first()
-        
+
         if existing:
             # Update existing reminder if days_stale increased
             if days_stale > existing.days_stale:
@@ -344,34 +368,47 @@ def generate_reminders(session: Session, user_id: Optional[int] = None) -> int:
                 existing.priority = calculate_priority(days_stale, rule.priority)
                 if reminder_type == ReminderType.QUOTE_EXPIRED:
                     existing.message = f"Quote {quote.quote_number} has expired"
+                elif rule.check_type == "SENT_NOT_OPENED":
+                    existing.message = f"Quote {quote.quote_number} not opened in 48h. Send a nudge."
+                elif rule.check_type == "OPENED_NO_REPLY":
+                    existing.message = f"Quote {quote.quote_number} opened but no reply for {days_stale} days. Schedule a call."
                 else:
                     existing.message = f"Quote {quote.quote_number} has been stale for {days_stale} days"
                 session.add(existing)
             continue
-        
+
         # Get customer for assigned user
         if not quote.customer_id:
             continue
-        
+
         # Get quote creator as assigned user
         assigned_to_id = quote.created_by_id or user_id
         if not assigned_to_id:
             continue
-        
-        # Get suggested action
-        suggested_action = get_suggested_action_for_quote(quote, days_stale)
-        
+
+        # Use rule's suggested_action for open-tracking rules (RESEND_QUOTE / PHONE_CALL)
+        if rule.check_type in ("SENT_NOT_OPENED", "OPENED_NO_REPLY"):
+            suggested_action = rule.suggested_action
+        else:
+            suggested_action = get_suggested_action_for_quote(quote, days_stale)
+
         # Calculate priority
         priority = calculate_priority(days_stale, rule.priority)
-        
-        # Create reminder
+
+        # Title and message
         if reminder_type == ReminderType.QUOTE_EXPIRED:
             title = f"Expired Quote: {quote.quote_number}"
             message = f"Quote {quote.quote_number} expired on {quote.valid_until.strftime('%Y-%m-%d') if quote.valid_until else 'N/A'}"
+        elif rule.check_type == "SENT_NOT_OPENED":
+            title = f"Quote not opened: {quote.quote_number}"
+            message = f"Quote {quote.quote_number} not opened in 48h. Send a nudge."
+        elif rule.check_type == "OPENED_NO_REPLY":
+            title = f"Quote opened, no reply: {quote.quote_number}"
+            message = f"Quote {quote.quote_number} was opened but no reply for {days_stale} days. Schedule a call."
         else:
             title = f"Stale Quote: {quote.quote_number}"
             message = f"Quote {quote.quote_number} has been stale for {days_stale} days (Status: {quote.status.value})"
-        
+
         reminder = Reminder(
             reminder_type=reminder_type,
             quote_id=quote.id,

@@ -485,6 +485,32 @@ def create_db_and_tables():
                     import traceback
                     print(traceback.format_exc(), file=sys.stderr, flush=True)
         
+        # Step 8b: Add view_token and open_count to QuoteEmail table
+        has_quoteemail_table = inspector.has_table("quoteemail")
+        if has_quoteemail_table:
+            quoteemail_columns = [col["name"] for col in inspector.get_columns("quoteemail")]
+            if "view_token" not in quoteemail_columns:
+                print("Adding view_token column to quoteemail table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE quoteemail ADD COLUMN view_token VARCHAR(255)"))
+                        conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_quoteemail_view_token ON quoteemail (view_token) WHERE view_token IS NOT NULL"))
+                    print("Added view_token column to quoteemail table", file=sys.stderr, flush=True)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Error adding view_token to quoteemail: {e}", file=sys.stderr, flush=True)
+            if "open_count" not in quoteemail_columns:
+                print("Adding open_count column to quoteemail table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE quoteemail ADD COLUMN open_count INTEGER DEFAULT 0"))
+                    print("Added open_count column to quoteemail table", file=sys.stderr, flush=True)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Error adding open_count to quoteemail: {e}", file=sys.stderr, flush=True)
+        
         # Step 9: Create Reminder and ReminderRule tables
         has_reminder_table = inspector.has_table("reminder")
         has_reminder_rule_table = inspector.has_table("reminderrule")
@@ -571,6 +597,26 @@ def create_db_and_tables():
                                 priority=ReminderPriority.URGENT,
                                 suggested_action=SuggestedAction.REVIEW_QUOTE
                             ),
+                            ReminderRule(
+                                rule_name="QUOTE_NOT_OPENED_48H",
+                                entity_type="QUOTE",
+                                status="SENT",
+                                threshold_days=2,
+                                check_type="SENT_NOT_OPENED",
+                                is_active=True,
+                                priority=ReminderPriority.HIGH,
+                                suggested_action=SuggestedAction.RESEND_QUOTE
+                            ),
+                            ReminderRule(
+                                rule_name="QUOTE_OPENED_NO_REPLY",
+                                entity_type="QUOTE",
+                                status="SENT",
+                                threshold_days=5,
+                                check_type="OPENED_NO_REPLY",
+                                is_active=True,
+                                priority=ReminderPriority.HIGH,
+                                suggested_action=SuggestedAction.PHONE_CALL
+                            ),
                         ]
                         
                         for rule in default_rules:
@@ -579,6 +625,46 @@ def create_db_and_tables():
                         print(f"Created {len(default_rules)} default reminder rules", file=sys.stderr, flush=True)
             except Exception as e:
                 print(f"Error creating reminder rules: {e}", file=sys.stderr, flush=True)
+                import traceback
+                print(traceback.format_exc(), file=sys.stderr, flush=True)
+        
+        # Step 9b: Seed quote open-tracking reminder rules if missing
+        if has_reminder_rule_table or inspector.has_table("reminderrule"):
+            try:
+                with Session(engine) as session:
+                    from app.models import ReminderRule, ReminderPriority, SuggestedAction
+                    from sqlmodel import select
+                    existing = session.exec(select(ReminderRule.rule_name)).all()
+                    to_add = []
+                    if "QUOTE_NOT_OPENED_48H" not in existing:
+                        to_add.append(ReminderRule(
+                            rule_name="QUOTE_NOT_OPENED_48H",
+                            entity_type="QUOTE",
+                            status="SENT",
+                            threshold_days=2,
+                            check_type="SENT_NOT_OPENED",
+                            is_active=True,
+                            priority=ReminderPriority.HIGH,
+                            suggested_action=SuggestedAction.RESEND_QUOTE,
+                        ))
+                    if "QUOTE_OPENED_NO_REPLY" not in existing:
+                        to_add.append(ReminderRule(
+                            rule_name="QUOTE_OPENED_NO_REPLY",
+                            entity_type="QUOTE",
+                            status="SENT",
+                            threshold_days=5,
+                            check_type="OPENED_NO_REPLY",
+                            is_active=True,
+                            priority=ReminderPriority.HIGH,
+                            suggested_action=SuggestedAction.PHONE_CALL,
+                        ))
+                    for rule in to_add:
+                        session.add(rule)
+                    if to_add:
+                        session.commit()
+                        print(f"Created {len(to_add)} quote open-tracking reminder rules", file=sys.stderr, flush=True)
+            except Exception as e:
+                print(f"Error seeding quote open-tracking rules: {e}", file=sys.stderr, flush=True)
                 import traceback
                 print(traceback.format_exc(), file=sys.stderr, flush=True)
         

@@ -73,7 +73,9 @@ def send_quote_email(
     cc: Optional[str] = None,
     bcc: Optional[str] = None,
     custom_message: Optional[str] = None,
-    user_id: Optional[int] = None
+    user_id: Optional[int] = None,
+    view_token: Optional[str] = None,
+    frontend_base_url: Optional[str] = None,
 ) -> Tuple[bool, Optional[str], Optional[str], Optional[BytesIO], Optional[str], Optional[str]]:
     """
     Send a quote as an email with PDF attachment.
@@ -120,7 +122,13 @@ def send_quote_email(
         # Render email templates
         subject = render_email_template(subject_template, quote, customer, company_settings, custom_message)
         body_html = render_email_template(body_template, quote, customer, company_settings, custom_message)
-        
+
+        # Append "View your quote online" link for open tracking (URL-based)
+        if view_token and frontend_base_url:
+            base = frontend_base_url.rstrip("/")
+            view_link = f'<p style="margin-top:1.5em;"><a href="{base}/quotes/view/{view_token}" style="font-weight:bold;">View your quote online</a></p>'
+            body_html = (body_html or "") + view_link
+
         # Generate PDF
         pdf_buffer = generate_quote_pdf(quote, customer, quote_items, company_settings, session)
         # Sanitize customer name for filename (remove invalid characters)

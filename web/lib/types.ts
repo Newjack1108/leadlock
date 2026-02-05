@@ -577,6 +577,32 @@ export interface Quote {
   temperature?: QuoteTemperature;
 }
 
+/** Public quote view (no auth) - for customer view link. */
+export interface PublicQuoteViewItem {
+  description: string;
+  quantity: number;
+  unit_price: number;
+  line_total: number;
+  final_line_total: number;
+  sort_order: number;
+}
+
+export interface PublicQuoteView {
+  quote_number: string;
+  customer_name: string;
+  currency: string;
+  valid_until?: string;
+  subtotal: number;
+  discount_total: number;
+  total_amount: number;
+  deposit_amount: number;
+  balance_amount: number;
+  vat_amount?: number;
+  total_amount_inc_vat?: number;
+  items: PublicQuoteViewItem[];
+  terms_and_conditions?: string;
+}
+
 export interface QuoteCreate {
   customer_id: number;
   quote_number?: string;
@@ -680,6 +706,8 @@ export enum ReminderType {
   QUOTE_STALE = "QUOTE_STALE",
   QUOTE_EXPIRING = "QUOTE_EXPIRING",
   QUOTE_EXPIRED = "QUOTE_EXPIRED",
+  QUOTE_NOT_OPENED = "QUOTE_NOT_OPENED",
+  QUOTE_OPENED_NO_REPLY = "QUOTE_OPENED_NO_REPLY",
   MANUAL = "MANUAL",
 }
 
@@ -689,6 +717,7 @@ export enum SuggestedAction {
   RESEND_QUOTE = "RESEND_QUOTE",
   REVIEW_QUOTE = "REVIEW_QUOTE",
   CONTACT_CUSTOMER = "CONTACT_CUSTOMER",
+  PHONE_CALL = "PHONE_CALL",
 }
 
 export interface Reminder {

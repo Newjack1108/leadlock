@@ -466,7 +466,9 @@ class QuoteEmail(SQLModel, table=True):
     opened_at: Optional[datetime] = None
     clicked_at: Optional[datetime] = None
     tracking_id: str = Field(unique=True, index=True)  # For email tracking
-    
+    view_token: Optional[str] = Field(default=None, unique=True, index=True)  # For public quote view URL
+    open_count: int = Field(default=0)  # Number of times view link was opened
+
     # Relationships
     quote: Quote = Relationship(back_populates="email_sends")
 
@@ -586,6 +588,8 @@ class ReminderType(str, Enum):
     QUOTE_STALE = "QUOTE_STALE"
     QUOTE_EXPIRING = "QUOTE_EXPIRING"
     QUOTE_EXPIRED = "QUOTE_EXPIRED"
+    QUOTE_NOT_OPENED = "QUOTE_NOT_OPENED"  # Sent but view link not opened in 48h
+    QUOTE_OPENED_NO_REPLY = "QUOTE_OPENED_NO_REPLY"  # Opened but no reply, phone call
     MANUAL = "MANUAL"  # User-created follow-up (e.g. call back)
 
 
@@ -595,6 +599,7 @@ class SuggestedAction(str, Enum):
     RESEND_QUOTE = "RESEND_QUOTE"
     REVIEW_QUOTE = "REVIEW_QUOTE"
     CONTACT_CUSTOMER = "CONTACT_CUSTOMER"
+    PHONE_CALL = "PHONE_CALL"
 
 
 class Reminder(SQLModel, table=True):

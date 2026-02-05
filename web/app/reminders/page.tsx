@@ -137,6 +137,8 @@ export default function RemindersPage() {
                 <SelectItem value={ReminderType.QUOTE_STALE}>Stale Quotes</SelectItem>
                 <SelectItem value={ReminderType.QUOTE_EXPIRED}>Expired Quotes</SelectItem>
                 <SelectItem value={ReminderType.QUOTE_EXPIRING}>Expiring Quotes</SelectItem>
+                <SelectItem value={ReminderType.QUOTE_NOT_OPENED}>Quote not opened (48h)</SelectItem>
+                <SelectItem value={ReminderType.QUOTE_OPENED_NO_REPLY}>Quote opened, no reply</SelectItem>
               </SelectContent>
             </Select>
           </div>

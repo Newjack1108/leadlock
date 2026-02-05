@@ -106,9 +106,11 @@ export default function ReminderList({
   };
 
   const handleQuickAction = (reminder: Reminder, action: SuggestedAction) => {
-    if (action === SuggestedAction.FOLLOW_UP || action === SuggestedAction.CONTACT_CUSTOMER) {
+    if (action === SuggestedAction.FOLLOW_UP || action === SuggestedAction.CONTACT_CUSTOMER || action === SuggestedAction.PHONE_CALL) {
       if (reminder.customer_id) {
         router.push(`/customers/${reminder.customer_id}`);
+      } else if (reminder.quote_id) {
+        router.push(`/quotes/${reminder.quote_id}`);
       } else if (reminder.lead_id) {
         router.push(`/leads/${reminder.lead_id}`);
       }
@@ -143,6 +145,8 @@ export default function ReminderList({
       case SuggestedAction.FOLLOW_UP:
       case SuggestedAction.CONTACT_CUSTOMER:
         return <Mail className="h-4 w-4" />;
+      case SuggestedAction.PHONE_CALL:
+        return <Phone className="h-4 w-4" />;
       case SuggestedAction.RESEND_QUOTE:
         return <FileText className="h-4 w-4" />;
       case SuggestedAction.REVIEW_QUOTE:
@@ -160,6 +164,8 @@ export default function ReminderList({
         return 'Follow Up';
       case SuggestedAction.CONTACT_CUSTOMER:
         return 'Contact';
+      case SuggestedAction.PHONE_CALL:
+        return 'Phone call';
       case SuggestedAction.RESEND_QUOTE:
         return 'Resend Quote';
       case SuggestedAction.REVIEW_QUOTE:
