@@ -16,6 +16,7 @@ import {
   markCustomerMessengerRead,
 } from '@/lib/api';
 import { MessengerMessage, MessengerDirection, Customer } from '@/lib/types';
+import { formatDateTime } from '@/lib/utils';
 import { toast } from 'sonner';
 import api from '@/lib/api';
 
@@ -204,7 +205,7 @@ export default function CustomerMessengerPage() {
                               : 'Received'}
                           </Badge>
                           <span className="text-xs text-muted-foreground">
-                            {new Date(msg.created_at).toLocaleString()}
+                            {formatDateTime(msg.created_at)}
                           </span>
                         </div>
                         <div className="text-xs text-muted-foreground mb-1">

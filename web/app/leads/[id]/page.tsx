@@ -25,6 +25,7 @@ import {
   Clock,
 } from 'lucide-react';
 import api from '@/lib/api';
+import { formatDateTime } from '@/lib/utils';
 import { Lead, Activity, ActivityType, LeadStatus, Timeframe, LeadType, LeadSource } from '@/lib/types';
 import { toast } from 'sonner';
 
@@ -319,7 +320,7 @@ export default function LeadDetailPage() {
                                 {activity.activity_type.replace('_', ' ')}
                               </span>
                               <span className="text-xs text-muted-foreground">
-                                {new Date(activity.created_at).toLocaleString()}
+                                {formatDateTime(activity.created_at)}
                               </span>
                             </div>
                             {activity.notes && (

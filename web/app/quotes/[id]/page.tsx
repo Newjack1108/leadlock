@@ -12,6 +12,7 @@ import SendQuoteEmailDialog from '@/components/SendQuoteEmailDialog';
 import CallNotesDialog from '@/components/CallNotesDialog';
 import { toast } from 'sonner';
 import Link from 'next/link';
+import { formatDateTime } from '@/lib/utils';
 import { ArrowLeft, Mail, Eye, Tag, Pencil, ChevronDown, ChevronUp, Send, ExternalLink } from 'lucide-react';
 import RequestDiscountDialog from '@/components/RequestDiscountDialog';
 
@@ -513,7 +514,7 @@ export default function QuoteDetailPage() {
                   <div>
                     <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Sent At</div>
                     <div className="text-sm">
-                      {new Date(quote.sent_at).toLocaleString()}
+                      {formatDateTime(quote.sent_at)}
                     </div>
                   </div>
                 )}
@@ -521,7 +522,7 @@ export default function QuoteDetailPage() {
                   <div>
                     <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Viewed At</div>
                     <div className="text-sm">
-                      {new Date(quote.viewed_at).toLocaleString()}
+                      {formatDateTime(quote.viewed_at)}
                     </div>
                   </div>
                 )}
@@ -529,14 +530,14 @@ export default function QuoteDetailPage() {
                   <div>
                     <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Accepted At</div>
                     <div className="text-sm">
-                      {new Date(quote.accepted_at).toLocaleString()}
+                      {formatDateTime(quote.accepted_at)}
                     </div>
                   </div>
                 )}
                 <div>
                   <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Created</div>
                   <div className="text-sm">
-                    {new Date(quote.created_at).toLocaleString()}
+                    {formatDateTime(quote.created_at)}
                   </div>
                 </div>
               </CardContent>

@@ -29,6 +29,7 @@ import {
   Eye,
 } from 'lucide-react';
 import api, { getCustomerHistory } from '@/lib/api';
+import { formatDateTime } from '@/lib/utils';
 import { Customer, Activity, ActivityType, Lead, OpportunityStage, CustomerHistoryEvent, CustomerHistoryEventType } from '@/lib/types';
 import SendQuoteEmailDialog from '@/components/SendQuoteEmailDialog';
 import ComposeEmailDialog from '@/components/ComposeEmailDialog';
@@ -618,7 +619,7 @@ export default function CustomerDetailPage() {
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="font-medium">{event.title}</span>
                               <span className="text-xs text-muted-foreground">
-                                {new Date(event.timestamp).toLocaleString()}
+                                {formatDateTime(event.timestamp)}
                               </span>
                             </div>
                             {event.description && (
@@ -682,7 +683,7 @@ export default function CustomerDetailPage() {
                                 {activity.activity_type.replace('_', ' ')}
                               </span>
                               <span className="text-xs text-muted-foreground">
-                                {new Date(activity.created_at).toLocaleString()}
+                                {formatDateTime(activity.created_at)}
                               </span>
                             </div>
                             {activity.notes && (

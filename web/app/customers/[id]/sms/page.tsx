@@ -18,6 +18,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { MessageSquare, ArrowLeft, Send, CalendarClock, RefreshCw } from 'lucide-react';
+import { formatDateTime } from '@/lib/utils';
 import {
   getCustomerSms,
   sendSms,
@@ -372,7 +373,7 @@ export default function CustomerSmsPage() {
                             {msg.direction === SmsDirection.SENT ? 'Sent' : 'Received'}
                           </Badge>
                           <span className="text-xs text-muted-foreground">
-                            {new Date(msg.created_at).toLocaleString()}
+                            {formatDateTime(msg.created_at)}
                           </span>
                         </div>
                         <div className="text-xs text-muted-foreground mb-1">
@@ -410,7 +411,7 @@ export default function CustomerSmsPage() {
                             {s.body}
                           </p>
                           <p className="text-xs text-muted-foreground mt-1">
-                            {new Date(s.scheduled_at).toLocaleString()}
+                            {formatDateTime(s.scheduled_at)}
                           </p>
                         </div>
                         <Button

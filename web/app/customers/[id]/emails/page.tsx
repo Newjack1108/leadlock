@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Mail, ArrowLeft, Reply, Send } from 'lucide-react';
 import { getCustomerEmails, sendEmail } from '@/lib/api';
+import { formatDateTime } from '@/lib/utils';
 import { Email, EmailDirection, Customer } from '@/lib/types';
 import { toast } from 'sonner';
 import api from '@/lib/api';
@@ -198,7 +199,7 @@ export default function CustomerEmailsPage() {
                             </span>
                           </div>
                           <span className="text-xs text-muted-foreground">
-                            {new Date(email.created_at).toLocaleString()}
+                            {formatDateTime(email.created_at)}
                           </span>
                         </div>
                         <div className="text-sm mt-2">
