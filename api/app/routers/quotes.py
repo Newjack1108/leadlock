@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 from sqlmodel import Session, select, or_, and_
+from sqlalchemy import func
 from typing import List, Optional
 from app.database import get_session
 from app.models import Quote, QuoteItem, Customer, User, QuoteEmail, Email, EmailDirection, Activity, ActivityType, CompanySettings, Lead, LeadStatus, QuoteStatus, OpportunityStage, LossCategory, DiscountTemplate, QuoteDiscount, DiscountType, DiscountScope
@@ -55,6 +56,12 @@ def build_quote_response(quote: Quote, quote_items: List[QuoteItem], session: Se
     deposit_amount_inc_vat = quote.deposit_amount * VAT_RATE_DECIMAL + quote.deposit_amount
     balance_amount_inc_vat = quote.balance_amount * VAT_RATE_DECIMAL + quote.balance_amount
 
+    total_open_count = session.exec(
+        select(func.coalesce(func.sum(QuoteEmail.open_count), 0)).where(QuoteEmail.quote_id == quote.id)
+    ).first() or 0
+    if hasattr(total_open_count, "__int__"):
+        total_open_count = int(total_open_count)
+
     return QuoteResponse(
         id=quote.id,
         customer_id=quote.customer_id,
@@ -91,7 +98,8 @@ def build_quote_response(quote: Quote, quote_items: List[QuoteItem], session: Se
         loss_reason=quote.loss_reason,
         loss_category=quote.loss_category,
         owner_id=quote.owner_id,
-        temperature=quote.temperature
+        temperature=quote.temperature,
+        total_open_count=total_open_count,
     )
 
 

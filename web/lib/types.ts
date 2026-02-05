@@ -577,6 +577,7 @@ export interface Quote {
   loss_category?: LossCategory;
   owner_id?: number;
   temperature?: QuoteTemperature;
+  total_open_count?: number;
 }
 
 /** Public quote view (no auth) - for customer view link. */

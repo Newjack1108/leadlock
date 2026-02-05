@@ -683,6 +683,7 @@ class QuoteResponse(BaseModel):
     loss_category: Optional["LossCategory"] = None
     owner_id: Optional[int] = None
     temperature: Optional[QuoteTemperature] = None
+    total_open_count: int = 0  # Total times quote view link was opened (across all sends)
 
 
 class QuoteEmailResponse(BaseModel):

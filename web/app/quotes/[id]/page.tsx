@@ -526,6 +526,10 @@ export default function QuoteDetailPage() {
                     </div>
                   </div>
                 )}
+                <div>
+                  <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Times viewed</div>
+                  <div className="text-sm font-medium">{quote.total_open_count ?? 0}</div>
+                </div>
                 {quote.accepted_at && (
                   <div>
                     <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Accepted At</div>
