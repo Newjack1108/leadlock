@@ -48,6 +48,17 @@ export default function QuotesPage() {
     fetchQuotes();
   }, []);
 
+  // Auto-refresh when user returns to this tab/window
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchQuotes();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
+  }, []);
+
   const fetchQuotes = async () => {
     try {
       setLoading(true);

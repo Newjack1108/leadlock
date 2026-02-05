@@ -506,10 +506,6 @@ export default function QuoteDetailPage() {
                     </div>
                   </div>
                 )}
-                <div>
-                  <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Currency</div>
-                  <div className="font-medium">{quote.currency}</div>
-                </div>
                 {quote.sent_at && (
                   <div>
                     <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Sent At</div>
