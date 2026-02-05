@@ -510,20 +510,18 @@ export default function CustomerDetailPage() {
                 </CardHeader>
                 <CardContent className="space-y-2">
                   <Button
-                    variant="default"
+                    variant="outline"
                     className="w-full"
                     onClick={() => setComposeEmailDialogOpen(true)}
                   >
-                    <Image src="/email-icon.png" alt="" width={20} height={20} className="mr-2 shrink-0" />
                     Compose Email
                   </Button>
                   <Button
-                    variant="outline"
-                    className="w-full"
+                    variant="link"
+                    className="w-full p-0 h-auto text-muted-foreground hover:text-primary"
                     onClick={() => router.push(`/customers/${customerId}/emails`)}
                   >
-                    <Image src="/email-icon.png" alt="" width={20} height={20} className="mr-2 shrink-0" />
-                    View All Emails
+                    View all emails
                   </Button>
                 </CardContent>
               </Card>
@@ -540,7 +538,6 @@ export default function CustomerDetailPage() {
                     className="w-full"
                     onClick={() => router.push(`/customers/${customerId}/sms`)}
                   >
-                    <Image src="/sms-icon.png" alt="" width={20} height={20} className="mr-2 shrink-0" />
                     View SMS
                   </Button>
                 </CardContent>
@@ -558,7 +555,6 @@ export default function CustomerDetailPage() {
                     className="w-full"
                     onClick={() => router.push(`/customers/${customerId}/messenger`)}
                   >
-                    <Image src="/messenger-icon.png" alt="" width={20} height={20} className="mr-2 shrink-0" />
                     View Messenger
                   </Button>
                 </CardContent>
