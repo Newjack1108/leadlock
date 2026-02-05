@@ -518,11 +518,19 @@ export default function QuoteDetailPage() {
                     </div>
                   </div>
                 )}
-                {quote.viewed_at && (
+                {quote.viewed_at != null && (
                   <div>
-                    <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Viewed At</div>
+                    <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">First viewed at</div>
                     <div className="text-sm">
                       {formatDateTime(quote.viewed_at)}
+                    </div>
+                  </div>
+                )}
+                {quote.last_viewed_at != null && (
+                  <div>
+                    <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Last viewed at</div>
+                    <div className="text-sm">
+                      {formatDateTime(quote.last_viewed_at)}
                     </div>
                   </div>
                 )}

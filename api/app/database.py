@@ -511,6 +511,20 @@ def create_db_and_tables():
                     if "already exists" not in error_str and "duplicate" not in error_str:
                         print(f"Error adding open_count to quoteemail: {e}", file=sys.stderr, flush=True)
         
+        # Step 8c: Add last_viewed_at to quote table
+        if has_quote_table:
+            quote_columns = [col["name"] for col in inspector.get_columns("quote")]
+            if "last_viewed_at" not in quote_columns:
+                print("Adding last_viewed_at column to quote table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE quote ADD COLUMN last_viewed_at TIMESTAMP"))
+                    print("Added last_viewed_at column to quote table", file=sys.stderr, flush=True)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Error adding last_viewed_at to quote: {e}", file=sys.stderr, flush=True)
+        
         # Step 9: Create Reminder and ReminderRule tables
         has_reminder_table = inspector.has_table("reminder")
         has_reminder_rule_table = inspector.has_table("reminderrule")

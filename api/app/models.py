@@ -406,7 +406,8 @@ class Quote(SQLModel, table=True):
     notes: Optional[str] = None
     created_by_id: int = Field(foreign_key="user.id")
     sent_at: Optional[datetime] = None
-    viewed_at: Optional[datetime] = None
+    viewed_at: Optional[datetime] = None  # First time quote view link was opened
+    last_viewed_at: Optional[datetime] = None  # Most recent time quote view link was opened
     accepted_at: Optional[datetime] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)

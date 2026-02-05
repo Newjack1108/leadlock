@@ -81,6 +81,7 @@ def build_quote_response(quote: Quote, quote_items: List[QuoteItem], session: Se
         created_by_id=quote.created_by_id,
         sent_at=quote.sent_at,
         viewed_at=quote.viewed_at,
+        last_viewed_at=quote.last_viewed_at,
         accepted_at=quote.accepted_at,
         created_at=quote.created_at,
         updated_at=quote.updated_at,

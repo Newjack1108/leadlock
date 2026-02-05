@@ -42,9 +42,10 @@ def get_public_quote_view(
         quote_email.opened_at = now
     quote_email.open_count = (quote_email.open_count or 0) + 1
 
-    # Set quote.viewed_at if not set (first open)
+    # Set quote.viewed_at if not set (first open), always update last_viewed_at
     if quote.viewed_at is None:
         quote.viewed_at = now
+    quote.last_viewed_at = now
 
     session.add(quote_email)
     session.add(quote)

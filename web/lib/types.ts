@@ -561,7 +561,8 @@ export interface Quote {
   notes?: string;
   created_by_id: number;
   sent_at?: string;
-  viewed_at?: string;
+  viewed_at?: string;   // First viewed at
+  last_viewed_at?: string;
   accepted_at?: string;
   created_at: string;
   updated_at: string;

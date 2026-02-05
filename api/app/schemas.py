@@ -662,7 +662,8 @@ class QuoteResponse(BaseModel):
     notes: Optional[str]
     created_by_id: int
     sent_at: Optional[datetime]
-    viewed_at: Optional[datetime]
+    viewed_at: Optional[datetime]  # First viewed at
+    last_viewed_at: Optional[datetime] = None  # Last viewed at
     accepted_at: Optional[datetime]
     created_at: datetime
     updated_at: datetime
