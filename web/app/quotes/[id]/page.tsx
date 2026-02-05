@@ -6,13 +6,13 @@ import Header from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import api, { getQuote, previewQuotePdf, getDiscountRequestsForQuote } from '@/lib/api';
+import api, { getQuote, previewQuotePdf, getDiscountRequestsForQuote, getQuoteViewLink } from '@/lib/api';
 import { Quote, QuoteItem, Customer, QuoteDiscount, DiscountRequest, DiscountRequestStatus, QuoteTemperature } from '@/lib/types';
 import SendQuoteEmailDialog from '@/components/SendQuoteEmailDialog';
 import CallNotesDialog from '@/components/CallNotesDialog';
 import { toast } from 'sonner';
 import Link from 'next/link';
-import { ArrowLeft, Mail, Eye, Tag, Pencil, ChevronDown, ChevronUp, Send } from 'lucide-react';
+import { ArrowLeft, Mail, Eye, Tag, Pencil, ChevronDown, ChevronUp, Send, ExternalLink } from 'lucide-react';
 import RequestDiscountDialog from '@/components/RequestDiscountDialog';
 
 const temperatureColors: Record<QuoteTemperature, string> = {
@@ -153,6 +153,23 @@ export default function QuoteDetailPage() {
                 <Mail className="h-4 w-4 mr-2" />
                 Send Quote
               </Button>
+              {quote.status === 'SENT' && (
+                <Button
+                  variant="outline"
+                  onClick={async () => {
+                    try {
+                      const { view_url } = await getQuoteViewLink(quoteId);
+                      if (view_url) window.open(view_url, '_blank');
+                      else toast.error('No view link available (set FRONTEND_BASE_URL and send the quote by email first).');
+                    } catch {
+                      toast.error('Failed to get view link');
+                    }
+                  }}
+                >
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  Open customer view
+                </Button>
+              )}
             </div>
           </div>
         </div>

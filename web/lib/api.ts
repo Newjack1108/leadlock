@@ -220,6 +220,12 @@ export const getPublicQuoteView = async (viewToken: string) => {
   return response.data;
 };
 
+/** Get latest customer view URL for a quote (for testing open tracking). */
+export const getQuoteViewLink = async (quoteId: number): Promise<{ view_url: string | null }> => {
+  const response = await api.get(`/api/quotes/${quoteId}/view-link`);
+  return response.data;
+};
+
 // Email Template API functions
 export const getEmailTemplates = async () => {
   const response = await api.get('/api/email-templates');

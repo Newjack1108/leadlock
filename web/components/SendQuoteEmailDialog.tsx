@@ -15,9 +15,9 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { sendQuoteEmail, previewQuotePdf } from '@/lib/api';
-import { QuoteEmailSendRequest, Customer } from '@/lib/types';
+import { QuoteEmailSendRequest, QuoteEmailSendResponse, Customer } from '@/lib/types';
 import { toast } from 'sonner';
-import { Eye } from 'lucide-react';
+import { Eye, ExternalLink, Copy } from 'lucide-react';
 
 interface QuoteTemplate {
   id: number;
@@ -43,6 +43,7 @@ export default function SendQuoteEmailDialog({
   onSuccess,
 }: SendQuoteEmailDialogProps) {
   const [loading, setLoading] = useState(false);
+  const [successResponse, setSuccessResponse] = useState<QuoteEmailSendResponse | null>(null);
   const [templates, setTemplates] = useState<QuoteTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | undefined>(undefined);
   const [formData, setFormData] = useState<QuoteEmailSendRequest>({
@@ -52,10 +53,10 @@ export default function SendQuoteEmailDialog({
     custom_message: '',
   });
 
-  // Load templates (you may need to create this API endpoint)
+  // Reset form and success state when dialog opens
   useEffect(() => {
     if (open) {
-      // Reset form when dialog opens
+      setSuccessResponse(null);
       setFormData({
         to_email: customer.email || '',
         cc: '',
@@ -63,9 +64,6 @@ export default function SendQuoteEmailDialog({
         custom_message: '',
       });
       setSelectedTemplateId(undefined);
-      
-      // TODO: Fetch templates from API
-      // For now, we'll use a default template option
       setTemplates([]);
     }
   }, [open, customer]);
@@ -90,35 +88,89 @@ export default function SendQuoteEmailDialog({
 
     setLoading(true);
     try {
-      await sendQuoteEmail(quoteId, {
+      const response = await sendQuoteEmail(quoteId, {
         ...formData,
         template_id: selectedTemplateId,
       });
-      
-      toast.success('Quote email sent successfully');
       setLoading(false);
-      onOpenChange(false);
-      // Wrap onSuccess in try-catch to prevent errors from stalling the app
-      setTimeout(() => {
-        try {
-          onSuccess?.();
-        } catch (error) {
-          console.error('Error in onSuccess callback:', error);
-          // Don't let onSuccess errors break the UI
-        }
-      }, 100);
+      toast.success('Quote email sent successfully');
+      if (response.view_url) {
+        setSuccessResponse(response);
+      } else {
+        onOpenChange(false);
+        setTimeout(() => onSuccess?.(), 100);
+      }
     } catch (error: any) {
       const errorMessage = error.response?.data?.detail || error.message || 'Failed to send quote email';
       toast.error(errorMessage);
       console.error('Quote email send error:', error);
     } finally {
-      // Always reset loading state, even if there's an error
       setLoading(false);
     }
   };
 
+  const handleClose = (open: boolean) => {
+    if (!open) setSuccessResponse(null);
+    onOpenChange(open);
+  };
+
+  const handleCopyLink = () => {
+    if (successResponse?.view_url) {
+      navigator.clipboard.writeText(successResponse.view_url);
+      toast.success('Link copied to clipboard');
+    }
+  };
+
+  if (successResponse?.view_url) {
+    return (
+      <Dialog open={open} onOpenChange={handleClose}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Quote email sent</DialogTitle>
+            <DialogDescription>
+              {successResponse.test_mode
+                ? 'Test mode: no email was sent. Use the link below to test the customer quote view and open tracking.'
+                : 'Use the link below to open the customer quote view (e.g. for testing).'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="flex flex-col gap-2">
+              <Label className="text-sm font-medium">Customer view link</Label>
+              <div className="flex gap-2">
+                <Input readOnly value={successResponse.view_url} className="font-mono text-sm" />
+                <Button type="button" variant="outline" size="icon" onClick={handleCopyLink} title="Copy link">
+                  <Copy className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  asChild
+                >
+                  <a href={successResponse.view_url} target="_blank" rel="noopener noreferrer">
+                    <ExternalLink className="h-4 w-4 mr-2" />
+                    Open
+                  </a>
+                </Button>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={() => {
+                onSuccess?.();
+                handleClose(false);
+              }}
+            >
+              Done
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Send Quote via Email</DialogTitle>
@@ -199,7 +251,7 @@ export default function SendQuoteEmailDialog({
             <Button
               type="button"
               variant="outline"
-              onClick={() => onOpenChange(false)}
+              onClick={() => handleClose(false)}
               disabled={loading}
             >
               Cancel

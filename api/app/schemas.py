@@ -277,6 +277,12 @@ class QuoteEmailSendResponse(BaseModel):
     email_id: int
     quote_email_id: int
     message: str
+    view_url: Optional[str] = None  # For testing: open/copy link when in test mode
+    test_mode: Optional[bool] = None  # True when email was not sent via SMTP
+
+
+class QuoteViewLinkResponse(BaseModel):
+    view_url: Optional[str] = None  # Latest customer view link for this quote, or null
 
 
 class OpportunityWonRequest(BaseModel):

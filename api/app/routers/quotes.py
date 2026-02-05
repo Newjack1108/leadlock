@@ -7,7 +7,8 @@ from app.models import Quote, QuoteItem, Customer, User, QuoteEmail, Email, Emai
 from app.auth import get_current_user
 from app.schemas import (
     QuoteCreate, QuoteUpdate, QuoteDraftUpdate, QuoteResponse, QuoteItemCreate, QuoteItemResponse,
-    QuoteEmailSendRequest, QuoteEmailSendResponse, OpportunityWonRequest, OpportunityLostRequest,
+    QuoteEmailSendRequest, QuoteEmailSendResponse, QuoteViewLinkResponse,
+    OpportunityWonRequest, OpportunityLostRequest,
     QuoteDiscountResponse
 )
 from app.quote_email_service import send_quote_email
@@ -883,6 +884,31 @@ async def get_customer_quotes(
     return result
 
 
+@router.get("/{quote_id}/view-link", response_model=QuoteViewLinkResponse)
+async def get_quote_view_link(
+    quote_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Return the latest customer view URL for this quote (for testing open tracking)."""
+    quote = session.exec(select(Quote).where(Quote.id == quote_id)).first()
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    frontend_base_url = os.getenv("FRONTEND_BASE_URL", "").strip() or None
+    statement = (
+        select(QuoteEmail)
+        .where(QuoteEmail.quote_id == quote_id, QuoteEmail.view_token.isnot(None))
+        .order_by(QuoteEmail.sent_at.desc())
+        .limit(1)
+    )
+    quote_email = session.exec(statement).first()
+    view_url = None
+    if quote_email and quote_email.view_token and frontend_base_url:
+        base = frontend_base_url.rstrip("/")
+        view_url = f"{base}/quotes/view/{quote_email.view_token}"
+    return QuoteViewLinkResponse(view_url=view_url)
+
+
 @router.post("/{quote_id}/send-email", response_model=QuoteEmailSendResponse)
 async def send_quote_email_endpoint(
     quote_id: int,
@@ -989,10 +1015,18 @@ async def send_quote_email_endpoint(
         session.add(activity)
         session.commit()
         
+        view_url = None
+        if view_token and frontend_base_url:
+            base = frontend_base_url.rstrip("/")
+            view_url = f"{base}/quotes/view/{view_token}"
+        test_mode = getattr(current_user, "email_test_mode", False)
+
         return QuoteEmailSendResponse(
             email_id=email_record.id,
             quote_email_id=quote_email.id,
-            message="Quote email sent successfully"
+            message="Quote email sent successfully",
+            view_url=view_url,
+            test_mode=test_mode,
         )
     except HTTPException:
         raise

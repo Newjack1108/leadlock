@@ -427,6 +427,8 @@ export interface QuoteEmailSendResponse {
   email_id: number;
   quote_email_id: number;
   message: string;
+  view_url?: string;
+  test_mode?: boolean;
 }
 
 export interface EmailTemplate {
