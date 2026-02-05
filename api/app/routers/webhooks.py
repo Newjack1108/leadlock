@@ -26,7 +26,12 @@ from app.auth import get_webhook_api_key
 from app.workflow import check_sla_overdue
 from app.routers.leads import enrich_lead_response
 from app.sms_service import validate_twilio_webhook, normalize_phone, get_twilio_config
-from app.messenger_service import parse_webhook_payload, get_user_profile, get_page_access_token
+from app.messenger_service import (
+    parse_webhook_payload,
+    get_user_profile,
+    get_page_access_token,
+    fetch_leadgen_lead,
+)
 
 router = APIRouter(prefix="/api/webhooks", tags=["webhooks"])
 
@@ -319,38 +324,61 @@ async def facebook_messenger_webhook(request: Request, session: Session = Depend
             if lead and lead.customer_id:
                 customer = session.get(Customer, lead.customer_id)
         if not customer:
-            # Unknown user: create Lead + Customer
-            ok, first_name, last_name, err = get_user_profile(sender_psid, get_page_access_token())
-            name = " ".join(filter(None, [first_name, last_name])) if (first_name or last_name) else f"Facebook {sender_psid[:8]}"
-            from datetime import date
-            year = date.today().year
-            num_stmt = select(Customer).where(Customer.customer_number.like(f"CUST-{year}-%"))
-            existing = list(session.exec(num_stmt).all())
-            numbers = []
-            for c in existing:
-                try:
-                    num = int(c.customer_number.split("-")[-1])
-                    numbers.append(num)
-                except (ValueError, IndexError):
-                    continue
-            next_num = max(numbers) + 1 if numbers else 1
-            customer_number = f"CUST-{year}-{next_num:03d}"
-            customer = Customer(
-                customer_number=customer_number,
-                name=name,
-                messenger_psid=sender_psid,
-                customer_since=now,
-            )
-            session.add(customer)
-            session.flush()
-            lead = Lead(
-                name=name,
-                lead_source=LeadSource.FACEBOOK,
-                messenger_psid=sender_psid,
-                customer_id=customer.id,
-            )
-            session.add(lead)
-            session.flush()
+            # Phone fallback: get profile (with optional phone), match by normalized phone
+            ok, first_name, last_name, profile_phone, err = get_user_profile(sender_psid, get_page_access_token())
+            if profile_phone:
+                from_normalized = normalize_phone(profile_phone)
+                if from_normalized:
+                    stmt = select(Customer).where(Customer.phone.isnot(None))
+                    for c in session.exec(stmt).all():
+                        if c.phone and normalize_phone(c.phone) == from_normalized:
+                            customer = c
+                            break
+                    if not customer:
+                        stmt = select(Lead).where(Lead.phone.isnot(None))
+                        for l in session.exec(stmt).all():
+                            if l.phone and normalize_phone(l.phone) == from_normalized and l.customer_id:
+                                lead = l
+                                customer = session.get(Customer, l.customer_id)
+                                break
+                    if customer:
+                        customer.messenger_psid = sender_psid
+                        session.add(customer)
+                        if lead:
+                            lead.messenger_psid = sender_psid
+                            session.add(lead)
+            if not customer:
+                # Unknown user: create Lead + Customer
+                name = " ".join(filter(None, [first_name, last_name])) if (first_name or last_name) else f"Facebook {sender_psid[:8]}"
+                from datetime import date
+                year = date.today().year
+                num_stmt = select(Customer).where(Customer.customer_number.like(f"CUST-{year}-%"))
+                existing = list(session.exec(num_stmt).all())
+                numbers = []
+                for c in existing:
+                    try:
+                        num = int(c.customer_number.split("-")[-1])
+                        numbers.append(num)
+                    except (ValueError, IndexError):
+                        continue
+                next_num = max(numbers) + 1 if numbers else 1
+                customer_number = f"CUST-{year}-{next_num:03d}"
+                customer = Customer(
+                    customer_number=customer_number,
+                    name=name,
+                    messenger_psid=sender_psid,
+                    customer_since=now,
+                )
+                session.add(customer)
+                session.flush()
+                lead = Lead(
+                    name=name,
+                    lead_source=LeadSource.FACEBOOK,
+                    messenger_psid=sender_psid,
+                    customer_id=customer.id,
+                )
+                session.add(lead)
+                session.flush()
         msg = MessengerMessage(
             customer_id=customer.id,
             lead_id=lead.id if lead else None,
@@ -374,5 +402,155 @@ async def facebook_messenger_webhook(request: Request, session: Session = Depend
         session.commit()
     except Exception as e:
         print(f"Facebook Messenger webhook commit error: {e}", file=sys.stderr, flush=True)
+        session.rollback()
+    return Response(status_code=200)
+
+
+# --- Facebook Lead Ads webhook ---
+
+def _parse_leadgen_events(body: dict) -> list[dict]:
+    """Extract leadgen events from Meta webhook payload. Returns list of {leadgen_id, page_id, form_id, created_time}."""
+    if body.get("object") != "page":
+        return []
+    events = []
+    for entry in body.get("entry", []):
+        for change in entry.get("changes", []):
+            if change.get("field") != "leadgen":
+                continue
+            value = change.get("value") or {}
+            leadgen_id = value.get("leadgen_id")
+            if leadgen_id:
+                events.append({
+                    "leadgen_id": str(leadgen_id),
+                    "page_id": value.get("page_id"),
+                    "form_id": value.get("form_id"),
+                    "created_time": value.get("created_time"),
+                })
+    return events
+
+
+def _leadgen_field_map_to_lead_data(field_map: dict) -> dict:
+    """Map Facebook Lead Ad field_data to LeadLock name, email, phone, postcode, description."""
+    # Common Meta field names
+    name = (
+        field_map.get("full_name") or
+        " ".join(filter(None, [field_map.get("first_name"), field_map.get("last_name")])) or
+        field_map.get("name")
+    )
+    if not name or not name.strip():
+        name = "Facebook Lead"
+    email = (field_map.get("email") or "").strip() or None
+    phone = (field_map.get("phone_number") or field_map.get("phone") or "").strip() or None
+    postcode = (field_map.get("postcode") or field_map.get("zip") or field_map.get("zip_code") or "").strip() or None
+    # Use known keys for description; then any remaining custom keys
+    known = {"full_name", "first_name", "last_name", "name", "email", "phone_number", "phone", "postcode", "zip", "zip_code", "city", "state"}
+    extra = [f"{k}: {v}" for k, v in field_map.items() if k not in known and v]
+    description = "\n".join(extra) if extra else None
+    return {"name": name.strip(), "email": email, "phone": phone, "postcode": postcode, "description": description}
+
+
+@router.get("/facebook/leadgen")
+async def facebook_leadgen_verify(request: Request):
+    """Facebook Lead Ads webhook verification: return hub.challenge if verify_token matches."""
+    hub_mode = request.query_params.get("hub.mode")
+    hub_verify_token = request.query_params.get("hub.verify_token")
+    hub_challenge = request.query_params.get("hub.challenge")
+    verify_token = os.getenv("FACEBOOK_VERIFY_TOKEN")
+    if not verify_token or hub_mode != "subscribe" or hub_verify_token != verify_token or not hub_challenge:
+        raise HTTPException(status_code=403, detail="Verification failed")
+    return Response(content=hub_challenge, media_type="text/plain")
+
+
+@router.post("/facebook/leadgen")
+async def facebook_leadgen_webhook(request: Request, session: Session = Depends(get_session)):
+    """
+    Process incoming Facebook Lead Ads webhook events.
+    Fetches lead data from Graph API and creates Customer + Lead with lead_source=FACEBOOK.
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        return Response(status_code=200)
+    events = _parse_leadgen_events(body)
+    if not events:
+        return Response(status_code=200)
+    activity_user_id = _get_activity_user_id(session)
+    token = get_page_access_token()
+    if not token:
+        print("Facebook Lead Ads webhook: FACEBOOK_PAGE_ACCESS_TOKEN not set", file=sys.stderr, flush=True)
+        return Response(status_code=200)
+    from datetime import date
+    now = datetime.utcnow()
+    year = date.today().year
+    for ev in events:
+        leadgen_id = ev["leadgen_id"]
+        ok, field_map, err = fetch_leadgen_lead(leadgen_id, token)
+        if not ok or not field_map:
+            print(f"Facebook Lead Ads: failed to fetch lead {leadgen_id}: {err}", file=sys.stderr, flush=True)
+            continue
+        data = _leadgen_field_map_to_lead_data(field_map)
+        # Optionally match existing customer by email or phone
+        customer = None
+        if data.get("email"):
+            stmt = select(Customer).where(Customer.email == data["email"])
+            customer = session.exec(stmt).first()
+        if not customer and data.get("phone"):
+            from app.sms_service import normalize_phone as norm
+            stmt = select(Customer).where(Customer.phone.isnot(None))
+            for c in session.exec(stmt).all():
+                if c.phone and norm(c.phone) == norm(data["phone"]):
+                    customer = c
+                    break
+        if not customer:
+            num_stmt = select(Customer).where(Customer.customer_number.like(f"CUST-{year}-%"))
+            existing = list(session.exec(num_stmt).all())
+            numbers = []
+            for c in existing:
+                try:
+                    num = int(c.customer_number.split("-")[-1])
+                    numbers.append(num)
+                except (ValueError, IndexError):
+                    continue
+            next_num = max(numbers) + 1 if numbers else 1
+            customer_number = f"CUST-{year}-{next_num:03d}"
+            customer = Customer(
+                customer_number=customer_number,
+                name=data["name"],
+                email=data.get("email"),
+                phone=data.get("phone"),
+                postcode=data.get("postcode"),
+                customer_since=now,
+            )
+            session.add(customer)
+            session.flush()
+        lead = Lead(
+            name=data["name"],
+            email=data.get("email"),
+            phone=data.get("phone"),
+            postcode=data.get("postcode"),
+            description=data.get("description"),
+            lead_source=LeadSource.FACEBOOK,
+            customer_id=customer.id,
+        )
+        session.add(lead)
+        session.flush()
+        if activity_user_id:
+            activity = Activity(
+                customer_id=customer.id,
+                activity_type=ActivityType.NOTE,
+                notes="Lead from Facebook Lead Ad form",
+                created_by_id=activity_user_id,
+            )
+            session.add(activity)
+            status_history = StatusHistory(
+                lead_id=lead.id,
+                new_status=LeadStatus.NEW,
+                changed_by_id=activity_user_id,
+            )
+            session.add(status_history)
+    try:
+        session.commit()
+    except Exception as e:
+        print(f"Facebook Lead Ads webhook commit error: {e}", file=sys.stderr, flush=True)
         session.rollback()
     return Response(status_code=200)
