@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
+import Image from 'next/image';
 import Header from '@/components/Header';
 import QuoteLockCard from '@/components/QuoteLockCard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -502,7 +503,10 @@ export default function CustomerDetailPage() {
             <div className="grid gap-4 sm:grid-cols-3">
               <Card>
                 <CardHeader>
-                  <CardTitle>Emails</CardTitle>
+                  <div className="flex items-center gap-2">
+                    <Image src="/email-icon.png" alt="" width={32} height={32} className="shrink-0" />
+                    <CardTitle>Emails</CardTitle>
+                  </div>
                 </CardHeader>
                 <CardContent className="space-y-2">
                   <Button
@@ -510,7 +514,7 @@ export default function CustomerDetailPage() {
                     className="w-full"
                     onClick={() => setComposeEmailDialogOpen(true)}
                   >
-                    <Send className="h-4 w-4 mr-2" />
+                    <Image src="/email-icon.png" alt="" width={20} height={20} className="mr-2 shrink-0" />
                     Compose Email
                   </Button>
                   <Button
@@ -518,14 +522,17 @@ export default function CustomerDetailPage() {
                     className="w-full"
                     onClick={() => router.push(`/customers/${customerId}/emails`)}
                   >
-                    <Mail className="h-4 w-4 mr-2" />
+                    <Image src="/email-icon.png" alt="" width={20} height={20} className="mr-2 shrink-0" />
                     View All Emails
                   </Button>
                 </CardContent>
               </Card>
               <Card>
                 <CardHeader>
-                  <CardTitle>SMS</CardTitle>
+                  <div className="flex items-center gap-2">
+                    <Image src="/sms-icon.png" alt="" width={32} height={32} className="shrink-0" />
+                    <CardTitle>SMS</CardTitle>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <Button
@@ -533,14 +540,17 @@ export default function CustomerDetailPage() {
                     className="w-full"
                     onClick={() => router.push(`/customers/${customerId}/sms`)}
                   >
-                    <MessageSquare className="h-4 w-4 mr-2" />
+                    <Image src="/sms-icon.png" alt="" width={20} height={20} className="mr-2 shrink-0" />
                     View SMS
                   </Button>
                 </CardContent>
               </Card>
               <Card>
                 <CardHeader>
-                  <CardTitle>Messenger</CardTitle>
+                  <div className="flex items-center gap-2">
+                    <Image src="/messenger-icon.png" alt="" width={32} height={32} className="shrink-0" />
+                    <CardTitle>Messenger</CardTitle>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <Button
@@ -548,7 +558,7 @@ export default function CustomerDetailPage() {
                     className="w-full"
                     onClick={() => router.push(`/customers/${customerId}/messenger`)}
                   >
-                    <MessageSquare className="h-4 w-4 mr-2" />
+                    <Image src="/messenger-icon.png" alt="" width={20} height={20} className="mr-2 shrink-0" />
                     View Messenger
                   </Button>
                 </CardContent>
