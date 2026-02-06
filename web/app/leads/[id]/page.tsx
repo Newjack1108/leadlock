@@ -6,6 +6,7 @@ import Image from 'next/image';
 import Header from '@/components/Header';
 import QuoteLockCard from '@/components/QuoteLockCard';
 import ComposeEmailDialog from '@/components/ComposeEmailDialog';
+import CallNotesDialog from '@/components/CallNotesDialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -71,6 +72,8 @@ export default function LeadDetailPage() {
   const [allowedTransitions, setAllowedTransitions] = useState<string[]>([]);
   const [qualifyLoading, setQualifyLoading] = useState(false);
   const [composeEmailOpen, setComposeEmailOpen] = useState(false);
+  const [callNotesDialogOpen, setCallNotesDialogOpen] = useState(false);
+  const [ensureCustomerLoading, setEnsureCustomerLoading] = useState(false);
 
   useEffect(() => {
     if (leadId) {
@@ -106,6 +109,47 @@ export default function LeadDetailPage() {
     } catch (error: any) {
       console.error('Failed to load activities');
     }
+  };
+
+  const ensureCustomerThen = async (): Promise<Lead | null> => {
+    if (lead?.customer) return lead;
+    setEnsureCustomerLoading(true);
+    try {
+      await api.post(`/api/leads/${leadId}/activities`, { activity_type: 'NOTE', notes: 'Contact initiated' });
+      const response = await api.get(`/api/leads/${leadId}`);
+      setLead(response.data);
+      return response.data;
+    } catch {
+      toast.error('Failed to initialize contact');
+      return null;
+    } finally {
+      setEnsureCustomerLoading(false);
+    }
+  };
+
+  const handleComposeEmail = async () => {
+    const updated = await ensureCustomerThen();
+    if (updated?.customer) setComposeEmailOpen(true);
+  };
+
+  const handleViewEmails = async () => {
+    const updated = await ensureCustomerThen();
+    if (updated?.customer) router.push(`/customers/${updated.customer!.id}/emails`);
+  };
+
+  const handleViewSms = async () => {
+    const updated = await ensureCustomerThen();
+    if (updated?.customer) router.push(`/customers/${updated.customer!.id}/sms`);
+  };
+
+  const handleViewMessenger = async () => {
+    const updated = await ensureCustomerThen();
+    if (updated?.customer) router.push(`/customers/${updated.customer!.id}/messenger`);
+  };
+
+  const handleCallClick = async () => {
+    const updated = await ensureCustomerThen();
+    if (updated?.customer && updated.phone) setCallNotesDialogOpen(true);
   };
 
   const handleQualify = async () => {
@@ -168,7 +212,9 @@ export default function LeadDetailPage() {
         </div>
 
         <div className="space-y-6">
-            {/* Header Card */}
+          {/* Two-column layout: Lead Info | Contact cards */}
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr,280px] gap-6">
+            {/* Left: Lead Information */}
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
@@ -203,11 +249,27 @@ export default function LeadDetailPage() {
                   </div>
                   <div>
                     <Label>Phone</Label>
-                    <Input
-                      value={lead.phone || ''}
-                      onChange={(e) => handleUpdateLead('phone', e.target.value)}
-                      onBlur={(e) => handleUpdateLead('phone', e.target.value)}
-                    />
+                    <div className="flex gap-2 items-center">
+                      <Input
+                        className="flex-1"
+                        value={lead.phone || ''}
+                        onChange={(e) => handleUpdateLead('phone', e.target.value)}
+                        onBlur={(e) => handleUpdateLead('phone', e.target.value)}
+                      />
+                      {lead.phone && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className="shrink-0"
+                          title="Call"
+                          onClick={handleCallClick}
+                          disabled={ensureCustomerLoading}
+                        >
+                          <Phone className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
                   <div>
                     <Label>Postcode</Label>
@@ -303,6 +365,73 @@ export default function LeadDetailPage() {
               </CardContent>
             </Card>
 
+            {/* Right: Contact cards stacked */}
+            <div className="flex flex-col gap-4">
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center gap-2">
+                    <Image src="/email-icon.png" alt="" width={32} height={32} className="shrink-0" />
+                    <CardTitle>Emails</CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={handleComposeEmail}
+                    disabled={ensureCustomerLoading}
+                  >
+                    Compose Email
+                  </Button>
+                  <Button
+                    variant="link"
+                    className="w-full p-0 h-auto text-muted-foreground hover:text-primary"
+                    onClick={handleViewEmails}
+                    disabled={ensureCustomerLoading}
+                  >
+                    View all emails
+                  </Button>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center gap-2">
+                    <Image src="/sms-icon.png" alt="" width={32} height={32} className="shrink-0" />
+                    <CardTitle>SMS</CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={handleViewSms}
+                    disabled={ensureCustomerLoading}
+                  >
+                    View SMS
+                  </Button>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center gap-2">
+                    <Image src="/messenger-icon.png" alt="" width={32} height={32} className="shrink-0" />
+                    <CardTitle>Messenger</CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={handleViewMessenger}
+                    disabled={ensureCustomerLoading}
+                  >
+                    View Messenger
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+
             {/* Customer Link Card */}
             {lead.customer && (
               <Card>
@@ -324,78 +453,6 @@ export default function LeadDetailPage() {
                   >
                     View Customer Profile →
                   </Button>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Emails, SMS & Messenger Cards */}
-            {lead.customer ? (
-              <div className="grid gap-4 sm:grid-cols-3">
-                <Card>
-                  <CardHeader>
-                    <div className="flex items-center gap-2">
-                      <Image src="/email-icon.png" alt="" width={32} height={32} className="shrink-0" />
-                      <CardTitle>Emails</CardTitle>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    <Button
-                      variant="outline"
-                      className="w-full"
-                      onClick={() => setComposeEmailOpen(true)}
-                    >
-                      Compose Email
-                    </Button>
-                    <Button
-                      variant="link"
-                      className="w-full p-0 h-auto text-muted-foreground hover:text-primary"
-                      onClick={() => router.push(`/customers/${lead.customer!.id}/emails`)}
-                    >
-                      View all emails
-                    </Button>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader>
-                    <div className="flex items-center gap-2">
-                      <Image src="/sms-icon.png" alt="" width={32} height={32} className="shrink-0" />
-                      <CardTitle>SMS</CardTitle>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <Button
-                      variant="outline"
-                      className="w-full"
-                      onClick={() => router.push(`/customers/${lead.customer!.id}/sms`)}
-                    >
-                      View SMS
-                    </Button>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader>
-                    <div className="flex items-center gap-2">
-                      <Image src="/messenger-icon.png" alt="" width={32} height={32} className="shrink-0" />
-                      <CardTitle>Messenger</CardTitle>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <Button
-                      variant="outline"
-                      className="w-full"
-                      onClick={() => router.push(`/customers/${lead.customer!.id}/messenger`)}
-                    >
-                      View Messenger
-                    </Button>
-                  </CardContent>
-                </Card>
-              </div>
-            ) : (
-              <Card>
-                <CardContent className="py-6">
-                  <p className="text-sm text-muted-foreground">
-                    Qualify the lead or add an activity to enable contact options.
-                  </p>
                 </CardContent>
               </Card>
             )}
@@ -460,6 +517,20 @@ export default function LeadDetailPage() {
             open={composeEmailOpen}
             onOpenChange={setComposeEmailOpen}
             customer={lead.customer}
+            onSuccess={() => {
+              fetchLead();
+              fetchActivities();
+            }}
+          />
+        )}
+
+        {lead.customer && lead.phone && (
+          <CallNotesDialog
+            open={callNotesDialogOpen}
+            onOpenChange={setCallNotesDialogOpen}
+            customerId={lead.customer.id}
+            customerName={lead.name}
+            phone={lead.phone}
             onSuccess={() => {
               fetchLead();
               fetchActivities();
