@@ -2,11 +2,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, select, or_
 from typing import Optional, List
 from app.database import get_session
-from app.models import Customer, User, Activity, Quote, Lead, LeadStatus, QuoteItem, StatusHistory, Email, QuoteEmail, EmailDirection, QuoteStatus
+from app.models import Customer, User, Activity, Quote, Lead, LeadStatus, QuoteItem, StatusHistory, Email, QuoteEmail, EmailDirection, QuoteStatus, WebsiteVisit
 from app.auth import get_current_user
 from app.schemas import (
     CustomerResponse, CustomerUpdate, ActivityCreate, ActivityResponse, QuoteResponse, QuoteItemResponse,
-    CustomerHistoryResponse, CustomerHistoryEvent, CustomerHistoryEventType
+    CustomerHistoryResponse, CustomerHistoryEvent, CustomerHistoryEventType,
+    WebsiteVisitResponse, WebsiteVisitsListResponse,
 )
 from app.workflow import check_quote_prerequisites
 from datetime import datetime
@@ -106,6 +107,30 @@ async def get_customer(
         created_at=customer.created_at,
         updated_at=customer.updated_at,
         messenger_psid=customer.messenger_psid,
+    )
+
+
+@router.get("/{customer_id}/website-visits", response_model=WebsiteVisitsListResponse)
+async def get_customer_website_visits(
+    customer_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Get website visits for a customer (Cheshire Stables, CSGB, BLC)."""
+    customer = session.get(Customer, customer_id)
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    statement = (
+        select(WebsiteVisit)
+        .where(WebsiteVisit.customer_id == customer_id)
+        .order_by(WebsiteVisit.visited_at.desc())
+    )
+    visits = session.exec(statement).all()
+    return WebsiteVisitsListResponse(
+        visits=[
+            WebsiteVisitResponse(site=v.site.value, visited_at=v.visited_at)
+            for v in visits
+        ]
     )
 
 

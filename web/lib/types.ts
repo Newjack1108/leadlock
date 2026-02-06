@@ -98,6 +98,11 @@ export interface UserEmailSettingsUpdate {
   email_test_mode?: boolean;
 }
 
+export interface WebsiteVisit {
+  site: string;
+  visited_at: string;
+}
+
 export interface Customer {
   id: number;
   customer_number: string;

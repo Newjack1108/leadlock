@@ -104,6 +104,15 @@ class CustomerResponse(BaseModel):
     messenger_psid: Optional[str] = None
 
 
+class WebsiteVisitResponse(BaseModel):
+    site: str
+    visited_at: datetime
+
+
+class WebsiteVisitsListResponse(BaseModel):
+    visits: List[WebsiteVisitResponse]
+
+
 class EmailCreate(BaseModel):
     customer_id: int
     to_email: str

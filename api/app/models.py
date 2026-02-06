@@ -72,6 +72,12 @@ class LeadSource(str, Enum):
     OTHER = "OTHER"
 
 
+class TrackedWebsite(str, Enum):
+    CHESHIRE_STABLES = "CHESHIRE_STABLES"
+    CSGB = "CSGB"
+    BLC = "BLC"
+
+
 class User(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     email: str = Field(unique=True, index=True)
@@ -125,6 +131,17 @@ class Customer(SQLModel, table=True):
     emails: List["Email"] = Relationship(back_populates="customer")
     sms_messages: List["SmsMessage"] = Relationship(back_populates="customer")
     messenger_messages: List["MessengerMessage"] = Relationship(back_populates="customer")
+    website_visits: List["WebsiteVisit"] = Relationship(back_populates="customer")
+
+
+class WebsiteVisit(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    customer_id: int = Field(foreign_key="customer.id")
+    site: TrackedWebsite
+    visited_at: datetime = Field(default_factory=datetime.utcnow)
+
+    # Relationships
+    customer: Optional["Customer"] = Relationship(back_populates="website_visits")
 
 
 class Lead(SQLModel, table=True):

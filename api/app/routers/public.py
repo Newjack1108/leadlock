@@ -1,19 +1,38 @@
 """
 Public API routes (no authentication).
-Used for quote view link tracking and public quote view page.
+Used for quote view link tracking, public quote view page, and website visit pixel.
 """
+import base64
 from datetime import datetime
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 from sqlmodel import Session, select, func
 
 from app.database import get_session
-from app.models import QuoteEmail, Quote, QuoteItem, Customer, QuoteTemperature
+from app.models import (
+    QuoteEmail,
+    Quote,
+    QuoteItem,
+    Customer,
+    QuoteTemperature,
+    WebsiteVisit,
+    TrackedWebsite,
+)
 from app.schemas import PublicQuoteViewResponse, PublicQuoteViewItemResponse
 from app.constants import VAT_RATE_DECIMAL
 
 router = APIRouter(prefix="/api/public", tags=["public"])
+
+# 1x1 transparent GIF (43 bytes)
+PIXEL_GIF_BYTES = base64.b64decode("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7")
+
+SITE_SLUG_TO_ENUM = {
+    "cheshire_stables": TrackedWebsite.CHESHIRE_STABLES,
+    "csgb": TrackedWebsite.CSGB,
+    "blc": TrackedWebsite.BLC,
+}
 
 
 @router.get("/quotes/view/{view_token}", response_model=PublicQuoteViewResponse)
@@ -107,4 +126,31 @@ def get_public_quote_view(
             for item in items
         ],
         terms_and_conditions=quote.terms_and_conditions,
+    )
+
+
+@router.get("/pixel")
+def get_pixel(
+    token: str = Query(..., description="Customer number (e.g. CUST-2024-001)"),
+    site: str = Query(..., description="Site slug: cheshire_stables, csgb, or blc"),
+    session: Session = Depends(get_session),
+):
+    """
+    Tracking pixel: 1x1 transparent GIF. When loaded with a valid token and site,
+    records a website visit for that customer. Always returns 200 and the GIF
+    (do not leak whether token was valid).
+    """
+    site_enum = SITE_SLUG_TO_ENUM.get(site.lower() if site else "")
+    if site_enum is not None:
+        customer = session.exec(
+            select(Customer).where(Customer.customer_number == token)
+        ).first()
+        if customer:
+            visit = WebsiteVisit(customer_id=customer.id, site=site_enum)
+            session.add(visit)
+            session.commit()
+    return Response(
+        content=PIXEL_GIF_BYTES,
+        media_type="image/gif",
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
     )

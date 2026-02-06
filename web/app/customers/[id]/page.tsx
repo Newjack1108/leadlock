@@ -27,10 +27,11 @@ import {
   User,
   Building,
   Eye,
+  Globe,
 } from 'lucide-react';
 import api, { getCustomerHistory } from '@/lib/api';
 import { formatDateTime } from '@/lib/utils';
-import { Customer, Activity, ActivityType, Lead, OpportunityStage, CustomerHistoryEvent, CustomerHistoryEventType } from '@/lib/types';
+import { Customer, Activity, ActivityType, Lead, OpportunityStage, CustomerHistoryEvent, CustomerHistoryEventType, WebsiteVisit } from '@/lib/types';
 import SendQuoteEmailDialog from '@/components/SendQuoteEmailDialog';
 import ComposeEmailDialog from '@/components/ComposeEmailDialog';
 import CallNotesDialog from '@/components/CallNotesDialog';
@@ -111,6 +112,7 @@ export default function CustomerDetailPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [quotes, setQuotes] = useState<any[]>([]);
   const [opportunities, setOpportunities] = useState<any[]>([]);
+  const [websiteVisits, setWebsiteVisits] = useState<WebsiteVisit[]>([]);
   const [loading, setLoading] = useState(true);
   const [quoteLocked, setQuoteLocked] = useState(false);
   const [quoteLockReason, setQuoteLockReason] = useState<any>(null);
@@ -127,6 +129,7 @@ export default function CustomerDetailPage() {
       fetchLeads();
       fetchQuotes();
       fetchOpportunities();
+      fetchWebsiteVisits();
     }
   }, [customerId]);
 
@@ -194,6 +197,15 @@ export default function CustomerDetailPage() {
       setOpportunities(customerOpportunities);
     } catch (error: any) {
       console.error('Failed to load opportunities');
+    }
+  };
+
+  const fetchWebsiteVisits = async () => {
+    try {
+      const response = await api.get(`/api/customers/${customerId}/website-visits`);
+      setWebsiteVisits(response.data.visits || []);
+    } catch (error: any) {
+      console.error('Failed to load website visits');
     }
   };
 
@@ -561,6 +573,45 @@ export default function CustomerDetailPage() {
                 </CardContent>
               </Card>
             </div>
+
+            {/* Websites Visited Card */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <Globe className="h-5 w-5 shrink-0" />
+                  <CardTitle>Websites Visited</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {websiteVisits.length === 0 ? (
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">No website visits recorded</p>
+                    <p className="text-xs text-muted-foreground">
+                      Visits are tracked when the customer uses a link that includes their tracking token (e.g. in emails you send).
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {websiteVisits.map((visit, index) => (
+                      <div key={index} className="flex items-center justify-between p-2 rounded-md border">
+                        <span className="font-medium">
+                          {visit.site === 'CHESHIRE_STABLES'
+                            ? 'Cheshire Stables'
+                            : visit.site === 'CSGB'
+                              ? 'CSGB'
+                              : visit.site === 'BLC'
+                                ? 'BLC'
+                                : visit.site.replace('_', ' ')}
+                        </span>
+                        <span className="text-sm text-muted-foreground">
+                          {formatDateTime(visit.visited_at)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
             {/* Related Leads Card */}
             <Card>
