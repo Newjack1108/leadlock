@@ -18,6 +18,14 @@ from sqlmodel import Session, select
 import os
 import urllib.request
 from pathlib import Path
+from urllib.parse import quote
+
+# Tracking links for quote PDF header (each URL gets ?ltk=customer_number when generating)
+QUOTE_WEBSITE_BASE_URLS = [
+    ("https://www.csgbgroup.co.uk", "www.csgbgroup.co.uk"),
+    ("https://www.beaverlogcabins.co.uk", "www.beaverlogcabins.co.uk"),
+    ("https://www.cheshirestables.co.uk", "www.cheshirestables.co.uk"),
+]
 
 
 def format_currency(amount: Decimal, currency: str = "GBP") -> str:
@@ -33,6 +41,7 @@ def _build_header_flowables(
     logo_bytes: Optional[bytes],
     normal_style: ParagraphStyle,
     company_name_style: ParagraphStyle,
+    customer_number: Optional[str] = None,
 ) -> List[Any]:
     """Build header flowables (logo + company info). When no logo is found, a placeholder is shown."""
     result: List[Any] = []
@@ -81,7 +90,15 @@ def _build_header_flowables(
         company_info_lines.append(f"Phone: {company_settings.phone}")
     if company_settings.email:
         company_info_lines.append(f"Email: {company_settings.email}")
-    if company_settings.website:
+    if customer_number:
+        # Three tracking links with ltk=customer_number for website visit attribution
+        token = quote(customer_number, safe="")
+        link_parts = [
+            f'<a href="{base}?ltk={token}">{label}</a>'
+            for base, label in QUOTE_WEBSITE_BASE_URLS
+        ]
+        company_info_lines.append("Websites: " + " | ".join(link_parts))
+    elif company_settings.website:
         company_info_lines.append(f"Website: {company_settings.website}")
     company_info_text = "<br/>".join(company_info_lines)
     company_info_para = Paragraph(company_info_text, normal_style)
@@ -362,7 +379,7 @@ def generate_quote_pdf(
     logo_bytes: Optional[bytes] = None
     if company_settings:
         logo_path, logo_bytes = _resolve_logo(company_settings)
-        elements.extend(_build_header_flowables(company_settings, logo_path, logo_bytes, normal_style, company_name_style))
+        elements.extend(_build_header_flowables(company_settings, logo_path, logo_bytes, normal_style, company_name_style, customer.customer_number))
 
     # Quote Title and Details Section
     quote_header_data = [
@@ -517,7 +534,7 @@ def generate_quote_pdf(
     # Page 2: Terms and Conditions from company settings (same header and footer)
     if company_settings and company_settings.default_terms_and_conditions and company_settings.default_terms_and_conditions.strip():
         elements.append(PageBreak())
-        elements.extend(_build_header_flowables(company_settings, logo_path, logo_bytes, normal_style, company_name_style))
+        elements.extend(_build_header_flowables(company_settings, logo_path, logo_bytes, normal_style, company_name_style, customer.customer_number))
         elements.append(Paragraph("Terms and Conditions:", heading_style))
         for line in company_settings.default_terms_and_conditions.split("\n"):
             if line.strip():
