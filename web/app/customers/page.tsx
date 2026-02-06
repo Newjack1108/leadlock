@@ -6,7 +6,7 @@ import Header from '@/components/Header';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import api from '@/lib/api';
+import api, { getUnreadCountsByCustomer } from '@/lib/api';
 import { Customer } from '@/lib/types';
 import { getTelUrl } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -16,6 +16,7 @@ import CallNotesDialog from '@/components/CallNotesDialog';
 export default function CustomersPage() {
   const router = useRouter();
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [unreadByCustomer, setUnreadByCustomer] = useState<Record<number, number>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [callNotesOpen, setCallNotesOpen] = useState(false);
@@ -28,8 +29,14 @@ export default function CustomersPage() {
   const fetchCustomers = async () => {
     try {
       const params = search ? { search } : {};
-      const response = await api.get('/api/customers', { params });
-      setCustomers(response.data);
+      const [customersRes, unreadRes] = await Promise.all([
+        api.get('/api/customers', { params }),
+        getUnreadCountsByCustomer().catch(() => []),
+      ]);
+      setCustomers(customersRes.data);
+      setUnreadByCustomer(
+        Object.fromEntries((unreadRes || []).map((d) => [d.customer_id, d.unread_count]))
+      );
     } catch (error: any) {
       toast.error('Failed to load customers');
       if (error.response?.status === 401) {
@@ -95,13 +102,14 @@ export default function CustomersPage() {
                   <th className="text-left p-3 font-medium">Phone</th>
                   <th className="text-left p-3 font-medium">Location</th>
                   <th className="text-left p-3 font-medium">Customer since</th>
+                  <th className="text-center p-3 font-medium w-20">Unread</th>
                   <th className="text-right p-3 font-medium w-16" aria-hidden />
                 </tr>
               </thead>
               <tbody>
                 {customers.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="p-8 text-center text-muted-foreground">
+                    <td colSpan={8} className="p-8 text-center text-muted-foreground">
                       No customers found
                     </td>
                   </tr>
@@ -141,6 +149,15 @@ export default function CustomersPage() {
                       </td>
                       <td className="p-3 text-muted-foreground">
                         {new Date(customer.customer_since).toLocaleDateString()}
+                      </td>
+                      <td className="p-3 text-center">
+                        {unreadByCustomer[customer.id] > 0 ? (
+                          <span className="inline-flex min-w-[20px] h-5 px-1 rounded-full bg-red-500 text-white text-xs font-semibold items-center justify-center">
+                            {unreadByCustomer[customer.id] > 99 ? '99+' : unreadByCustomer[customer.id]}
+                          </span>
+                        ) : (
+                          '—'
+                        )}
                       </td>
                       <td className="p-3 text-right" onClick={(e) => e.stopPropagation()}>
                         <Button

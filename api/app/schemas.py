@@ -445,6 +445,12 @@ class UnreadMessengerSummary(BaseModel):
     messages: List[UnreadMessengerMessageItem] = []
 
 
+class UnreadByCustomerItem(BaseModel):
+    """Per-customer unread message count (SMS + Messenger)."""
+    customer_id: int
+    unread_count: int
+
+
 PRODUCT_UNIT_VALUES = ("Per Box", "Unit", "Set")
 
 

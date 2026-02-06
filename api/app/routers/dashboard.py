@@ -3,7 +3,7 @@ from sqlmodel import Session, select, func
 from app.database import get_session
 from app.models import Lead, LeadStatus, Activity, SmsMessage, SmsDirection, Customer, MessengerMessage, MessengerDirection
 from app.auth import get_current_user
-from app.schemas import DashboardStats, UnreadSmsSummary, UnreadSmsMessageItem, UnreadMessengerSummary, UnreadMessengerMessageItem
+from app.schemas import DashboardStats, UnreadSmsSummary, UnreadSmsMessageItem, UnreadMessengerSummary, UnreadMessengerMessageItem, UnreadByCustomerItem
 from datetime import datetime, timedelta
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
@@ -140,3 +140,31 @@ async def get_unread_messenger(
             )
         )
     return UnreadMessengerSummary(count=count, messages=items)
+
+
+@router.get("/unread-by-customer", response_model=list[UnreadByCustomerItem])
+async def get_unread_by_customer(
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_user),
+):
+    """Get unread message count per customer (SMS + Messenger). Only includes customers with at least one unread."""
+    # Unread SMS counts per customer_id
+    sms_statement = (
+        select(SmsMessage.customer_id, func.count(SmsMessage.id).label("cnt"))
+        .where(SmsMessage.direction == SmsDirection.RECEIVED, SmsMessage.read_at.is_(None))
+        .group_by(SmsMessage.customer_id)
+    )
+    sms_rows = session.exec(sms_statement).all()
+    merged: dict[int, int] = {row[0]: row[1] for row in sms_rows}
+
+    # Unread Messenger counts per customer_id
+    messenger_statement = (
+        select(MessengerMessage.customer_id, func.count(MessengerMessage.id).label("cnt"))
+        .where(MessengerMessage.direction == MessengerDirection.RECEIVED, MessengerMessage.read_at.is_(None))
+        .group_by(MessengerMessage.customer_id)
+    )
+    messenger_rows = session.exec(messenger_statement).all()
+    for customer_id, cnt in messenger_rows:
+        merged[customer_id] = merged.get(customer_id, 0) + cnt
+
+    return [UnreadByCustomerItem(customer_id=cid, unread_count=total) for cid, total in merged.items()]
