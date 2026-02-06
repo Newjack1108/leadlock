@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
+import Image from 'next/image';
 import Header from '@/components/Header';
 import QuoteLockCard from '@/components/QuoteLockCard';
+import ComposeEmailDialog from '@/components/ComposeEmailDialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -23,6 +25,7 @@ import {
   MessageSquare,
   PhoneCall,
   Clock,
+  CheckCircle,
 } from 'lucide-react';
 import api from '@/lib/api';
 import { formatDateTime } from '@/lib/utils';
@@ -65,6 +68,9 @@ export default function LeadDetailPage() {
   const [lead, setLead] = useState<Lead | null>(null);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
+  const [allowedTransitions, setAllowedTransitions] = useState<string[]>([]);
+  const [qualifyLoading, setQualifyLoading] = useState(false);
+  const [composeEmailOpen, setComposeEmailOpen] = useState(false);
 
   useEffect(() => {
     if (leadId) {
@@ -77,6 +83,12 @@ export default function LeadDetailPage() {
     try {
       const response = await api.get(`/api/leads/${leadId}`);
       setLead(response.data);
+      try {
+        const transitionsRes = await api.get(`/api/leads/${leadId}/allowed-transitions`);
+        setAllowedTransitions(transitionsRes.data.allowed_transitions || []);
+      } catch {
+        setAllowedTransitions([]);
+      }
     } catch (error: any) {
       toast.error('Failed to load lead');
       if (error.response?.status === 401) {
@@ -93,6 +105,21 @@ export default function LeadDetailPage() {
       setActivities(response.data);
     } catch (error: any) {
       console.error('Failed to load activities');
+    }
+  };
+
+  const handleQualify = async () => {
+    if (!allowedTransitions.includes('QUALIFIED')) return;
+    setQualifyLoading(true);
+    try {
+      await api.post(`/api/leads/${leadId}/transition`, { new_status: 'QUALIFIED' });
+      toast.success('Lead qualified');
+      fetchLead();
+      fetchActivities();
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail?.message || error.response?.data?.detail || 'Failed to qualify lead');
+    } finally {
+      setQualifyLoading(false);
     }
   };
 
@@ -146,9 +173,22 @@ export default function LeadDetailPage() {
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle>Lead Information</CardTitle>
-                  <Badge className="bg-primary/20 text-primary">
-                    {lead.status.replace('_', ' ')}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    {allowedTransitions.includes('QUALIFIED') && lead.status !== LeadStatus.QUALIFIED && (
+                      <Button
+                        size="sm"
+                        onClick={handleQualify}
+                        disabled={qualifyLoading}
+                        className="gap-1"
+                      >
+                        <CheckCircle className="h-4 w-4" />
+                        {qualifyLoading ? 'Qualifying...' : 'Qualify'}
+                      </Button>
+                    )}
+                    <Badge className="bg-primary/20 text-primary">
+                      {lead.status.replace('_', ' ')}
+                    </Badge>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -288,6 +328,78 @@ export default function LeadDetailPage() {
               </Card>
             )}
 
+            {/* Emails, SMS & Messenger Cards */}
+            {lead.customer ? (
+              <div className="grid gap-4 sm:grid-cols-3">
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center gap-2">
+                      <Image src="/email-icon.png" alt="" width={32} height={32} className="shrink-0" />
+                      <CardTitle>Emails</CardTitle>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => setComposeEmailOpen(true)}
+                    >
+                      Compose Email
+                    </Button>
+                    <Button
+                      variant="link"
+                      className="w-full p-0 h-auto text-muted-foreground hover:text-primary"
+                      onClick={() => router.push(`/customers/${lead.customer!.id}/emails`)}
+                    >
+                      View all emails
+                    </Button>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center gap-2">
+                      <Image src="/sms-icon.png" alt="" width={32} height={32} className="shrink-0" />
+                      <CardTitle>SMS</CardTitle>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => router.push(`/customers/${lead.customer!.id}/sms`)}
+                    >
+                      View SMS
+                    </Button>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center gap-2">
+                      <Image src="/messenger-icon.png" alt="" width={32} height={32} className="shrink-0" />
+                      <CardTitle>Messenger</CardTitle>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => router.push(`/customers/${lead.customer!.id}/messenger`)}
+                    >
+                      View Messenger
+                    </Button>
+                  </CardContent>
+                </Card>
+              </div>
+            ) : (
+              <Card>
+                <CardContent className="py-6">
+                  <p className="text-sm text-muted-foreground">
+                    Qualify the lead or add an activity to enable contact options.
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Quote Lock Card */}
             {lead.status === LeadStatus.QUALIFIED && lead.customer && (
               <QuoteLockCard 
@@ -342,6 +454,18 @@ export default function LeadDetailPage() {
               </CardContent>
             </Card>
           </div>
+
+        {lead.customer && (
+          <ComposeEmailDialog
+            open={composeEmailOpen}
+            onOpenChange={setComposeEmailOpen}
+            customer={lead.customer}
+            onSuccess={() => {
+              fetchLead();
+              fetchActivities();
+            }}
+          />
+        )}
       </main>
     </div>
   );
