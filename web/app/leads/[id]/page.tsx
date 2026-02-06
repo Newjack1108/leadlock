@@ -213,7 +213,7 @@ export default function LeadDetailPage() {
 
         <div className="space-y-6">
           {/* Two-column layout: Lead Info | Contact cards */}
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr,280px] gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-[1fr,280px] gap-6">
             {/* Left: Lead Information */}
             <Card>
               <CardHeader>
