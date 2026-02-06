@@ -7,7 +7,7 @@ import Logo from './Logo';
 import { Button } from '@/components/ui/button';
 import { LogOut, Users, Settings, Package, User, Mail, Bell, FileText, ShoppingCart, ChevronDown, Gift, Send, MessageSquare } from 'lucide-react';
 import api from '@/lib/api';
-import { getStaleSummary, getDiscountRequests } from '@/lib/api';
+import { getStaleSummary, getDiscountRequests, getUnreadSms, getUnreadMessenger } from '@/lib/api';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,6 +22,7 @@ export default function Header() {
   const [userRole, setUserRole] = useState<string | null>(null);
   const [reminderCount, setReminderCount] = useState<number>(0);
   const [newLeadsCount, setNewLeadsCount] = useState<number>(0);
+  const [unreadMessagesCount, setUnreadMessagesCount] = useState<number>(0);
   const [pendingDiscountCount, setPendingDiscountCount] = useState<number>(0);
 
   useEffect(() => {
@@ -66,9 +67,22 @@ export default function Header() {
     }
   };
 
+  const fetchUnreadMessagesCount = async () => {
+    try {
+      const [smsRes, messengerRes] = await Promise.all([
+        getUnreadSms().catch(() => ({ count: 0 })),
+        getUnreadMessenger().catch(() => ({ count: 0 })),
+      ]);
+      setUnreadMessagesCount((smsRes?.count ?? 0) + (messengerRes?.count ?? 0));
+    } catch {
+      setUnreadMessagesCount(0);
+    }
+  };
+
   useEffect(() => {
     fetchReminderCount();
     fetchNewLeadsCount();
+    fetchUnreadMessagesCount();
     if (userRole === 'DIRECTOR' || userRole === 'SALES_MANAGER') {
       fetchPendingDiscountCount();
     }
@@ -109,7 +123,7 @@ export default function Header() {
               </span>
             )}
           </Link>
-          <Link href="/customers">
+          <Link href="/customers" className="relative">
             <Button
               variant={pathname?.startsWith('/customers') ? 'default' : 'ghost'}
               size="sm"
@@ -118,6 +132,11 @@ export default function Header() {
               <Users className="h-4 w-4 mr-2" />
               Customers
             </Button>
+            {unreadMessagesCount > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-red-500 text-white text-xs font-semibold flex items-center justify-center">
+                {unreadMessagesCount > 99 ? '99+' : unreadMessagesCount}
+              </span>
+            )}
           </Link>
           <Link href="/quotes">
             <Button
