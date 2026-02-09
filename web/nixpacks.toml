@@ -12,5 +12,5 @@ cmds = ["npm ci"]
 cmds = ["npm run build"]
 
 [start]
-# Login shell so .profile is sourced (PATH has node + node_modules/.bin)
-cmd = "sh -l -c 'npm start'"
+# Set PATH so node and next are found (nix profile + node_modules/.bin)
+cmd = "export PATH=/app/node_modules/.bin:/root/.nix-profile/bin:/nix/var/nix/profiles/default/bin:$PATH && npm start"

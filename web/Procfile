@@ -1,3 +1,3 @@
 # Next.js Frontend Procfile
 # This is for the web frontend only. Root directory must be set to 'web' in Railway.
-web: sh -l -c 'npm start'
+web: export PATH=/app/node_modules/.bin:/root/.nix-profile/bin:/nix/var/nix/profiles/default/bin:$PATH && npm start
