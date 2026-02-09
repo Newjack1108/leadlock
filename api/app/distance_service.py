@@ -1,13 +1,16 @@
 """
-UK postcode geocoding via postcodes.io and Haversine distance (straight-line miles).
-Road mileage may be higher; optional future: routing API or multiplier.
+UK postcode geocoding via postcodes.io; Haversine (straight-line) and OpenRouteService (road) distance.
 """
 import math
-from typing import Tuple
+import os
+from typing import Optional, Tuple
 
 import httpx
 
 POSTCODES_IO_BASE = "https://api.postcodes.io"
+ORS_DIRECTIONS_BASE = "https://api.openrouteservice.org/v2/directions/driving-car"
+METRES_PER_MILE = 1609.344
+SECONDS_PER_HOUR = 3600.0
 
 
 def _normalise_postcode(postcode: str) -> str:
@@ -55,6 +58,58 @@ def get_postcode_coordinates(postcode: str) -> Tuple[float, float]:
     if lat is None or lon is None:
         raise ValueError("Postcode not found")
     return (float(lat), float(lon))
+
+
+def get_road_distance_and_duration(
+    origin_lat: float,
+    origin_lon: float,
+    dest_lat: float,
+    dest_lon: float,
+) -> Optional[Tuple[float, float]]:
+    """
+    Get road distance (miles) and drive duration (hours) via OpenRouteService.
+    Returns (distance_miles, duration_hours) or None if no API key, request fails, or no route.
+    ORS expects coordinates as [longitude, latitude] per point.
+    """
+    api_key = (os.getenv("OPENROUTE_SERVICE_API_KEY") or "").strip()
+    if not api_key:
+        return None
+    body = {
+        "coordinates": [[origin_lon, origin_lat], [dest_lon, dest_lat]],
+    }
+    try:
+        with httpx.Client(timeout=15.0) as client:
+            resp = client.post(
+                ORS_DIRECTIONS_BASE,
+                json=body,
+                headers={"Authorization": api_key},
+            )
+    except (httpx.TimeoutException, httpx.RequestError):
+        return None
+    if resp.status_code != 200:
+        return None
+    try:
+        data = resp.json()
+    except Exception:
+        return None
+    routes = data.get("routes") if isinstance(data, dict) else None
+    if not routes or not isinstance(routes, list):
+        return None
+    summary = routes[0].get("summary") if isinstance(routes[0], dict) else None
+    if not summary or not isinstance(summary, dict):
+        return None
+    dist_m = summary.get("distance")
+    dur_s = summary.get("duration")
+    if dist_m is None or dur_s is None:
+        return None
+    try:
+        distance_miles = float(dist_m) / METRES_PER_MILE
+        duration_hours = float(dur_s) / SECONDS_PER_HOUR
+    except (TypeError, ValueError):
+        return None
+    if distance_miles < 0 or duration_hours < 0:
+        return None
+    return (distance_miles, duration_hours)
 
 
 def haversine_miles(lat1: float, lon1: float, lat2: float, lon2: float) -> float:

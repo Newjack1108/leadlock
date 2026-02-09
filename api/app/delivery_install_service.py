@@ -2,11 +2,18 @@
 Delivery & installation estimate: distance from factory, travel time, 8hr fitting days,
 overnight threshold, and cost breakdown (mileage, labour, hotel, meals) for a 2-man team.
 """
+import logging
 import math
 from decimal import Decimal
 from typing import Optional
 
-from app.distance_service import get_postcode_coordinates, haversine_miles
+logger = logging.getLogger(__name__)
+
+from app.distance_service import (
+    get_postcode_coordinates,
+    get_road_distance_and_duration,
+    haversine_miles,
+)
 from app.schemas import DeliveryInstallEstimateResponse
 
 
@@ -24,13 +31,21 @@ def compute_delivery_install_estimate(
     """
     Compute distance, travel time, fitting days, overnight stay, and cost breakdown.
     Uses company postcode as factory; all monetary/rate settings optional.
+    When OPENROUTE_SERVICE_API_KEY is set, uses road distance and drive time; else Haversine + average speed.
     """
     lat1, lon1 = get_postcode_coordinates(factory_postcode)
     lat2, lon2 = get_postcode_coordinates(customer_postcode)
-    distance_miles = haversine_miles(lat1, lon1, lat2, lon2)
 
-    speed = float(average_speed_mph) if average_speed_mph is not None and average_speed_mph > 0 else 45.0
-    travel_time_hours_one_way = distance_miles / speed
+    road_result = get_road_distance_and_duration(lat1, lon1, lat2, lon2)
+    if road_result is not None:
+        distance_miles, travel_time_hours_one_way = road_result
+    else:
+        logger.warning(
+            "OpenRouteService not available or request failed; using straight-line distance and average speed for delivery/install estimate."
+        )
+        distance_miles = haversine_miles(lat1, lon1, lat2, lon2)
+        speed = float(average_speed_mph) if average_speed_mph is not None and average_speed_mph > 0 else 45.0
+        travel_time_hours_one_way = distance_miles / speed
 
     fitting_days = max(1, math.ceil(installation_hours / 8))
     threshold = float(distance_before_overnight_miles) if distance_before_overnight_miles is not None else None
