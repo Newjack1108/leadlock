@@ -1,9 +1,8 @@
 {
   "$schema": "https://railway.app/railway.schema.json",
-  "$comment": "Backend API. Root directory = empty (repo root). Dockerfile so container starts reliably.",
   "build": {
     "builder": "DOCKERFILE",
-    "dockerfilePath": "Dockerfile"
+    "dockerfilePath": "api/Dockerfile"
   },
   "deploy": {
     "restartPolicyType": "ON_FAILURE",
