@@ -6,7 +6,7 @@
     "nixpacksConfigPath": "./nixpacks.toml"
   },
   "deploy": {
-    "startCommand": "next start -H 0.0.0.0 -p $PORT",
+    "startCommand": "npx next start -H 0.0.0.0 -p $PORT",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10
   }

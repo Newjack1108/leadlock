@@ -14,11 +14,12 @@
    - Select your `leadlock` repository
    - Railway will create a new service
 
-3. **Configure the service:**
+3. **Configure the service (required):**
    - Click on the new service
-   - Go to "Settings" → "Source"
-   - Set **Root Directory** to exactly: `web` (lowercase, no quotes, no trailing slash)
-   - Click "Save"
+   - Go to **"Settings"** → **"Source"**
+   - Set **Root Directory** to exactly: **`web`** (lowercase, no quotes, no trailing slash)
+   - If you leave Root Directory empty, Railway builds from the repo root and will build the **API** (Python) instead of the frontend, so the deploy will be wrong.
+   - Click **"Save"**
 
 4. **Verify Root Directory:**
    - In Railway, click "View Files" or browse the service

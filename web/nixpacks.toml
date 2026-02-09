@@ -12,4 +12,5 @@ cmds = ["npm ci"]
 cmds = ["npm run build"]
 
 [start]
-cmd = "next start -H 0.0.0.0 -p $PORT"
+# npx ensures next is found when PATH may not include node_modules/.bin
+cmd = "npx next start -H 0.0.0.0 -p ${PORT:-3000}"
