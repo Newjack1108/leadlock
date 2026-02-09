@@ -28,6 +28,8 @@ import {
   Building,
   Eye,
   Globe,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import api, { getCustomerHistory } from '@/lib/api';
 import { formatDateTime } from '@/lib/utils';
@@ -120,6 +122,7 @@ export default function CustomerDetailPage() {
   const [selectedQuoteId, setSelectedQuoteId] = useState<number | null>(null);
   const [composeEmailDialogOpen, setComposeEmailDialogOpen] = useState(false);
   const [callNotesDialogOpen, setCallNotesDialogOpen] = useState(false);
+  const [historyExpanded, setHistoryExpanded] = useState(false);
 
   useEffect(() => {
     if (customerId) {
@@ -643,81 +646,13 @@ export default function CustomerDetailPage() {
               </CardContent>
             </Card>
 
-            {/* Customer History Timeline */}
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2">
-                    <History className="h-5 w-5" />
-                    Customer History
-                  </CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {history.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No history yet</p>
-                  ) : (
-                    history.map((event, index) => {
-                      const Icon = historyIcons[event.event_type] || History;
-                      const color = historyColors[event.event_type] || 'text-muted-foreground';
-                      return (
-                        <div key={index} className="flex gap-4 relative">
-                          <div className={`${color} flex-shrink-0`}>
-                            <Icon className="h-5 w-5" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="font-medium">{event.title}</span>
-                              <span className="text-xs text-muted-foreground">
-                                {formatDateTime(event.timestamp)}
-                              </span>
-                            </div>
-                            {event.description && (
-                              <p className="text-sm text-muted-foreground mt-1">
-                                {event.description}
-                              </p>
-                            )}
-                            {event.created_by_name && (
-                              <p className="text-xs text-muted-foreground mt-1">
-                                by {event.created_by_name}
-                              </p>
-                            )}
-                            {event.metadata && Object.keys(event.metadata).length > 0 && (
-                              <div className="mt-2 flex flex-wrap gap-2">
-                                {event.metadata.quote_number && (
-                                  <Badge variant="outline" className="text-xs">
-                                    Quote: {event.metadata.quote_number}
-                                  </Badge>
-                                )}
-                                {event.metadata.lead_name && (
-                                  <Badge variant="outline" className="text-xs">
-                                    Lead: {event.metadata.lead_name}
-                                  </Badge>
-                                )}
-                                {event.metadata.old_status && event.metadata.new_status && (
-                                  <Badge variant="outline" className="text-xs">
-                                    {event.metadata.old_status} → {event.metadata.new_status}
-                                  </Badge>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
             {/* Activity Timeline */}
             <Card>
               <CardHeader>
                 <CardTitle>Activity Timeline</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
+                <div className="space-y-4 max-h-[480px] overflow-y-auto">
                   {activities.length === 0 ? (
                     <p className="text-sm text-muted-foreground">No activities yet</p>
                   ) : (
@@ -754,6 +689,89 @@ export default function CustomerDetailPage() {
                   )}
                 </div>
               </CardContent>
+            </Card>
+
+            {/* Customer History Timeline - Collapsible */}
+            <Card>
+              <CardHeader
+                className="cursor-pointer select-none hover:bg-muted/50 rounded-t-lg transition-colors"
+                onClick={() => setHistoryExpanded(!historyExpanded)}
+              >
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    <History className="h-5 w-5" />
+                    Customer History
+                    {history.length > 0 && (
+                      <span className="text-sm font-normal text-muted-foreground">
+                        ({history.length} events)
+                      </span>
+                    )}
+                  </CardTitle>
+                  {historyExpanded ? (
+                    <ChevronUp className="h-5 w-5 text-muted-foreground" />
+                  ) : (
+                    <ChevronDown className="h-5 w-5 text-muted-foreground" />
+                  )}
+                </div>
+              </CardHeader>
+              {historyExpanded && (
+                <CardContent>
+                  <div className="space-y-4">
+                    {history.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No history yet</p>
+                    ) : (
+                      history.map((event, index) => {
+                        const Icon = historyIcons[event.event_type] || History;
+                        const color = historyColors[event.event_type] || 'text-muted-foreground';
+                        return (
+                          <div key={index} className="flex gap-4 relative">
+                            <div className={`${color} flex-shrink-0`}>
+                              <Icon className="h-5 w-5" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-medium">{event.title}</span>
+                                <span className="text-xs text-muted-foreground">
+                                  {formatDateTime(event.timestamp)}
+                                </span>
+                              </div>
+                              {event.description && (
+                                <p className="text-sm text-muted-foreground mt-1">
+                                  {event.description}
+                                </p>
+                              )}
+                              {event.created_by_name && (
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  by {event.created_by_name}
+                                </p>
+                              )}
+                              {event.metadata && Object.keys(event.metadata).length > 0 && (
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                  {event.metadata.quote_number && (
+                                    <Badge variant="outline" className="text-xs">
+                                      Quote: {event.metadata.quote_number}
+                                    </Badge>
+                                  )}
+                                  {event.metadata.lead_name && (
+                                    <Badge variant="outline" className="text-xs">
+                                      Lead: {event.metadata.lead_name}
+                                    </Badge>
+                                  )}
+                                  {event.metadata.old_status && event.metadata.new_status && (
+                                    <Badge variant="outline" className="text-xs">
+                                      {event.metadata.old_status} → {event.metadata.new_status}
+                                    </Badge>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </CardContent>
+              )}
             </Card>
           </div>
       </main>
