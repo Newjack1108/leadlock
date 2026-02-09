@@ -39,6 +39,12 @@ export default function CompanySettingsPage() {
     logo_url: '',
     default_terms_and_conditions: '',
     installation_lead_time: '' as InstallationLeadTime | '',
+    hourly_install_rate: '',
+    distance_before_overnight_miles: '',
+    cost_per_mile: '',
+    hotel_allowance_per_night: '',
+    meal_allowance_per_day: '',
+    average_speed_mph: '',
   });
 
   useEffect(() => {
@@ -68,6 +74,12 @@ export default function CompanySettingsPage() {
         logo_url: response.data.logo_url || '',
         default_terms_and_conditions: response.data.default_terms_and_conditions || '',
         installation_lead_time: response.data.installation_lead_time || '',
+        hourly_install_rate: response.data.hourly_install_rate != null ? String(response.data.hourly_install_rate) : '',
+        distance_before_overnight_miles: response.data.distance_before_overnight_miles != null ? String(response.data.distance_before_overnight_miles) : '',
+        cost_per_mile: response.data.cost_per_mile != null ? String(response.data.cost_per_mile) : '',
+        hotel_allowance_per_night: response.data.hotel_allowance_per_night != null ? String(response.data.hotel_allowance_per_night) : '',
+        meal_allowance_per_day: response.data.meal_allowance_per_day != null ? String(response.data.meal_allowance_per_day) : '',
+        average_speed_mph: response.data.average_speed_mph != null ? String(response.data.average_speed_mph) : '',
       });
     } catch (error: any) {
       if (error.response?.status === 401) {
@@ -94,6 +106,12 @@ export default function CompanySettingsPage() {
       const payload: Record<string, unknown> = {
         ...formData,
         installation_lead_time: formData.installation_lead_time || undefined,
+        hourly_install_rate: formData.hourly_install_rate ? parseFloat(formData.hourly_install_rate) : undefined,
+        distance_before_overnight_miles: formData.distance_before_overnight_miles ? parseFloat(formData.distance_before_overnight_miles) : undefined,
+        cost_per_mile: formData.cost_per_mile ? parseFloat(formData.cost_per_mile) : undefined,
+        hotel_allowance_per_night: formData.hotel_allowance_per_night ? parseFloat(formData.hotel_allowance_per_night) : undefined,
+        meal_allowance_per_day: formData.meal_allowance_per_day ? parseFloat(formData.meal_allowance_per_day) : undefined,
+        average_speed_mph: formData.average_speed_mph ? parseFloat(formData.average_speed_mph) : undefined,
       };
       if (settings) {
         // Update existing: omit logo_filename so existing value is unchanged
@@ -321,6 +339,104 @@ export default function CompanySettingsPage() {
               <p className="text-sm text-muted-foreground">
                 Amended by production. Shown clearly on the dashboard for sales.
               </p>
+            </div>
+
+            <div className="space-y-4 border-t pt-6">
+              <h3 className="text-lg font-medium">Installation & travel</h3>
+              <p className="text-sm text-muted-foreground">
+                Used for delivery & installation estimates (mileage from factory, travel time, 8hr fitting days, overnight threshold). Factory postcode is the company postcode above.
+              </p>
+              <div className="rounded-md border p-3 bg-muted/30">
+                <Label className="text-muted-foreground">Factory postcode (for distance)</Label>
+                <p className="font-medium mt-1">{formData.postcode || '—'}</p>
+                <p className="text-xs text-muted-foreground mt-1">Set in Company postcode above.</p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="distance_before_overnight_miles">Distance before overnight (miles)</Label>
+                  <Input
+                    id="distance_before_overnight_miles"
+                    type="number"
+                    step="0.5"
+                    min="0"
+                    value={formData.distance_before_overnight_miles}
+                    onChange={(e) => setFormData({ ...formData, distance_before_overnight_miles: e.target.value })}
+                    placeholder="e.g. 60"
+                    disabled={saving}
+                  />
+                  <p className="text-xs text-muted-foreground">Stay away if one-way distance exceeds this.</p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="hourly_install_rate">Hourly install rate (£)</Label>
+                  <Input
+                    id="hourly_install_rate"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={formData.hourly_install_rate}
+                    onChange={(e) => setFormData({ ...formData, hourly_install_rate: e.target.value })}
+                    placeholder="e.g. 45.00"
+                    disabled={saving}
+                  />
+                  <p className="text-xs text-muted-foreground">Used for installation cost calculation.</p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="cost_per_mile">Cost per mile (£)</Label>
+                  <Input
+                    id="cost_per_mile"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={formData.cost_per_mile}
+                    onChange={(e) => setFormData({ ...formData, cost_per_mile: e.target.value })}
+                    placeholder="e.g. 0.45"
+                    disabled={saving}
+                  />
+                  <p className="text-xs text-muted-foreground">Applied to return distance.</p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="average_speed_mph">Average speed (mph)</Label>
+                  <Input
+                    id="average_speed_mph"
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    value={formData.average_speed_mph}
+                    onChange={(e) => setFormData({ ...formData, average_speed_mph: e.target.value })}
+                    placeholder="e.g. 45"
+                    disabled={saving}
+                  />
+                  <p className="text-xs text-muted-foreground">Used for travel time (e.g. 45).</p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="hotel_allowance_per_night">Hotel allowance per night (£)</Label>
+                  <Input
+                    id="hotel_allowance_per_night"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={formData.hotel_allowance_per_night}
+                    onChange={(e) => setFormData({ ...formData, hotel_allowance_per_night: e.target.value })}
+                    placeholder="e.g. 80.00"
+                    disabled={saving}
+                  />
+                  <p className="text-xs text-muted-foreground">Per person; ×2 for 2-man team.</p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="meal_allowance_per_day">Meal allowance per day (£)</Label>
+                  <Input
+                    id="meal_allowance_per_day"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={formData.meal_allowance_per_day}
+                    onChange={(e) => setFormData({ ...formData, meal_allowance_per_day: e.target.value })}
+                    placeholder="e.g. 25.00"
+                    disabled={saving}
+                  />
+                  <p className="text-xs text-muted-foreground">Per person when staying away.</p>
+                </div>
+              </div>
             </div>
 
             <div className="space-y-2 border-t pt-6">

@@ -434,6 +434,26 @@ def create_db_and_tables():
                     if "already exists" not in error_str and "duplicate" not in error_str:
                         print(f"Warning: Could not add logo_url column: {col_error}", file=sys.stderr, flush=True)
 
+            # Installation & travel (mileage, overnight, 2-man team)
+            for col_name, col_sql in [
+                ("distance_before_overnight_miles", "NUMERIC(10, 2)"),
+                ("cost_per_mile", "NUMERIC(10, 2)"),
+                ("hotel_allowance_per_night", "NUMERIC(10, 2)"),
+                ("meal_allowance_per_day", "NUMERIC(10, 2)"),
+                ("average_speed_mph", "NUMERIC(5, 2)"),
+            ]:
+                company_columns = [col['name'] for col in inspector.get_columns("companysettings")]
+                if col_name not in company_columns:
+                    print(f"Adding {col_name} column to companysettings table...", file=sys.stderr, flush=True)
+                    try:
+                        with engine.begin() as conn:
+                            conn.execute(text(f'ALTER TABLE companysettings ADD COLUMN {col_name} {col_sql}'))
+                        print(f"Added {col_name} column to companysettings table", file=sys.stderr, flush=True)
+                    except Exception as e:
+                        error_str = str(e).lower()
+                        if "already exists" not in error_str and "duplicate" not in error_str:
+                            print(f"Error adding {col_name} column: {e}", file=sys.stderr, flush=True)
+
         # Step 7: Add email settings columns to User table
         has_user_table = inspector.has_table("user")
         if has_user_table:

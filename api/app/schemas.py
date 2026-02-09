@@ -548,6 +548,11 @@ class CompanySettingsCreate(BaseModel):
     default_terms_and_conditions: Optional[str] = None
     hourly_install_rate: Optional[Decimal] = None
     installation_lead_time: Optional[InstallationLeadTime] = None
+    distance_before_overnight_miles: Optional[Decimal] = None
+    cost_per_mile: Optional[Decimal] = None
+    hotel_allowance_per_night: Optional[Decimal] = None
+    meal_allowance_per_day: Optional[Decimal] = None
+    average_speed_mph: Optional[Decimal] = None
 
 
 class CompanySettingsUpdate(BaseModel):
@@ -569,6 +574,11 @@ class CompanySettingsUpdate(BaseModel):
     default_terms_and_conditions: Optional[str] = None
     hourly_install_rate: Optional[Decimal] = None
     installation_lead_time: Optional[InstallationLeadTime] = None
+    distance_before_overnight_miles: Optional[Decimal] = None
+    cost_per_mile: Optional[Decimal] = None
+    hotel_allowance_per_night: Optional[Decimal] = None
+    meal_allowance_per_day: Optional[Decimal] = None
+    average_speed_mph: Optional[Decimal] = None
 
 
 class CompanySettingsResponse(BaseModel):
@@ -591,7 +601,32 @@ class CompanySettingsResponse(BaseModel):
     default_terms_and_conditions: Optional[str]
     hourly_install_rate: Optional[Decimal] = None
     installation_lead_time: Optional[InstallationLeadTime] = None
+    distance_before_overnight_miles: Optional[Decimal] = None
+    cost_per_mile: Optional[Decimal] = None
+    hotel_allowance_per_night: Optional[Decimal] = None
+    meal_allowance_per_day: Optional[Decimal] = None
+    average_speed_mph: Optional[Decimal] = None
     updated_at: datetime
+
+
+class DeliveryInstallEstimateRequest(BaseModel):
+    customer_postcode: str
+    installation_hours: float
+    number_of_boxes: Optional[int] = None  # For future use
+
+
+class DeliveryInstallEstimateResponse(BaseModel):
+    distance_miles: float
+    travel_time_hours_one_way: float
+    fitting_days: int
+    requires_overnight: bool
+    nights_away: int
+    cost_mileage: Optional[Decimal] = None
+    cost_labour: Optional[Decimal] = None
+    cost_hotel: Optional[Decimal] = None
+    cost_meals: Optional[Decimal] = None
+    cost_total: Decimal
+    settings_incomplete: bool = False  # True if some costs could not be calculated
 
 
 class QuoteItemCreate(BaseModel):

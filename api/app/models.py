@@ -350,6 +350,12 @@ class CompanySettings(SQLModel, table=True):
     default_terms_and_conditions: Optional[str] = None  # Default terms and conditions for quotes
     hourly_install_rate: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(10, 2)))  # Hourly rate for installation cost calculation
     installation_lead_time: Optional[InstallationLeadTime] = Field(default=None)  # Current lead time; amended by production, visible to sales
+    # Installation & travel (mileage, overnight, 2-man team)
+    distance_before_overnight_miles: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(10, 2)))  # Stay away if distance > this
+    cost_per_mile: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(10, 2)))  # Applied to return distance
+    hotel_allowance_per_night: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(10, 2)))  # Per person; ×2 for 2-man team
+    meal_allowance_per_day: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(10, 2)))  # Per person when staying away
+    average_speed_mph: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(5, 2)))  # For travel time calculation
     updated_by_id: int = Field(foreign_key="user.id")
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     

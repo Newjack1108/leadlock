@@ -9,9 +9,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { createQuote, getProducts, getProduct, getCompanySettings, getDiscountTemplates } from '@/lib/api';
+import { createQuote, getProducts, getProduct, getCompanySettings, getDiscountTemplates, estimateDeliveryInstall } from '@/lib/api';
 import api from '@/lib/api';
-import { Customer, Product, QuoteItemCreate, DiscountTemplate, QuoteTemperature } from '@/lib/types';
+import { Customer, Product, QuoteItemCreate, DiscountTemplate, QuoteTemperature, DeliveryInstallEstimateResponse } from '@/lib/types';
+import Link from 'next/link';
 import { toast } from 'sonner';
 import { Plus, Trash2, ArrowLeft, X, ChevronDown, ChevronUp } from 'lucide-react';
 
@@ -81,6 +82,9 @@ function CreateQuoteContent() {
   const [selectedDiscountIds, setSelectedDiscountIds] = useState<number[]>([]);
   const [productDetails, setProductDetails] = useState<Record<number, Product>>({});
   const [termsExpanded, setTermsExpanded] = useState(false);
+  const [deliveryEstimate, setDeliveryEstimate] = useState<DeliveryInstallEstimateResponse | null>(null);
+  const [deliveryEstimateLoading, setDeliveryEstimateLoading] = useState(false);
+  const [deliveryEstimateError, setDeliveryEstimateError] = useState<string | null>(null);
 
   useEffect(() => {
     if (customerId) {
@@ -249,6 +253,47 @@ function CreateQuoteContent() {
     if (!item.product_id) return null;
     return productDetails[item.product_id] ?? products.find((p) => p.id === item.product_id) ?? null;
   };
+
+  const calculateTotalInstallationHours = (): number => {
+    return items.reduce((total, item) => {
+      if (item.parent_index != null) return total;
+      const product = getSelectedProduct(item);
+      if (!product?.installation_hours) return total;
+      const qty = Number(item.quantity) || 0;
+      return total + qty * product.installation_hours;
+    }, 0);
+  };
+
+  useEffect(() => {
+    const postcode = customer?.postcode?.trim();
+    const installHours = calculateTotalInstallationHours();
+    if (!postcode || installHours <= 0) {
+      setDeliveryEstimate(null);
+      setDeliveryEstimateError(null);
+      return;
+    }
+    let cancelled = false;
+    setDeliveryEstimateLoading(true);
+    setDeliveryEstimateError(null);
+    estimateDeliveryInstall(postcode, installHours)
+      .then((data) => {
+        if (!cancelled) {
+          setDeliveryEstimate(data);
+          setDeliveryEstimateError(null);
+        }
+      })
+      .catch((err: any) => {
+        if (!cancelled) {
+          setDeliveryEstimate(null);
+          const msg = err.response?.data?.detail || 'Failed to load delivery estimate';
+          setDeliveryEstimateError(Array.isArray(msg) ? msg[0]?.msg ?? String(msg) : msg);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setDeliveryEstimateLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [customer?.postcode, items, productDetails, products]);
 
   const calculateInstallCost = (product: Product) => {
     if (!product.installation_hours || !companySettings?.hourly_install_rate) {
@@ -603,6 +648,53 @@ function CreateQuoteContent() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Delivery & installation estimate */}
+            {(customer?.postcode?.trim() && calculateTotalInstallationHours() > 0) && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Delivery & installation estimate</CardTitle>
+                  <p className="text-sm text-muted-foreground font-normal">
+                    From factory to customer postcode; 8hr fitting days, 2-man team. Not added to quote total.
+                  </p>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {deliveryEstimateLoading && (
+                    <p className="text-sm text-muted-foreground">Loading estimate…</p>
+                  )}
+                  {deliveryEstimateError && (
+                    <div className="rounded-md border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 p-3 text-sm">
+                      <p className="font-medium text-amber-800 dark:text-amber-200">Cannot calculate estimate</p>
+                      <p className="text-amber-700 dark:text-amber-300 mt-1">{deliveryEstimateError}</p>
+                      <Link href="/settings/company" className="text-amber-700 dark:text-amber-300 underline mt-2 inline-block">Configure factory postcode and installation & travel in Company settings</Link>
+                    </div>
+                  )}
+                  {!deliveryEstimateLoading && !deliveryEstimateError && deliveryEstimate && (
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div><span className="text-muted-foreground">Distance (one way):</span> <span className="font-medium">{deliveryEstimate.distance_miles} miles</span></div>
+                        <div><span className="text-muted-foreground">Travel time (one way):</span> <span className="font-medium">{deliveryEstimate.travel_time_hours_one_way} hrs</span></div>
+                        <div><span className="text-muted-foreground">Fitting days (8hr):</span> <span className="font-medium">{deliveryEstimate.fitting_days}</span></div>
+                        <div><span className="text-muted-foreground">Overnight stay:</span> <span className="font-medium">{deliveryEstimate.requires_overnight ? 'Yes' : 'No'}</span></div>
+                        {deliveryEstimate.requires_overnight && (
+                          <div><span className="text-muted-foreground">Nights away:</span> <span className="font-medium">{deliveryEstimate.nights_away}</span></div>
+                        )}
+                      </div>
+                      <div className="border-t pt-3 space-y-1 text-sm">
+                        {deliveryEstimate.cost_mileage != null && <div className="flex justify-between"><span className="text-muted-foreground">Mileage:</span><span>£{Number(deliveryEstimate.cost_mileage).toFixed(2)}</span></div>}
+                        {deliveryEstimate.cost_labour != null && <div className="flex justify-between"><span className="text-muted-foreground">Labour:</span><span>£{Number(deliveryEstimate.cost_labour).toFixed(2)}</span></div>}
+                        {deliveryEstimate.cost_hotel != null && <div className="flex justify-between"><span className="text-muted-foreground">Hotel:</span><span>£{Number(deliveryEstimate.cost_hotel).toFixed(2)}</span></div>}
+                        {deliveryEstimate.cost_meals != null && <div className="flex justify-between"><span className="text-muted-foreground">Meals:</span><span>£{Number(deliveryEstimate.cost_meals).toFixed(2)}</span></div>}
+                        <div className="flex justify-between font-semibold pt-1 border-t"><span>Total (Ex VAT):</span><span>£{Number(deliveryEstimate.cost_total).toFixed(2)}</span></div>
+                      </div>
+                      {deliveryEstimate.settings_incomplete && (
+                        <p className="text-xs text-muted-foreground">Some costs could not be calculated. Complete Installation & travel in Company settings.</p>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
 
             {/* Discounts Selection */}
             <Card>

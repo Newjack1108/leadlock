@@ -229,7 +229,32 @@ export interface CompanySettings {
   default_terms_and_conditions?: string;
   hourly_install_rate?: number;
   installation_lead_time?: InstallationLeadTime;
+  distance_before_overnight_miles?: number;
+  cost_per_mile?: number;
+  hotel_allowance_per_night?: number;
+  meal_allowance_per_day?: number;
+  average_speed_mph?: number;
   updated_at: string;
+}
+
+export interface DeliveryInstallEstimateRequest {
+  customer_postcode: string;
+  installation_hours: number;
+  number_of_boxes?: number;
+}
+
+export interface DeliveryInstallEstimateResponse {
+  distance_miles: number;
+  travel_time_hours_one_way: number;
+  fitting_days: number;
+  requires_overnight: boolean;
+  nights_away: number;
+  cost_mileage?: number;
+  cost_labour?: number;
+  cost_hotel?: number;
+  cost_meals?: number;
+  cost_total: number;
+  settings_incomplete: boolean;
 }
 
 export enum EmailDirection {

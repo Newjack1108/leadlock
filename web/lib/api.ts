@@ -331,6 +331,20 @@ export const getCompanySettings = async () => {
   return response.data;
 };
 
+// Delivery & installation estimate (mileage, travel time, overnight, cost breakdown)
+export const estimateDeliveryInstall = async (
+  customerPostcode: string,
+  installationHours: number,
+  numberOfBoxes?: number
+) => {
+  const response = await api.post('/api/delivery-install/estimate', {
+    customer_postcode: customerPostcode,
+    installation_hours: installationHours,
+    number_of_boxes: numberOfBoxes,
+  });
+  return response.data;
+};
+
 // Quote API functions
 export const createQuote = async (quoteData: {
   customer_id: number;
