@@ -4,7 +4,7 @@ from sqlmodel import Session, select, or_, and_
 from sqlalchemy import func
 from typing import List, Optional
 from app.database import get_session
-from app.models import Quote, QuoteItem, Customer, User, QuoteEmail, Email, EmailDirection, Activity, ActivityType, CompanySettings, Lead, LeadStatus, QuoteStatus, OpportunityStage, LossCategory, DiscountTemplate, QuoteDiscount, DiscountType, DiscountScope
+from app.models import Quote, QuoteItem, Customer, User, QuoteEmail, Email, EmailDirection, Activity, ActivityType, CompanySettings, Lead, LeadStatus, QuoteStatus, QuoteTemperature, OpportunityStage, LossCategory, DiscountTemplate, QuoteDiscount, DiscountType, DiscountScope
 from app.auth import get_current_user
 from app.schemas import (
     QuoteCreate, QuoteUpdate, QuoteDraftUpdate, QuoteResponse, QuoteItemCreate, QuoteItemResponse,
@@ -1007,6 +1007,8 @@ async def send_quote_email_endpoint(
         quote.status = QuoteStatus.SENT
         quote.sent_at = datetime.utcnow()
         quote.updated_at = datetime.utcnow()
+        if quote.temperature is None:
+            quote.temperature = QuoteTemperature.COLD
         if quote.opportunity_stage == OpportunityStage.CONCEPT:
             quote.opportunity_stage = OpportunityStage.QUOTE_SENT
         session.add(quote)

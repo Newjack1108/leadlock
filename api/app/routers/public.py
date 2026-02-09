@@ -9,7 +9,7 @@ from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
-from sqlmodel import Session, select, func
+from sqlmodel import Session, select
 
 from app.database import get_session
 from app.models import (
@@ -17,6 +17,7 @@ from app.models import (
     Quote,
     QuoteItem,
     Customer,
+    QuoteStatus,
     QuoteTemperature,
     WebsiteVisit,
     TrackedWebsite,
@@ -25,6 +26,7 @@ from app.models import (
 from app.schemas import PublicQuoteViewResponse, PublicQuoteViewItemResponse
 from app.constants import VAT_RATE_DECIMAL
 from app.quote_pdf_service import generate_quote_pdf
+from app.temperature_service import recompute_quote_temperature
 
 router = APIRouter(prefix="/api/public", tags=["public"])
 
@@ -75,17 +77,10 @@ def get_public_quote_view(
     session.refresh(quote_email)
     session.refresh(quote)
 
-    # After commit: check total opens and set Hot if >= 3
-    total_opens = session.exec(
-        select(func.coalesce(func.sum(QuoteEmail.open_count), 0)).where(
-            QuoteEmail.quote_id == quote.id
-        )
-    ).first() or 0
-    if total_opens >= 3 and quote.temperature != QuoteTemperature.HOT:
-        quote.temperature = QuoteTemperature.HOT
-        session.add(quote)
-        session.commit()
-        session.refresh(quote)
+    # Recompute temperature from opens (and cooling); commit if updated
+    recompute_quote_temperature(session, quote.id)
+    session.commit()
+    session.refresh(quote)
 
     # Load customer name
     customer_name = ""
@@ -139,7 +134,7 @@ def get_public_quote_pdf(
 ):
     """
     Public endpoint: return quote as PDF by view token. No auth.
-    Does not record an open/view; used when customer clicks "Download PDF" on the tracked view.
+    Records one open (same as view) and recomputes temperature when customer downloads PDF.
     """
     statement = select(QuoteEmail).where(QuoteEmail.view_token == view_token)
     quote_email = session.exec(statement).first()
@@ -149,6 +144,23 @@ def get_public_quote_pdf(
     quote = session.get(Quote, quote_email.quote_id)
     if not quote:
         raise HTTPException(status_code=404, detail="Quote not found")
+
+    # Record PDF download as engagement: one open, update last_viewed_at, recompute temperature
+    now = datetime.utcnow()
+    if quote_email.opened_at is None:
+        quote_email.opened_at = now
+    quote_email.open_count = (quote_email.open_count or 0) + 1
+    if quote.viewed_at is None:
+        quote.viewed_at = now
+    quote.last_viewed_at = now
+    session.add(quote_email)
+    session.add(quote)
+    session.commit()
+    session.refresh(quote_email)
+    session.refresh(quote)
+    recompute_quote_temperature(session, quote.id)
+    session.commit()
+    session.refresh(quote)
 
     if not quote.customer_id:
         raise HTTPException(status_code=400, detail="Quote has no customer")
@@ -206,6 +218,20 @@ def get_pixel(
             visit = WebsiteVisit(customer_id=customer.id, site=site_enum)
             session.add(visit)
             session.commit()
+            # Warm latest SENT quote if it is COLD or null (customer visited site)
+            latest_sent = session.exec(
+                select(Quote)
+                .where(
+                    Quote.customer_id == customer.id,
+                    Quote.status == QuoteStatus.SENT,
+                )
+                .order_by(Quote.sent_at.desc())
+                .limit(1)
+            ).first()
+            if latest_sent and latest_sent.temperature in (None, QuoteTemperature.COLD):
+                latest_sent.temperature = QuoteTemperature.WARM
+                session.add(latest_sent)
+                session.commit()
     return Response(
         content=PIXEL_GIF_BYTES,
         media_type="image/gif",
