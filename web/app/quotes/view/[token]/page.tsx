@@ -76,28 +76,31 @@ export default function PublicQuoteViewPage() {
           </Button>
         </div>
 
-        {/* Header: logo + company info (matches PDF) */}
-        <div className="quote-view-print mb-6 flex gap-4 items-start">
-          <div className="flex-shrink-0 w-[120px]">
-            <img
-              src={logoUrl}
-              alt="Company logo"
-              className="max-h-[72px] w-auto object-contain"
-            />
-          </div>
-          <div className="text-sm text-muted-foreground min-w-0">
-            {cd?.trading_name && <p className="font-semibold text-foreground">{cd.trading_name}</p>}
-            {address && <p>{address}</p>}
-            {cd?.phone && <p>Phone: {cd.phone}</p>}
-            {cd?.email && <p>Email: {cd.email}</p>}
-            {cd?.website && <p>Website: {cd.website}</p>}
-          </div>
-        </div>
-
         <Card className="quote-view-print">
+          {/* Header inside card: company info left, logo right */}
           <CardHeader className="pb-2">
-            <CardTitle className="text-xl">Quote {data.quote_number}</CardTitle>
-            <p className="text-muted-foreground text-sm">Prepared for {data.customer_name}</p>
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="min-w-0 flex-1">
+                <CardTitle className="text-xl">Quote {data.quote_number}</CardTitle>
+                <p className="text-muted-foreground text-sm">Prepared for {data.customer_name}</p>
+                {(cd?.trading_name || address || cd?.phone || cd?.email || cd?.website) && (
+                  <div className="mt-3 text-sm text-muted-foreground space-y-0.5">
+                    {cd?.trading_name && <p className="font-semibold text-foreground">{cd.trading_name}</p>}
+                    {address && <p>{address}</p>}
+                    {cd?.phone && <p>Phone: {cd.phone}</p>}
+                    {cd?.email && <p>Email: {cd.email}</p>}
+                    {cd?.website && <p>Website: {cd.website}</p>}
+                  </div>
+                )}
+              </div>
+              <div className="flex-shrink-0 w-[120px] flex justify-end">
+                <img
+                  src={logoUrl}
+                  alt="Company logo"
+                  className="max-h-[72px] w-auto object-contain"
+                />
+              </div>
+            </div>
           </CardHeader>
           <CardContent className="space-y-6">
             {/* Line items */}

@@ -104,11 +104,12 @@ def _build_header_flowables(
     company_info_para = Paragraph(company_info_text, normal_style)
 
     if logo:
-        header_table = Table([[logo, company_info_para]], colWidths=[60*mm, 120*mm])
+        # Logo on the right: [company info | logo]
+        header_table = Table([[company_info_para, logo]], colWidths=[120*mm, 60*mm])
         header_table.setStyle(TableStyle([
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
             ("ALIGN", (0, 0), (0, 0), "LEFT"),
-            ("ALIGN", (1, 0), (1, 0), "LEFT"),
+            ("ALIGN", (1, 0), (1, 0), "RIGHT"),
             ("LEFTPADDING", (0, 0), (-1, -1), 0),
             ("RIGHTPADDING", (0, 0), (-1, -1), 0),
             ("TOPPADDING", (0, 0), (-1, -1), 0),
@@ -116,7 +117,7 @@ def _build_header_flowables(
         ]))
         result.append(header_table)
     else:
-        # Placeholder so layout matches and you know where to put the logo
+        # Placeholder on the right so layout matches
         placeholder_style = ParagraphStyle(
             "LogoPlaceholder",
             parent=normal_style,
@@ -139,11 +140,11 @@ def _build_header_flowables(
             ("TOPPADDING", (0, 0), (-1, -1), 12),
             ("BOTTOMPADDING", (0, 0), (-1, -1), 12),
         ]))
-        header_table = Table([[placeholder_table, company_info_para]], colWidths=[60*mm, 120*mm])
+        header_table = Table([[company_info_para, placeholder_table]], colWidths=[120*mm, 60*mm])
         header_table.setStyle(TableStyle([
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
             ("ALIGN", (0, 0), (0, 0), "LEFT"),
-            ("ALIGN", (1, 0), (1, 0), "LEFT"),
+            ("ALIGN", (1, 0), (1, 0), "RIGHT"),
             ("LEFTPADDING", (0, 0), (-1, -1), 0),
             ("RIGHTPADDING", (0, 0), (-1, -1), 0),
             ("TOPPADDING", (0, 0), (-1, -1), 0),
@@ -251,6 +252,9 @@ def _resolve_logo(company_settings: CompanySettings) -> Tuple[Optional[str], Opt
     if not env_frontend_url:
         env_frontend_url = DEFAULT_LOGO_BASE
     cors_origins = os.getenv("CORS_ORIGINS", "")
+    # If company logo_url is a path (e.g. /logo1.jpg), try frontend base + path first
+    if logo_url and logo_url.startswith("/") and not logo_url.startswith("/static/"):
+        url_candidates.append(env_frontend_url.rstrip("/") + logo_url)
     if env_logo_url:
         url_candidates.append(env_logo_url)
     for fn in filenames_to_try:
