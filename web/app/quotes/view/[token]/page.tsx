@@ -55,6 +55,7 @@ export default function PublicQuoteViewPage() {
 
   const handlePrint = () => window.print();
   const handleDownloadPdf = () => {
+    if (!token) return;
     downloadPublicQuotePdf(token).catch(() => setError('Failed to download PDF'));
   };
 
