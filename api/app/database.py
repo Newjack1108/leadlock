@@ -17,7 +17,9 @@ if "localhost" not in DATABASE_URL and "127.0.0.1" not in DATABASE_URL:
     elif "sslmode=" not in DATABASE_URL and "?" in DATABASE_URL:
         DATABASE_URL = DATABASE_URL + "&sslmode=require"
 
-engine = create_engine(DATABASE_URL, echo=True)
+# Only echo SQL in development (noisy in production)
+_echo_sql = os.getenv("DEBUG", "false").lower() == "true" and not os.getenv("RAILWAY_ENVIRONMENT")
+engine = create_engine(DATABASE_URL, echo=_echo_sql)
 
 
 def create_db_and_tables():
