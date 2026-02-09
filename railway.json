@@ -1,12 +1,11 @@
 {
   "$schema": "https://railway.app/railway.schema.json",
-  "$comment": "Backend API configuration. Root directory should NOT be set (use repo root).",
+  "$comment": "Backend API. Root directory = empty (repo root). Dockerfile so container starts reliably.",
   "build": {
-    "builder": "NIXPACKS",
-    "nixpacksConfigPath": "api/nixpacks.toml"
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "Dockerfile"
   },
   "deploy": {
-    "startCommand": "sh api/start.sh",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10
   }

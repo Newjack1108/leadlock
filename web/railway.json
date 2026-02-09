@@ -1,8 +1,8 @@
 {
   "$schema": "https://railway.app/railway.schema.json",
-  "$comment": "Next.js frontend. Root directory = web. Use DOCKERFILE so container starts reliably.",
   "build": {
-    "builder": "DOCKERFILE"
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "Dockerfile"
   },
   "deploy": {
     "restartPolicyType": "ON_FAILURE",

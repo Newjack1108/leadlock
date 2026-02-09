@@ -1,0 +1,9 @@
+# For API build (Dockerfile.api from repo root) - exclude frontend and cruft
+web
+.git
+.env*
+__pycache__
+*.pyc
+.pytest_cache
+.venv
+.cursor
