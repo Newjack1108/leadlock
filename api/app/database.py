@@ -7,6 +7,15 @@ from dotenv import load_dotenv
 load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://user:password@localhost:5432/leadlock")
+# Railway and some providers use postgres://; SQLAlchemy/psycopg2 expect postgresql://
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = "postgresql://" + DATABASE_URL[9:]
+# Railway Postgres requires SSL; add sslmode if not localhost and not already set
+if "localhost" not in DATABASE_URL and "127.0.0.1" not in DATABASE_URL:
+    if "sslmode=" not in DATABASE_URL and "?" not in DATABASE_URL:
+        DATABASE_URL = DATABASE_URL + "?sslmode=require"
+    elif "sslmode=" not in DATABASE_URL and "?" in DATABASE_URL:
+        DATABASE_URL = DATABASE_URL + "&sslmode=require"
 
 engine = create_engine(DATABASE_URL, echo=True)
 

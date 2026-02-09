@@ -284,6 +284,12 @@ async def root():
     return {"message": "LeadLock API"}
 
 
+@app.get("/health")
+async def health():
+    """Lightweight health check (no DB). Use this to verify the container is serving."""
+    return {"status": "ok"}
+
+
 @app.post("/api/seed")
 @app.get("/api/seed")
 async def seed_database():

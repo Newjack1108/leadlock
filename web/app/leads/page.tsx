@@ -116,6 +116,10 @@ export default function LeadsPage() {
     } catch (error: any) {
       if (error.response?.status === 401) {
         router.push('/login');
+      } else if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        toast.error('Server is not responding. Check that the API is running.');
+      } else if (!error.response) {
+        toast.error('Cannot reach server. Check your connection and API URL.');
       } else {
         toast.error('Failed to load leads');
       }
