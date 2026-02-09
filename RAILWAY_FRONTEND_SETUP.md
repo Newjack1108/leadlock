@@ -91,3 +91,11 @@ After successful deployment:
 3. Try logging in with:
    - Email: `director@cheshirestables.com`
    - Password: `director123`
+
+---
+
+## Backend (API) deployment
+
+- **Root Directory:** Leave **empty** (repo root) so the start script `api/start.sh` is used. If you set Root Directory to `api`, set the start command in Railway to: `sh start.sh`.
+- **Required variable:** `DATABASE_URL` (Postgres connection string). Add it in the API service’s Variables tab (e.g. from a Railway Postgres plugin).
+- **If the container fails to start:** Open the API service → Deployments → latest deployment → **View logs**. Check for errors (e.g. database connection, missing env vars).

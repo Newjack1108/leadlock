@@ -9,5 +9,5 @@ cmds = [
 ]
 
 [start]
-# Use . instead of source for POSIX sh; ensure we run from api so uvicorn finds app
-cmd = "cd api && . venv/bin/activate && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"
+# start.sh works from repo root (use: sh api/start.sh) or from api root (use: sh start.sh)
+cmd = "sh api/start.sh"
