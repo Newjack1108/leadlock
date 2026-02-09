@@ -15,6 +15,7 @@ import api from '@/lib/api';
 import { Customer, Product, QuoteItemCreate, DiscountTemplate, Quote, QuoteItem, QuoteDiscount, DiscountRequest, DiscountRequestStatus, QuoteTemperature, DeliveryInstallEstimateResponse } from '@/lib/types';
 import Link from 'next/link';
 import { toast } from 'sonner';
+import { formatHoursMinutes } from '@/lib/utils';
 import { Plus, Trash2, ArrowLeft, X, ChevronDown, ChevronUp, Send } from 'lucide-react';
 import RequestDiscountDialog from '@/components/RequestDiscountDialog';
 
@@ -704,7 +705,7 @@ function EditQuoteContent() {
                     <div className="space-y-3">
                       <div className="grid grid-cols-2 gap-3 text-sm">
                         <div><span className="text-muted-foreground">Distance (one way):</span> <span className="font-medium">{deliveryEstimate.distance_miles} miles</span></div>
-                        <div><span className="text-muted-foreground">Travel time (one way):</span> <span className="font-medium">{deliveryEstimate.travel_time_hours_one_way} hrs</span></div>
+                        <div><span className="text-muted-foreground">Travel time (one way):</span> <span className="font-medium">{formatHoursMinutes(deliveryEstimate.travel_time_hours_one_way)}</span></div>
                         <div><span className="text-muted-foreground">Fitting days (8hr):</span> <span className="font-medium">{deliveryEstimate.fitting_days}</span></div>
                         <div><span className="text-muted-foreground">Overnight stay:</span> <span className="font-medium">{deliveryEstimate.requires_overnight ? 'Yes' : 'No'}</span></div>
                         {deliveryEstimate.requires_overnight && (
@@ -713,10 +714,10 @@ function EditQuoteContent() {
                       </div>
                       <div className="border-t pt-3 space-y-1 text-sm">
                         {deliveryEstimate.cost_mileage != null && <div className="flex justify-between"><span className="text-muted-foreground">Mileage:</span><span>£{Number(deliveryEstimate.cost_mileage).toFixed(2)}</span></div>}
-                        {deliveryEstimate.cost_labour != null && <div className="flex justify-between"><span className="text-muted-foreground">Labour:</span><span>£{Number(deliveryEstimate.cost_labour).toFixed(2)}</span></div>}
+                        {deliveryEstimate.cost_labour != null && <div className="flex justify-between"><span className="text-muted-foreground">Labour (install):</span><span>£{Number(deliveryEstimate.cost_labour).toFixed(2)}</span></div>}
                         {deliveryEstimate.cost_hotel != null && <div className="flex justify-between"><span className="text-muted-foreground">Hotel:</span><span>£{Number(deliveryEstimate.cost_hotel).toFixed(2)}</span></div>}
                         {deliveryEstimate.cost_meals != null && <div className="flex justify-between"><span className="text-muted-foreground">Meals:</span><span>£{Number(deliveryEstimate.cost_meals).toFixed(2)}</span></div>}
-                        <div className="flex justify-between font-semibold pt-1 border-t"><span>Total (Ex VAT):</span><span>£{Number(deliveryEstimate.cost_total).toFixed(2)}</span></div>
+                        <div className="flex justify-between font-semibold pt-1 border-t"><span>Total (Mileage + Labour + Hotel + Meals, Ex VAT):</span><span>£{Number(deliveryEstimate.cost_total).toFixed(2)}</span></div>
                       </div>
                       {deliveryEstimate.settings_incomplete && (
                         <p className="text-xs text-muted-foreground">Some costs could not be calculated. Complete Installation & travel in Company settings.</p>
