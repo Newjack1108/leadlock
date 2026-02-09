@@ -12,5 +12,5 @@ cmds = ["npm ci"]
 cmds = ["npm run build"]
 
 [start]
-# npx ensures next is found when PATH may not include node_modules/.bin
-cmd = "npx next start -H 0.0.0.0 -p ${PORT:-3000}"
+# start.sh uses node so Next runs without relying on PATH/npx
+cmd = "sh start.sh"
