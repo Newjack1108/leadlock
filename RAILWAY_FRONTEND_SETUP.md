@@ -70,6 +70,11 @@ If you want to keep the existing service:
 - Verify `NEXT_PUBLIC_API_URL` points to your backend
 - Check Railway logs for runtime errors
 
+**If "Container failed to start" keeps happening (Nixpacks):**
+- Use the Dockerfile instead: in the frontend service go to **Settings** → **Build** → set **Builder** to **Dockerfile** (or **Dockerfile** if listed).
+- Ensure **Root Directory** is still `web` so Railway uses `web/Dockerfile`.
+- Redeploy. The Dockerfile runs Next with a known PATH and avoids Nixpacks runtime issues.
+
 ### Expected Build Output
 
 When Railway builds successfully, you should see:
