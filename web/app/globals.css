@@ -93,3 +93,21 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Public quote view: print-friendly (hide actions, readable quote only) */
+@media print {
+  .quote-view-page {
+    background: white;
+    padding: 0;
+  }
+  .quote-view-actions {
+    display: none !important;
+  }
+  .quote-view-print {
+    box-shadow: none;
+    border: 1px solid #e5e7eb;
+  }
+  body {
+    background: white;
+  }
+}

@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { getPublicQuoteView } from '@/lib/api';
+import { getPublicQuoteView, downloadPublicQuotePdf } from '@/lib/api';
 import type { PublicQuoteView } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 
 const currencySymbol = (currency: string) => (currency === 'GBP' ? '£' : currency + ' ');
 const formatAmount = (n: number, currency: string) =>
@@ -52,10 +53,23 @@ export default function PublicQuoteViewPage() {
     );
   }
 
+  const handlePrint = () => window.print();
+  const handleDownloadPdf = () => {
+    downloadPublicQuotePdf(token).catch(() => setError('Failed to download PDF'));
+  };
+
   return (
-    <div className="min-h-screen bg-muted/30 py-8 px-4">
+    <div className="min-h-screen bg-muted/30 py-8 px-4 quote-view-page">
       <div className="max-w-2xl mx-auto">
-        <Card>
+        <div className="quote-view-actions flex gap-2 mb-4 print:hidden">
+          <Button variant="outline" size="sm" onClick={handlePrint}>
+            Print
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleDownloadPdf}>
+            Download PDF
+          </Button>
+        </div>
+        <Card className="quote-view-print">
           <CardHeader className="pb-2">
             <CardTitle className="text-xl">Quote {data.quote_number}</CardTitle>
             <p className="text-muted-foreground text-sm">Prepared for {data.customer_name}</p>

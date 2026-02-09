@@ -1,14 +1,11 @@
 """
-Service for sending quote emails with PDF attachments.
+Service for sending quote emails (link only; customer downloads/prints from tracked view).
 """
 from typing import Optional, Tuple
-from datetime import datetime
-from io import BytesIO
 from jinja2 import Template
 from sqlmodel import Session, select
-from app.models import Quote, QuoteTemplate, Customer, CompanySettings, QuoteItem
+from app.models import Quote, QuoteTemplate, Customer, CompanySettings
 from app.email_service import send_email
-from app.quote_pdf_service import generate_quote_pdf
 from app.constants import VAT_RATE_DECIMAL
 from decimal import Decimal
 
@@ -19,7 +16,7 @@ def get_default_email_template() -> Tuple[str, str]:
     body = """
     <p>Dear {{ customer.name }},</p>
     
-    <p>Please find attached your quote {{ quote.quote_number }}.</p>
+    <p>Please view your quote {{ quote.quote_number }} using the link below.</p>
     
     <p>Quote Summary (all prices Ex VAT @ 20%):</p>
     <ul>
@@ -76,9 +73,10 @@ def send_quote_email(
     user_id: Optional[int] = None,
     view_token: Optional[str] = None,
     frontend_base_url: Optional[str] = None,
-) -> Tuple[bool, Optional[str], Optional[str], Optional[BytesIO], Optional[str], Optional[str]]:
+) -> Tuple[bool, Optional[str], Optional[str], None, Optional[str], Optional[str]]:
     """
-    Send a quote as an email with PDF attachment.
+    Send a quote as an email with "View your quote online" link only (no PDF attachment).
+    Customer opens the tracked view and can Print or Download PDF from there.
     
     Args:
         quote: Quote object
@@ -90,15 +88,13 @@ def send_quote_email(
         bcc: Optional BCC recipients
         custom_message: Optional custom message to append
         user_id: Optional user ID for email sending
+        view_token: Token for public quote view link
+        frontend_base_url: Base URL for view link
     
     Returns:
-        Tuple of (success, message_id, error_message, pdf_buffer, subject, body_html)
+        Tuple of (success, message_id, error_message, None, subject, body_html)
     """
     try:
-        # Get quote items
-        statement = select(QuoteItem).where(QuoteItem.quote_id == quote.id).order_by(QuoteItem.sort_order)
-        quote_items = session.exec(statement).all()
-        
         # Get company settings
         statement = select(CompanySettings).limit(1)
         company_settings = session.exec(statement).first()
@@ -129,32 +125,21 @@ def send_quote_email(
             view_link = f'<p style="margin-top:1.5em;"><a href="{base}/quotes/view/{view_token}" style="font-weight:bold;">View your quote online</a></p>'
             body_html = (body_html or "") + view_link
 
-        # Generate PDF
-        pdf_buffer = generate_quote_pdf(quote, customer, quote_items, company_settings, session)
-        # Sanitize customer name for filename (remove invalid characters)
-        import re
-        safe_customer_name = re.sub(r'[<>:"/\\|?*]', '_', customer.name).strip()
-        safe_customer_name = re.sub(r'\s+', '_', safe_customer_name)  # Replace spaces with underscores
-        pdf_filename = f"Quote_{quote.quote_number}_{safe_customer_name}.pdf"
-        
-        # Send email
+        # Send email (no PDF attachment; customer uses Print/Download PDF on the tracked view)
         success, message_id, error = send_email(
             to_email=to_email,
             subject=subject,
             body_html=body_html,
             cc=cc,
             bcc=bcc,
-            attachments=[{
-                "filename": pdf_filename,
-                "content": pdf_buffer.read()
-            }],
+            attachments=None,
             user_id=user_id
         )
-        
+
         if success:
-            return True, message_id, None, pdf_buffer, subject, body_html
+            return True, message_id, None, None, subject, body_html
         else:
-            return False, None, error, pdf_buffer, subject, body_html
-    
+            return False, None, error, None, subject, body_html
+
     except Exception as e:
         return False, None, str(e), None, None, None

@@ -3,6 +3,7 @@ Public API routes (no authentication).
 Used for quote view link tracking, public quote view page, and website visit pixel.
 """
 import base64
+import re
 from datetime import datetime
 from decimal import Decimal
 
@@ -19,9 +20,11 @@ from app.models import (
     QuoteTemperature,
     WebsiteVisit,
     TrackedWebsite,
+    CompanySettings,
 )
 from app.schemas import PublicQuoteViewResponse, PublicQuoteViewItemResponse
 from app.constants import VAT_RATE_DECIMAL
+from app.quote_pdf_service import generate_quote_pdf
 
 router = APIRouter(prefix="/api/public", tags=["public"])
 
@@ -126,6 +129,60 @@ def get_public_quote_view(
             for item in items
         ],
         terms_and_conditions=quote.terms_and_conditions,
+    )
+
+
+@router.get("/quotes/view/{view_token}/pdf")
+def get_public_quote_pdf(
+    view_token: str,
+    session: Session = Depends(get_session),
+):
+    """
+    Public endpoint: return quote as PDF by view token. No auth.
+    Does not record an open/view; used when customer clicks "Download PDF" on the tracked view.
+    """
+    statement = select(QuoteEmail).where(QuoteEmail.view_token == view_token)
+    quote_email = session.exec(statement).first()
+    if not quote_email:
+        raise HTTPException(status_code=404, detail="Quote view not found")
+
+    quote = session.get(Quote, quote_email.quote_id)
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+
+    if not quote.customer_id:
+        raise HTTPException(status_code=400, detail="Quote has no customer")
+
+    customer = session.get(Customer, quote.customer_id)
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+
+    items_stmt = (
+        select(QuoteItem)
+        .where(QuoteItem.quote_id == quote.id)
+        .order_by(QuoteItem.sort_order)
+    )
+    quote_items = session.exec(items_stmt).all()
+    company_settings = session.exec(select(CompanySettings).limit(1)).first()
+
+    try:
+        pdf_buffer = generate_quote_pdf(
+            quote, customer, list(quote_items), company_settings, session
+        )
+        pdf_content = pdf_buffer.read()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating PDF: {str(e)}")
+
+    safe_customer_name = re.sub(r'[<>:"/\\|?*]', '_', customer.name).strip()
+    safe_customer_name = re.sub(r'\s+', '_', safe_customer_name)
+    pdf_filename = f"Quote_{quote.quote_number}_{safe_customer_name}.pdf"
+
+    return Response(
+        content=pdf_content,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{pdf_filename}"',
+        },
     )
 
 

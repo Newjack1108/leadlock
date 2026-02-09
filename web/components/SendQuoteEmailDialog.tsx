@@ -72,9 +72,9 @@ export default function SendQuoteEmailDialog({
     try {
       await previewQuotePdf(quoteId);
     } catch (error: any) {
-      const errorMessage = error.response?.data?.detail || error.message || 'Failed to preview PDF';
+      const errorMessage = error.response?.data?.detail || error.message || 'Failed to download PDF';
       toast.error(errorMessage);
-      console.error('Quote PDF preview error:', error);
+      console.error('Quote PDF download error:', error);
     }
   };
 
@@ -263,7 +263,7 @@ export default function SendQuoteEmailDialog({
               disabled={loading}
             >
               <Eye className="h-4 w-4 mr-2" />
-              Preview PDF
+              Download PDF
             </Button>
             <Button type="submit" disabled={loading || !formData.to_email}>
               {loading ? 'Sending...' : 'Send Quote Email'}

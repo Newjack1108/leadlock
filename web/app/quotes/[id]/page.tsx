@@ -140,12 +140,12 @@ export default function QuoteDetailPage() {
                   try {
                     await previewQuotePdf(quoteId);
                   } catch (error: any) {
-                    toast.error(error.response?.data?.detail || error.message || 'Failed to preview PDF');
+                    toast.error(error.response?.data?.detail || error.message || 'Failed to download PDF');
                   }
                 }}
               >
                 <Eye className="h-4 w-4 mr-2" />
-                Preview PDF
+                Download PDF
               </Button>
               <Button
                 onClick={() => setSendEmailDialogOpen(true)}

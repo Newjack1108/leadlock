@@ -269,12 +269,12 @@ export default function QuotesPage() {
                               try {
                                 await previewQuotePdf(quote.id);
                               } catch (error: any) {
-                                toast.error(error.response?.data?.detail || error.message || 'Failed to preview PDF');
+                                toast.error(error.response?.data?.detail || error.message || 'Failed to download PDF');
                               }
                             }}
                           >
                             <Eye className="h-4 w-4 mr-1" />
-                            Preview
+                            Download PDF
                           </Button>
                           <Button
                             variant="default"
@@ -350,12 +350,12 @@ export default function QuotesPage() {
                           try {
                             await previewQuotePdf(quote.id);
                           } catch (error: any) {
-                            toast.error(error.response?.data?.detail || error.message || 'Failed to preview PDF');
+                            toast.error(error.response?.data?.detail || error.message || 'Failed to download PDF');
                           }
                         }}
                       >
                         <Eye className="h-4 w-4 mr-2" />
-                        Preview
+                        Download PDF
                       </Button>
                       <Button
                         variant="default"

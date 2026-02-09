@@ -225,6 +225,29 @@ export const getPublicQuoteView = async (viewToken: string) => {
   return response.data;
 };
 
+/** Base URL for API (same as axios baseURL). */
+export const getApiBaseUrl = () => process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+/** Download quote PDF by public view token (no auth). Triggers browser download. */
+export const downloadPublicQuotePdf = async (viewToken: string) => {
+  const base = getApiBaseUrl().replace(/\/$/, '');
+  const url = `${base}/api/public/quotes/view/${viewToken}/pdf`;
+  const response = await fetch(url, { credentials: 'omit' });
+  if (!response.ok) throw new Error('Failed to download PDF');
+  const blob = await response.blob();
+  const disposition = response.headers.get('Content-Disposition');
+  let filename = `Quote.pdf`;
+  if (disposition) {
+    const match = /filename="?([^";\n]+)"?/.exec(disposition);
+    if (match) filename = match[1].trim();
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+
 /** Get latest customer view URL for a quote (for testing open tracking). */
 export const getQuoteViewLink = async (quoteId: number): Promise<{ view_url: string | null }> => {
   const response = await api.get(`/api/quotes/${quoteId}/view-link`);
