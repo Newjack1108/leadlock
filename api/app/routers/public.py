@@ -3,11 +3,12 @@ Public API routes (no authentication).
 Used for quote view link tracking, public quote view page, and website visit pixel.
 """
 import base64
+import os
 import re
 from datetime import datetime
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import Response
 from sqlmodel import Session, select
 
@@ -23,7 +24,7 @@ from app.models import (
     TrackedWebsite,
     CompanySettings,
 )
-from app.schemas import PublicQuoteViewResponse, PublicQuoteViewItemResponse
+from app.schemas import PublicQuoteViewResponse, PublicQuoteViewItemResponse, PublicQuoteCompanyDisplay
 from app.constants import VAT_RATE_DECIMAL
 from app.quote_pdf_service import generate_quote_pdf
 from app.temperature_service import recompute_quote_temperature
@@ -40,8 +41,29 @@ SITE_SLUG_TO_ENUM = {
 }
 
 
+def _resolve_public_logo_url(
+    request: Request,
+    logo_url: str | None,
+    logo_filename: str,
+) -> str | None:
+    """Build a single logo URL for the frontend (browser)."""
+    url = (logo_url or "").strip()
+    if url.startswith("http://") or url.startswith("https://"):
+        return url
+    if url.startswith("/static/"):
+        base = str(request.base_url).rstrip("/")
+        return f"{base}{url}"
+    # Fallback: frontend base + filename (same as PDF uses)
+    frontend = (os.getenv("FRONTEND_URL") or os.getenv("PUBLIC_FRONTEND_URL") or "").strip()
+    if not frontend:
+        frontend = "https://leadlock-frontend-production.up.railway.app"
+    filename = logo_filename or "logo1.jpg"
+    return f"{frontend.rstrip('/')}/{filename}"
+
+
 @router.get("/quotes/view/{view_token}", response_model=PublicQuoteViewResponse)
 def get_public_quote_view(
+    request: Request,
     view_token: str,
     session: Session = Depends(get_session),
 ):
@@ -100,6 +122,28 @@ def get_public_quote_view(
     vat_amount = (quote.total_amount or Decimal(0)) * VAT_RATE_DECIMAL
     total_inc_vat = (quote.total_amount or Decimal(0)) + vat_amount
 
+    # Company display for header (logo + contact) – same as PDF
+    company_display = None
+    company_settings = session.exec(select(CompanySettings).limit(1)).first()
+    if company_settings:
+        logo_url_resolved = _resolve_public_logo_url(
+            request,
+            company_settings.logo_url,
+            company_settings.logo_filename or "logo1.jpg",
+        )
+        company_display = PublicQuoteCompanyDisplay(
+            trading_name=company_settings.trading_name,
+            logo_url=logo_url_resolved,
+            address_line1=company_settings.address_line1,
+            address_line2=company_settings.address_line2,
+            city=company_settings.city,
+            county=company_settings.county,
+            postcode=company_settings.postcode,
+            phone=company_settings.phone,
+            email=company_settings.email,
+            website=company_settings.website,
+        )
+
     return PublicQuoteViewResponse(
         quote_number=quote.quote_number,
         customer_name=customer_name,
@@ -124,6 +168,7 @@ def get_public_quote_view(
             for item in items
         ],
         terms_and_conditions=quote.terms_and_conditions,
+        company_display=company_display,
     )
 
 

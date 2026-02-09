@@ -758,6 +758,20 @@ class PublicQuoteViewItemResponse(BaseModel):
     sort_order: int
 
 
+class PublicQuoteCompanyDisplay(BaseModel):
+    """Company display info for public quote view header (logo + contact)."""
+    trading_name: Optional[str] = None
+    logo_url: Optional[str] = None
+    address_line1: Optional[str] = None
+    address_line2: Optional[str] = None
+    city: Optional[str] = None
+    county: Optional[str] = None
+    postcode: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    website: Optional[str] = None
+
+
 class PublicQuoteViewResponse(BaseModel):
     """Quote payload for public view page (no auth)."""
     quote_number: str
@@ -773,6 +787,7 @@ class PublicQuoteViewResponse(BaseModel):
     total_amount_inc_vat: Optional[Decimal] = None
     items: List[PublicQuoteViewItemResponse]
     terms_and_conditions: Optional[str] = None
+    company_display: Optional[PublicQuoteCompanyDisplay] = None
 
 
 class QuoteSendRequest(BaseModel):

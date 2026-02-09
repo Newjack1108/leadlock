@@ -621,6 +621,20 @@ export interface PublicQuoteViewItem {
   sort_order: number;
 }
 
+/** Company display for public quote header (logo + contact). */
+export interface PublicQuoteCompanyDisplay {
+  trading_name?: string;
+  logo_url?: string;
+  address_line1?: string;
+  address_line2?: string;
+  city?: string;
+  county?: string;
+  postcode?: string;
+  phone?: string;
+  email?: string;
+  website?: string;
+}
+
 export interface PublicQuoteView {
   quote_number: string;
   customer_name: string;
@@ -635,6 +649,7 @@ export interface PublicQuoteView {
   total_amount_inc_vat?: number;
   items: PublicQuoteViewItem[];
   terms_and_conditions?: string;
+  company_display?: PublicQuoteCompanyDisplay;
 }
 
 export interface QuoteCreate {

@@ -531,12 +531,15 @@ def generate_quote_pdf(
         elements.append(Spacer(1, 8))
         elements.extend(_build_footer_flowables(company_settings, footer_style))
 
-    # Page 2: Terms and Conditions from company settings (same header and footer)
-    if company_settings and company_settings.default_terms_and_conditions and company_settings.default_terms_and_conditions.strip():
+    # Page 2: Terms and Conditions – quote terms when present, else company default (same header and footer)
+    terms_text = (quote.terms_and_conditions or "").strip() or (
+        (company_settings.default_terms_and_conditions or "").strip() if company_settings else ""
+    )
+    if terms_text and company_settings:
         elements.append(PageBreak())
         elements.extend(_build_header_flowables(company_settings, logo_path, logo_bytes, normal_style, company_name_style, customer.customer_number))
         elements.append(Paragraph("Terms and Conditions:", heading_style))
-        for line in company_settings.default_terms_and_conditions.split("\n"):
+        for line in terms_text.split("\n"):
             if line.strip():
                 elements.append(Paragraph(line.strip(), terms_style))
         elements.append(Spacer(1, 8))

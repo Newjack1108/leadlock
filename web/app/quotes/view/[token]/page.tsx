@@ -59,6 +59,11 @@ export default function PublicQuoteViewPage() {
     downloadPublicQuotePdf(token).catch(() => setError('Failed to download PDF'));
   };
 
+  const cd = data.company_display;
+  const logoUrl = cd?.logo_url || '/logo1.jpg';
+  const addressParts = [cd?.address_line1, cd?.address_line2, cd?.city, cd?.county, cd?.postcode].filter(Boolean);
+  const address = addressParts.join(', ');
+
   return (
     <div className="min-h-screen bg-muted/30 py-8 px-4 quote-view-page">
       <div className="max-w-2xl mx-auto">
@@ -70,6 +75,25 @@ export default function PublicQuoteViewPage() {
             Download PDF
           </Button>
         </div>
+
+        {/* Header: logo + company info (matches PDF) */}
+        <div className="quote-view-print mb-6 flex gap-4 items-start">
+          <div className="flex-shrink-0 w-[120px]">
+            <img
+              src={logoUrl}
+              alt="Company logo"
+              className="max-h-[72px] w-auto object-contain"
+            />
+          </div>
+          <div className="text-sm text-muted-foreground min-w-0">
+            {cd?.trading_name && <p className="font-semibold text-foreground">{cd.trading_name}</p>}
+            {address && <p>{address}</p>}
+            {cd?.phone && <p>Phone: {cd.phone}</p>}
+            {cd?.email && <p>Email: {cd.email}</p>}
+            {cd?.website && <p>Website: {cd.website}</p>}
+          </div>
+        </div>
+
         <Card className="quote-view-print">
           <CardHeader className="pb-2">
             <CardTitle className="text-xl">Quote {data.quote_number}</CardTitle>
@@ -140,13 +164,35 @@ export default function PublicQuoteViewPage() {
             )}
 
             {data.terms_and_conditions && (
-              <div className="pt-2 border-t">
-                <h3 className="font-medium mb-2 text-sm">Terms & conditions</h3>
-                <p className="text-sm text-muted-foreground whitespace-pre-wrap">{data.terms_and_conditions}</p>
+              <div className="pt-2 print:hidden">
+                <a
+                  href="#terms"
+                  className="text-sm text-primary hover:underline"
+                >
+                  View terms and conditions
+                </a>
               </div>
             )}
           </CardContent>
         </Card>
+
+        {/* Terms and Conditions – separate page when printing (like PDF) */}
+        {data.terms_and_conditions && (
+          <div
+            id="terms"
+            className="quote-view-print mt-8"
+            style={{ pageBreakBefore: 'always' }}
+          >
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg">Terms and Conditions</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground whitespace-pre-wrap">{data.terms_and_conditions}</p>
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </div>
     </div>
   );
