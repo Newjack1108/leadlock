@@ -273,107 +273,169 @@ export default function CustomerDetailPage() {
         </div>
 
         <div className="space-y-6">
-            {/* Customer Profile Card */}
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle>Customer Profile</CardTitle>
-                  <Badge className="bg-primary/20 text-primary">
-                    {customer.customer_number}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="mb-4 p-3 bg-muted rounded-md">
-                  <div className="text-sm font-medium">Customer Number</div>
-                  <div className="text-lg font-semibold">{customer.customer_number}</div>
-                  <div className="text-xs text-muted-foreground mt-1">
-                    Customer since: {new Date(customer.customer_since).toLocaleDateString()}
+            {/* Customer Profile + Contact Methods */}
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr,320px] gap-6">
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle>Customer Profile</CardTitle>
+                    <Badge className="bg-primary/20 text-primary">
+                      {customer.customer_number}
+                    </Badge>
                   </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label>Email <span className="text-destructive">*</span></Label>
-                    <Input
-                      value={customer.email || ''}
-                      onChange={(e) => handleUpdateCustomer('email', e.target.value)}
-                      onBlur={(e) => handleUpdateCustomer('email', e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <Label>Phone <span className="text-destructive">*</span></Label>
-                    <div className="flex gap-2 items-center">
-                      <Input
-                        className="flex-1"
-                        value={customer.phone || ''}
-                        onChange={(e) => handleUpdateCustomer('phone', e.target.value)}
-                        onBlur={(e) => handleUpdateCustomer('phone', e.target.value)}
-                      />
-                      {customer.phone && (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="icon"
-                          className="shrink-0"
-                          title="Call"
-                          onClick={() => setCallNotesDialogOpen(true)}
-                        >
-                          <Phone className="h-4 w-4" />
-                        </Button>
-                      )}
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="mb-4 p-3 bg-muted rounded-md">
+                    <div className="text-sm font-medium">Customer Number</div>
+                    <div className="text-lg font-semibold">{customer.customer_number}</div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      Customer since: {new Date(customer.customer_since).toLocaleDateString()}
                     </div>
                   </div>
-                  <div className="col-span-2">
-                    <Label>Address Line 1 <span className="text-destructive">*</span></Label>
-                    <Input
-                      value={customer.address_line1 || ''}
-                      onChange={(e) => handleUpdateCustomer('address_line1', e.target.value)}
-                      onBlur={(e) => handleUpdateCustomer('address_line1', e.target.value)}
-                    />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label>Email <span className="text-destructive">*</span></Label>
+                      <Input
+                        value={customer.email || ''}
+                        onChange={(e) => handleUpdateCustomer('email', e.target.value)}
+                        onBlur={(e) => handleUpdateCustomer('email', e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <Label>Phone <span className="text-destructive">*</span></Label>
+                      <div className="flex gap-2 items-center">
+                        <Input
+                          className="flex-1"
+                          value={customer.phone || ''}
+                          onChange={(e) => handleUpdateCustomer('phone', e.target.value)}
+                          onBlur={(e) => handleUpdateCustomer('phone', e.target.value)}
+                        />
+                        {customer.phone && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            className="shrink-0"
+                            title="Call"
+                            onClick={() => setCallNotesDialogOpen(true)}
+                          >
+                            <Phone className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="col-span-2">
+                      <Label>Address Line 1 <span className="text-destructive">*</span></Label>
+                      <Input
+                        value={customer.address_line1 || ''}
+                        onChange={(e) => handleUpdateCustomer('address_line1', e.target.value)}
+                        onBlur={(e) => handleUpdateCustomer('address_line1', e.target.value)}
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <Label>Address Line 2 (Optional)</Label>
+                      <Input
+                        value={customer.address_line2 || ''}
+                        onChange={(e) => handleUpdateCustomer('address_line2', e.target.value)}
+                        onBlur={(e) => handleUpdateCustomer('address_line2', e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <Label>City <span className="text-destructive">*</span></Label>
+                      <Input
+                        value={customer.city || ''}
+                        onChange={(e) => handleUpdateCustomer('city', e.target.value)}
+                        onBlur={(e) => handleUpdateCustomer('city', e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <Label>County <span className="text-destructive">*</span></Label>
+                      <Input
+                        value={customer.county || ''}
+                        onChange={(e) => handleUpdateCustomer('county', e.target.value)}
+                        onBlur={(e) => handleUpdateCustomer('county', e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <Label>Postcode <span className="text-destructive">*</span></Label>
+                      <Input
+                        value={customer.postcode || ''}
+                        onChange={(e) => handleUpdateCustomer('postcode', e.target.value)}
+                        onBlur={(e) => handleUpdateCustomer('postcode', e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <Label>Country</Label>
+                      <Input
+                        value={customer.country || 'United Kingdom'}
+                        onChange={(e) => handleUpdateCustomer('country', e.target.value)}
+                        onBlur={(e) => handleUpdateCustomer('country', e.target.value)}
+                      />
+                    </div>
                   </div>
-                  <div className="col-span-2">
-                    <Label>Address Line 2 (Optional)</Label>
-                    <Input
-                      value={customer.address_line2 || ''}
-                      onChange={(e) => handleUpdateCustomer('address_line2', e.target.value)}
-                      onBlur={(e) => handleUpdateCustomer('address_line2', e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <Label>City <span className="text-destructive">*</span></Label>
-                    <Input
-                      value={customer.city || ''}
-                      onChange={(e) => handleUpdateCustomer('city', e.target.value)}
-                      onBlur={(e) => handleUpdateCustomer('city', e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <Label>County <span className="text-destructive">*</span></Label>
-                    <Input
-                      value={customer.county || ''}
-                      onChange={(e) => handleUpdateCustomer('county', e.target.value)}
-                      onBlur={(e) => handleUpdateCustomer('county', e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <Label>Postcode <span className="text-destructive">*</span></Label>
-                    <Input
-                      value={customer.postcode || ''}
-                      onChange={(e) => handleUpdateCustomer('postcode', e.target.value)}
-                      onBlur={(e) => handleUpdateCustomer('postcode', e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <Label>Country</Label>
-                    <Input
-                      value={customer.country || 'United Kingdom'}
-                      onChange={(e) => handleUpdateCustomer('country', e.target.value)}
-                      onBlur={(e) => handleUpdateCustomer('country', e.target.value)}
-                    />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+              <div className="flex flex-col gap-4">
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center gap-2">
+                      <Image src="/email-icon.png" alt="" width={32} height={32} className="shrink-0" />
+                      <CardTitle>Emails</CardTitle>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => setComposeEmailDialogOpen(true)}
+                    >
+                      Compose Email
+                    </Button>
+                    <Button
+                      variant="link"
+                      className="w-full p-0 h-auto text-muted-foreground hover:text-primary"
+                      onClick={() => router.push(`/customers/${customerId}/emails`)}
+                    >
+                      View all emails
+                    </Button>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center gap-2">
+                      <Image src="/sms-icon.png" alt="" width={32} height={32} className="shrink-0" />
+                      <CardTitle>SMS</CardTitle>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => router.push(`/customers/${customerId}/sms`)}
+                    >
+                      View SMS
+                    </Button>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center gap-2">
+                      <Image src="/messenger-icon.png" alt="" width={32} height={32} className="shrink-0" />
+                      <CardTitle>Messenger</CardTitle>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => router.push(`/customers/${customerId}/messenger`)}
+                    >
+                      View Messenger
+                    </Button>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
 
             {/* Quote Lock Card */}
             <QuoteLockCard 
@@ -514,68 +576,6 @@ export default function CustomerDetailPage() {
                 )}
               </CardContent>
             </Card>
-
-            {/* Emails, SMS & Messenger Cards - side by side */}
-            <div className="grid gap-4 sm:grid-cols-3">
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center gap-2">
-                    <Image src="/email-icon.png" alt="" width={32} height={32} className="shrink-0" />
-                    <CardTitle>Emails</CardTitle>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => setComposeEmailDialogOpen(true)}
-                  >
-                    Compose Email
-                  </Button>
-                  <Button
-                    variant="link"
-                    className="w-full p-0 h-auto text-muted-foreground hover:text-primary"
-                    onClick={() => router.push(`/customers/${customerId}/emails`)}
-                  >
-                    View all emails
-                  </Button>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center gap-2">
-                    <Image src="/sms-icon.png" alt="" width={32} height={32} className="shrink-0" />
-                    <CardTitle>SMS</CardTitle>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => router.push(`/customers/${customerId}/sms`)}
-                  >
-                    View SMS
-                  </Button>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center gap-2">
-                    <Image src="/messenger-icon.png" alt="" width={32} height={32} className="shrink-0" />
-                    <CardTitle>Messenger</CardTitle>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => router.push(`/customers/${customerId}/messenger`)}
-                  >
-                    View Messenger
-                  </Button>
-                </CardContent>
-              </Card>
-            </div>
 
             {/* Websites Visited Card */}
             <Card>
