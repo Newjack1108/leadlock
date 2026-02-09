@@ -16,6 +16,12 @@ import Link from 'next/link';
 import { toast } from 'sonner';
 import { Plus, Trash2, ArrowLeft, X, ChevronDown, ChevronUp } from 'lucide-react';
 
+const DELIVERY_INSTALL_LINE_DESCRIPTION = 'Delivery & Installation';
+
+function hasDeliveryInstallLine(items: QuoteItemCreate[]): boolean {
+  return items.some((item) => item.description === DELIVERY_INSTALL_LINE_DESCRIPTION && item.is_custom);
+}
+
 // Default terms and conditions constant (fallback if not set in company settings)
 const DEFAULT_TERMS_AND_CONDITIONS = `Key Terms Summary (For Quotations)
 
@@ -294,6 +300,28 @@ function CreateQuoteContent() {
       });
     return () => { cancelled = true; };
   }, [customer?.postcode, items, productDetails, products]);
+
+  const addDeliveryInstallToQuote = () => {
+    if (!deliveryEstimate) return;
+    const newItem: QuoteItemCreate = {
+      description: DELIVERY_INSTALL_LINE_DESCRIPTION,
+      quantity: 1,
+      unit_price: Number(deliveryEstimate.cost_total),
+      is_custom: true,
+      sort_order: items.length,
+    };
+    const newItems = [...items, newItem].map((it, i) => ({ ...it, sort_order: i }));
+    setItems(newItems);
+    toast.success('Delivery & Installation added to quote');
+  };
+
+  const removeDeliveryInstallFromQuote = () => {
+    const newItems = items
+      .filter((item) => !(item.description === DELIVERY_INSTALL_LINE_DESCRIPTION && item.is_custom))
+      .map((it, i) => ({ ...it, sort_order: i }));
+    setItems(newItems);
+    toast.success('Delivery & Installation removed from quote');
+  };
 
   const calculateInstallCost = (product: Product) => {
     if (!product.installation_hours || !companySettings?.hourly_install_rate) {
@@ -655,7 +683,7 @@ function CreateQuoteContent() {
                 <CardHeader>
                   <CardTitle>Delivery & installation estimate</CardTitle>
                   <p className="text-sm text-muted-foreground font-normal">
-                    From factory to customer postcode; 8hr fitting days, 2-man team. Not added to quote total.
+                    From factory to customer postcode; 8hr fitting days, 2-man team. Add below to include in quote total.
                   </p>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -690,6 +718,22 @@ function CreateQuoteContent() {
                       {deliveryEstimate.settings_incomplete && (
                         <p className="text-xs text-muted-foreground">Some costs could not be calculated. Complete Installation & travel in Company settings.</p>
                       )}
+                      <div className="flex flex-wrap gap-2 pt-2 border-t">
+                        {hasDeliveryInstallLine(items) ? (
+                          <>
+                            <Button type="button" variant="secondary" size="sm" disabled>
+                              Added to quote
+                            </Button>
+                            <Button type="button" variant="outline" size="sm" onClick={removeDeliveryInstallFromQuote}>
+                              Remove
+                            </Button>
+                          </>
+                        ) : (
+                          <Button type="button" variant="default" size="sm" onClick={addDeliveryInstallToQuote}>
+                            Add to quote
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   )}
                 </CardContent>
