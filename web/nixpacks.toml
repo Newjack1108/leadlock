@@ -12,5 +12,5 @@ cmds = ["npm ci"]
 cmds = ["npm run build"]
 
 [start]
-# npm start so PATH includes node_modules/.bin and script runs in app dir
-cmd = "npm start"
+# Login shell so .profile is sourced (PATH has node + node_modules/.bin)
+cmd = "sh -l -c 'npm start'"

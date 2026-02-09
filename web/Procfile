@@ -1,3 +1,3 @@
 # Next.js Frontend Procfile
 # This is for the web frontend only. Root directory must be set to 'web' in Railway.
-web: npm start
+web: sh -l -c 'npm start'
