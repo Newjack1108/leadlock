@@ -107,14 +107,20 @@ app.include_router(public.router)
 
 @app.on_event("startup")
 def on_startup():
-    print("=" * 50)
-    print("Starting database initialization...")
-    print("=" * 50)
-    create_db_and_tables()
-    print("=" * 50)
-    print("Database initialization complete")
-    print("=" * 50)
-    
+    import sys
+    print("LeadLock API startup...", file=sys.stderr, flush=True)
+    print("=" * 50, file=sys.stderr, flush=True)
+    print("Starting database initialization...", file=sys.stderr, flush=True)
+    print("=" * 50, file=sys.stderr, flush=True)
+    try:
+        create_db_and_tables()
+        print("Database initialization complete", file=sys.stderr, flush=True)
+    except Exception as e:
+        print("Database startup failed:", str(e), file=sys.stderr, flush=True)
+        print(traceback.format_exc(), file=sys.stderr, flush=True)
+        raise
+    print("=" * 50, file=sys.stderr, flush=True)
+
     # Start IMAP polling background task
     import threading
     import time
