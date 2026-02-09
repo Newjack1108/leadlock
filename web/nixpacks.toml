@@ -1,6 +1,6 @@
 # Next.js Frontend Build Configuration
-# This file is for the web frontend only. Root directory must be set to 'web' in Railway.
-# Nixpacks will auto-detect Node.js from package.json, but we specify it explicitly here.
+# Root directory must be set to 'web' in Railway.
+# Keep start minimal: next start -H 0.0.0.0 -p $PORT (Railway sets PORT).
 
 [phases.setup]
 nixPkgs = ["nodejs"]
@@ -11,6 +11,9 @@ cmds = ["npm ci"]
 [phases.build]
 cmds = ["npm run build"]
 
+[variables]
+# So "next" is found at runtime (Nixpacks bakes this into the image)
+PATH = "/app/node_modules/.bin:${PATH}"
+
 [start]
-# Set PATH so node and next are found (nix profile + node_modules/.bin)
-cmd = "export PATH=/app/node_modules/.bin:/root/.nix-profile/bin:/nix/var/nix/profiles/default/bin:$PATH && npm start"
+cmd = "next start -H 0.0.0.0 -p $PORT"
