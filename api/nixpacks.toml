@@ -9,4 +9,5 @@ cmds = [
 ]
 
 [start]
-cmd = "cd api && source venv/bin/activate && uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+# Use . instead of source for POSIX sh; ensure we run from api so uvicorn finds app
+cmd = "cd api && . venv/bin/activate && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"
