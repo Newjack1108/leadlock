@@ -1,9 +1,13 @@
 # Next.js frontend - Dockerfile for Railway (root dir = web).
-# Use this when Nixpacks fails to start: set builder to DOCKERFILE in Railway.
+# NEXT_PUBLIC_API_URL must be set in Railway frontend Variables so the client bundle uses the real API URL.
 
 FROM node:20-alpine AS builder
 
 WORKDIR /app
+
+# Build-time API URL (Railway injects env vars during build; pass through so Next.js can inline it)
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
 COPY package.json package-lock.json* ./
 RUN npm ci
