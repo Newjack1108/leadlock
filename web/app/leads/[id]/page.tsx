@@ -27,6 +27,7 @@ import {
   PhoneCall,
   Clock,
   CheckCircle,
+  XCircle,
 } from 'lucide-react';
 import api from '@/lib/api';
 import { formatDateTime } from '@/lib/utils';
@@ -71,6 +72,7 @@ export default function LeadDetailPage() {
   const [loading, setLoading] = useState(true);
   const [allowedTransitions, setAllowedTransitions] = useState<string[]>([]);
   const [qualifyLoading, setQualifyLoading] = useState(false);
+  const [rejectLoading, setRejectLoading] = useState(false);
   const [composeEmailOpen, setComposeEmailOpen] = useState(false);
   const [callNotesDialogOpen, setCallNotesDialogOpen] = useState(false);
   const [ensureCustomerLoading, setEnsureCustomerLoading] = useState(false);
@@ -167,6 +169,22 @@ export default function LeadDetailPage() {
     }
   };
 
+  const handleReject = async () => {
+    if (!allowedTransitions.includes('LOST')) return;
+    if (!window.confirm('Are you sure you want to reject this lead? This will mark the lead as lost.')) return;
+    setRejectLoading(true);
+    try {
+      await api.post(`/api/leads/${leadId}/transition`, { new_status: 'LOST' });
+      toast.success('Lead rejected');
+      fetchLead();
+      fetchActivities();
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail?.message || error.response?.data?.detail || 'Failed to reject lead');
+    } finally {
+      setRejectLoading(false);
+    }
+  };
+
   const handleUpdateLead = async (field: string, value: any) => {
     try {
       await api.patch(`/api/leads/${leadId}`, {
@@ -213,9 +231,9 @@ export default function LeadDetailPage() {
 
         <div className="space-y-6">
           {/* Two-column layout: Lead Info | Contact cards */}
-          <div className="grid grid-cols-1 md:grid-cols-[1fr,280px] gap-6">
+          <div className="flex flex-col md:flex-row gap-6">
             {/* Left: Lead Information */}
-            <Card>
+            <Card className="flex-1 min-w-0">
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle>Lead Information</CardTitle>
@@ -229,6 +247,18 @@ export default function LeadDetailPage() {
                       >
                         <CheckCircle className="h-4 w-4" />
                         {qualifyLoading ? 'Qualifying...' : 'Qualify'}
+                      </Button>
+                    )}
+                    {allowedTransitions.includes('LOST') && lead.status !== LeadStatus.LOST && (
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={handleReject}
+                        disabled={rejectLoading}
+                        className="gap-1"
+                      >
+                        <XCircle className="h-4 w-4" />
+                        {rejectLoading ? 'Rejecting...' : 'Reject'}
                       </Button>
                     )}
                     <Badge className="bg-primary/20 text-primary">
@@ -366,7 +396,7 @@ export default function LeadDetailPage() {
             </Card>
 
             {/* Right: Contact cards stacked */}
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-4 md:w-80 md:flex-shrink-0">
               <Card>
                 <CardHeader>
                   <div className="flex items-center gap-2">
