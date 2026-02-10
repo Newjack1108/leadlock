@@ -870,6 +870,7 @@ class OrderResponse(BaseModel):
     id: int
     quote_id: int
     customer_id: Optional[int] = None
+    customer_name: Optional[str] = None
     order_number: str
     subtotal: Decimal
     discount_total: Decimal

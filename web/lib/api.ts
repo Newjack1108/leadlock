@@ -379,6 +379,16 @@ export const getQuote = async (quoteId: number) => {
   return response.data;
 };
 
+export const getOrders = async () => {
+  const response = await api.get('/api/orders');
+  return response.data;
+};
+
+export const getOrder = async (orderId: number) => {
+  const response = await api.get(`/api/orders/${orderId}`);
+  return response.data;
+};
+
 export const updateDraftQuote = async (quoteId: number, quoteData: {
   valid_until?: string;
   terms_and_conditions?: string;

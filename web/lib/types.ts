@@ -567,6 +567,40 @@ export interface QuoteItemCreate {
   parent_index?: number | null;
 }
 
+export interface OrderItem {
+  id: number;
+  order_id: number;
+  quote_item_id?: number | null;
+  product_id?: number | null;
+  description: string;
+  quantity: number;
+  unit_price: number;
+  line_total: number;
+  discount_amount: number;
+  final_line_total: number;
+  sort_order: number;
+  is_custom: boolean;
+}
+
+export interface Order {
+  id: number;
+  quote_id: number;
+  customer_id?: number | null;
+  customer_name?: string | null;
+  order_number: string;
+  subtotal: number;
+  discount_total: number;
+  total_amount: number;
+  deposit_amount: number;
+  balance_amount: number;
+  currency: string;
+  terms_and_conditions?: string | null;
+  notes?: string | null;
+  created_by_id: number;
+  created_at: string;
+  items: OrderItem[];
+}
+
 export interface Quote {
   id: number;
   customer_id: number;
