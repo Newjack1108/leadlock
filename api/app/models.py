@@ -630,7 +630,7 @@ class Order(SQLModel, table=True):
 class OrderItem(SQLModel, table=True):
     """Line item on an order; snapshot of quote line at acceptance."""
     id: Optional[int] = Field(default=None, primary_key=True)
-    order_id: int = Field(foreign_key="order.id")
+    order_id: int = Field(foreign_key="customer_order.id")
     quote_item_id: Optional[int] = Field(default=None, foreign_key="quoteitem.id")
     product_id: Optional[int] = Field(default=None, foreign_key="product.id")
     description: str
