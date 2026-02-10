@@ -716,6 +716,18 @@ def create_db_and_tables():
                 import traceback
                 print(traceback.format_exc(), file=sys.stderr, flush=True)
         
+        # Step 9c: Extend remindertype enum with QUOTE_NOT_OPENED and QUOTE_OPENED_NO_REPLY (if reminder table exists)
+        if has_reminder_table or inspector.has_table("reminder"):
+            for enum_value in ("QUOTE_NOT_OPENED", "QUOTE_OPENED_NO_REPLY"):
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text(f"ALTER TYPE remindertype ADD VALUE IF NOT EXISTS '{enum_value}'"))
+                    print(f"Added remindertype enum value: {enum_value}", file=sys.stderr, flush=True)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str:
+                        print(f"Warning: could not add remindertype value {enum_value}: {e}", file=sys.stderr, flush=True)
+        
         # Step 10: Add installation_hours to Product table
         has_product_table = inspector.has_table("product")
         if has_product_table:
