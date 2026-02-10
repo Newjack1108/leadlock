@@ -112,7 +112,7 @@ export default function Header() {
             <Button
               variant={pathname?.startsWith('/leads') ? 'default' : 'ghost'}
               size="sm"
-              className="text-muted-foreground hover:text-foreground"
+              className={pathname?.startsWith('/leads') ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}
             >
               <Users className="h-4 w-4 mr-2" />
               Leads
@@ -127,7 +127,7 @@ export default function Header() {
             <Button
               variant={pathname?.startsWith('/customers') ? 'default' : 'ghost'}
               size="sm"
-              className="text-muted-foreground hover:text-foreground"
+              className={pathname?.startsWith('/customers') ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}
             >
               <Users className="h-4 w-4 mr-2" />
               Customers
@@ -142,7 +142,7 @@ export default function Header() {
             <Button
               variant={pathname?.startsWith('/quotes') ? 'default' : 'ghost'}
               size="sm"
-              className="text-muted-foreground hover:text-foreground"
+              className={pathname?.startsWith('/quotes') ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}
             >
               <FileText className="h-4 w-4 mr-2" />
               Quotes
@@ -152,7 +152,7 @@ export default function Header() {
             <Button
               variant={pathname?.startsWith('/orders') ? 'default' : 'ghost'}
               size="sm"
-              className="text-muted-foreground hover:text-foreground"
+              className={pathname?.startsWith('/orders') ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}
             >
               <ShoppingCart className="h-4 w-4 mr-2" />
               Orders
@@ -163,7 +163,7 @@ export default function Header() {
               <Button
                 variant={pathname?.startsWith('/products') ? 'default' : 'ghost'}
                 size="sm"
-                className="text-muted-foreground hover:text-foreground"
+                className={pathname?.startsWith('/products') ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}
               >
                 <Package className="h-4 w-4 mr-2" />
                 Products
@@ -174,7 +174,7 @@ export default function Header() {
             <Button
               variant={pathname?.startsWith('/reminders') ? 'default' : 'ghost'}
               size="sm"
-              className="text-muted-foreground hover:text-foreground"
+              className={pathname?.startsWith('/reminders') ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}
             >
               <Bell className="h-4 w-4 mr-2" />
               Reminders
@@ -189,7 +189,7 @@ export default function Header() {
             <Button
               variant={pathname?.startsWith('/discount-requests') ? 'default' : 'ghost'}
               size="sm"
-              className="text-muted-foreground hover:text-foreground"
+              className={pathname?.startsWith('/discount-requests') ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}
             >
               <Send className="h-4 w-4 mr-2" />
               Discount requests
