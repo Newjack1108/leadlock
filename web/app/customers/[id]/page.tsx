@@ -375,8 +375,8 @@ export default function CustomerDetailPage() {
                   </div>
                 </CardContent>
               </Card>
-              <div className="flex flex-col gap-4 md:w-80 md:flex-shrink-0">
-                <Card>
+              <div className="flex flex-col gap-4 md:w-80 md:flex-shrink-0 md:min-h-0">
+                <Card className="flex-1 min-h-0 flex flex-col">
                   <CardHeader>
                     <div className="flex items-center gap-2">
                       <Image src="/email-icon.png" alt="" width={32} height={32} className="shrink-0" />
@@ -400,7 +400,7 @@ export default function CustomerDetailPage() {
                     </Button>
                   </CardContent>
                 </Card>
-                <Card>
+                <Card className="flex-1 min-h-0 flex flex-col">
                   <CardHeader>
                     <div className="flex items-center gap-2">
                       <Image src="/sms-icon.png" alt="" width={32} height={32} className="shrink-0" />
@@ -417,7 +417,7 @@ export default function CustomerDetailPage() {
                     </Button>
                   </CardContent>
                 </Card>
-                <Card>
+                <Card className="flex-1 min-h-0 flex flex-col">
                   <CardHeader>
                     <div className="flex items-center gap-2">
                       <Image src="/messenger-icon.png" alt="" width={32} height={32} className="shrink-0" />
@@ -444,8 +444,9 @@ export default function CustomerDetailPage() {
               quoteLockReason={quoteLockReason}
             />
 
-            {/* Quotes Card */}
-            <Card>
+            {/* Quotes and Opportunities - side by side */}
+            <div className="flex flex-col md:flex-row gap-6">
+            <Card className="flex-1 min-w-0">
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle>Quotes</CardTitle>
@@ -517,8 +518,7 @@ export default function CustomerDetailPage() {
               </CardContent>
             </Card>
 
-            {/* Opportunities Card */}
-            <Card>
+            <Card className="flex-1 min-w-0">
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle>Opportunities</CardTitle>
@@ -576,6 +576,7 @@ export default function CustomerDetailPage() {
                 )}
               </CardContent>
             </Card>
+            </div>
 
             {/* Websites Visited Card */}
             <Card>

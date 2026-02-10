@@ -396,8 +396,8 @@ export default function LeadDetailPage() {
             </Card>
 
             {/* Right: Contact cards stacked */}
-            <div className="flex flex-col gap-4 md:w-80 md:flex-shrink-0">
-              <Card>
+            <div className="flex flex-col gap-4 md:w-80 md:flex-shrink-0 md:min-h-0">
+              <Card className="flex-1 min-h-0 flex flex-col">
                 <CardHeader>
                   <div className="flex items-center gap-2">
                     <Image src="/email-icon.png" alt="" width={32} height={32} className="shrink-0" />
@@ -423,7 +423,7 @@ export default function LeadDetailPage() {
                   </Button>
                 </CardContent>
               </Card>
-              <Card>
+              <Card className="flex-1 min-h-0 flex flex-col">
                 <CardHeader>
                   <div className="flex items-center gap-2">
                     <Image src="/sms-icon.png" alt="" width={32} height={32} className="shrink-0" />
@@ -441,7 +441,7 @@ export default function LeadDetailPage() {
                   </Button>
                 </CardContent>
               </Card>
-              <Card>
+              <Card className="flex-1 min-h-0 flex flex-col">
                 <CardHeader>
                   <div className="flex items-center gap-2">
                     <Image src="/messenger-icon.png" alt="" width={32} height={32} className="shrink-0" />
