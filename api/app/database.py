@@ -43,6 +43,58 @@ def create_db_and_tables():
         has_lead_table = inspector.has_table("lead")
         has_activity_table = inspector.has_table("activity")
         has_quote_table = inspector.has_table("quote")
+        has_customer_order_table = inspector.has_table("customer_order")
+        has_orderitem_table = inspector.has_table("orderitem")
+        
+        # Step 0a: Create order tables (customer_order, orderitem) if missing - order-from-quote feature
+        if has_quote_table and (not has_customer_order_table or not has_orderitem_table):
+            print("Creating order tables if missing...", file=sys.stderr, flush=True)
+            try:
+                with engine.begin() as conn:
+                    if not has_customer_order_table:
+                        conn.execute(text("""
+                            CREATE TABLE IF NOT EXISTS customer_order (
+                                id SERIAL PRIMARY KEY,
+                                quote_id INTEGER NOT NULL UNIQUE REFERENCES quote(id),
+                                customer_id INTEGER REFERENCES customer(id),
+                                order_number VARCHAR(255) NOT NULL UNIQUE,
+                                subtotal NUMERIC(10, 2) NOT NULL,
+                                discount_total NUMERIC(10, 2) DEFAULT 0 NOT NULL,
+                                total_amount NUMERIC(10, 2) NOT NULL,
+                                deposit_amount NUMERIC(10, 2) DEFAULT 0 NOT NULL,
+                                balance_amount NUMERIC(10, 2) DEFAULT 0 NOT NULL,
+                                currency VARCHAR(10) DEFAULT 'GBP' NOT NULL,
+                                terms_and_conditions TEXT,
+                                notes TEXT,
+                                created_by_id INTEGER NOT NULL REFERENCES "user"(id),
+                                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+                            )
+                        """))
+                        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_customer_order_order_number ON customer_order (order_number)"))
+                        print("Created customer_order table", file=sys.stderr, flush=True)
+                    if not has_orderitem_table:
+                        conn.execute(text("""
+                            CREATE TABLE IF NOT EXISTS orderitem (
+                                id SERIAL PRIMARY KEY,
+                                order_id INTEGER NOT NULL REFERENCES customer_order(id),
+                                quote_item_id INTEGER REFERENCES quoteitem(id),
+                                product_id INTEGER REFERENCES product(id),
+                                description TEXT NOT NULL,
+                                quantity NUMERIC(10, 2) DEFAULT 1 NOT NULL,
+                                unit_price NUMERIC(10, 2) NOT NULL,
+                                line_total NUMERIC(10, 2) NOT NULL,
+                                discount_amount NUMERIC(10, 2) DEFAULT 0 NOT NULL,
+                                final_line_total NUMERIC(10, 2) NOT NULL,
+                                sort_order INTEGER DEFAULT 0 NOT NULL,
+                                is_custom BOOLEAN DEFAULT FALSE NOT NULL
+                            )
+                        """))
+                        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_orderitem_order_id ON orderitem (order_id)"))
+                        print("Created orderitem table", file=sys.stderr, flush=True)
+            except Exception as e:
+                print(f"Error creating order tables: {e}", file=sys.stderr, flush=True)
+                import traceback
+                print(traceback.format_exc(), file=sys.stderr, flush=True)
         
         # Step 0: Facebook Messenger - messenger_psid on Customer/Lead (run first so it's never skipped)
         if has_customer_table:
