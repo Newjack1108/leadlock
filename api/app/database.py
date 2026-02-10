@@ -27,6 +27,9 @@ def create_db_and_tables():
     import sys
     from datetime import datetime, date
     
+    # Ensure all models (including Order, OrderItem) are registered before create_all
+    from app import models  # noqa: F401
+    _ = models
     print("Creating tables...", file=sys.stderr, flush=True)
     SQLModel.metadata.create_all(engine)
     print("Tables created/verified", file=sys.stderr, flush=True)

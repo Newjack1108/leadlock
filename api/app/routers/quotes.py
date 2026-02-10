@@ -4,7 +4,7 @@ from sqlmodel import Session, select, or_, and_
 from sqlalchemy import func
 from typing import List, Optional
 from app.database import get_session
-from app.models import Quote, QuoteItem, Customer, User, QuoteEmail, Email, EmailDirection, Activity, ActivityType, CompanySettings, Lead, LeadStatus, QuoteStatus, QuoteTemperature, OpportunityStage, LossCategory, DiscountTemplate, QuoteDiscount, DiscountType, DiscountScope
+from app.models import Quote, QuoteItem, Customer, User, QuoteEmail, Email, EmailDirection, Activity, ActivityType, CompanySettings, Lead, LeadStatus, QuoteStatus, QuoteTemperature, OpportunityStage, LossCategory, DiscountTemplate, QuoteDiscount, DiscountType, DiscountScope, Order, OrderItem
 from app.auth import get_current_user
 from app.schemas import (
     QuoteCreate, QuoteUpdate, QuoteDraftUpdate, QuoteResponse, QuoteItemCreate, QuoteItemResponse,
@@ -289,6 +289,70 @@ def generate_quote_number(session: Session) -> str:
     
     next_num = max(numbers) + 1
     return f"QT-{year}-{next_num:03d}"
+
+
+def generate_order_number(session: Session) -> str:
+    """Generate a unique order number like ORD-2025-001."""
+    from datetime import date
+    year = date.today().year
+    statement = select(Order).where(Order.order_number.like(f"ORD-{year}-%"))
+    orders = session.exec(statement).all()
+    if not orders:
+        return f"ORD-{year}-001"
+    numbers = []
+    for order in orders:
+        try:
+            num = int(order.order_number.split("-")[-1])
+            numbers.append(num)
+        except (ValueError, IndexError):
+            continue
+    if not numbers:
+        return f"ORD-{year}-001"
+    next_num = max(numbers) + 1
+    return f"ORD-{year}-{next_num:03d}"
+
+
+def create_order_from_quote(quote: Quote, session: Session, created_by_id: int) -> Order:
+    """Create an Order from an accepted quote (idempotent: returns existing order if already created)."""
+    existing = session.exec(select(Order).where(Order.quote_id == quote.id)).first()
+    if existing:
+        return existing
+    order_number = generate_order_number(session)
+    order = Order(
+        quote_id=quote.id,
+        customer_id=quote.customer_id,
+        order_number=order_number,
+        subtotal=quote.subtotal,
+        discount_total=quote.discount_total,
+        total_amount=quote.total_amount,
+        deposit_amount=quote.deposit_amount,
+        balance_amount=quote.balance_amount,
+        currency=quote.currency,
+        terms_and_conditions=quote.terms_and_conditions,
+        notes=quote.notes,
+        created_by_id=created_by_id,
+    )
+    session.add(order)
+    session.flush()
+    quote_items = session.exec(
+        select(QuoteItem).where(QuoteItem.quote_id == quote.id).order_by(QuoteItem.sort_order)
+    ).all()
+    for qi in quote_items:
+        order_item = OrderItem(
+            order_id=order.id,
+            quote_item_id=qi.id,
+            product_id=qi.product_id,
+            description=qi.description,
+            quantity=qi.quantity,
+            unit_price=qi.unit_price,
+            line_total=qi.line_total,
+            discount_amount=qi.discount_amount,
+            final_line_total=qi.final_line_total,
+            sort_order=qi.sort_order,
+            is_custom=qi.is_custom,
+        )
+        session.add(order_item)
+    return order
 
 
 @router.post("", response_model=QuoteResponse)
@@ -636,6 +700,8 @@ async def mark_opportunity_won(
     if quote.opportunity_stage is None:
         raise HTTPException(status_code=404, detail="Quote is not an opportunity")
     old_status = quote.status
+    if old_status != QuoteStatus.ACCEPTED:
+        create_order_from_quote(quote, session, current_user.id)
     quote.status = QuoteStatus.ACCEPTED
     quote.opportunity_stage = OpportunityStage.WON
     quote.accepted_at = datetime.utcnow()
@@ -1092,6 +1158,7 @@ async def update_quote(
     if quote.status == QuoteStatus.ACCEPTED and old_status != QuoteStatus.ACCEPTED:
         if not quote.accepted_at:
             quote.accepted_at = datetime.utcnow()
+        create_order_from_quote(quote, session, current_user.id)
     
     # Mandatory next action validation (for open opportunities)
     if quote.opportunity_stage and quote.opportunity_stage not in [OpportunityStage.WON, OpportunityStage.LOST]:

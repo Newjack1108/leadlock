@@ -127,6 +127,7 @@ class Customer(SQLModel, table=True):
     # Relationships
     leads: List["Lead"] = Relationship(back_populates="customer")
     quotes: List["Quote"] = Relationship(back_populates="customer")
+    orders: List["Order"] = Relationship(back_populates="customer")
     activities: List["Activity"] = Relationship(back_populates="customer")
     emails: List["Email"] = Relationship(back_populates="customer")
     sms_messages: List["SmsMessage"] = Relationship(back_populates="customer")
@@ -457,6 +458,7 @@ class Quote(SQLModel, table=True):
     # Use sa_relationship_kwargs to pass SQLAlchemy-specific parameters
     created_by: User = Relationship(sa_relationship_kwargs={"foreign_keys": "[Quote.created_by_id]"})
     email_sends: List["QuoteEmail"] = Relationship(back_populates="quote")
+    order: Optional["Order"] = Relationship(back_populates="quote", sa_relationship_kwargs={"uselist": False})
 
 
 class QuoteItem(SQLModel, table=True):
@@ -598,6 +600,52 @@ class DiscountRequest(SQLModel, table=True):
     quote: "Quote" = Relationship(back_populates="discount_requests")
     requested_by: User = Relationship(sa_relationship_kwargs={"foreign_keys": "[DiscountRequest.requested_by_id]"})
     approved_by: Optional[User] = Relationship(sa_relationship_kwargs={"foreign_keys": "[DiscountRequest.approved_by_id]"})
+
+
+class Order(SQLModel, table=True):
+    """Order created from an accepted quote. One-to-one with Quote."""
+    __tablename__ = "customer_order"  # "order" is a reserved SQL keyword
+    id: Optional[int] = Field(default=None, primary_key=True)
+    quote_id: int = Field(unique=True, foreign_key="quote.id")
+    customer_id: Optional[int] = Field(default=None, foreign_key="customer.id")
+    order_number: str = Field(unique=True, index=True)  # e.g., "ORD-2025-001"
+    subtotal: Decimal = Field(sa_column=Column(Numeric(10, 2)))
+    discount_total: Decimal = Field(default=0, sa_column=Column(Numeric(10, 2)))
+    total_amount: Decimal = Field(sa_column=Column(Numeric(10, 2)))
+    deposit_amount: Decimal = Field(default=0, sa_column=Column(Numeric(10, 2)))
+    balance_amount: Decimal = Field(default=0, sa_column=Column(Numeric(10, 2)))
+    currency: str = Field(default="GBP")
+    terms_and_conditions: Optional[str] = None
+    notes: Optional[str] = None
+    created_by_id: int = Field(foreign_key="user.id")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    # Relationships
+    quote: "Quote" = Relationship(back_populates="order")
+    customer: Optional["Customer"] = Relationship(back_populates="orders")
+    created_by: User = Relationship()
+    items: List["OrderItem"] = Relationship(back_populates="order")
+
+
+class OrderItem(SQLModel, table=True):
+    """Line item on an order; snapshot of quote line at acceptance."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    order_id: int = Field(foreign_key="order.id")
+    quote_item_id: Optional[int] = Field(default=None, foreign_key="quoteitem.id")
+    product_id: Optional[int] = Field(default=None, foreign_key="product.id")
+    description: str
+    quantity: Decimal = Field(default=1, sa_column=Column(Numeric(10, 2)))
+    unit_price: Decimal = Field(sa_column=Column(Numeric(10, 2)))
+    line_total: Decimal = Field(sa_column=Column(Numeric(10, 2)))
+    discount_amount: Decimal = Field(default=0, sa_column=Column(Numeric(10, 2)))
+    final_line_total: Decimal = Field(sa_column=Column(Numeric(10, 2)))
+    sort_order: int = Field(default=0)
+    is_custom: bool = Field(default=False)
+
+    # Relationships
+    order: "Order" = Relationship(back_populates="items")
+    quote_item: Optional["QuoteItem"] = Relationship()
+    product: Optional["Product"] = Relationship()
 
 
 class ReminderPriority(str, Enum):

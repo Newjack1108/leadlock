@@ -851,6 +851,39 @@ class QuoteDiscountResponse(BaseModel):
     applied_by_id: int
 
 
+class OrderItemResponse(BaseModel):
+    id: int
+    order_id: int
+    quote_item_id: Optional[int] = None
+    product_id: Optional[int] = None
+    description: str
+    quantity: Decimal
+    unit_price: Decimal
+    line_total: Decimal
+    discount_amount: Decimal
+    final_line_total: Decimal
+    sort_order: int
+    is_custom: bool
+
+
+class OrderResponse(BaseModel):
+    id: int
+    quote_id: int
+    customer_id: Optional[int] = None
+    order_number: str
+    subtotal: Decimal
+    discount_total: Decimal
+    total_amount: Decimal
+    deposit_amount: Decimal
+    balance_amount: Decimal
+    currency: str
+    terms_and_conditions: Optional[str] = None
+    notes: Optional[str] = None
+    created_by_id: int
+    created_at: datetime
+    items: List[OrderItemResponse] = []
+
+
 class DiscountRequestCreate(BaseModel):
     discount_type: DiscountType
     discount_value: Decimal
