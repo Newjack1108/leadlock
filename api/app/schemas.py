@@ -866,6 +866,14 @@ class OrderItemResponse(BaseModel):
     is_custom: bool
 
 
+class OrderUpdate(BaseModel):
+    deposit_paid: Optional[bool] = None
+    balance_paid: Optional[bool] = None
+    paid_in_full: Optional[bool] = None
+    installation_booked: Optional[bool] = None
+    installation_completed: Optional[bool] = None
+
+
 class OrderResponse(BaseModel):
     id: int
     quote_id: int
@@ -882,6 +890,11 @@ class OrderResponse(BaseModel):
     notes: Optional[str] = None
     created_by_id: int
     created_at: datetime
+    deposit_paid: bool = False
+    balance_paid: bool = False
+    paid_in_full: bool = False
+    installation_booked: bool = False
+    installation_completed: bool = False
     items: List[OrderItemResponse] = []
 
 

@@ -598,6 +598,11 @@ export interface Order {
   notes?: string | null;
   created_by_id: number;
   created_at: string;
+  deposit_paid?: boolean;
+  balance_paid?: boolean;
+  paid_in_full?: boolean;
+  installation_booked?: boolean;
+  installation_completed?: boolean;
   items: OrderItem[];
 }
 

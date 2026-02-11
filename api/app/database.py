@@ -96,6 +96,19 @@ def create_db_and_tables():
                 import traceback
                 print(traceback.format_exc(), file=sys.stderr, flush=True)
         
+        # Step 0a2: Add order status columns to customer_order if missing
+        if has_customer_order_table or inspector.has_table("customer_order"):
+            order_columns = [col["name"] for col in inspector.get_columns("customer_order")]
+            for col_name in ("deposit_paid", "balance_paid", "paid_in_full", "installation_booked", "installation_completed"):
+                if col_name not in order_columns:
+                    try:
+                        with engine.begin() as conn:
+                            conn.execute(text(f"ALTER TABLE customer_order ADD COLUMN {col_name} BOOLEAN DEFAULT FALSE"))
+                        print(f"Added {col_name} to customer_order", file=sys.stderr, flush=True)
+                    except Exception as e:
+                        if "already exists" not in str(e).lower():
+                            print(f"Warning adding {col_name}: {e}", file=sys.stderr, flush=True)
+        
         # Step 0: Facebook Messenger - messenger_psid on Customer/Lead (run first so it's never skipped)
         if has_customer_table:
             customer_columns = [col['name'] for col in inspector.get_columns("customer")]

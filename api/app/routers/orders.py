@@ -4,7 +4,7 @@ from typing import List
 from app.database import get_session
 from app.models import Order, OrderItem, Customer
 from app.auth import get_current_user
-from app.schemas import OrderResponse, OrderItemResponse
+from app.schemas import OrderResponse, OrderItemResponse, OrderUpdate
 from app.models import User
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
@@ -32,6 +32,11 @@ def build_order_response(order: Order, order_items: List[OrderItem], session: Se
         notes=order.notes,
         created_by_id=order.created_by_id,
         created_at=order.created_at,
+        deposit_paid=order.deposit_paid,
+        balance_paid=order.balance_paid,
+        paid_in_full=order.paid_in_full,
+        installation_booked=order.installation_booked,
+        installation_completed=order.installation_completed,
         items=[
             OrderItemResponse(
                 id=item.id,
@@ -79,6 +84,29 @@ async def get_order(
     order = session.exec(select(Order).where(Order.id == order_id)).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+    items = session.exec(
+        select(OrderItem).where(OrderItem.order_id == order.id).order_by(OrderItem.sort_order)
+    ).all()
+    return build_order_response(order, list(items), session)
+
+
+@router.patch("/{order_id}", response_model=OrderResponse)
+async def update_order(
+    order_id: int,
+    order_data: OrderUpdate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Update order status fields (deposit_paid, balance_paid, etc.)."""
+    order = session.exec(select(Order).where(Order.id == order_id)).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    update_dict = order_data.dict(exclude_unset=True)
+    for field, value in update_dict.items():
+        setattr(order, field, value)
+    session.add(order)
+    session.commit()
+    session.refresh(order)
     items = session.exec(
         select(OrderItem).where(OrderItem.order_id == order.id).order_by(OrderItem.sort_order)
     ).all()

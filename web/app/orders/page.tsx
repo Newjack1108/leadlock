@@ -9,6 +9,7 @@ import { getOrders } from '@/lib/api';
 import { Order } from '@/lib/types';
 import { toast } from 'sonner';
 import { FileText, ExternalLink } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 
 function formatCurrency(amount: number, currency: string = 'GBP'): string {
   return new Intl.NumberFormat('en-GB', {
@@ -84,7 +85,7 @@ export default function OrdersPage() {
                     <th className="text-left p-3 font-medium">Order #</th>
                     <th className="text-left p-3 font-medium">Customer</th>
                     <th className="text-left p-3 font-medium">Total</th>
-                    <th className="text-left p-3 font-medium">Deposit</th>
+                    <th className="text-left p-3 font-medium">Status</th>
                     <th className="text-left p-3 font-medium">Created</th>
                     <th className="text-right p-3 font-medium">Quote</th>
                   </tr>
@@ -93,7 +94,8 @@ export default function OrdersPage() {
                   {orders.map((order) => (
                     <tr
                       key={order.id}
-                      className="border-b last:border-0 hover:bg-muted/30 transition-colors"
+                      className="border-b last:border-0 hover:bg-muted/30 transition-colors cursor-pointer"
+                      onClick={() => router.push(`/orders/${order.id}`)}
                     >
                       <td className="p-3 font-semibold">{order.order_number}</td>
                       <td className="p-3 text-muted-foreground">
@@ -102,13 +104,26 @@ export default function OrdersPage() {
                       <td className="p-3 font-semibold">
                         {formatCurrency(order.total_amount, order.currency)}
                       </td>
-                      <td className="p-3 text-muted-foreground">
-                        {formatCurrency(order.deposit_amount, order.currency)}
+                      <td className="p-3">
+                        <div className="flex flex-wrap gap-1">
+                          {(order.deposit_paid ?? false) && (
+                            <Badge variant="secondary" className="text-xs">Deposit paid</Badge>
+                          )}
+                          {(order.installation_booked ?? false) && (
+                            <Badge variant="secondary" className="text-xs">Inst. booked</Badge>
+                          )}
+                          {(order.installation_completed ?? false) && (
+                            <Badge variant="default" className="text-xs">Inst. done</Badge>
+                          )}
+                          {!(order.deposit_paid ?? false) && !(order.installation_booked ?? false) && !(order.installation_completed ?? false) && (
+                            <span className="text-muted-foreground text-sm">—</span>
+                          )}
+                        </div>
                       </td>
                       <td className="p-3 text-muted-foreground">
                         {new Date(order.created_at).toLocaleDateString()}
                       </td>
-                      <td className="p-3 text-right">
+                      <td className="p-3 text-right" onClick={(e) => e.stopPropagation()}>
                         <Button
                           variant="ghost"
                           size="sm"

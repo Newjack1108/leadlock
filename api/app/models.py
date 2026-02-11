@@ -619,6 +619,11 @@ class Order(SQLModel, table=True):
     notes: Optional[str] = None
     created_by_id: int = Field(foreign_key="user.id")
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    deposit_paid: bool = Field(default=False)
+    balance_paid: bool = Field(default=False)
+    paid_in_full: bool = Field(default=False)
+    installation_booked: bool = Field(default=False)
+    installation_completed: bool = Field(default=False)
 
     # Relationships
     quote: "Quote" = Relationship(back_populates="order")

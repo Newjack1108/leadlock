@@ -394,6 +394,20 @@ export const getOrder = async (orderId: number) => {
   return response.data;
 };
 
+export const updateOrder = async (
+  orderId: number,
+  data: {
+    deposit_paid?: boolean;
+    balance_paid?: boolean;
+    paid_in_full?: boolean;
+    installation_booked?: boolean;
+    installation_completed?: boolean;
+  }
+) => {
+  const response = await api.patch(`/api/orders/${orderId}`, data);
+  return response.data;
+};
+
 export const updateDraftQuote = async (quoteId: number, quoteData: {
   valid_until?: string;
   terms_and_conditions?: string;
