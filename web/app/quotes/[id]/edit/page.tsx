@@ -27,7 +27,7 @@ function isDeliveryOrInstallItem(item: QuoteItemCreate | QuoteItem): boolean {
   return (
     item.line_type === 'DELIVERY' ||
     item.line_type === 'INSTALLATION' ||
-    (item.description === DELIVERY_INSTALL_LEGACY_DESCRIPTION && item.is_custom)
+    (item.description === DELIVERY_INSTALL_LEGACY_DESCRIPTION && !!item.is_custom)
   );
 }
 
