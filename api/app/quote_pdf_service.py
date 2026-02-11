@@ -476,28 +476,30 @@ def generate_quote_pdf(
                 format_currency(child.final_line_total, quote.currency),
             ])
     
-    # Add totals (no HTML tags; use table styling for emphasis). All amounts Ex VAT.
+    # Add totals (label spans cols 0-2, value in col 3). All amounts Ex VAT.
     subtotal_row_index = len(table_data)
-    table_data.append(["", "", "Subtotal (Ex VAT):", format_currency(quote.subtotal, quote.currency)])
+    table_data.append(["Subtotal (Ex VAT):", "", "", format_currency(quote.subtotal, quote.currency)])
+    discount_row_index = None
     if quote.discount_total > 0:
-        table_data.append(["", "", "Discount:", format_currency(quote.discount_total, quote.currency)])
+        discount_row_index = len(table_data)
+        table_data.append(["Discount:", "", "", format_currency(quote.discount_total, quote.currency)])
     total_ex_vat_row_index = len(table_data)
-    table_data.append(["", "", "Total (Ex VAT):", format_currency(quote.total_amount, quote.currency)])
+    table_data.append(["Total (Ex VAT):", "", "", format_currency(quote.total_amount, quote.currency)])
     vat_amount = quote.total_amount * VAT_RATE_DECIMAL
     total_inc_vat = quote.total_amount + vat_amount
     vat_row_index = len(table_data)
-    table_data.append(["", "", "VAT @ 20%:", format_currency(vat_amount, quote.currency)])
+    table_data.append(["VAT @ 20%:", "", "", format_currency(vat_amount, quote.currency)])
     total_row_index = len(table_data)
-    table_data.append(["", "", "Total (inc VAT):", format_currency(total_inc_vat, quote.currency)])
+    table_data.append(["Total (inc VAT):", "", "", format_currency(total_inc_vat, quote.currency)])
 
     # Add deposit and balance rows (always show if total > 0) — Ex VAT
     deposit_row_index = None
     balance_row_index = None
     if quote.total_amount > 0:
         deposit_row_index = len(table_data)
-        table_data.append(["", "", "Deposit (on order, Ex VAT):", format_currency(quote.deposit_amount, quote.currency)])
+        table_data.append(["Deposit (on order, Ex VAT):", "", "", format_currency(quote.deposit_amount, quote.currency)])
         balance_row_index = len(table_data)
-        table_data.append(["", "", "Balance (Ex VAT):", format_currency(quote.balance_amount, quote.currency)])
+        table_data.append(["Balance (Ex VAT):", "", "", format_currency(quote.balance_amount, quote.currency)])
     
     # Build table style list
     table_style_list = [
@@ -515,15 +517,29 @@ def generate_quote_pdf(
         ("GRID", (0, 0), (-1, -2), 0.5, colors.HexColor("#e0e0e0")),
         ("LINEBELOW", (0, total_row_index), (-1, total_row_index), 1.5, brand_color),
         ("LINEABOVE", (0, total_row_index), (-1, total_row_index), 0.5, colors.HexColor("#e0e0e0")),
-        ("FONTNAME", (2, subtotal_row_index), (3, subtotal_row_index), "Helvetica-Bold"),
-        ("FONTNAME", (2, vat_row_index), (3, vat_row_index), "Helvetica-Bold"),
-        ("FONTNAME", (2, total_row_index), (3, total_row_index), "Helvetica-Bold"),
+        ("SPAN", (0, subtotal_row_index), (2, subtotal_row_index)),
+        ("ALIGN", (0, subtotal_row_index), (2, subtotal_row_index), "RIGHT"),
+        ("FONTNAME", (0, subtotal_row_index), (3, subtotal_row_index), "Helvetica-Bold"),
+        ("FONTNAME", (0, vat_row_index), (3, vat_row_index), "Helvetica-Bold"),
+        ("FONTNAME", (0, total_row_index), (3, total_row_index), "Helvetica-Bold"),
     ]
-    # Add deposit and balance styling if they exist
+    if discount_row_index is not None:
+        table_style_list.append(("SPAN", (0, discount_row_index), (2, discount_row_index)))
+        table_style_list.append(("ALIGN", (0, discount_row_index), (2, discount_row_index), "RIGHT"))
+    table_style_list.append(("SPAN", (0, total_ex_vat_row_index), (2, total_ex_vat_row_index)))
+    table_style_list.append(("ALIGN", (0, total_ex_vat_row_index), (2, total_ex_vat_row_index), "RIGHT"))
+    table_style_list.append(("SPAN", (0, vat_row_index), (2, vat_row_index)))
+    table_style_list.append(("ALIGN", (0, vat_row_index), (2, vat_row_index), "RIGHT"))
+    table_style_list.append(("SPAN", (0, total_row_index), (2, total_row_index)))
+    table_style_list.append(("ALIGN", (0, total_row_index), (2, total_row_index), "RIGHT"))
     if deposit_row_index is not None:
-        table_style_list.append(("FONTNAME", (2, deposit_row_index), (3, deposit_row_index), "Helvetica-Bold"))
+        table_style_list.append(("SPAN", (0, deposit_row_index), (2, deposit_row_index)))
+        table_style_list.append(("ALIGN", (0, deposit_row_index), (2, deposit_row_index), "RIGHT"))
+        table_style_list.append(("FONTNAME", (0, deposit_row_index), (3, deposit_row_index), "Helvetica-Bold"))
     if balance_row_index is not None:
-        table_style_list.append(("FONTNAME", (2, balance_row_index), (3, balance_row_index), "Helvetica-Bold"))
+        table_style_list.append(("SPAN", (0, balance_row_index), (2, balance_row_index)))
+        table_style_list.append(("ALIGN", (0, balance_row_index), (2, balance_row_index), "RIGHT"))
+        table_style_list.append(("FONTNAME", (0, balance_row_index), (3, balance_row_index), "Helvetica-Bold"))
     
     items_table = Table(table_data, colWidths=[90*mm, 25*mm, 30*mm, 35*mm])
     items_table.setStyle(TableStyle(table_style_list))

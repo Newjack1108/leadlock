@@ -195,26 +195,28 @@ def _build_invoice_elements(
         ])
 
     subtotal_row_index = len(table_data)
-    table_data.append(["", "", "Subtotal (Ex VAT):", format_currency(order.subtotal, order.currency)])
+    table_data.append(["Subtotal (Ex VAT):", "", "", format_currency(order.subtotal, order.currency)])
+    discount_row_index = None
     if order.discount_total > 0:
-        table_data.append(["", "", "Discount:", format_currency(order.discount_total, order.currency)])
+        discount_row_index = len(table_data)
+        table_data.append(["Discount:", "", "", format_currency(order.discount_total, order.currency)])
     total_ex_vat_row_index = len(table_data)
-    table_data.append(["", "", "Total (Ex VAT):", format_currency(order.total_amount, order.currency)])
+    table_data.append(["Total (Ex VAT):", "", "", format_currency(order.total_amount, order.currency)])
     vat_amount = order.total_amount * VAT_RATE_DECIMAL
     total_inc_vat = order.total_amount + vat_amount
     vat_row_index = len(table_data)
-    table_data.append(["", "", "VAT @ 20%:", format_currency(vat_amount, order.currency)])
+    table_data.append(["VAT @ 20%:", "", "", format_currency(vat_amount, order.currency)])
     total_row_index = len(table_data)
-    table_data.append(["", "", "Total (inc VAT):", format_currency(total_inc_vat, order.currency)])
+    table_data.append(["Total (inc VAT):", "", "", format_currency(total_inc_vat, order.currency)])
 
     deposit_row_index = None
     balance_row_index = None
     if order.total_amount > 0:
         deposit_row_index = len(table_data)
-        table_data.append(["", "", deposit_paid_label, format_currency(order.deposit_amount, order.currency)])
+        table_data.append([deposit_paid_label, "", "", format_currency(order.deposit_amount, order.currency)])
         if balance_label is not None:
             balance_row_index = len(table_data)
-            table_data.append(["", "", balance_label, format_currency(order.balance_amount, order.currency)])
+            table_data.append([balance_label, "", "", format_currency(order.balance_amount, order.currency)])
 
     table_style_list = [
         ("BACKGROUND", (0, 0), (-1, 0), brand_color),
@@ -231,15 +233,30 @@ def _build_invoice_elements(
         ("GRID", (0, 0), (-1, -2), 0.5, colors.HexColor("#e0e0e0")),
         ("LINEBELOW", (0, total_row_index), (-1, total_row_index), 1.5, brand_color),
         ("LINEABOVE", (0, total_row_index), (-1, total_row_index), 0.5, colors.HexColor("#e0e0e0")),
-        ("FONTNAME", (2, subtotal_row_index), (3, subtotal_row_index), "Helvetica-Bold"),
-        ("FONTNAME", (2, vat_row_index), (3, vat_row_index), "Helvetica-Bold"),
-        ("FONTNAME", (2, total_row_index), (3, total_row_index), "Helvetica-Bold"),
+        ("SPAN", (0, subtotal_row_index), (2, subtotal_row_index)),
+        ("ALIGN", (0, subtotal_row_index), (2, subtotal_row_index), "RIGHT"),
+        ("FONTNAME", (0, subtotal_row_index), (3, subtotal_row_index), "Helvetica-Bold"),
+        ("SPAN", (0, total_ex_vat_row_index), (2, total_ex_vat_row_index)),
+        ("ALIGN", (0, total_ex_vat_row_index), (2, total_ex_vat_row_index), "RIGHT"),
+        ("SPAN", (0, vat_row_index), (2, vat_row_index)),
+        ("ALIGN", (0, vat_row_index), (2, vat_row_index), "RIGHT"),
+        ("FONTNAME", (0, vat_row_index), (3, vat_row_index), "Helvetica-Bold"),
+        ("SPAN", (0, total_row_index), (2, total_row_index)),
+        ("ALIGN", (0, total_row_index), (2, total_row_index), "RIGHT"),
+        ("FONTNAME", (0, total_row_index), (3, total_row_index), "Helvetica-Bold"),
     ]
+    if discount_row_index is not None:
+        table_style_list.append(("SPAN", (0, discount_row_index), (2, discount_row_index)))
+        table_style_list.append(("ALIGN", (0, discount_row_index), (2, discount_row_index), "RIGHT"))
     if deposit_row_index is not None:
-        table_style_list.append(("FONTNAME", (2, deposit_row_index), (3, deposit_row_index), "Helvetica-Bold"))
+        table_style_list.append(("SPAN", (0, deposit_row_index), (2, deposit_row_index)))
+        table_style_list.append(("ALIGN", (0, deposit_row_index), (2, deposit_row_index), "RIGHT"))
+        table_style_list.append(("FONTNAME", (0, deposit_row_index), (3, deposit_row_index), "Helvetica-Bold"))
     if balance_row_index is not None:
+        table_style_list.append(("SPAN", (0, balance_row_index), (2, balance_row_index)))
+        table_style_list.append(("ALIGN", (0, balance_row_index), (2, balance_row_index), "RIGHT"))
         font_weight = "Helvetica-Bold" if balance_bold else "Helvetica"
-        table_style_list.append(("FONTNAME", (2, balance_row_index), (3, balance_row_index), font_weight))
+        table_style_list.append(("FONTNAME", (0, balance_row_index), (3, balance_row_index), font_weight))
 
     items_table = Table(table_data, colWidths=[90 * mm, 25 * mm, 30 * mm, 35 * mm])
     items_table.setStyle(TableStyle(table_style_list))
