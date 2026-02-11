@@ -407,6 +407,12 @@ class DiscountScope(str, Enum):
     QUOTE = "QUOTE"  # Applied to entire quote total
 
 
+class QuoteItemLineType(str, Enum):
+    """Line types excluded from PRODUCT-scope discounts. None = building product."""
+    DELIVERY = "DELIVERY"
+    INSTALLATION = "INSTALLATION"
+
+
 class DiscountRequestStatus(str, Enum):
     PENDING = "PENDING"
     APPROVED = "APPROVED"
@@ -474,6 +480,7 @@ class QuoteItem(SQLModel, table=True):
     final_line_total: Decimal = Field(sa_column=Column(Numeric(10, 2)))  # line_total - discount_amount
     sort_order: int = Field(default=0)
     is_custom: bool = Field(default=False)  # True if not from product catalog
+    line_type: Optional[QuoteItemLineType] = Field(default=None)  # DELIVERY or INSTALLATION; excluded from PRODUCT-scope discount
     
     # Relationships
     quote: Quote = Relationship(back_populates="items")

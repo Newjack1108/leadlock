@@ -886,6 +886,20 @@ def create_db_and_tables():
                     if "already exists" not in error_str and "duplicate" not in error_str:
                         print(f"Error adding parent_quote_item_id column: {e}", file=sys.stderr, flush=True)
         
+        # Step 12b: Add line_type to QuoteItem table (DELIVERY/INSTALLATION excluded from product discount)
+        if has_quoteitem_table:
+            quoteitem_columns = [col['name'] for col in inspector.get_columns("quoteitem")]
+            if "line_type" not in quoteitem_columns:
+                print("Adding line_type column to quoteitem table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE quoteitem ADD COLUMN line_type VARCHAR(20)"))
+                    print("Added line_type column to quoteitem table", file=sys.stderr, flush=True)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Error adding line_type column: {e}", file=sys.stderr, flush=True)
+
         # Step 13: Add read_at to SmsMessage table (unread tracking for received SMS)
         has_smsmessage_table = inspector.has_table("smsmessage")
         if has_smsmessage_table:

@@ -8,7 +8,7 @@ from app.models import (
     QuoteStatus, QuoteTemperature, DiscountType, DiscountScope, DiscountRequestStatus,
     LeadType, LeadSource, EmailDirection, ReminderPriority, ReminderType,
     SuggestedAction, OpportunityStage, LossCategory, InstallationLeadTime,
-    SmsDirection, ScheduledSmsStatus, MessengerDirection
+    SmsDirection, ScheduledSmsStatus, MessengerDirection, QuoteItemLineType,
 )
 
 
@@ -637,6 +637,7 @@ class QuoteItemCreate(BaseModel):
     is_custom: bool = False
     sort_order: int = 0
     parent_index: Optional[int] = None  # Index of parent item (0-based) when this is an optional extra; backend sets parent_quote_item_id
+    line_type: Optional[QuoteItemLineType] = None  # DELIVERY or INSTALLATION; excluded from PRODUCT-scope discount
 
 
 class QuoteItemResponse(BaseModel):
@@ -652,6 +653,7 @@ class QuoteItemResponse(BaseModel):
     final_line_total: Decimal
     sort_order: int
     is_custom: bool
+    line_type: Optional[QuoteItemLineType] = None
 
 
 class QuoteCreate(BaseModel):

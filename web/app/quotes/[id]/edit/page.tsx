@@ -19,10 +19,20 @@ import { formatHoursMinutes } from '@/lib/utils';
 import { Plus, Trash2, ArrowLeft, X, ChevronDown, ChevronUp, Send } from 'lucide-react';
 import RequestDiscountDialog from '@/components/RequestDiscountDialog';
 
-const DELIVERY_INSTALL_LINE_DESCRIPTION = 'Delivery & Installation';
+const DELIVERY_LINE_DESCRIPTION = 'Delivery';
+const INSTALLATION_LINE_DESCRIPTION = 'Installation';
+const DELIVERY_INSTALL_LEGACY_DESCRIPTION = 'Delivery & Installation';
+
+function isDeliveryOrInstallItem(item: QuoteItemCreate | QuoteItem): boolean {
+  return (
+    item.line_type === 'DELIVERY' ||
+    item.line_type === 'INSTALLATION' ||
+    (item.description === DELIVERY_INSTALL_LEGACY_DESCRIPTION && item.is_custom)
+  );
+}
 
 function hasDeliveryInstallLine(items: QuoteItemCreate[]): boolean {
-  return items.some((item) => item.description === DELIVERY_INSTALL_LINE_DESCRIPTION && item.is_custom);
+  return items.some(isDeliveryOrInstallItem);
 }
 
 const DEFAULT_TERMS_AND_CONDITIONS = `Key Terms Summary (For Quotations)
@@ -76,6 +86,7 @@ function quoteItemsToFormItems(items: QuoteItem[]): QuoteItemCreate[] {
     is_custom: item.is_custom ?? false,
     sort_order: item.sort_order ?? 0,
     parent_index: item.parent_quote_item_id != null ? idToIndex[item.parent_quote_item_id] : undefined,
+    line_type: item.line_type ?? undefined,
   }));
 }
 
@@ -330,21 +341,48 @@ function EditQuoteContent() {
 
   const addDeliveryInstallToQuote = () => {
     if (!deliveryEstimate) return;
-    const newItem: QuoteItemCreate = {
-      description: DELIVERY_INSTALL_LINE_DESCRIPTION,
-      quantity: 1,
-      unit_price: Number(deliveryEstimate.cost_total),
-      is_custom: true,
-      sort_order: items.length,
-    };
-    const newItems = [...items, newItem].map((it, i) => ({ ...it, sort_order: i }));
-    setItems(newItems);
-    toast.success('Delivery & Installation added to quote');
+    const deliveryCost =
+      (deliveryEstimate.cost_mileage ?? 0) + (deliveryEstimate.cost_hotel ?? 0) + (deliveryEstimate.cost_meals ?? 0);
+    const installCost = deliveryEstimate.cost_labour ?? 0;
+    if (deliveryCost <= 0 && installCost <= 0) {
+      toast.error('No delivery or installation costs to add');
+      return;
+    }
+    const newItems: QuoteItemCreate[] = [...items];
+    let sortOrder = items.length;
+    if (deliveryCost > 0) {
+      newItems.push({
+        description: DELIVERY_LINE_DESCRIPTION,
+        quantity: 1,
+        unit_price: deliveryCost,
+        is_custom: true,
+        sort_order: sortOrder++,
+        line_type: 'DELIVERY',
+      });
+    }
+    if (installCost > 0) {
+      newItems.push({
+        description: INSTALLATION_LINE_DESCRIPTION,
+        quantity: 1,
+        unit_price: installCost,
+        is_custom: true,
+        sort_order: sortOrder++,
+        line_type: 'INSTALLATION',
+      });
+    }
+    setItems(newItems.map((it, i) => ({ ...it, sort_order: i })));
+    toast.success(
+      deliveryCost > 0 && installCost > 0
+        ? 'Delivery & Installation added to quote'
+        : deliveryCost > 0
+          ? 'Delivery added to quote'
+          : 'Installation added to quote'
+    );
   };
 
   const removeDeliveryInstallFromQuote = () => {
     const newItems = items
-      .filter((item) => !(item.description === DELIVERY_INSTALL_LINE_DESCRIPTION && item.is_custom))
+      .filter((item) => !isDeliveryOrInstallItem(item))
       .map((it, i) => ({ ...it, sort_order: i }));
     setItems(newItems);
     toast.success('Delivery & Installation removed from quote');
@@ -402,6 +440,7 @@ function EditQuoteContent() {
             is_custom: item.is_custom !== undefined ? item.is_custom : (item.product_id == null),
             sort_order: index,
             parent_index: parentIndexInPayload >= 0 ? parentIndexInPayload : undefined,
+            line_type: item.line_type ?? undefined,
           };
         }),
         discount_template_ids:

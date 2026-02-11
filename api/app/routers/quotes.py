@@ -4,7 +4,7 @@ from sqlmodel import Session, select, or_, and_
 from sqlalchemy import func
 from typing import List, Optional
 from app.database import get_session
-from app.models import Quote, QuoteItem, Customer, User, QuoteEmail, Email, EmailDirection, Activity, ActivityType, CompanySettings, Lead, LeadStatus, QuoteStatus, QuoteTemperature, OpportunityStage, LossCategory, DiscountTemplate, QuoteDiscount, DiscountType, DiscountScope, Order, OrderItem
+from app.models import Quote, QuoteItem, Customer, User, QuoteEmail, Email, EmailDirection, Activity, ActivityType, CompanySettings, Lead, LeadStatus, QuoteStatus, QuoteTemperature, OpportunityStage, LossCategory, DiscountTemplate, QuoteDiscount, DiscountType, DiscountScope, Order, OrderItem, QuoteItemLineType
 from app.auth import get_current_user
 from app.schemas import (
     QuoteCreate, QuoteUpdate, QuoteDraftUpdate, QuoteResponse, QuoteItemCreate, QuoteItemResponse,
@@ -37,7 +37,8 @@ def quote_item_to_response(item: QuoteItem) -> QuoteItemResponse:
         discount_amount=item.discount_amount,
         final_line_total=item.final_line_total,
         sort_order=item.sort_order,
-        is_custom=item.is_custom
+        is_custom=item.is_custom,
+        line_type=getattr(item, "line_type", None),
     )
 
 
@@ -125,10 +126,15 @@ def apply_discount_to_quote(
     total_discount = Decimal(0)
     
     if discount_template.scope == DiscountScope.PRODUCT:
-        # Apply discount only to main/building items (exclude optional extras: parent_quote_item_id is set)
+        # Apply discount only to main/building items (exclude extras, delivery, installation)
         for item in quote_items:
             if item.parent_quote_item_id is not None:
                 continue  # Skip optional extras
+            line_type = getattr(item, "line_type", None)
+            if line_type in (QuoteItemLineType.DELIVERY, QuoteItemLineType.INSTALLATION):
+                continue  # Skip delivery and installation lines
+            if item.description == "Delivery & Installation":
+                continue  # Legacy combined line
             if item.line_total > 0:  # Only apply to items with value
                 # Calculate discount based on current line total (before other discounts)
                 base_amount = item.line_total + item.discount_amount  # Original line total
@@ -206,6 +212,11 @@ def apply_custom_discount_to_quote(
         for item in quote_items:
             if item.parent_quote_item_id is not None:
                 continue  # Skip optional extras (building-only discount)
+            line_type = getattr(item, "line_type", None)
+            if line_type in (QuoteItemLineType.DELIVERY, QuoteItemLineType.INSTALLATION):
+                continue  # Skip delivery and installation lines
+            if item.description == "Delivery & Installation":
+                continue  # Legacy combined line
             if item.line_total > 0:
                 base_amount = item.line_total + item.discount_amount
                 if discount_type == DiscountType.PERCENTAGE:
@@ -404,7 +415,8 @@ async def create_quote(
                 discount_amount=Decimal(0),
                 final_line_total=line_total,
                 sort_order=item_data.sort_order or 0,
-                is_custom=item_data.is_custom if item_data.is_custom is not None else False
+                is_custom=item_data.is_custom if item_data.is_custom is not None else False,
+                line_type=getattr(item_data, "line_type", None),
             )
             items.append(item)
     
@@ -833,6 +845,7 @@ async def update_draft_quote(
             final_line_total=line_total,
             sort_order=item_data.sort_order or 0,
             is_custom=item_data.is_custom if item_data.is_custom is not None else False,
+            line_type=getattr(item_data, "line_type", None),
         )
         items.append(item)
     

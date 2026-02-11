@@ -542,6 +542,8 @@ export enum LossCategory {
   OTHER = "OTHER",
 }
 
+export type QuoteItemLineType = 'DELIVERY' | 'INSTALLATION';
+
 export interface QuoteItem {
   id: number;
   quote_id: number;
@@ -555,6 +557,7 @@ export interface QuoteItem {
   sort_order: number;
   is_custom: boolean;
   parent_quote_item_id?: number | null;
+  line_type?: QuoteItemLineType | null;
 }
 
 export interface QuoteItemCreate {
@@ -565,6 +568,7 @@ export interface QuoteItemCreate {
   is_custom?: boolean;
   sort_order?: number;
   parent_index?: number | null;
+  line_type?: QuoteItemLineType | null;
 }
 
 export interface OrderItem {

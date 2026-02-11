@@ -361,6 +361,8 @@ export const createQuote = async (quoteData: {
     unit_price: number;
     is_custom?: boolean;
     sort_order?: number;
+    parent_index?: number;
+    line_type?: 'DELIVERY' | 'INSTALLATION';
   }>;
   discount_template_ids?: number[];
   temperature?: QuoteTemperature;
@@ -488,6 +490,7 @@ export const updateDraftQuote = async (quoteId: number, quoteData: {
     is_custom?: boolean;
     sort_order?: number;
     parent_index?: number;
+    line_type?: 'DELIVERY' | 'INSTALLATION';
   }>;
   discount_template_ids?: number[];
   temperature?: QuoteTemperature;
