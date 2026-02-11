@@ -73,7 +73,7 @@ function XeroCallbackContent() {
 
 export default function XeroCallbackPage() {
   return (
-    <div className="min-h-screen bg-background flex items-start justify-center pt-16">
+    <div className="min-h-screen flex items-start justify-center pt-16">
       <Suspense fallback={<div className="text-muted-foreground">Loading...</div>}>
         <XeroCallbackContent />
       </Suspense>

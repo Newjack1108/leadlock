@@ -176,7 +176,7 @@ export default function OrderDetailPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen">
         <Header />
         <div className="container mx-auto px-6 py-8">
           <div className="text-center py-12 text-muted-foreground">Loading...</div>
@@ -187,7 +187,7 @@ export default function OrderDetailPage() {
 
   if (!order) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen">
         <Header />
         <div className="container mx-auto px-6 py-8">
           <div className="text-center py-12 text-muted-foreground">Order not found</div>
@@ -197,7 +197,7 @@ export default function OrderDetailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen">
       <Header />
       <main className="container mx-auto px-6 py-8">
         <div className="mb-6">

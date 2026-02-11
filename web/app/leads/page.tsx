@@ -160,7 +160,7 @@ export default function LeadsPage() {
   const statusTabs: (LeadStatus | 'ALL')[] = ['ALL', ...Object.values(LeadStatus).filter(status => !['QUOTED', 'WON', 'LOST'].includes(status))];
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen">
       <Header />
       <main className="container mx-auto px-6 py-8">
         <div className="mb-6">

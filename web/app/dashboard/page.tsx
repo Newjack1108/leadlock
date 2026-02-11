@@ -55,7 +55,7 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen">
         <Header />
         <div className="container mx-auto px-6 py-8">
           <div className="text-center py-12 text-muted-foreground">Loading...</div>
@@ -69,7 +69,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen">
       <Header />
       <main className="container mx-auto px-6 py-8">
         <h1 className="text-3xl font-semibold mb-8">Dashboard</h1>

@@ -145,7 +145,7 @@ export default function ProductsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen">
       <Header />
       <main className="container mx-auto px-6 py-8">
         <div className="mb-6 flex items-center justify-between">

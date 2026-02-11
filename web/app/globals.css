@@ -83,6 +83,12 @@
   --sidebar-accent-foreground: #6B7280;
   --sidebar-border: #E5E7EB;
   --sidebar-ring: #1F6B3A;
+
+  /* Area-specific background tints for subtle section identification */
+  --area-leads: #F8FAFF;
+  --area-customers: #F5FAF8;
+  --area-quotes: #FFFBF5;
+  --area-orders: #FAF8FF;
 }
 
 @layer base {
