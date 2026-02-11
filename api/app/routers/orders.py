@@ -204,7 +204,8 @@ async def get_deposit_paid_invoice_pdf(
         raise HTTPException(status_code=500, detail=f"Error generating PDF: {str(e)}")
     safe_name = re.sub(r'[<>:"/\\|?*]', '_', customer.name or "Customer").strip()
     safe_name = re.sub(r'\s+', '_', safe_name)
-    filename = f"Invoice_Deposit_{order.invoice_number}_{safe_name}.pdf"
+    inv_display = f"{order.invoice_number}-1" if order.invoice_number else order.invoice_number or ""
+    filename = f"Invoice_Deposit_{inv_display}_{safe_name}.pdf"
     return Response(
         content=pdf_content,
         media_type="application/pdf",
@@ -240,7 +241,8 @@ async def get_paid_in_full_invoice_pdf(
         raise HTTPException(status_code=500, detail=f"Error generating PDF: {str(e)}")
     safe_name = re.sub(r'[<>:"/\\|?*]', '_', customer.name or "Customer").strip()
     safe_name = re.sub(r'\s+', '_', safe_name)
-    filename = f"Invoice_PaidInFull_{order.invoice_number}_{safe_name}.pdf"
+    inv_display = f"{order.invoice_number}-2" if order.invoice_number else order.invoice_number or ""
+    filename = f"Invoice_PaidInFull_{inv_display}_{safe_name}.pdf"
     return Response(
         content=pdf_content,
         media_type="application/pdf",

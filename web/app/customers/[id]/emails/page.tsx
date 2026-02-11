@@ -65,10 +65,10 @@ export default function CustomerEmailsPage() {
     return acc;
   }, {} as Record<string, Email[]>);
 
-  // Sort emails within each thread by date
+  // Sort emails within each thread - newest at top
   Object.keys(groupedEmails).forEach(threadId => {
     groupedEmails[threadId].sort((a, b) => 
-      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
   });
 
@@ -76,7 +76,7 @@ export default function CustomerEmailsPage() {
     threadId,
     emails: threadEmails,
     subject: threadEmails[0]?.subject || 'No Subject',
-    latestDate: threadEmails[threadEmails.length - 1]?.created_at
+    latestDate: threadEmails[0]?.created_at
   })).sort((a, b) => 
     new Date(b.latestDate).getTime() - new Date(a.latestDate).getTime()
   );

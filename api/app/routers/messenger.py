@@ -101,7 +101,7 @@ async def get_customer_messenger(
     statement = (
         select(MessengerMessage)
         .where(MessengerMessage.customer_id == customer_id)
-        .order_by(MessengerMessage.created_at)
+        .order_by(MessengerMessage.created_at.desc())
     )
     messages = list(session.exec(statement).all())
     result = []

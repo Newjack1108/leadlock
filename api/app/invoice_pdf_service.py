@@ -31,6 +31,7 @@ def _build_invoice_elements(
     balance_label: Optional[str],
     balance_bold: bool,
     note_text: Optional[str],
+    invoice_display_number: Optional[str] = None,
 ) -> BytesIO:
     """Shared logic for building invoice PDF elements. Returns PDF buffer."""
     if not company_settings and session:
@@ -123,7 +124,7 @@ def _build_invoice_elements(
     # Invoice title and details
     invoice_header_data = [[Paragraph(f"<b>{title}</b>", title_style), ""]]
     invoice_details = [
-        ["Invoice Number:", order.invoice_number or ""],
+        ["Invoice Number:", invoice_display_number or (order.invoice_number or "")],
         ["Order Number:", order.order_number],
         ["Date:", order.created_at.strftime("%d %B %Y")],
     ]
@@ -263,6 +264,7 @@ def generate_deposit_paid_invoice_pdf(
     order_items: List[OrderItem],
     company_settings: Optional[CompanySettings] = None,
     session: Optional[Session] = None,
+    invoice_display_number: Optional[str] = None,
 ) -> BytesIO:
     """
     Generate Deposit Paid invoice PDF: deposit paid, outstanding balance due in bold,
@@ -279,6 +281,7 @@ def generate_deposit_paid_invoice_pdf(
         balance_label="Outstanding balance due:",
         balance_bold=True,
         note_text="Balance will be required when contacted to book in Installation or delivery.",
+        invoice_display_number=invoice_display_number or (f"{order.invoice_number}-1" if order.invoice_number else None),
     )
 
 
@@ -288,6 +291,7 @@ def generate_paid_in_full_invoice_pdf(
     order_items: List[OrderItem],
     company_settings: Optional[CompanySettings] = None,
     session: Optional[Session] = None,
+    invoice_display_number: Optional[str] = None,
 ) -> BytesIO:
     """
     Generate Paid in Full invoice PDF: shows deposit and balance both paid, no outstanding balance.
@@ -303,4 +307,5 @@ def generate_paid_in_full_invoice_pdf(
         balance_label="Balance paid:",
         balance_bold=False,
         note_text=None,
+        invoice_display_number=invoice_display_number or (f"{order.invoice_number}-2" if order.invoice_number else None),
     )

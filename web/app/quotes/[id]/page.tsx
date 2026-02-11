@@ -194,7 +194,7 @@ export default function QuoteDetailPage() {
               )}
               {quote.status === 'ACCEPTED' && (
                 <Button variant="outline" asChild>
-                  <Link href="/orders">
+                  <Link href={quote.order_id ? `/orders/${quote.order_id}` : '/orders'}>
                     <ShoppingBag className="h-4 w-4 mr-2" />
                     View order
                   </Link>

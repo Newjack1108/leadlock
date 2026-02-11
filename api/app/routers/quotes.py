@@ -62,6 +62,12 @@ def build_quote_response(quote: Quote, quote_items: List[QuoteItem], session: Se
     if hasattr(total_open_count, "__int__"):
         total_open_count = int(total_open_count)
 
+    order_id = None
+    if quote.status == QuoteStatus.ACCEPTED:
+        order = session.exec(select(Order).where(Order.quote_id == quote.id)).first()
+        if order:
+            order_id = order.id
+
     return QuoteResponse(
         id=quote.id,
         customer_id=quote.customer_id,
@@ -101,6 +107,7 @@ def build_quote_response(quote: Quote, quote_items: List[QuoteItem], session: Se
         owner_id=quote.owner_id,
         temperature=quote.temperature,
         total_open_count=total_open_count,
+        order_id=order_id,
     )
 
 
