@@ -51,7 +51,7 @@ def _build_access_sheet_response(order_id: int, session: Session) -> AccessSheet
         return None
 
     frontend = (os.getenv("FRONTEND_URL") or os.getenv("PUBLIC_FRONTEND_URL") or "").strip()
-    if not frontend:
+    if not frontend or not (frontend.startswith("http://") or frontend.startswith("https://")):
         frontend = "https://leadlock-frontend-production.up.railway.app"
     base = frontend.rstrip("/")
     access_sheet_url = f"{base}/access-sheet/{req.access_token}"
@@ -313,7 +313,7 @@ async def send_access_sheet(
             session.commit()
 
     frontend = (os.getenv("FRONTEND_URL") or os.getenv("PUBLIC_FRONTEND_URL") or "").strip()
-    if not frontend:
+    if not frontend or not (frontend.startswith("http://") or frontend.startswith("https://")):
         frontend = "https://leadlock-frontend-production.up.railway.app"
     base = frontend.rstrip("/")
     access_sheet_url = f"{base}/access-sheet/{req.access_token}"
