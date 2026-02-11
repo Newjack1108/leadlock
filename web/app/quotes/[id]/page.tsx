@@ -6,14 +6,14 @@ import Header from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import api, { getQuote, previewQuotePdf, getDiscountRequestsForQuote, getQuoteViewLink } from '@/lib/api';
+import api, { getQuote, previewQuotePdf, getDiscountRequestsForQuote, getQuoteViewLink, acceptQuote } from '@/lib/api';
 import { Quote, QuoteItem, Customer, QuoteDiscount, DiscountRequest, DiscountRequestStatus, QuoteTemperature } from '@/lib/types';
 import SendQuoteEmailDialog from '@/components/SendQuoteEmailDialog';
 import CallNotesDialog from '@/components/CallNotesDialog';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { formatDateTime } from '@/lib/utils';
-import { ArrowLeft, Mail, Eye, Tag, Pencil, ChevronDown, ChevronUp, Send, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Mail, Eye, Tag, Pencil, ChevronDown, ChevronUp, Send, ExternalLink, CheckCircle, ShoppingBag } from 'lucide-react';
 import RequestDiscountDialog from '@/components/RequestDiscountDialog';
 
 const temperatureColors: Record<QuoteTemperature, string> = {
@@ -35,6 +35,7 @@ export default function QuoteDetailPage() {
   const [discountRequests, setDiscountRequests] = useState<DiscountRequest[]>([]);
   const [requestDialogOpen, setRequestDialogOpen] = useState(false);
   const [callNotesOpen, setCallNotesOpen] = useState(false);
+  const [accepting, setAccepting] = useState(false);
 
   useEffect(() => {
     if (quoteId) {
@@ -169,6 +170,34 @@ export default function QuoteDetailPage() {
                 >
                   <ExternalLink className="h-4 w-4 mr-2" />
                   Open customer view
+                </Button>
+              )}
+              {['DRAFT', 'SENT', 'VIEWED'].includes(quote.status) && (
+                <Button
+                  onClick={async () => {
+                    try {
+                      setAccepting(true);
+                      await acceptQuote(quoteId);
+                      await fetchQuote();
+                      toast.success('Quote accepted. Order created.');
+                    } catch (error: any) {
+                      toast.error(error.response?.data?.detail || 'Failed to accept quote');
+                    } finally {
+                      setAccepting(false);
+                    }
+                  }}
+                  disabled={accepting}
+                >
+                  <CheckCircle className="h-4 w-4 mr-2" />
+                  Accept quote
+                </Button>
+              )}
+              {quote.status === 'ACCEPTED' && (
+                <Button variant="outline" asChild>
+                  <Link href="/orders">
+                    <ShoppingBag className="h-4 w-4 mr-2" />
+                    View order
+                  </Link>
                 </Button>
               )}
             </div>

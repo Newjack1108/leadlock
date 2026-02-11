@@ -379,6 +379,11 @@ export const getQuote = async (quoteId: number) => {
   return response.data;
 };
 
+export const acceptQuote = async (quoteId: number) => {
+  const response = await api.patch(`/api/quotes/${quoteId}`, { status: 'ACCEPTED' });
+  return response.data;
+};
+
 export const getOrders = async () => {
   const response = await api.get('/api/orders');
   return response.data;
