@@ -185,12 +185,15 @@ export default function LeadDetailPage() {
     }
   };
 
+  const handleFieldChange = (field: string, value: any) => {
+    setLead((prev) => (prev ? { ...prev, [field]: value } : null));
+  };
+
   const handleUpdateLead = async (field: string, value: any) => {
     try {
       await api.patch(`/api/leads/${leadId}`, {
         [field]: value,
       });
-      fetchLead();
     } catch (error: any) {
       toast.error('Failed to update');
     }
@@ -273,7 +276,7 @@ export default function LeadDetailPage() {
                     <Label>Email</Label>
                     <Input
                       value={lead.email || ''}
-                      onChange={(e) => handleUpdateLead('email', e.target.value)}
+                      onChange={(e) => handleFieldChange('email', e.target.value)}
                       onBlur={(e) => handleUpdateLead('email', e.target.value)}
                     />
                   </div>
@@ -283,7 +286,7 @@ export default function LeadDetailPage() {
                       <Input
                         className="flex-1"
                         value={lead.phone || ''}
-                        onChange={(e) => handleUpdateLead('phone', e.target.value)}
+                        onChange={(e) => handleFieldChange('phone', e.target.value)}
                         onBlur={(e) => handleUpdateLead('phone', e.target.value)}
                       />
                       {lead.phone && (
@@ -305,7 +308,7 @@ export default function LeadDetailPage() {
                     <Label>Postcode</Label>
                     <Input
                       value={lead.postcode || ''}
-                      onChange={(e) => handleUpdateLead('postcode', e.target.value)}
+                      onChange={(e) => handleFieldChange('postcode', e.target.value)}
                       onBlur={(e) => handleUpdateLead('postcode', e.target.value)}
                     />
                   </div>
@@ -313,7 +316,10 @@ export default function LeadDetailPage() {
                     <Label>Timeframe</Label>
                     <Select
                       value={lead.timeframe}
-                      onValueChange={(value) => handleUpdateLead('timeframe', value)}
+                      onValueChange={(value) => {
+                        handleFieldChange('timeframe', value);
+                        handleUpdateLead('timeframe', value);
+                      }}
                     >
                       <SelectTrigger>
                         <SelectValue />
@@ -331,7 +337,10 @@ export default function LeadDetailPage() {
                     <Label>Lead Type</Label>
                     <Select
                       value={lead.lead_type}
-                      onValueChange={(value) => handleUpdateLead('lead_type', value)}
+                      onValueChange={(value) => {
+                        handleFieldChange('lead_type', value);
+                        handleUpdateLead('lead_type', value);
+                      }}
                     >
                       <SelectTrigger>
                         <SelectValue />
@@ -349,7 +358,10 @@ export default function LeadDetailPage() {
                     <Label>Lead Source</Label>
                     <Select
                       value={lead.lead_source}
-                      onValueChange={(value) => handleUpdateLead('lead_source', value)}
+                      onValueChange={(value) => {
+                        handleFieldChange('lead_source', value);
+                        handleUpdateLead('lead_source', value);
+                      }}
                     >
                       <SelectTrigger>
                         <SelectValue />
@@ -368,7 +380,7 @@ export default function LeadDetailPage() {
                   <Label>Description</Label>
                   <Textarea
                     value={lead.description || ''}
-                    onChange={(e) => handleUpdateLead('description', e.target.value)}
+                    onChange={(e) => handleFieldChange('description', e.target.value)}
                     onBlur={(e) => handleUpdateLead('description', e.target.value)}
                     rows={3}
                     placeholder="Additional information about the lead..."
@@ -378,7 +390,7 @@ export default function LeadDetailPage() {
                   <Label>Scope Notes</Label>
                   <Textarea
                     value={lead.scope_notes || ''}
-                    onChange={(e) => handleUpdateLead('scope_notes', e.target.value)}
+                    onChange={(e) => handleFieldChange('scope_notes', e.target.value)}
                     onBlur={(e) => handleUpdateLead('scope_notes', e.target.value)}
                     rows={3}
                   />
@@ -387,7 +399,7 @@ export default function LeadDetailPage() {
                   <Label>Product Interest</Label>
                   <Textarea
                     value={lead.product_interest || ''}
-                    onChange={(e) => handleUpdateLead('product_interest', e.target.value)}
+                    onChange={(e) => handleFieldChange('product_interest', e.target.value)}
                     onBlur={(e) => handleUpdateLead('product_interest', e.target.value)}
                     rows={2}
                   />

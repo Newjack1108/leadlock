@@ -226,12 +226,15 @@ export default function CustomerDetailPage() {
     }
   };
 
+  const handleFieldChange = (field: string, value: string) => {
+    setCustomer((prev) => (prev ? { ...prev, [field]: value } : null));
+  };
+
   const handleUpdateCustomer = async (field: string, value: any) => {
     try {
       await api.patch(`/api/customers/${customerId}`, {
         [field]: value,
       });
-      fetchCustomer();
       fetchHistory();
       checkQuotePrerequisites();
     } catch (error: any) {
@@ -297,7 +300,7 @@ export default function CustomerDetailPage() {
                       <Label>Email <span className="text-destructive">*</span></Label>
                       <Input
                         value={customer.email || ''}
-                        onChange={(e) => handleUpdateCustomer('email', e.target.value)}
+                        onChange={(e) => handleFieldChange('email', e.target.value)}
                         onBlur={(e) => handleUpdateCustomer('email', e.target.value)}
                       />
                     </div>
@@ -307,7 +310,7 @@ export default function CustomerDetailPage() {
                         <Input
                           className="flex-1"
                           value={customer.phone || ''}
-                          onChange={(e) => handleUpdateCustomer('phone', e.target.value)}
+                          onChange={(e) => handleFieldChange('phone', e.target.value)}
                           onBlur={(e) => handleUpdateCustomer('phone', e.target.value)}
                         />
                         {customer.phone && (
@@ -328,7 +331,7 @@ export default function CustomerDetailPage() {
                       <Label>Address Line 1 <span className="text-destructive">*</span></Label>
                       <Input
                         value={customer.address_line1 || ''}
-                        onChange={(e) => handleUpdateCustomer('address_line1', e.target.value)}
+                        onChange={(e) => handleFieldChange('address_line1', e.target.value)}
                         onBlur={(e) => handleUpdateCustomer('address_line1', e.target.value)}
                       />
                     </div>
@@ -336,7 +339,7 @@ export default function CustomerDetailPage() {
                       <Label>Address Line 2 (Optional)</Label>
                       <Input
                         value={customer.address_line2 || ''}
-                        onChange={(e) => handleUpdateCustomer('address_line2', e.target.value)}
+                        onChange={(e) => handleFieldChange('address_line2', e.target.value)}
                         onBlur={(e) => handleUpdateCustomer('address_line2', e.target.value)}
                       />
                     </div>
@@ -344,7 +347,7 @@ export default function CustomerDetailPage() {
                       <Label>City <span className="text-destructive">*</span></Label>
                       <Input
                         value={customer.city || ''}
-                        onChange={(e) => handleUpdateCustomer('city', e.target.value)}
+                        onChange={(e) => handleFieldChange('city', e.target.value)}
                         onBlur={(e) => handleUpdateCustomer('city', e.target.value)}
                       />
                     </div>
@@ -352,7 +355,7 @@ export default function CustomerDetailPage() {
                       <Label>County <span className="text-destructive">*</span></Label>
                       <Input
                         value={customer.county || ''}
-                        onChange={(e) => handleUpdateCustomer('county', e.target.value)}
+                        onChange={(e) => handleFieldChange('county', e.target.value)}
                         onBlur={(e) => handleUpdateCustomer('county', e.target.value)}
                       />
                     </div>
@@ -360,7 +363,7 @@ export default function CustomerDetailPage() {
                       <Label>Postcode <span className="text-destructive">*</span></Label>
                       <Input
                         value={customer.postcode || ''}
-                        onChange={(e) => handleUpdateCustomer('postcode', e.target.value)}
+                        onChange={(e) => handleFieldChange('postcode', e.target.value)}
                         onBlur={(e) => handleUpdateCustomer('postcode', e.target.value)}
                       />
                     </div>
@@ -368,7 +371,7 @@ export default function CustomerDetailPage() {
                       <Label>Country</Label>
                       <Input
                         value={customer.country || 'United Kingdom'}
-                        onChange={(e) => handleUpdateCustomer('country', e.target.value)}
+                        onChange={(e) => handleFieldChange('country', e.target.value)}
                         onBlur={(e) => handleUpdateCustomer('country', e.target.value)}
                       />
                     </div>
