@@ -108,6 +108,19 @@ def create_db_and_tables():
                     except Exception as e:
                         if "already exists" not in str(e).lower():
                             print(f"Warning adding {col_name}: {e}", file=sys.stderr, flush=True)
+            for col_name in ("invoice_number", "xero_invoice_id"):
+                if col_name not in order_columns:
+                    try:
+                        with engine.begin() as conn:
+                            if col_name == "invoice_number":
+                                conn.execute(text("ALTER TABLE customer_order ADD COLUMN invoice_number VARCHAR(255)"))
+                                conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_customer_order_invoice_number ON customer_order (invoice_number) WHERE invoice_number IS NOT NULL"))
+                            else:
+                                conn.execute(text("ALTER TABLE customer_order ADD COLUMN xero_invoice_id VARCHAR(255)"))
+                        print(f"Added {col_name} to customer_order", file=sys.stderr, flush=True)
+                    except Exception as e:
+                        if "already exists" not in str(e).lower():
+                            print(f"Warning adding {col_name}: {e}", file=sys.stderr, flush=True)
         
         # Step 0: Facebook Messenger - messenger_psid on Customer/Lead (run first so it's never skipped)
         if has_customer_table:

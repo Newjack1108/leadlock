@@ -603,6 +603,8 @@ export interface Order {
   paid_in_full?: boolean;
   installation_booked?: boolean;
   installation_completed?: boolean;
+  invoice_number?: string | null;
+  xero_invoice_id?: string | null;
   items: OrderItem[];
 }
 

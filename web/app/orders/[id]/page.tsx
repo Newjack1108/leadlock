@@ -6,12 +6,12 @@ import Header from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import api, { getOrder, updateOrder } from '@/lib/api';
+import api, { getOrder, updateOrder, getOrderDepositInvoicePdf, getOrderPaidInFullInvoicePdf, pushOrderToXero } from '@/lib/api';
 import { Order, OrderItem, Customer } from '@/lib/types';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { formatDateTime } from '@/lib/utils';
-import { ArrowLeft, ExternalLink, CheckCircle, Circle } from 'lucide-react';
+import { ArrowLeft, ExternalLink, CheckCircle, Circle, FileDown, Upload } from 'lucide-react';
 
 function formatCurrency(amount: number, currency: string = 'GBP'): string {
   return new Intl.NumberFormat('en-GB', {
@@ -32,6 +32,7 @@ export default function OrderDetailPage() {
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState<StatusKey | null>(null);
+  const [pushingXero, setPushingXero] = useState(false);
 
   useEffect(() => {
     if (orderId) fetchOrder();
@@ -72,6 +73,37 @@ export default function OrderDetailPage() {
       toast.error(error.response?.data?.detail || `Failed to update ${key}`);
     } finally {
       setUpdating(null);
+    }
+  };
+
+  const handleDepositInvoice = async () => {
+    try {
+      await getOrderDepositInvoicePdf(orderId);
+      toast.success('Deposit invoice downloaded');
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || 'Failed to download invoice');
+    }
+  };
+
+  const handlePaidInFullInvoice = async () => {
+    try {
+      await getOrderPaidInFullInvoicePdf(orderId);
+      toast.success('Paid in full invoice downloaded');
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || 'Failed to download invoice');
+    }
+  };
+
+  const handlePushToXero = async () => {
+    try {
+      setPushingXero(true);
+      const result = await pushOrderToXero(orderId);
+      await fetchOrder();
+      toast.success(result.message || 'Pushed to XERO successfully');
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || 'Failed to push to XERO');
+    } finally {
+      setPushingXero(false);
     }
   };
 
@@ -246,6 +278,49 @@ export default function OrderDetailPage() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Invoices */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Invoices</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  {order.invoice_number
+                    ? `Invoice ${order.invoice_number}`
+                    : 'Mark deposit or paid in full to generate an invoice.'}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleDepositInvoice}
+                    disabled={!order.invoice_number || (!order.deposit_paid && !order.paid_in_full)}
+                  >
+                    <FileDown className="h-4 w-4 mr-1" />
+                    Download Deposit Paid Invoice
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handlePaidInFullInvoice}
+                    disabled={!order.invoice_number || !order.paid_in_full}
+                  >
+                    <FileDown className="h-4 w-4 mr-1" />
+                    Download Paid in Full Invoice
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handlePushToXero}
+                    disabled={!order.invoice_number || pushingXero}
+                  >
+                    <Upload className="h-4 w-4 mr-1" />
+                    {order.xero_invoice_id ? 'In XERO' : 'Push to XERO'}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           </div>
 
           {/* Sidebar */}
@@ -259,6 +334,12 @@ export default function OrderDetailPage() {
                   <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Order number</div>
                   <div className="font-medium">{order.order_number}</div>
                 </div>
+                {order.invoice_number && (
+                  <div>
+                    <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Invoice number</div>
+                    <div className="font-medium">{order.invoice_number}</div>
+                  </div>
+                )}
                 <div>
                   <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Created</div>
                   <div className="text-sm">{formatDateTime(order.created_at)}</div>

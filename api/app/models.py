@@ -624,6 +624,8 @@ class Order(SQLModel, table=True):
     paid_in_full: bool = Field(default=False)
     installation_booked: bool = Field(default=False)
     installation_completed: bool = Field(default=False)
+    invoice_number: Optional[str] = Field(default=None, unique=True, index=True)  # e.g. "INV-2025-001"
+    xero_invoice_id: Optional[str] = Field(default=None)  # XERO invoice ID after push
 
     # Relationships
     quote: "Quote" = Relationship(back_populates="order")

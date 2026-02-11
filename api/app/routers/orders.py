@@ -1,13 +1,40 @@
+import re
+from datetime import date
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import Response
 from sqlmodel import Session, select
 from typing import List
 from app.database import get_session
-from app.models import Order, OrderItem, Customer
+from app.models import Order, OrderItem, Customer, CompanySettings
 from app.auth import get_current_user
 from app.schemas import OrderResponse, OrderItemResponse, OrderUpdate
 from app.models import User
+from app.invoice_pdf_service import generate_deposit_paid_invoice_pdf, generate_paid_in_full_invoice_pdf
+from app.make_xero_service import push_order_invoice_to_make
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
+
+
+def generate_invoice_number(session: Session) -> str:
+    """Generate a unique invoice number like INV-2025-001."""
+    year = date.today().year
+    statement = select(Order).where(Order.invoice_number.like(f"INV-{year}-%"))
+    orders = session.exec(statement).all()
+    if not orders:
+        return f"INV-{year}-001"
+    numbers = []
+    for order in orders:
+        if not order.invoice_number:
+            continue
+        try:
+            num = int(order.invoice_number.split("-")[-1])
+            numbers.append(num)
+        except (ValueError, IndexError):
+            continue
+    if not numbers:
+        return f"INV-{year}-001"
+    next_num = max(numbers) + 1
+    return f"INV-{year}-{next_num:03d}"
 
 
 def build_order_response(order: Order, order_items: List[OrderItem], session: Session) -> OrderResponse:
@@ -37,6 +64,8 @@ def build_order_response(order: Order, order_items: List[OrderItem], session: Se
         paid_in_full=order.paid_in_full,
         installation_booked=order.installation_booked,
         installation_completed=order.installation_completed,
+        invoice_number=order.invoice_number,
+        xero_invoice_id=order.xero_invoice_id,
         items=[
             OrderItemResponse(
                 id=item.id,
@@ -104,6 +133,9 @@ async def update_order(
     update_dict = order_data.dict(exclude_unset=True)
     for field, value in update_dict.items():
         setattr(order, field, value)
+    # Assign invoice_number when first payment is recorded
+    if order.invoice_number is None and (order.deposit_paid or order.paid_in_full):
+        order.invoice_number = generate_invoice_number(session)
     session.add(order)
     session.commit()
     session.refresh(order)
@@ -111,3 +143,103 @@ async def update_order(
         select(OrderItem).where(OrderItem.order_id == order.id).order_by(OrderItem.sort_order)
     ).all()
     return build_order_response(order, list(items), session)
+
+
+@router.get("/{order_id}/invoice/deposit-pdf")
+async def get_deposit_paid_invoice_pdf(
+    order_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Download Deposit Paid invoice PDF. Requires deposit_paid or paid_in_full."""
+    order = session.exec(select(Order).where(Order.id == order_id)).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if not order.invoice_number:
+        raise HTTPException(status_code=404, detail="No invoice yet. Mark deposit or paid in full first.")
+    if not order.deposit_paid and not order.paid_in_full:
+        raise HTTPException(status_code=400, detail="Deposit or paid in full required to download this invoice.")
+    if not order.customer_id:
+        raise HTTPException(status_code=400, detail="Order has no customer.")
+    customer = session.get(Customer, order.customer_id)
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    items = list(session.exec(select(OrderItem).where(OrderItem.order_id == order.id).order_by(OrderItem.sort_order)).all())
+    company_settings = session.exec(select(CompanySettings).limit(1)).first()
+    try:
+        pdf_buffer = generate_deposit_paid_invoice_pdf(order, customer, items, company_settings, session)
+        pdf_content = pdf_buffer.read()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating PDF: {str(e)}")
+    safe_name = re.sub(r'[<>:"/\\|?*]', '_', customer.name or "Customer").strip()
+    safe_name = re.sub(r'\s+', '_', safe_name)
+    filename = f"Invoice_Deposit_{order.invoice_number}_{safe_name}.pdf"
+    return Response(
+        content=pdf_content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/{order_id}/invoice/paid-in-full-pdf")
+async def get_paid_in_full_invoice_pdf(
+    order_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Download Paid in Full invoice PDF. Requires paid_in_full."""
+    order = session.exec(select(Order).where(Order.id == order_id)).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if not order.invoice_number:
+        raise HTTPException(status_code=404, detail="No invoice yet. Mark paid in full first.")
+    if not order.paid_in_full:
+        raise HTTPException(status_code=400, detail="Paid in full required to download this invoice.")
+    if not order.customer_id:
+        raise HTTPException(status_code=400, detail="Order has no customer.")
+    customer = session.get(Customer, order.customer_id)
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    items = list(session.exec(select(OrderItem).where(OrderItem.order_id == order.id).order_by(OrderItem.sort_order)).all())
+    company_settings = session.exec(select(CompanySettings).limit(1)).first()
+    try:
+        pdf_buffer = generate_paid_in_full_invoice_pdf(order, customer, items, company_settings, session)
+        pdf_content = pdf_buffer.read()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating PDF: {str(e)}")
+    safe_name = re.sub(r'[<>:"/\\|?*]', '_', customer.name or "Customer").strip()
+    safe_name = re.sub(r'\s+', '_', safe_name)
+    filename = f"Invoice_PaidInFull_{order.invoice_number}_{safe_name}.pdf"
+    return Response(
+        content=pdf_content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.post("/{order_id}/push-to-xero")
+async def push_to_xero(
+    order_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Push invoice to XERO via Make.com webhook."""
+    order = session.exec(select(Order).where(Order.id == order_id)).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if not order.invoice_number:
+        raise HTTPException(status_code=400, detail="No invoice yet. Mark deposit or paid in full first.")
+    if not order.customer_id:
+        raise HTTPException(status_code=400, detail="Order has no customer.")
+    customer = session.get(Customer, order.customer_id)
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    order_items = list(
+        session.exec(
+            select(OrderItem).where(OrderItem.order_id == order.id).order_by(OrderItem.sort_order)
+        ).all()
+    )
+    result = push_order_invoice_to_make(order, customer, order_items, session)
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("error", "Failed to push to XERO"))
+    return result

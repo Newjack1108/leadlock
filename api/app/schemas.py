@@ -895,6 +895,8 @@ class OrderResponse(BaseModel):
     paid_in_full: bool = False
     installation_booked: bool = False
     installation_completed: bool = False
+    invoice_number: Optional[str] = None
+    xero_invoice_id: Optional[str] = None
     items: List[OrderItemResponse] = []
 
 

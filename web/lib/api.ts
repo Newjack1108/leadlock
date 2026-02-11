@@ -408,6 +408,39 @@ export const updateOrder = async (
   return response.data;
 };
 
+export const getOrderDepositInvoicePdf = async (orderId: number) => {
+  const response = await api.get(`/api/orders/${orderId}/invoice/deposit-pdf`, {
+    responseType: 'blob',
+  });
+  const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', `Invoice_Deposit_${orderId}.pdf`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
+};
+
+export const getOrderPaidInFullInvoicePdf = async (orderId: number) => {
+  const response = await api.get(`/api/orders/${orderId}/invoice/paid-in-full-pdf`, {
+    responseType: 'blob',
+  });
+  const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', `Invoice_PaidInFull_${orderId}.pdf`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
+};
+
+export const pushOrderToXero = async (orderId: number) => {
+  const response = await api.post(`/api/orders/${orderId}/push-to-xero`);
+  return response.data;
+};
+
 export const updateDraftQuote = async (quoteId: number, quoteData: {
   valid_until?: string;
   terms_and_conditions?: string;
