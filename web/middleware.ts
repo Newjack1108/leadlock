@@ -7,7 +7,8 @@ export function middleware(request: NextRequest) {
   
   const isLoginPage = request.nextUrl.pathname === '/login';
   const isPublicQuoteView = request.nextUrl.pathname.startsWith('/quotes/view/');
-  const isPublicPage = isLoginPage || isPublicQuoteView;
+  const isPublicAccessSheet = request.nextUrl.pathname.startsWith('/access-sheet/');
+  const isPublicPage = isLoginPage || isPublicQuoteView || isPublicAccessSheet;
 
   // If no token and trying to access protected route, redirect to login
   // Note: We also check token in client-side, this is just a basic check

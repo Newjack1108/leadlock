@@ -6,12 +6,19 @@ import Header from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import api, { getOrder, updateOrder, getOrderDepositInvoicePdf, getOrderPaidInFullInvoicePdf, pushOrderToXero } from '@/lib/api';
+import api, {
+  getOrder,
+  updateOrder,
+  getOrderDepositInvoicePdf,
+  getOrderPaidInFullInvoicePdf,
+  pushOrderToXero,
+  sendAccessSheet,
+} from '@/lib/api';
 import { Order, OrderItem, Customer } from '@/lib/types';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { formatDateTime } from '@/lib/utils';
-import { ArrowLeft, ExternalLink, CheckCircle, Circle, FileDown, Upload } from 'lucide-react';
+import { ArrowLeft, ExternalLink, CheckCircle, Circle, FileDown, Upload, Copy, Link2 } from 'lucide-react';
 
 function formatCurrency(amount: number, currency: string = 'GBP'): string {
   return new Intl.NumberFormat('en-GB', {
@@ -33,6 +40,7 @@ export default function OrderDetailPage() {
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState<StatusKey | null>(null);
   const [pushingXero, setPushingXero] = useState(false);
+  const [sendingAccessSheet, setSendingAccessSheet] = useState(false);
 
   useEffect(() => {
     if (orderId) fetchOrder();
@@ -105,6 +113,65 @@ export default function OrderDetailPage() {
     } finally {
       setPushingXero(false);
     }
+  };
+
+  const handleSendAccessSheet = async () => {
+    try {
+      setSendingAccessSheet(true);
+      const result = await sendAccessSheet(orderId);
+      await fetchOrder();
+      if (result.access_sheet_url) {
+        await navigator.clipboard.writeText(result.access_sheet_url);
+        toast.success('Access sheet link copied to clipboard');
+      }
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || 'Failed to get access sheet link');
+    } finally {
+      setSendingAccessSheet(false);
+    }
+  };
+
+  const handleCopyAccessSheetLink = () => {
+    const url = order?.access_sheet?.access_sheet_url;
+    if (url) {
+      navigator.clipboard.writeText(url).then(() => toast.success('Link copied to clipboard'));
+    }
+  };
+
+  const accessSheetLabels: Record<string, string> = {
+    access_4x4_trailer: 'Access suitable for 4x4 and trailer',
+    access_4x4_notes: 'Notes',
+    drive_near_build: 'Can drive near build position',
+    drive_near_build_notes: 'Notes',
+    permission_drive_land: 'Permission to drive on land',
+    permission_drive_land_notes: 'Notes',
+    balances_paid_before: 'Balances paid before delivery',
+    balances_paid_before_notes: 'Notes',
+    horses_contained: 'Horses contained during install',
+    horses_contained_notes: 'Notes',
+    site_level: 'Site level',
+    site_level_notes: 'Notes',
+    area_clear: 'Area clear of grass/shrubs',
+    area_clear_notes: 'Notes',
+    ground_type: 'Ground type',
+    brickwork_if_concrete: 'Brickwork if concrete',
+    brickwork_notes: 'Notes',
+    electricity_available: 'Electricity onsite',
+    electricity_notes: 'Notes',
+    toilet_facilities: 'Toilet facilities',
+    toilet_notes: 'Notes',
+    customer_signature: 'Customer signature',
+    notes: 'Additional notes',
+  };
+
+  const formatAnswerKey = (key: string) =>
+    accessSheetLabels[key] || key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+
+  const GROUND_TYPE_LABELS: Record<string, string> = {
+    NEW_CONCRETE: 'New Concrete',
+    OLD_CONCRETE: 'Old Concrete',
+    GRASS_FIELD: 'Grass/Field',
+    HARDCORE: 'Hardcore',
   };
 
   if (loading) {
@@ -232,7 +299,7 @@ export default function OrderDetailPage() {
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2 pt-2">
-                  {(['deposit_paid', 'balance_paid', 'paid_in_full'] as const).map((key) => (
+                  {(['deposit_paid', 'paid_in_full'] as const).map((key) => (
                     <Button
                       key={key}
                       variant={order[key] ? 'default' : 'outline'}
@@ -276,6 +343,87 @@ export default function OrderDetailPage() {
                     </Button>
                   ))}
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Access Sheet */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Access Sheet</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Customer fills in access details via link. Send link to customer to complete.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {!order.access_sheet ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleSendAccessSheet}
+                    disabled={sendingAccessSheet}
+                  >
+                    <Link2 className="h-4 w-4 mr-1" />
+                    {sendingAccessSheet ? 'Creating...' : 'Send Access Sheet'}
+                  </Button>
+                ) : order.access_sheet.completed ? (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                      Completed{' '}
+                      {order.access_sheet.completed_at &&
+                        formatDateTime(order.access_sheet.completed_at)}
+                    </div>
+                    {order.access_sheet.answers && Object.keys(order.access_sheet.answers).length > 0 && (
+                      <div className="border rounded-md divide-y text-sm">
+                        {Object.entries(order.access_sheet.answers)
+                          .filter(([, v]) => v != null && v !== '')
+                          .map(([key, value]) => (
+                            <div
+                              key={key}
+                              className="flex flex-col sm:flex-row sm:items-start gap-1 px-3 py-2"
+                            >
+                              <span className="font-medium text-muted-foreground min-w-[180px]">
+                                {formatAnswerKey(key)}:
+                              </span>
+                              <span>
+                                {key === 'ground_type'
+                                  ? GROUND_TYPE_LABELS[value as string] || value
+                                  : value}
+                              </span>
+                            </div>
+                          ))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <p className="text-sm text-muted-foreground">Link sent – awaiting customer completion</p>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleCopyAccessSheetLink}
+                      >
+                        <Copy className="h-4 w-4 mr-1" />
+                        Copy link
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        asChild
+                      >
+                        <a
+                          href={order.access_sheet.access_sheet_url ?? '#'}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <ExternalLink className="h-4 w-4 mr-1" />
+                          Open form
+                        </a>
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
 

@@ -1,6 +1,6 @@
 from sqlmodel import SQLModel, Field, Relationship, Column
 from sqlalchemy.orm import relationship
-from sqlalchemy import Numeric
+from sqlalchemy import Numeric, JSON
 from typing import Optional, List
 from datetime import datetime
 from enum import Enum
@@ -632,6 +632,7 @@ class Order(SQLModel, table=True):
     customer: Optional["Customer"] = Relationship(back_populates="orders")
     created_by: User = Relationship()
     items: List["OrderItem"] = Relationship(back_populates="order")
+    access_sheet_requests: List["AccessSheetRequest"] = Relationship(back_populates="order")
 
 
 class OrderItem(SQLModel, table=True):
@@ -653,6 +654,20 @@ class OrderItem(SQLModel, table=True):
     order: "Order" = Relationship(back_populates="items")
     quote_item: Optional["QuoteItem"] = Relationship()
     product: Optional["Product"] = Relationship()
+
+
+class AccessSheetRequest(SQLModel, table=True):
+    """Token-based access sheet form. One per order; customer fills via public link."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    order_id: int = Field(foreign_key="customer_order.id")
+    access_token: str = Field(unique=True, index=True)
+    completed_at: Optional[datetime] = None
+    answers: Optional[dict] = Field(default=None, sa_column=Column(JSON))  # Form answers as JSON
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    sent_at: Optional[datetime] = None
+
+    # Relationships
+    order: "Order" = Relationship(back_populates="access_sheet_requests")
 
 
 class ReminderPriority(str, Enum):

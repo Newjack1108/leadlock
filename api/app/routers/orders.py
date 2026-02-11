@@ -1,13 +1,15 @@
+import os
 import re
-from datetime import date
+import secrets
+from datetime import date, datetime
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from sqlmodel import Session, select
 from typing import List
 from app.database import get_session
-from app.models import Order, OrderItem, Customer, CompanySettings
+from app.models import Order, OrderItem, Customer, CompanySettings, AccessSheetRequest
 from app.auth import get_current_user
-from app.schemas import OrderResponse, OrderItemResponse, OrderUpdate
+from app.schemas import OrderResponse, OrderItemResponse, OrderUpdate, AccessSheetSendResponse, AccessSheetResponse
 from app.models import User
 from app.invoice_pdf_service import generate_deposit_paid_invoice_pdf, generate_paid_in_full_invoice_pdf
 from app.make_xero_service import push_order_invoice_to_make
@@ -37,12 +39,40 @@ def generate_invoice_number(session: Session) -> str:
     return f"INV-{year}-{next_num:03d}"
 
 
+def _build_access_sheet_response(order_id: int, session: Session) -> AccessSheetResponse | None:
+    """Build AccessSheetResponse from latest AccessSheetRequest for order."""
+    req = session.exec(
+        select(AccessSheetRequest)
+        .where(AccessSheetRequest.order_id == order_id)
+        .order_by(AccessSheetRequest.created_at.desc())
+        .limit(1)
+    ).first()
+    if not req:
+        return None
+
+    frontend = (os.getenv("FRONTEND_URL") or os.getenv("PUBLIC_FRONTEND_URL") or "").strip()
+    if not frontend:
+        frontend = "https://leadlock-frontend-production.up.railway.app"
+    base = frontend.rstrip("/")
+    access_sheet_url = f"{base}/access-sheet/{req.access_token}"
+
+    return AccessSheetResponse(
+        access_sheet_url=access_sheet_url,
+        completed=req.completed_at is not None,
+        completed_at=req.completed_at,
+        answers=req.answers,
+    )
+
+
 def build_order_response(order: Order, order_items: List[OrderItem], session: Session) -> OrderResponse:
     """Build OrderResponse with items and optional customer_name."""
     customer_name = None
     if order.customer_id:
         customer = session.exec(select(Customer).where(Customer.id == order.customer_id)).first()
         customer_name = customer.name if customer else None
+
+    access_sheet = _build_access_sheet_response(order.id, session)
+
     return OrderResponse(
         id=order.id,
         quote_id=order.quote_id,
@@ -83,6 +113,7 @@ def build_order_response(order: Order, order_items: List[OrderItem], session: Se
             )
             for item in order_items
         ],
+        access_sheet=access_sheet,
     )
 
 
@@ -243,3 +274,51 @@ async def push_to_xero(
     if not result.get("success"):
         raise HTTPException(status_code=400, detail=result.get("error", "Failed to push to XERO"))
     return result
+
+
+@router.post("/{order_id}/access-sheet/send", response_model=AccessSheetSendResponse)
+async def send_access_sheet(
+    order_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Create or get access sheet link for order. Returns URL for staff to copy or email."""
+    order = session.exec(select(Order).where(Order.id == order_id)).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    # Get or create AccessSheetRequest
+    req = session.exec(
+        select(AccessSheetRequest)
+        .where(AccessSheetRequest.order_id == order_id)
+        .order_by(AccessSheetRequest.created_at.desc())
+        .limit(1)
+    ).first()
+
+    if not req:
+        token = secrets.token_urlsafe(32)
+        req = AccessSheetRequest(
+            order_id=order_id,
+            access_token=token,
+            sent_at=datetime.utcnow(),
+        )
+        session.add(req)
+        session.commit()
+        session.refresh(req)
+    else:
+        # Update sent_at if not set
+        if not req.sent_at:
+            req.sent_at = datetime.utcnow()
+            session.add(req)
+            session.commit()
+
+    frontend = (os.getenv("FRONTEND_URL") or os.getenv("PUBLIC_FRONTEND_URL") or "").strip()
+    if not frontend:
+        frontend = "https://leadlock-frontend-production.up.railway.app"
+    base = frontend.rstrip("/")
+    access_sheet_url = f"{base}/access-sheet/{req.access_token}"
+
+    return AccessSheetSendResponse(
+        access_sheet_url=access_sheet_url,
+        access_token=req.access_token,
+    )

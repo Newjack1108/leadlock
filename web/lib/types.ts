@@ -582,6 +582,14 @@ export interface OrderItem {
   is_custom: boolean;
 }
 
+/** Access sheet status and data shown on order page */
+export interface AccessSheet {
+  access_sheet_url?: string | null;
+  completed: boolean;
+  completed_at?: string | null;
+  answers?: Record<string, string> | null;
+}
+
 export interface Order {
   id: number;
   quote_id: number;
@@ -606,6 +614,7 @@ export interface Order {
   invoice_number?: string | null;
   xero_invoice_id?: string | null;
   items: OrderItem[];
+  access_sheet?: AccessSheet | null;
 }
 
 export interface Quote {
@@ -650,6 +659,7 @@ export interface Quote {
   owner_id?: number;
   temperature?: QuoteTemperature;
   total_open_count?: number;
+  order_id?: number | null;
 }
 
 /** Public quote view (no auth) - for customer view link. */

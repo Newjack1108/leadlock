@@ -441,6 +441,40 @@ export const pushOrderToXero = async (orderId: number) => {
   return response.data;
 };
 
+/** Send access sheet link for order. Returns URL for staff to copy. Auth required. */
+export const sendAccessSheet = async (orderId: number): Promise<{
+  access_sheet_url: string;
+  access_token: string;
+}> => {
+  const response = await api.post(`/api/orders/${orderId}/access-sheet/send`);
+  return response.data;
+};
+
+/** Public: Get access sheet form context by token (no auth). */
+export const getAccessSheetContext = async (token: string): Promise<{
+  customer_name: string;
+  order_number: string;
+  completed: boolean;
+  completed_at?: string | null;
+  answers?: Record<string, string> | null;
+}> => {
+  const response = await api.get(`/api/public/access-sheet/${token}`);
+  return response.data;
+};
+
+/** Public: Submit access sheet form (no auth). */
+export const submitAccessSheet = async (
+  token: string,
+  data: Record<string, string | undefined | null>
+) => {
+  const body: Record<string, string> = {};
+  for (const [k, v] of Object.entries(data)) {
+    if (v != null && v !== '') body[k] = String(v);
+  }
+  const response = await api.post(`/api/public/access-sheet/${token}`, body);
+  return response.data;
+};
+
 export const updateDraftQuote = async (quoteId: number, quoteData: {
   valid_until?: string;
   terms_and_conditions?: string;

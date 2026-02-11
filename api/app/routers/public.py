@@ -23,8 +23,16 @@ from app.models import (
     WebsiteVisit,
     TrackedWebsite,
     CompanySettings,
+    AccessSheetRequest,
+    Order,
 )
-from app.schemas import PublicQuoteViewResponse, PublicQuoteViewItemResponse, PublicQuoteCompanyDisplay
+from app.schemas import (
+    PublicQuoteViewResponse,
+    PublicQuoteViewItemResponse,
+    PublicQuoteCompanyDisplay,
+    AccessSheetContextResponse,
+    AccessSheetSubmitRequest,
+)
 from app.constants import VAT_RATE_DECIMAL
 from app.quote_pdf_service import generate_quote_pdf
 from app.temperature_service import recompute_quote_temperature
@@ -241,6 +249,75 @@ def get_public_quote_pdf(
             "Content-Disposition": f'attachment; filename="{pdf_filename}"',
         },
     )
+
+
+@router.get("/access-sheet/{token}", response_model=AccessSheetContextResponse)
+def get_access_sheet_context(
+    token: str,
+    session: Session = Depends(get_session),
+):
+    """
+    Public endpoint: load access sheet context by token.
+    Returns customer name, order number, and any existing answers if already completed.
+    No authentication.
+    """
+    req = session.exec(
+        select(AccessSheetRequest).where(AccessSheetRequest.access_token == token)
+    ).first()
+    if not req:
+        raise HTTPException(status_code=404, detail="Access sheet not found")
+
+    order = session.get(Order, req.order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    customer_name = ""
+    if order.customer_id:
+        customer = session.get(Customer, order.customer_id)
+        if customer:
+            customer_name = customer.name
+
+    return AccessSheetContextResponse(
+        customer_name=customer_name,
+        order_number=order.order_number,
+        completed=req.completed_at is not None,
+        completed_at=req.completed_at,
+        answers=req.answers,
+    )
+
+
+@router.post("/access-sheet/{token}")
+def submit_access_sheet(
+    token: str,
+    data: AccessSheetSubmitRequest,
+    session: Session = Depends(get_session),
+):
+    """
+    Public endpoint: submit access sheet form. No authentication.
+    Saves answers and sets completed_at.
+    """
+    req = session.exec(
+        select(AccessSheetRequest).where(AccessSheetRequest.access_token == token)
+    ).first()
+    if not req:
+        raise HTTPException(status_code=404, detail="Access sheet not found")
+
+    if req.completed_at:
+        raise HTTPException(status_code=400, detail="Access sheet already submitted")
+
+    # Build answers dict from request (exclude None)
+    answers = {}
+    for field, value in data.model_dump(exclude_none=True).items():
+        if value is not None:
+            answers[field] = value
+
+    req.answers = answers if answers else None
+    req.completed_at = datetime.utcnow()
+
+    session.add(req)
+    session.commit()
+
+    return {"message": "Access sheet submitted successfully"}
 
 
 @router.get("/pixel")

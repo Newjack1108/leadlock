@@ -121,6 +121,31 @@ def create_db_and_tables():
                     except Exception as e:
                         if "already exists" not in str(e).lower():
                             print(f"Warning adding {col_name}: {e}", file=sys.stderr, flush=True)
+
+        # Step 0a3: Create access_sheet_request table if missing
+        has_access_sheet_table = inspector.has_table("accesssheetrequest")
+        if has_customer_order_table and not has_access_sheet_table:
+            print("Creating accesssheetrequest table...", file=sys.stderr, flush=True)
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text("""
+                        CREATE TABLE IF NOT EXISTS accesssheetrequest (
+                            id SERIAL PRIMARY KEY,
+                            order_id INTEGER NOT NULL REFERENCES customer_order(id),
+                            access_token VARCHAR(255) NOT NULL UNIQUE,
+                            completed_at TIMESTAMP,
+                            answers JSONB,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                            sent_at TIMESTAMP
+                        )
+                    """))
+                    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_accesssheetrequest_access_token ON accesssheetrequest (access_token)"))
+                    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_accesssheetrequest_order_id ON accesssheetrequest (order_id)"))
+                    print("Created accesssheetrequest table", file=sys.stderr, flush=True)
+            except Exception as e:
+                print(f"Error creating accesssheetrequest table: {e}", file=sys.stderr, flush=True)
+                import traceback
+                print(traceback.format_exc(), file=sys.stderr, flush=True)
         
         # Step 0: Facebook Messenger - messenger_psid on Customer/Lead (run first so it's never skipped)
         if has_customer_table:

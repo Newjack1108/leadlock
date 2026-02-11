@@ -735,6 +735,7 @@ class QuoteResponse(BaseModel):
     owner_id: Optional[int] = None
     temperature: Optional[QuoteTemperature] = None
     total_open_count: int = 0  # Total times quote view link was opened (across all sends)
+    order_id: Optional[int] = None  # Order ID when quote is accepted (for View order link)
 
 
 class QuoteEmailResponse(BaseModel):
@@ -874,6 +875,14 @@ class OrderUpdate(BaseModel):
     installation_completed: Optional[bool] = None
 
 
+class AccessSheetResponse(BaseModel):
+    """For order page: access sheet status and completed data."""
+    access_sheet_url: Optional[str] = None
+    completed: bool = False
+    completed_at: Optional[datetime] = None
+    answers: Optional[dict] = None
+
+
 class OrderResponse(BaseModel):
     id: int
     quote_id: int
@@ -898,6 +907,49 @@ class OrderResponse(BaseModel):
     invoice_number: Optional[str] = None
     xero_invoice_id: Optional[str] = None
     items: List[OrderItemResponse] = []
+    access_sheet: Optional[AccessSheetResponse] = None
+
+
+class AccessSheetContextResponse(BaseModel):
+    """Public GET: form context and pre-fill for customer."""
+    customer_name: str
+    order_number: str
+    completed: bool = False
+    completed_at: Optional[datetime] = None
+    answers: Optional[dict] = None  # If completed, existing answers
+
+
+class AccessSheetSubmitRequest(BaseModel):
+    """Public POST: form submission from customer."""
+    access_4x4_trailer: Optional[str] = None  # yes | no
+    access_4x4_notes: Optional[str] = None
+    drive_near_build: Optional[str] = None
+    drive_near_build_notes: Optional[str] = None
+    permission_drive_land: Optional[str] = None
+    permission_drive_land_notes: Optional[str] = None
+    balances_paid_before: Optional[str] = None
+    balances_paid_before_notes: Optional[str] = None
+    horses_contained: Optional[str] = None
+    horses_contained_notes: Optional[str] = None
+    site_level: Optional[str] = None
+    site_level_notes: Optional[str] = None
+    area_clear: Optional[str] = None
+    area_clear_notes: Optional[str] = None
+    ground_type: Optional[str] = None  # NEW_CONCRETE | OLD_CONCRETE | GRASS_FIELD | HARDCORE
+    brickwork_if_concrete: Optional[str] = None
+    brickwork_notes: Optional[str] = None
+    electricity_available: Optional[str] = None
+    electricity_notes: Optional[str] = None
+    toilet_facilities: Optional[str] = None
+    toilet_notes: Optional[str] = None
+    customer_signature: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class AccessSheetSendResponse(BaseModel):
+    """Response from POST send: link for staff to copy or email."""
+    access_sheet_url: str
+    access_token: str
 
 
 class DiscountRequestCreate(BaseModel):
