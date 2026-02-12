@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, File, UploadFile
+from fastapi.responses import Response
 from sqlmodel import Session, select
 from app.database import get_session
 from app.models import CompanySettings, User
@@ -8,9 +9,16 @@ from app.schemas import (
     UserEmailSettingsUpdate, UserEmailSettingsResponse
 )
 from app.models import UserRole
+from app.customer_import_export import (
+    generate_example_csv,
+    import_customers_from_csv,
+    export_customers_to_csv,
+)
 from datetime import datetime
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
+
+MAX_IMPORT_SIZE_BYTES = 5 * 1024 * 1024  # 5MB
 
 
 def get_company_settings(session: Session) -> CompanySettings:
@@ -132,4 +140,62 @@ async def update_user_email_settings(
         imap_use_ssl=current_user.imap_use_ssl,
         email_signature=current_user.email_signature,
         email_test_mode=getattr(current_user, 'email_test_mode', False)
+    )
+
+
+@router.get("/customers/import-example")
+async def get_customer_import_example(
+    current_user: User = Depends(get_current_user)
+):
+    """Download an example CSV template for customer import. All authenticated users."""
+    content = generate_example_csv()
+    return Response(
+        content=content,
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": "attachment; filename=customer-import-example.csv"
+        }
+    )
+
+
+@router.post("/customers/import")
+async def import_customers(
+    file: UploadFile = File(...),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_role([UserRole.DIRECTOR]))
+):
+    """Import customers from CSV. DIRECTOR only."""
+    if not file.filename or not file.filename.lower().endswith(".csv"):
+        raise HTTPException(status_code=400, detail="Please upload a CSV file")
+    content = await file.read()
+    if len(content) > MAX_IMPORT_SIZE_BYTES:
+        raise HTTPException(status_code=400, detail="File too large (max 5MB)")
+    try:
+        text = content.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        raise HTTPException(status_code=400, detail="File must be UTF-8 encoded")
+    created, skipped, errors = import_customers_from_csv(
+        text, session, skip_duplicates=True
+    )
+    return {
+        "created": created,
+        "skipped": skipped,
+        "errors": errors,
+    }
+
+
+@router.get("/customers/export")
+async def export_customers(
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    """Export all customers to CSV. All authenticated users."""
+    content = export_customers_to_csv(session)
+    date_str = datetime.utcnow().strftime("%Y-%m-%d")
+    return Response(
+        content=content,
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f"attachment; filename=customers-export-{date_str}.csv"
+        }
     )

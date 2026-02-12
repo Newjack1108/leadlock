@@ -792,3 +792,48 @@ export const rejectDiscountRequest = async (requestId: number, rejectionReason?:
   });
   return response.data;
 };
+
+// Customer import/export (Company Settings)
+export const downloadCustomerImportExample = async () => {
+  const response = await api.get('/api/settings/customers/import-example', {
+    responseType: 'blob',
+  });
+  const blob = new Blob([response.data], { type: 'text/csv' });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', 'customer-import-example.csv');
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
+};
+
+export const importCustomersFromCsv = async (file: File): Promise<{
+  created: number;
+  skipped: number;
+  errors: Array<{ row: number; message: string }>;
+}> => {
+  const formData = new FormData();
+  formData.append('file', file);
+  const response = await api.post('/api/settings/customers/import', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return response.data;
+};
+
+export const downloadCustomerExport = async () => {
+  const response = await api.get('/api/settings/customers/export', {
+    responseType: 'blob',
+  });
+  const dateStr = new Date().toISOString().slice(0, 10);
+  const blob = new Blob([response.data], { type: 'text/csv' });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', `customers-export-${dateStr}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
+};

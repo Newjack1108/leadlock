@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Header from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -9,9 +9,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Save, ChevronDown, ChevronUp } from 'lucide-react';
+import { Save, ChevronDown, ChevronUp, Download, Upload, FileSpreadsheet } from 'lucide-react';
 import ImageUpload from '@/components/ImageUpload';
-import api from '@/lib/api';
+import api, {
+  downloadCustomerImportExample,
+  importCustomersFromCsv,
+  downloadCustomerExport,
+} from '@/lib/api';
 import { CompanySettings, InstallationLeadTime } from '@/lib/types';
 import { toast } from 'sonner';
 
@@ -19,6 +23,13 @@ export default function CompanySettingsPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<{
+    created: number;
+    skipped: number;
+    errors: Array<{ row: number; message: string }>;
+  } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [settings, setSettings] = useState<CompanySettings | null>(null);
   const [termsExpanded, setTermsExpanded] = useState(false);
   const [formData, setFormData] = useState({
@@ -128,6 +139,56 @@ export default function CompanySettingsPage() {
       toast.error(error.response?.data?.detail || 'Failed to save company settings');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDownloadExample = async () => {
+    try {
+      await downloadCustomerImportExample();
+      toast.success('Example CSV downloaded');
+    } catch (error: any) {
+      if (error.response?.status !== 401) {
+        toast.error(error.response?.data?.detail || 'Failed to download example');
+      }
+    }
+  };
+
+  const handleExport = async () => {
+    try {
+      await downloadCustomerExport();
+      toast.success('Customers exported');
+    } catch (error: any) {
+      if (error.response?.status !== 401) {
+        toast.error(error.response?.data?.detail || 'Failed to export');
+      }
+    }
+  };
+
+  const handleImportFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImporting(true);
+    setImportResult(null);
+    try {
+      const result = await importCustomersFromCsv(file);
+      setImportResult(result);
+      const total = result.created + result.skipped;
+      if (result.errors.length > 0) {
+        toast.warning(
+          `Import complete: ${result.created} created, ${result.skipped} skipped, ${result.errors.length} errors`
+        );
+      } else {
+        toast.success(
+          `Import complete: ${result.created} created, ${result.skipped} skipped`
+        );
+      }
+    } catch (error: any) {
+      if (error.response?.status !== 401) {
+        toast.error(error.response?.data?.detail || 'Failed to import');
+      }
+    } finally {
+      setImporting(false);
+      e.target.value = '';
     }
   };
 
@@ -478,6 +539,82 @@ export default function CompanySettingsPage() {
                 {saving ? 'Saving...' : settings ? 'Update Settings' : 'Create Settings'}
               </Button>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card className="mt-8">
+          <CardHeader>
+            <CardTitle>Customer Data Migration</CardTitle>
+            <CardDescription>
+              Import customers from your old system or export in the legacy CSV format. Upload file must match the example layout.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleDownloadExample}
+                disabled={importing}
+              >
+                <FileSpreadsheet className="h-4 w-4 mr-2" />
+                Download example CSV
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={importing}
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                Upload CSV
+              </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv"
+                className="hidden"
+                onChange={handleImportFileChange}
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExport}
+                disabled={importing}
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Export customers
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Example columns: First Name, Surname, Email, Phone, First of Postcode, Last modified, First of Product Type (Stables, Cabins, Sheds). Download the example to see the format.
+            </p>
+            {importResult && (
+              <div className="rounded-md border p-3 bg-muted/30 text-sm">
+                <p className="font-medium">Import result</p>
+                <p className="text-muted-foreground mt-1">
+                  Created: {importResult.created} · Skipped: {importResult.skipped}
+                  {importResult.errors.length > 0 && (
+                    <> · Errors: {importResult.errors.length}</>
+                  )}
+                </p>
+                {importResult.errors.length > 0 && importResult.errors.length <= 10 && (
+                  <ul className="mt-2 list-disc list-inside text-destructive text-xs">
+                    {importResult.errors.map((err, i) => (
+                      <li key={i}>Row {err.row}: {err.message}</li>
+                    ))}
+                  </ul>
+                )}
+                {importResult.errors.length > 10 && (
+                  <ul className="mt-2 list-disc list-inside text-destructive text-xs">
+                    {importResult.errors.slice(0, 10).map((err, i) => (
+                      <li key={i}>Row {err.row}: {err.message}</li>
+                    ))}
+                    <li>... and {importResult.errors.length - 10} more</li>
+                  </ul>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
       </main>
