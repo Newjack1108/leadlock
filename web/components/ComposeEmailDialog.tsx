@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -17,7 +17,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { sendEmail, getEmailTemplates, previewEmailTemplate, getUserEmailSettings } from '@/lib/api';
 import { Customer, EmailTemplate } from '@/lib/types';
 import { toast } from 'sonner';
-import api from '@/lib/api';
+import { Paperclip, X } from 'lucide-react';
+
+const MAX_TOTAL_ATTACHMENTS_BYTES = 20 * 1024 * 1024; // 20MB
 
 interface ComposeEmailDialogProps {
   open: boolean;
@@ -37,12 +39,14 @@ export default function ComposeEmailDialog({
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | undefined>(undefined);
   const [loadingTemplate, setLoadingTemplate] = useState(false);
   const [signature, setSignature] = useState('');
+  const [attachments, setAttachments] = useState<File[]>([]);
   const [formData, setFormData] = useState({
     to_email: customer.email || '',
     cc: '',
     subject: '',
     body: '',
   });
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch templates and user signature when dialog opens
   useEffect(() => {
@@ -55,12 +59,14 @@ export default function ComposeEmailDialog({
         subject: '',
         body: '',
       });
+      setAttachments([]);
       setSelectedTemplateId(undefined);
       setLoading(false); // Reset loading state when dialog opens
     } else {
       // Reset all state when dialog closes
       setLoading(false);
       setSelectedTemplateId(undefined);
+      setAttachments([]);
     }
   }, [open, customer]);
 
@@ -124,6 +130,23 @@ export default function ComposeEmailDialog({
     return emailList.every((email) => validateEmail(email));
   };
 
+  const handleAttachmentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files?.length) return;
+    const newFiles = Array.from(files);
+    const totalSize = [...attachments, ...newFiles].reduce((sum, f) => sum + f.size, 0);
+    if (totalSize > MAX_TOTAL_ATTACHMENTS_BYTES) {
+      toast.error('Total attachment size exceeds 20MB limit');
+      return;
+    }
+    setAttachments((prev) => [...prev, ...newFiles]);
+    e.target.value = '';
+  };
+
+  const removeAttachment = (index: number) => {
+    setAttachments((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -154,6 +177,12 @@ export default function ComposeEmailDialog({
       return;
     }
 
+    const totalAttachmentSize = attachments.reduce((sum, f) => sum + f.size, 0);
+    if (totalAttachmentSize > MAX_TOTAL_ATTACHMENTS_BYTES) {
+      toast.error('Total attachment size exceeds 20MB limit');
+      return;
+    }
+
     setLoading(true);
     try {
       // Combine body and signature (signature is HTML, so append properly)
@@ -168,15 +197,18 @@ export default function ComposeEmailDialog({
       }
 
       // Send email (axios already has 30s timeout configured)
-      await sendEmail({
-        customer_id: customer.id,
-        to_email: formData.to_email,
-        cc: formData.cc || undefined,
-        subject: formData.subject,
-        body_html: bodyWithSignature,
-        body_text: bodyWithSignature, // Use same content for plain text fallback
-        template_id: selectedTemplateId,
-      });
+      await sendEmail(
+        {
+          customer_id: customer.id,
+          to_email: formData.to_email,
+          cc: formData.cc || undefined,
+          subject: formData.subject,
+          body_html: bodyWithSignature,
+          body_text: bodyWithSignature, // Use same content for plain text fallback
+          template_id: selectedTemplateId,
+        },
+        attachments.length > 0 ? attachments : undefined
+      );
 
       toast.success('Email sent successfully');
       // Reset loading before closing
@@ -283,6 +315,57 @@ export default function ComposeEmailDialog({
                 placeholder="Email subject"
                 className="col-span-11 h-8"
               />
+            </div>
+
+            {/* Attachments */}
+            <div className="space-y-1">
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                accept="*/*"
+                onChange={handleAttachmentChange}
+              />
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Paperclip className="h-4 w-4 mr-1" />
+                  Attach files
+                </Button>
+                <span className="text-xs text-muted-foreground">
+                  Max 20MB total
+                </span>
+              </div>
+              {attachments.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {attachments.map((file, index) => (
+                    <div
+                      key={`${file.name}-${index}`}
+                      className="flex items-center gap-1 px-2 py-1 rounded-md bg-muted text-sm"
+                    >
+                      <span className="truncate max-w-[120px]" title={file.name}>
+                        {file.name}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        ({(file.size / 1024).toFixed(1)} KB)
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => removeAttachment(index)}
+                        className="ml-1 p-0.5 hover:bg-muted-foreground/20 rounded"
+                        aria-label="Remove attachment"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 

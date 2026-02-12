@@ -49,8 +49,15 @@ export const sendEmail = async (emailData: {
   body_html?: string;
   body_text?: string;
   template_id?: number;
-}) => {
-  const response = await api.post('/api/emails', emailData);
+}, attachments?: File[]) => {
+  const formData = new FormData();
+  formData.append('email_data', JSON.stringify(emailData));
+  if (attachments?.length) {
+    for (const file of attachments) {
+      formData.append('attachments', file);
+    }
+  }
+  const response = await api.post('/api/emails', formData);
   return response.data;
 };
 
@@ -69,8 +76,15 @@ export const replyToEmail = async (emailId: number, replyData: {
   body_text?: string;
   cc?: string;
   bcc?: string;
-}) => {
-  const response = await api.post(`/api/emails/${emailId}/reply`, replyData);
+}, attachments?: File[]) => {
+  const formData = new FormData();
+  formData.append('reply_data', JSON.stringify(replyData));
+  if (attachments?.length) {
+    for (const file of attachments) {
+      formData.append('attachments', file);
+    }
+  }
+  const response = await api.post(`/api/emails/${emailId}/reply`, formData);
   return response.data;
 };
 

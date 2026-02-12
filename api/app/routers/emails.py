@@ -1,7 +1,9 @@
 """
 Email router for sending and receiving emails.
 """
-from fastapi import APIRouter, Depends, HTTPException
+import json
+import os
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlmodel import Session, select
 from typing import List, Optional
 from datetime import datetime
@@ -15,6 +17,10 @@ from app.email_template_service import render_email_template
 
 router = APIRouter(prefix="/api/emails", tags=["emails"])
 
+# Attachment limits (bytes)
+MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024  # 10MB per file
+MAX_TOTAL_ATTACHMENTS = 25 * 1024 * 1024  # 25MB total
+
 
 def generate_thread_id(message_id: Optional[str], in_reply_to: Optional[str]) -> str:
     """Generate or retrieve thread ID for email threading."""
@@ -24,54 +30,96 @@ def generate_thread_id(message_id: Optional[str], in_reply_to: Optional[str]) ->
     return str(uuid.uuid4())
 
 
+def _sanitize_filename(filename: Optional[str]) -> str:
+    """Sanitize filename to prevent path traversal."""
+    if not filename or not filename.strip():
+        return "attachment"
+    return os.path.basename(filename.strip())
+
+
 @router.post("", response_model=EmailResponse)
 async def send_email_to_customer(
-    email_data: EmailCreate,
+    email_data: str = Form(..., description="JSON string of email payload"),
+    attachments: Optional[List[UploadFile]] = File(None),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
-    """Send an email to a customer."""
+    """Send an email to a customer. Accepts multipart/form-data with email_data (JSON) and optional attachments."""
     import traceback
     import sys
-    
+
+    try:
+        data = json.loads(email_data)
+        email_data_parsed = EmailCreate.model_validate(data)
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid email_data JSON: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
     try:
         # Verify customer exists
-        statement = select(Customer).where(Customer.id == email_data.customer_id)
+        statement = select(Customer).where(Customer.id == email_data_parsed.customer_id)
         customer = session.exec(statement).first()
-        
+
         if not customer:
             raise HTTPException(status_code=404, detail="Customer not found")
-        
+
+        # Process attachments
+        attachment_list: List[dict] = []
+        attachment_metadata: List[dict] = []
+        total_size = 0
+        files_to_process = attachments or []
+
+        for f in files_to_process:
+            if not f.filename:
+                continue
+            content = await f.read()
+            size = len(content)
+            if size > MAX_ATTACHMENT_SIZE:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Attachment '{f.filename}' exceeds 10MB limit"
+                )
+            total_size += size
+            if total_size > MAX_TOTAL_ATTACHMENTS:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Total attachments exceed 25MB limit"
+                )
+            safe_name = _sanitize_filename(f.filename)
+            attachment_list.append({"filename": safe_name, "content": content})
+            attachment_metadata.append({"filename": safe_name})
+
         # If template_id is provided, render the template
-        subject = email_data.subject
-        body_html = email_data.body_html
-        body_text = email_data.body_text
-        
-        if email_data.template_id:
-            statement = select(EmailTemplate).where(EmailTemplate.id == email_data.template_id)
+        subject = email_data_parsed.subject
+        body_html = email_data_parsed.body_html
+        body_text = email_data_parsed.body_text
+
+        if email_data_parsed.template_id:
+            statement = select(EmailTemplate).where(EmailTemplate.id == email_data_parsed.template_id)
             template = session.exec(statement).first()
-            
+
             if template:
                 rendered_subject, rendered_body_html = render_email_template(template, customer)
-                # Use rendered content if subject/body not explicitly provided
                 if not subject:
                     subject = rendered_subject
                 if not body_html:
                     body_html = rendered_body_html
                 if not body_text:
-                    body_text = rendered_body_html  # Use HTML as fallback for plain text
-        
+                    body_text = rendered_body_html
+
         # Send email via SMTP
         success, message_id, error = send_email(
-            to_email=email_data.to_email,
+            to_email=email_data_parsed.to_email,
             subject=subject,
             body_html=body_html,
             body_text=body_text,
-            cc=email_data.cc,
-            bcc=email_data.bcc,
+            cc=email_data_parsed.cc,
+            bcc=email_data_parsed.bcc,
+            attachments=attachment_list if attachment_list else None,
             user_id=current_user.id
         )
-        
+
         if not success:
             error_msg = f"Failed to send email: {error}"
             print(error_msg, file=sys.stderr, flush=True)
@@ -83,19 +131,21 @@ async def send_email_to_customer(
         print(error_msg, file=sys.stderr, flush=True)
         print(traceback.format_exc(), file=sys.stderr, flush=True)
         raise HTTPException(status_code=500, detail=error_msg)
-    
+
     # Create email record
+    attachments_json = json.dumps(attachment_metadata) if attachment_metadata else None
     email_record = Email(
-        customer_id=email_data.customer_id,
+        customer_id=email_data_parsed.customer_id,
         message_id=message_id,
         direction=EmailDirection.SENT,
         from_email=current_user.email,
-        to_email=email_data.to_email,
-        cc=email_data.cc,
-        bcc=email_data.bcc,
+        to_email=email_data_parsed.to_email,
+        cc=email_data_parsed.cc,
+        bcc=email_data_parsed.bcc,
         subject=subject,
         body_html=body_html,
         body_text=body_text,
+        attachments=attachments_json,
         sent_at=datetime.utcnow(),
         created_by_id=current_user.id,
         thread_id=generate_thread_id(message_id, None)
@@ -106,9 +156,9 @@ async def send_email_to_customer(
     
     # Create EMAIL_SENT activity
     activity = Activity(
-        customer_id=email_data.customer_id,
+        customer_id=email_data_parsed.customer_id,
         activity_type=ActivityType.EMAIL_SENT,
-        notes=f"Email sent to {email_data.to_email}: {subject}",
+        notes=f"Email sent to {email_data_parsed.to_email}: {subject}",
         created_by_id=current_user.id
     )
     session.add(activity)
@@ -228,48 +278,82 @@ async def get_email(
 @router.post("/{email_id}/reply", response_model=EmailResponse)
 async def reply_to_email(
     email_id: int,
-    reply_data: EmailReplyRequest,
+    reply_data: str = Form(..., description="JSON string of reply payload (body_html, body_text, cc, bcc)"),
+    attachments: Optional[List[UploadFile]] = File(None),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
-    """Reply to an email."""
+    """Reply to an email. Accepts multipart/form-data with reply_data (JSON) and optional attachments."""
+    try:
+        data = json.loads(reply_data)
+        reply_data_parsed = EmailReplyRequest.model_validate(data)
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid reply_data JSON: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
     # Get original email
     statement = select(Email).where(Email.id == email_id)
     original_email = session.exec(statement).first()
-    
+
     if not original_email:
         raise HTTPException(status_code=404, detail="Email not found")
-    
+
     # Determine reply recipient
     if original_email.direction == EmailDirection.SENT:
-        # Replying to a sent email - reply to the recipient
         to_email = original_email.to_email
     else:
-        # Replying to a received email - reply to the sender
         to_email = original_email.from_email
-    
+
     # Create reply subject
     subject = original_email.subject
     if not subject.startswith("Re: "):
         subject = f"Re: {subject}"
-    
+
+    # Process attachments
+    attachment_list: List[dict] = []
+    attachment_metadata: List[dict] = []
+    total_size = 0
+    files_to_process = attachments or []
+
+    for f in files_to_process:
+        if not f.filename:
+            continue
+        content = await f.read()
+        size = len(content)
+        if size > MAX_ATTACHMENT_SIZE:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Attachment '{f.filename}' exceeds 10MB limit"
+            )
+        total_size += size
+        if total_size > MAX_TOTAL_ATTACHMENTS:
+            raise HTTPException(
+                status_code=400,
+                detail="Total attachments exceed 25MB limit"
+            )
+        safe_name = _sanitize_filename(f.filename)
+        attachment_list.append({"filename": safe_name, "content": content})
+        attachment_metadata.append({"filename": safe_name})
+
     # Send reply email
     success, message_id, error = send_email(
         to_email=to_email,
         subject=subject,
-        body_html=reply_data.body_html,
-        body_text=reply_data.body_text,
-        cc=reply_data.cc,
-        bcc=reply_data.bcc,
+        body_html=reply_data_parsed.body_html,
+        body_text=reply_data_parsed.body_text,
+        cc=reply_data_parsed.cc,
+        bcc=reply_data_parsed.bcc,
+        attachments=attachment_list if attachment_list else None,
         in_reply_to=original_email.message_id,
         references=original_email.message_id,
         user_id=current_user.id
     )
-    
+
     if not success:
         raise HTTPException(status_code=500, detail=f"Failed to send reply: {error}")
-    
-    # Create email record
+
+    attachments_json = json.dumps(attachment_metadata) if attachment_metadata else None
     reply_email = Email(
         customer_id=original_email.customer_id,
         message_id=message_id,
@@ -278,11 +362,12 @@ async def reply_to_email(
         direction=EmailDirection.SENT,
         from_email=current_user.email,
         to_email=to_email,
-        cc=reply_data.cc,
-        bcc=reply_data.bcc,
+        cc=reply_data_parsed.cc,
+        bcc=reply_data_parsed.bcc,
         subject=subject,
-        body_html=reply_data.body_html,
-        body_text=reply_data.body_text,
+        body_html=reply_data_parsed.body_html,
+        body_text=reply_data_parsed.body_text,
+        attachments=attachments_json,
         sent_at=datetime.utcnow(),
         created_by_id=current_user.id
     )
