@@ -6,8 +6,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from sqlmodel import Session, select
 from typing import List
+import httpx
 from app.database import get_session
-from app.models import Order, OrderItem, Customer, CompanySettings, AccessSheetRequest
+from app.models import Order, OrderItem, Customer, CompanySettings, AccessSheetRequest, Product
 from app.auth import get_current_user
 from app.schemas import OrderResponse, OrderItemResponse, OrderUpdate, AccessSheetSendResponse, AccessSheetResponse
 from app.models import User
@@ -324,3 +325,107 @@ async def send_access_sheet(
         access_sheet_url=access_sheet_url,
         access_token=req.access_token,
     )
+
+
+def _build_customer_address(customer: Customer) -> str:
+    """Build full address string from customer fields."""
+    parts = []
+    if customer.address_line1:
+        parts.append(customer.address_line1)
+    if customer.address_line2:
+        parts.append(customer.address_line2)
+    if customer.city:
+        parts.append(customer.city)
+    if customer.county:
+        parts.append(customer.county)
+    if customer.postcode:
+        parts.append(customer.postcode)
+    if customer.country:
+        parts.append(customer.country)
+    return ", ".join(parts) if parts else ""
+
+
+@router.post("/{order_id}/send-to-production")
+async def send_to_production(
+    order_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Send order to production app as a work order. Requires PRODUCTION_APP_API_URL and PRODUCTION_APP_API_KEY."""
+    base_url = (os.getenv("PRODUCTION_APP_API_URL") or "").strip().rstrip("/")
+    api_key = (os.getenv("PRODUCTION_APP_API_KEY") or "").strip()
+    if not base_url or not api_key:
+        raise HTTPException(
+            status_code=500,
+            detail="Production app not configured. Set PRODUCTION_APP_API_URL and PRODUCTION_APP_API_KEY.",
+        )
+
+    order = session.exec(select(Order).where(Order.id == order_id)).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if not order.customer_id:
+        raise HTTPException(status_code=400, detail="Order has no customer.")
+    customer = session.get(Customer, order.customer_id)
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+
+    order_items = list(
+        session.exec(
+            select(OrderItem).where(OrderItem.order_id == order.id).order_by(OrderItem.sort_order)
+        ).all()
+    )
+
+    items_payload = []
+    for item in order_items:
+        product = None
+        if item.product_id:
+            product = session.get(Product, item.product_id)
+        install_hours = float(product.installation_hours) if product and product.installation_hours else 0
+        number_of_boxes = product.boxes_per_product if product and product.boxes_per_product is not None else 0
+        items_payload.append({
+            "product_name": product.name if product else item.description,
+            "description": item.description,
+            "quantity": float(item.quantity),
+            "unit_price": float(item.unit_price),
+            "install_hours": install_hours,
+            "number_of_boxes": int(number_of_boxes),
+        })
+
+    payload = {
+        "order_number": order.order_number,
+        "order_id": order.id,
+        "customer_name": customer.name,
+        "customer_postcode": customer.postcode or "",
+        "customer_address": _build_customer_address(customer),
+        "customer_email": customer.email or "",
+        "customer_phone": customer.phone or "",
+        "items": items_payload,
+        "total_amount": float(order.total_amount),
+        "currency": order.currency,
+        "installation_booked": order.installation_booked,
+        "created_at": order.created_at.isoformat() if order.created_at else None,
+    }
+
+    url = f"{base_url}/api/webhooks/work-orders"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}",
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(url, json=payload, headers=headers)
+            response.raise_for_status()
+            data = response.json() if response.content else {}
+            return {"success": True, "message": "Order sent to production", **data}
+    except httpx.HTTPStatusError as e:
+        detail = "Production app rejected the request"
+        try:
+            err_body = e.response.json()
+            if "detail" in err_body:
+                detail = str(err_body["detail"])
+        except Exception:
+            pass
+        raise HTTPException(status_code=502, detail=detail)
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=502, detail=f"Failed to reach production app: {str(e)}")

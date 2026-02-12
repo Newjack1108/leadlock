@@ -452,6 +452,12 @@ export const sendAccessSheet = async (orderId: number): Promise<{
   return response.data;
 };
 
+/** Send order to production app as work order. Auth required. */
+export const sendOrderToProduction = async (orderId: number): Promise<{ success: boolean; message?: string }> => {
+  const response = await api.post(`/api/orders/${orderId}/send-to-production`);
+  return response.data;
+};
+
 /** Public: Get access sheet form context by token (no auth). */
 export const getAccessSheetContext = async (token: string): Promise<{
   customer_name: string;

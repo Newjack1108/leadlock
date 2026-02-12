@@ -13,12 +13,13 @@ import api, {
   getOrderPaidInFullInvoicePdf,
   pushOrderToXero,
   sendAccessSheet,
+  sendOrderToProduction,
 } from '@/lib/api';
 import { Order, OrderItem, Customer } from '@/lib/types';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { formatDateTime } from '@/lib/utils';
-import { ArrowLeft, ExternalLink, CheckCircle, Circle, FileDown, Upload, Copy, Link2 } from 'lucide-react';
+import { ArrowLeft, ExternalLink, CheckCircle, Circle, FileDown, Upload, Copy, Link2, Send } from 'lucide-react';
 
 function formatCurrency(amount: number, currency: string = 'GBP'): string {
   return new Intl.NumberFormat('en-GB', {
@@ -41,6 +42,7 @@ export default function OrderDetailPage() {
   const [updating, setUpdating] = useState<StatusKey | null>(null);
   const [pushingXero, setPushingXero] = useState(false);
   const [sendingAccessSheet, setSendingAccessSheet] = useState(false);
+  const [sendingToProduction, setSendingToProduction] = useState(false);
 
   useEffect(() => {
     if (orderId) fetchOrder();
@@ -128,6 +130,18 @@ export default function OrderDetailPage() {
       toast.error(error.response?.data?.detail || 'Failed to get access sheet link');
     } finally {
       setSendingAccessSheet(false);
+    }
+  };
+
+  const handleSendToProduction = async () => {
+    try {
+      setSendingToProduction(true);
+      await sendOrderToProduction(orderId);
+      toast.success('Order sent to production');
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || 'Failed to send to production');
+    } finally {
+      setSendingToProduction(false);
     }
   };
 
@@ -342,6 +356,17 @@ export default function OrderDetailPage() {
                       {key.replace('installation_', '')}
                     </Button>
                   ))}
+                </div>
+                <div className="mt-4 pt-4 border-t">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleSendToProduction}
+                    disabled={sendingToProduction}
+                  >
+                    <Send className="h-4 w-4 mr-1" />
+                    {sendingToProduction ? 'Sending...' : 'Send to production'}
+                  </Button>
                 </div>
               </CardContent>
             </Card>
