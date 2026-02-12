@@ -26,6 +26,8 @@ interface ComposeEmailDialogProps {
   onOpenChange: (open: boolean) => void;
   customer: Customer;
   onSuccess?: () => void;
+  initialAttachments?: File[];
+  initialSubject?: string;
 }
 
 export default function ComposeEmailDialog({
@@ -33,6 +35,8 @@ export default function ComposeEmailDialog({
   onOpenChange,
   customer,
   onSuccess,
+  initialAttachments,
+  initialSubject,
 }: ComposeEmailDialogProps) {
   const [loading, setLoading] = useState(false);
   const [templates, setTemplates] = useState<EmailTemplate[]>([]);
@@ -56,10 +60,10 @@ export default function ComposeEmailDialog({
       setFormData({
         to_email: customer.email || '',
         cc: '',
-        subject: '',
+        subject: initialSubject ?? '',
         body: '',
       });
-      setAttachments([]);
+      setAttachments(initialAttachments ?? []);
       setSelectedTemplateId(undefined);
       setLoading(false); // Reset loading state when dialog opens
     } else {
@@ -68,7 +72,7 @@ export default function ComposeEmailDialog({
       setSelectedTemplateId(undefined);
       setAttachments([]);
     }
-  }, [open, customer]);
+  }, [open, customer, initialAttachments, initialSubject]);
 
   const fetchUserSignature = async () => {
     try {

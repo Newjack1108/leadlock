@@ -11,6 +11,8 @@ import api, {
   updateOrder,
   getOrderDepositInvoicePdf,
   getOrderPaidInFullInvoicePdf,
+  fetchOrderDepositInvoiceBlob,
+  fetchOrderPaidInFullInvoiceBlob,
   pushOrderToXero,
   sendAccessSheet,
   sendOrderToProduction,
@@ -19,7 +21,14 @@ import { Order, OrderItem, Customer } from '@/lib/types';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { formatDateTime } from '@/lib/utils';
-import { ArrowLeft, ExternalLink, CheckCircle, Circle, FileDown, Upload, Copy, Link2, Send } from 'lucide-react';
+import { ArrowLeft, ChevronDown, ExternalLink, CheckCircle, Circle, FileDown, Mail, Upload, Copy, Link2, Send } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import ComposeEmailDialog from '@/components/ComposeEmailDialog';
 
 function formatCurrency(amount: number, currency: string = 'GBP'): string {
   return new Intl.NumberFormat('en-GB', {
@@ -43,6 +52,9 @@ export default function OrderDetailPage() {
   const [pushingXero, setPushingXero] = useState(false);
   const [sendingAccessSheet, setSendingAccessSheet] = useState(false);
   const [sendingToProduction, setSendingToProduction] = useState(false);
+  const [composeEmailOpen, setComposeEmailOpen] = useState(false);
+  const [composeEmailInitialAttachments, setComposeEmailInitialAttachments] = useState<File[]>([]);
+  const [composeEmailInitialSubject, setComposeEmailInitialSubject] = useState<string>('');
 
   useEffect(() => {
     if (orderId) fetchOrder();
@@ -101,6 +113,32 @@ export default function OrderDetailPage() {
       toast.success('Paid in full invoice downloaded');
     } catch (error: any) {
       toast.error(error.response?.data?.detail || 'Failed to download invoice');
+    }
+  };
+
+  const handleAttachDepositInvoiceToEmail = async () => {
+    if (!customer || !order) return;
+    try {
+      const blob = await fetchOrderDepositInvoiceBlob(orderId);
+      const file = new File([blob], `Invoice_Deposit_${orderId}.pdf`, { type: 'application/pdf' });
+      setComposeEmailInitialAttachments([file]);
+      setComposeEmailInitialSubject(order.order_number ? `Invoice - Order #${order.order_number}` : '');
+      setComposeEmailOpen(true);
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || 'Failed to load invoice');
+    }
+  };
+
+  const handleAttachPaidInFullInvoiceToEmail = async () => {
+    if (!customer || !order) return;
+    try {
+      const blob = await fetchOrderPaidInFullInvoiceBlob(orderId);
+      const file = new File([blob], `Invoice_PaidInFull_${orderId}.pdf`, { type: 'application/pdf' });
+      setComposeEmailInitialAttachments([file]);
+      setComposeEmailInitialSubject(order.order_number ? `Invoice - Order #${order.order_number}` : '');
+      setComposeEmailOpen(true);
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || 'Failed to load invoice');
     }
   };
 
@@ -464,24 +502,58 @@ export default function OrderDetailPage() {
                     : 'Mark deposit or paid in full to generate an invoice.'}
                 </p>
                 <div className="flex flex-wrap gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleDepositInvoice}
-                    disabled={!order.invoice_number || (!order.deposit_paid && !order.paid_in_full)}
-                  >
-                    <FileDown className="h-4 w-4 mr-1" />
-                    Download Deposit Paid Invoice
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handlePaidInFullInvoice}
-                    disabled={!order.invoice_number || !order.paid_in_full}
-                  >
-                    <FileDown className="h-4 w-4 mr-1" />
-                    Download Paid in Full Invoice
-                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={!order.invoice_number || (!order.deposit_paid && !order.paid_in_full)}
+                      >
+                        <FileDown className="h-4 w-4 mr-1" />
+                        Deposit Invoice
+                        <ChevronDown className="h-4 w-4 ml-1" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start">
+                      <DropdownMenuItem onClick={handleDepositInvoice}>
+                        <FileDown className="h-4 w-4 mr-2" />
+                        Download
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={handleAttachDepositInvoiceToEmail}
+                        disabled={!customer}
+                      >
+                        <Mail className="h-4 w-4 mr-2" />
+                        Attach to new email
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={!order.invoice_number || !order.paid_in_full}
+                      >
+                        <FileDown className="h-4 w-4 mr-1" />
+                        Paid in Full Invoice
+                        <ChevronDown className="h-4 w-4 ml-1" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start">
+                      <DropdownMenuItem onClick={handlePaidInFullInvoice}>
+                        <FileDown className="h-4 w-4 mr-2" />
+                        Download
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={handleAttachPaidInFullInvoiceToEmail}
+                        disabled={!customer}
+                      >
+                        <Mail className="h-4 w-4 mr-2" />
+                        Attach to new email
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                   <Button
                     variant="outline"
                     size="sm"
@@ -557,6 +629,22 @@ export default function OrderDetailPage() {
           </div>
         </div>
       </main>
+
+      {customer && (
+        <ComposeEmailDialog
+          open={composeEmailOpen}
+          onOpenChange={(open) => {
+            setComposeEmailOpen(open);
+            if (!open) {
+              setComposeEmailInitialAttachments([]);
+              setComposeEmailInitialSubject('');
+            }
+          }}
+          customer={customer}
+          initialAttachments={composeEmailInitialAttachments}
+          initialSubject={composeEmailInitialSubject}
+        />
+      )}
     </div>
   );
 }

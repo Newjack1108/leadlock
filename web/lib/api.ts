@@ -424,11 +424,25 @@ export const updateOrder = async (
   return response.data;
 };
 
-export const getOrderDepositInvoicePdf = async (orderId: number) => {
+/** Fetches deposit invoice PDF as Blob for download or attach-to-email. */
+export const fetchOrderDepositInvoiceBlob = async (orderId: number): Promise<Blob> => {
   const response = await api.get(`/api/orders/${orderId}/invoice/deposit-pdf`, {
     responseType: 'blob',
   });
-  const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+  return new Blob([response.data], { type: 'application/pdf' });
+};
+
+/** Fetches paid-in-full invoice PDF as Blob for download or attach-to-email. */
+export const fetchOrderPaidInFullInvoiceBlob = async (orderId: number): Promise<Blob> => {
+  const response = await api.get(`/api/orders/${orderId}/invoice/paid-in-full-pdf`, {
+    responseType: 'blob',
+  });
+  return new Blob([response.data], { type: 'application/pdf' });
+};
+
+export const getOrderDepositInvoicePdf = async (orderId: number) => {
+  const blob = await fetchOrderDepositInvoiceBlob(orderId);
+  const url = window.URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
   link.setAttribute('download', `Invoice_Deposit_${orderId}.pdf`);
@@ -439,10 +453,8 @@ export const getOrderDepositInvoicePdf = async (orderId: number) => {
 };
 
 export const getOrderPaidInFullInvoicePdf = async (orderId: number) => {
-  const response = await api.get(`/api/orders/${orderId}/invoice/paid-in-full-pdf`, {
-    responseType: 'blob',
-  });
-  const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+  const blob = await fetchOrderPaidInFullInvoiceBlob(orderId);
+  const url = window.URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
   link.setAttribute('download', `Invoice_PaidInFull_${orderId}.pdf`);
