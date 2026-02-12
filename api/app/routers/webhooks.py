@@ -20,9 +20,11 @@ from app.models import (
     ActivityType,
     MessengerMessage,
     MessengerDirection,
+    Product,
+    ProductCategory,
 )
-from app.schemas import LeadCreate, LeadResponse
-from app.auth import get_webhook_api_key
+from app.schemas import LeadCreate, LeadResponse, ProductImportPayload, ProductImportResponse
+from app.auth import get_webhook_api_key, get_product_import_api_key
 from app.workflow import check_sla_overdue
 from app.routers.leads import enrich_lead_response
 from app.sms_service import validate_twilio_webhook, normalize_phone, get_twilio_config
@@ -160,6 +162,54 @@ async def create_lead_webhook(
             quote_lock_reason=quote_lock_reason,
             customer=customer_response
         )
+
+
+@router.post("/products", response_model=ProductImportResponse)
+async def import_product_webhook(
+    payload: ProductImportPayload,
+    _api_key: str = Depends(get_product_import_api_key),
+    session: Session = Depends(get_session),
+):
+    """
+    Create or update a product pushed from the production app.
+    Requires Bearer token in Authorization header.
+    Matches existing product by name (case-sensitive); updates if found, creates otherwise.
+    """
+    # Map payload to Product fields
+    base_price = payload.price_ex_vat
+    installation_hours = payload.install_hours
+    number_of_boxes_int = int(payload.number_of_boxes) if payload.number_of_boxes is not None else 0
+
+    # Upsert by name
+    existing = session.exec(select(Product).where(Product.name == payload.name)).first()
+    if existing:
+        existing.description = payload.description or None
+        existing.base_price = base_price
+        existing.installation_hours = installation_hours
+        existing.boxes_per_product = number_of_boxes_int
+        existing.updated_at = datetime.utcnow()
+        session.add(existing)
+        session.commit()
+        session.refresh(existing)
+        product = existing
+    else:
+        product = Product(
+            name=payload.name,
+            description=payload.description or None,
+            category=ProductCategory.STABLES,
+            subcategory=None,
+            is_extra=False,
+            base_price=base_price,
+            unit="Unit",
+            is_active=True,
+            installation_hours=installation_hours,
+            boxes_per_product=number_of_boxes_int,
+        )
+        session.add(product)
+        session.commit()
+        session.refresh(product)
+
+    return ProductImportResponse(success=True, product_id=str(product.id))
 
 
 @router.post("/twilio/sms")

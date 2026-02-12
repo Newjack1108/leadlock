@@ -529,6 +529,44 @@ class ProductResponse(BaseModel):
         }
 
 
+class ProductImportPayload(BaseModel):
+    """Payload for product import from production app."""
+
+    name: str
+    description: Optional[str] = None
+    price_ex_vat: Decimal
+    install_hours: Decimal
+    number_of_boxes: Decimal  # Accepted as number; validated and stored as int
+
+    @field_validator("price_ex_vat")
+    @classmethod
+    def price_non_negative(cls, v: Decimal) -> Decimal:
+        if v < 0:
+            raise ValueError("price_ex_vat must be >= 0")
+        return v
+
+    @field_validator("install_hours")
+    @classmethod
+    def install_hours_non_negative(cls, v: Decimal) -> Decimal:
+        if v < 0:
+            raise ValueError("install_hours must be >= 0")
+        return v
+
+    @field_validator("number_of_boxes")
+    @classmethod
+    def number_of_boxes_non_negative(cls, v: Decimal) -> Decimal:
+        if v < 0:
+            raise ValueError("number_of_boxes must be >= 0")
+        return v
+
+
+class ProductImportResponse(BaseModel):
+    """Response for product import endpoint."""
+
+    success: bool = True
+    product_id: str
+
+
 class CompanySettingsCreate(BaseModel):
     company_name: str
     trading_name: Optional[str] = None

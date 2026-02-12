@@ -85,3 +85,27 @@ def get_webhook_api_key(api_key: str = Header(None, alias="X-API-Key")) -> str:
             detail="Invalid API key"
         )
     return api_key
+
+
+def get_product_import_api_key(authorization: Optional[str] = Header(None, alias="Authorization")) -> str:
+    """Validate Bearer token in Authorization header against product import API key."""
+    expected_key = os.getenv("PRODUCT_IMPORT_API_KEY") or os.getenv("WEBHOOK_API_KEY")
+    if not expected_key:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Product import API key not configured"
+        )
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing or invalid Authorization header. Expected: Bearer <token>",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    token = authorization[7:].strip()  # Remove "Bearer " prefix
+    if token != expected_key:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid Bearer token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return token
