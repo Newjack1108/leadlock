@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import api, {
   getOrder,
   updateOrder,
+  previewQuotePdf,
   getOrderDepositInvoicePdf,
   getOrderPaidInFullInvoicePdf,
   fetchOrderDepositInvoiceBlob,
@@ -21,7 +22,7 @@ import { Order, OrderItem, Customer } from '@/lib/types';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { formatDateTime } from '@/lib/utils';
-import { ArrowLeft, ChevronDown, ExternalLink, CheckCircle, Circle, FileDown, Mail, Upload, Copy, Link2, Send } from 'lucide-react';
+import { ArrowLeft, ChevronDown, ExternalLink, CheckCircle, Circle, Eye, FileDown, Mail, Upload, Copy, Link2, Send } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,6 +30,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import ComposeEmailDialog from '@/components/ComposeEmailDialog';
+import SendQuoteEmailDialog from '@/components/SendQuoteEmailDialog';
 
 function formatCurrency(amount: number, currency: string = 'GBP'): string {
   return new Intl.NumberFormat('en-GB', {
@@ -55,6 +57,7 @@ export default function OrderDetailPage() {
   const [composeEmailOpen, setComposeEmailOpen] = useState(false);
   const [composeEmailInitialAttachments, setComposeEmailInitialAttachments] = useState<File[]>([]);
   const [composeEmailInitialSubject, setComposeEmailInitialSubject] = useState<string>('');
+  const [sendEmailDialogOpen, setSendEmailDialogOpen] = useState(false);
 
   useEffect(() => {
     if (orderId) fetchOrder();
@@ -264,12 +267,44 @@ export default function OrderDetailPage() {
                 <p className="text-muted-foreground mt-1">For {customer.name}</p>
               )}
             </div>
-            <Button variant="outline" asChild>
-              <Link href={`/quotes/${order.quote_id}`}>
-                <ExternalLink className="h-4 w-4 mr-2" />
-                View quote
-              </Link>
-            </Button>
+            <div className="flex items-center gap-3">
+              <Badge
+                className={`text-sm ${order.deposit_paid ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'}`}
+              >
+                Deposit paid
+              </Badge>
+              <Badge
+                className={`text-sm ${order.balance_paid || order.paid_in_full ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'}`}
+              >
+                Balance paid
+              </Badge>
+              <Button
+                variant="outline"
+                onClick={async () => {
+                  try {
+                    await previewQuotePdf(order.quote_id);
+                  } catch (error: any) {
+                    toast.error(error.response?.data?.detail || error.message || 'Failed to download PDF');
+                  }
+                }}
+              >
+                <Eye className="h-4 w-4 mr-2" />
+                Download PDF
+              </Button>
+              <Button
+                onClick={() => setSendEmailDialogOpen(true)}
+                disabled={!customer}
+              >
+                <Mail className="h-4 w-4 mr-2" />
+                Send Quote
+              </Button>
+              <Button variant="outline" asChild>
+                <Link href={`/quotes/${order.quote_id}`}>
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  View quote
+                </Link>
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -643,6 +678,15 @@ export default function OrderDetailPage() {
           customer={customer}
           initialAttachments={composeEmailInitialAttachments}
           initialSubject={composeEmailInitialSubject}
+        />
+      )}
+      {customer && (
+        <SendQuoteEmailDialog
+          open={sendEmailDialogOpen}
+          onOpenChange={setSendEmailDialogOpen}
+          quoteId={order.quote_id}
+          customer={customer}
+          onSuccess={fetchOrder}
         />
       )}
     </div>
