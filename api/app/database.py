@@ -855,6 +855,17 @@ def create_db_and_tables():
                     error_str = str(e).lower()
                     if "already exists" not in error_str and "duplicate" not in error_str:
                         print(f"Error adding boxes_per_product column: {e}", file=sys.stderr, flush=True)
+            if "production_product_id" not in product_columns:
+                print("Adding production_product_id column to product table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE product ADD COLUMN production_product_id INTEGER"))
+                        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_product_production_product_id ON product (production_product_id)"))
+                    print("Added production_product_id column to product table", file=sys.stderr, flush=True)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Error adding production_product_id column: {e}", file=sys.stderr, flush=True)
         
         # Step 11: Add is_giveaway to DiscountTemplate table
         has_discount_template_table = inspector.has_table("discounttemplate")

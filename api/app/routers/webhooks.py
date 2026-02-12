@@ -173,20 +173,30 @@ async def import_product_webhook(
     """
     Create or update a product pushed from the production app.
     Requires Bearer token in Authorization header.
-    Matches existing product by name (case-sensitive); updates if found, creates otherwise.
+    Upsert: if product_id (Production's ID) provided, match by production_product_id; else match by name.
     """
     # Map payload to Product fields
     base_price = payload.price_ex_vat
     installation_hours = payload.install_hours
     number_of_boxes_int = int(payload.number_of_boxes) if payload.number_of_boxes is not None else 0
 
-    # Upsert by name
-    existing = session.exec(select(Product).where(Product.name == payload.name)).first()
+    # Upsert: prefer production_product_id if provided, else fall back to name
+    existing = None
+    if payload.product_id is not None:
+        existing = session.exec(
+            select(Product).where(Product.production_product_id == payload.product_id)
+        ).first()
+    if existing is None:
+        existing = session.exec(select(Product).where(Product.name == payload.name)).first()
+
     if existing:
+        existing.name = payload.name
         existing.description = payload.description or None
         existing.base_price = base_price
         existing.installation_hours = installation_hours
         existing.boxes_per_product = number_of_boxes_int
+        if payload.product_id is not None:
+            existing.production_product_id = payload.product_id
         existing.updated_at = datetime.utcnow()
         session.add(existing)
         session.commit()
@@ -204,6 +214,7 @@ async def import_product_webhook(
             is_active=True,
             installation_hours=installation_hours,
             boxes_per_product=number_of_boxes_int,
+            production_product_id=payload.product_id,
         )
         session.add(product)
         session.commit()

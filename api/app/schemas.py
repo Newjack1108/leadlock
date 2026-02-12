@@ -532,6 +532,7 @@ class ProductResponse(BaseModel):
 class ProductImportPayload(BaseModel):
     """Payload for product import from production app."""
 
+    product_id: Optional[int] = None  # Production app's product ID for sync
     name: str
     description: Optional[str] = None
     price_ex_vat: Decimal
