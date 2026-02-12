@@ -56,6 +56,7 @@ export default function CompanySettingsPage() {
     hotel_allowance_per_night: '',
     meal_allowance_per_day: '',
     average_speed_mph: '',
+    product_import_gross_margin_pct: '',
   });
 
   useEffect(() => {
@@ -91,6 +92,7 @@ export default function CompanySettingsPage() {
         hotel_allowance_per_night: response.data.hotel_allowance_per_night != null ? String(response.data.hotel_allowance_per_night) : '',
         meal_allowance_per_day: response.data.meal_allowance_per_day != null ? String(response.data.meal_allowance_per_day) : '',
         average_speed_mph: response.data.average_speed_mph != null ? String(response.data.average_speed_mph) : '',
+        product_import_gross_margin_pct: response.data.product_import_gross_margin_pct != null ? String(response.data.product_import_gross_margin_pct) : '',
       });
     } catch (error: any) {
       if (error.response?.status === 401) {
@@ -111,6 +113,11 @@ export default function CompanySettingsPage() {
       toast.error('Company name is required');
       return;
     }
+    const marginVal = formData.product_import_gross_margin_pct ? parseFloat(formData.product_import_gross_margin_pct) : null;
+    if (marginVal != null && (marginVal < 0 || marginVal >= 99)) {
+      toast.error('Gross margin % must be between 0 and 99');
+      return;
+    }
 
     try {
       setSaving(true);
@@ -123,6 +130,7 @@ export default function CompanySettingsPage() {
         hotel_allowance_per_night: formData.hotel_allowance_per_night ? parseFloat(formData.hotel_allowance_per_night) : undefined,
         meal_allowance_per_day: formData.meal_allowance_per_day ? parseFloat(formData.meal_allowance_per_day) : undefined,
         average_speed_mph: formData.average_speed_mph ? parseFloat(formData.average_speed_mph) : undefined,
+        product_import_gross_margin_pct: formData.product_import_gross_margin_pct ? parseFloat(formData.product_import_gross_margin_pct) : undefined,
       };
       if (settings) {
         // Update existing: omit logo_filename so existing value is unchanged
@@ -400,6 +408,27 @@ export default function CompanySettingsPage() {
               <p className="text-sm text-muted-foreground">
                 Amended by production. Shown clearly on the dashboard for sales.
               </p>
+            </div>
+
+            <div className="space-y-4 border-t pt-6">
+              <h3 className="text-lg font-medium">Product import from production</h3>
+              <p className="text-sm text-muted-foreground">
+                Applied when products are pushed from production. Cost ex VAT × (1 / (1 - margin%)) = RRP. Leave blank to use cost as RRP.
+              </p>
+              <div className="space-y-2">
+                <Label htmlFor="product_import_gross_margin_pct">Gross margin % (RRP mark-up)</Label>
+                <Input
+                  id="product_import_gross_margin_pct"
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="99"
+                  value={formData.product_import_gross_margin_pct}
+                  onChange={(e) => setFormData({ ...formData, product_import_gross_margin_pct: e.target.value })}
+                  placeholder="e.g. 30"
+                  disabled={saving}
+                />
+              </div>
             </div>
 
             <div className="space-y-4 border-t pt-6">

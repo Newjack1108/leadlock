@@ -1,6 +1,7 @@
 import os
 import sys
 from datetime import datetime
+from decimal import Decimal, ROUND_HALF_UP
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
 from sqlmodel import Session, select
@@ -25,6 +26,7 @@ from app.models import (
 )
 from app.schemas import LeadCreate, LeadResponse, ProductImportPayload, ProductImportResponse
 from app.auth import get_webhook_api_key, get_product_import_api_key
+from app.routers.settings import get_company_settings
 from app.workflow import check_sla_overdue
 from app.routers.leads import enrich_lead_response
 from app.sms_service import validate_twilio_webhook, normalize_phone, get_twilio_config
@@ -174,9 +176,18 @@ async def import_product_webhook(
     Create or update a product pushed from the production app.
     Requires Bearer token in Authorization header.
     Upsert: if product_id (Production's ID) provided, match by production_product_id; else match by name.
+    Products from production send cost ex VAT; RRP (base_price) is derived using company gross margin % if set.
     """
-    # Map payload to Product fields
-    base_price = payload.price_ex_vat
+    # Map payload to Product fields: cost ex VAT from production
+    cost_ex_vat = payload.price_ex_vat
+    settings = get_company_settings(session)
+    margin_pct = getattr(settings, "product_import_gross_margin_pct", None) if settings else None
+    if margin_pct is not None and Decimal("0") < margin_pct < Decimal("100"):
+        # RRP = Cost / (1 - margin%/100)
+        divisor = Decimal("1") - (margin_pct / 100)
+        base_price = (cost_ex_vat / divisor).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    else:
+        base_price = cost_ex_vat
     installation_hours = payload.install_hours
     number_of_boxes_int = int(payload.number_of_boxes) if payload.number_of_boxes is not None else 0
 

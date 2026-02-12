@@ -234,6 +234,7 @@ export interface CompanySettings {
   hotel_allowance_per_night?: number;
   meal_allowance_per_day?: number;
   average_speed_mph?: number;
+  product_import_gross_margin_pct?: number;
   updated_at: string;
 }
 

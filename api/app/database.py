@@ -540,13 +540,14 @@ def create_db_and_tables():
                     if "already exists" not in error_str and "duplicate" not in error_str:
                         print(f"Warning: Could not add logo_url column: {col_error}", file=sys.stderr, flush=True)
 
-            # Installation & travel (mileage, overnight, 2-man team)
+            # Installation & travel (mileage, overnight, 2-man team) + product import gross margin
             for col_name, col_sql in [
                 ("distance_before_overnight_miles", "NUMERIC(10, 2)"),
                 ("cost_per_mile", "NUMERIC(10, 2)"),
                 ("hotel_allowance_per_night", "NUMERIC(10, 2)"),
                 ("meal_allowance_per_day", "NUMERIC(10, 2)"),
                 ("average_speed_mph", "NUMERIC(5, 2)"),
+                ("product_import_gross_margin_pct", "NUMERIC(5, 2)"),
             ]:
                 company_columns = [col['name'] for col in inspector.get_columns("companysettings")]
                 if col_name not in company_columns:

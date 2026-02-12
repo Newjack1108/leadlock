@@ -592,6 +592,7 @@ class CompanySettingsCreate(BaseModel):
     hotel_allowance_per_night: Optional[Decimal] = None
     meal_allowance_per_day: Optional[Decimal] = None
     average_speed_mph: Optional[Decimal] = None
+    product_import_gross_margin_pct: Optional[Decimal] = None
 
 
 class CompanySettingsUpdate(BaseModel):
@@ -618,6 +619,7 @@ class CompanySettingsUpdate(BaseModel):
     hotel_allowance_per_night: Optional[Decimal] = None
     meal_allowance_per_day: Optional[Decimal] = None
     average_speed_mph: Optional[Decimal] = None
+    product_import_gross_margin_pct: Optional[Decimal] = None
 
 
 class CompanySettingsResponse(BaseModel):
@@ -645,6 +647,7 @@ class CompanySettingsResponse(BaseModel):
     hotel_allowance_per_night: Optional[Decimal] = None
     meal_allowance_per_day: Optional[Decimal] = None
     average_speed_mph: Optional[Decimal] = None
+    product_import_gross_margin_pct: Optional[Decimal] = None
     updated_at: datetime
 
 
