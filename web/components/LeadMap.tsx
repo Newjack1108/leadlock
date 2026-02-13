@@ -1,19 +1,8 @@
 'use client';
 
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
-import L from 'leaflet';
+import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet';
 import type { LeadLocationItem } from '@/lib/types';
 import 'leaflet/dist/leaflet.css';
-
-// Fix default marker icon in Next.js (webpack doesn't resolve leaflet's default icon paths)
-const DefaultIcon = L.icon({
-  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-});
-L.Marker.prototype.options.icon = DefaultIcon;
 
 interface LeadMapProps {
   locations: LeadLocationItem[];
@@ -56,7 +45,18 @@ export default function LeadMap({ locations, loading = false }: LeadMapProps) {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         {locations.map((loc, i) => (
-          <Marker key={`${loc.postcode}-${i}`} position={[loc.lat, loc.lng]}>
+          <CircleMarker
+            key={`${loc.postcode}-${i}`}
+            center={[loc.lat, loc.lng]}
+            radius={6}
+            pathOptions={{
+              fillColor: '#22c55e',
+              color: '#16a34a',
+              weight: 1,
+              fillOpacity: 1,
+              opacity: 1,
+            }}
+          >
             <Popup>
               <span className="font-medium">{loc.postcode}</span>
               <br />
@@ -64,7 +64,7 @@ export default function LeadMap({ locations, loading = false }: LeadMapProps) {
                 {loc.count} lead{loc.count !== 1 ? 's' : ''}
               </span>
             </Popup>
-          </Marker>
+          </CircleMarker>
         ))}
       </MapContainer>
     </div>
