@@ -18,7 +18,7 @@ import api, { getQuotes, previewQuotePdf } from '@/lib/api';
 import { Quote, QuoteStatus, QuoteTemperature } from '@/lib/types';
 import { toast } from 'sonner';
 import Link from 'next/link';
-import { FileText, Eye, Pencil, List, LayoutGrid } from 'lucide-react';
+import { FileText, Eye, Pencil, List, LayoutGrid, ShoppingCart } from 'lucide-react';
 
 const statusColors: Record<QuoteStatus, string> = {
   DRAFT: 'bg-gray-100 text-gray-700',
@@ -40,7 +40,7 @@ export default function QuotesPage() {
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'list' | 'tile'>('list');
-  const [statusFilter, setStatusFilter] = useState<QuoteStatus | 'ALL'>('ALL');
+  const [statusFilter, setStatusFilter] = useState<QuoteStatus | 'ALL'>('SENT');
   const [temperatureFilter, setTemperatureFilter] = useState<QuoteTemperature | 'ALL'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -234,6 +234,12 @@ export default function QuotesPage() {
                           <Badge className={statusColors[quote.status]}>
                             {quote.status}
                           </Badge>
+                          {quote.order_id && (
+                            <Badge variant="outline" className="gap-1 border-emerald-500 text-emerald-700 bg-emerald-50">
+                              <ShoppingCart className="h-3 w-3" />
+                              Ordered
+                            </Badge>
+                          )}
                           {quote.temperature && (
                             <Badge className={temperatureColors[quote.temperature]}>
                               {quote.temperature}
@@ -311,6 +317,12 @@ export default function QuotesPage() {
                         <Badge className={statusColors[quote.status]}>
                           {quote.status}
                         </Badge>
+                        {quote.order_id && (
+                          <Badge variant="outline" className="gap-1 border-emerald-500 text-emerald-700 bg-emerald-50">
+                            <ShoppingCart className="h-3 w-3" />
+                            Ordered
+                          </Badge>
+                        )}
                         {quote.temperature && (
                           <Badge className={temperatureColors[quote.temperature]}>
                             {quote.temperature}
