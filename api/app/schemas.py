@@ -381,16 +381,23 @@ class StatusHistoryResponse(BaseModel):
     changed_by_name: Optional[str] = None
 
 
+class LeadSourceCount(BaseModel):
+    source: str
+    count: int
+
+
 class DashboardStats(BaseModel):
     total_leads: int
     new_count: int
     engaged_count: int
     qualified_count: int
     quoted_count: int
+    quotes_sent_count: int
     won_count: int
     lost_count: int
     engaged_percentage: float
     qualified_percentage: float
+    leads_by_source: List[LeadSourceCount] = []
 
 
 class UnreadSmsMessageItem(BaseModel):

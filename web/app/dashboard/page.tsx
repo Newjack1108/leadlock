@@ -188,6 +188,9 @@ export default function DashboardPage() {
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-bold">{stats.quoted_count}</div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {stats.quotes_sent_count} quotes sent
+                </p>
               </CardContent>
             </Card>
           </Link>
@@ -202,6 +205,31 @@ export default function DashboardPage() {
             </Card>
           </Link>
         </div>
+
+        {/* Leads by Source */}
+        {stats.leads_by_source && stats.leads_by_source.length > 0 && (
+          <Card className="mb-8">
+            <CardHeader>
+              <CardTitle className="text-lg">Leads by Source</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                {stats.leads_by_source.map((item) => (
+                  <Link
+                    key={item.source}
+                    href={`/leads?lead_source=${item.source}`}
+                    className="flex items-center justify-between p-4 rounded-lg border border-border hover:border-primary/50 transition-colors"
+                  >
+                    <span className="font-medium">
+                      {item.source.replace(/_/g, ' ')}
+                    </span>
+                    <span className="text-lg font-bold">{item.count}</span>
+                  </Link>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Stale Items Summary */}
         {staleSummary && staleSummary.total_reminders > 0 && (

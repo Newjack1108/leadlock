@@ -62,11 +62,15 @@ export default function LeadsPage() {
   const initialStatus = statusFromUrl && Object.values(LeadStatus).includes(statusFromUrl as LeadStatus)
     ? (statusFromUrl as LeadStatus)
     : 'ALL';
+  const leadSourceFromUrl = searchParams.get('lead_source');
+  const initialLeadSource = leadSourceFromUrl && Object.values(LeadSource).includes(leadSourceFromUrl as LeadSource)
+    ? (leadSourceFromUrl as LeadSource)
+    : 'ALL';
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<LeadStatus | 'ALL'>(initialStatus);
   const [leadTypeFilter, setLeadTypeFilter] = useState<LeadType | 'ALL'>('ALL');
-  const [leadSourceFilter, setLeadSourceFilter] = useState<LeadSource | 'ALL'>('ALL');
+  const [leadSourceFilter, setLeadSourceFilter] = useState<LeadSource | 'ALL'>(initialLeadSource);
   const [search, setSearch] = useState('');
   const [searchDebounced, setSearchDebounced] = useState('');
   const [myLeadsOnly, setMyLeadsOnly] = useState(false);
@@ -82,11 +86,15 @@ export default function LeadsPage() {
     lead_source: LeadSource.MANUAL_ENTRY,
   });
 
-  // Sync status filter from URL when search params change (e.g. navigation from dashboard)
+  // Sync status and lead_source filters from URL when search params change (e.g. navigation from dashboard)
   useEffect(() => {
     const status = searchParams.get('status');
     if (status && Object.values(LeadStatus).includes(status as LeadStatus)) {
       setStatusFilter(status as LeadStatus);
+    }
+    const leadSource = searchParams.get('lead_source');
+    if (leadSource && Object.values(LeadSource).includes(leadSource as LeadSource)) {
+      setLeadSourceFilter(leadSource as LeadSource);
     }
   }, [searchParams]);
 

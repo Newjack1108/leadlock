@@ -169,16 +169,23 @@ export interface StatusHistory {
   changed_by_name?: string;
 }
 
+export interface LeadSourceCount {
+  source: string;
+  count: number;
+}
+
 export interface DashboardStats {
   total_leads: number;
   new_count: number;
   engaged_count: number;
   qualified_count: number;
   quoted_count: number;
+  quotes_sent_count: number;
   won_count: number;
   lost_count: number;
   engaged_percentage: number;
   qualified_percentage: number;
+  leads_by_source: LeadSourceCount[];
 }
 
 export interface Product {

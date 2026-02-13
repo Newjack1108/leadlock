@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session, select, func
 from app.database import get_session
-from app.models import Lead, LeadStatus, Activity, SmsMessage, SmsDirection, Customer, MessengerMessage, MessengerDirection
+from app.models import Lead, LeadStatus, LeadSource, Quote, QuoteStatus, Activity, SmsMessage, SmsDirection, Customer, MessengerMessage, MessengerDirection
 from app.auth import get_current_user
-from app.schemas import DashboardStats, UnreadSmsSummary, UnreadSmsMessageItem, UnreadMessengerSummary, UnreadMessengerMessageItem, UnreadByCustomerItem
+from app.schemas import DashboardStats, LeadSourceCount, UnreadSmsSummary, UnreadSmsMessageItem, UnreadMessengerSummary, UnreadMessengerMessageItem, UnreadByCustomerItem
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -41,9 +41,11 @@ async def get_dashboard_stats(
     period: Optional[str] = Query(None, description="Filter by period: week, month, quarter, year. Omit for all-time."),
 ):
     date_filter = None
+    quote_date_filter = None
     if period and period.lower() in ("week", "month", "quarter", "year"):
         start, end = get_date_range_for_period(period.lower())
         date_filter = (Lead.created_at >= start) & (Lead.created_at <= end)
+        quote_date_filter = (Quote.sent_at >= start) & (Quote.sent_at <= end)
 
     def count_leads(extra_cond=None):
         stmt = select(func.count(Lead.id))
@@ -61,6 +63,29 @@ async def get_dashboard_stats(
     quoted_count = count_leads(Lead.status == LeadStatus.QUOTED)
     won_count = count_leads(Lead.status == LeadStatus.WON)
     lost_count = count_leads(Lead.status == LeadStatus.LOST)
+
+    # Count quotes sent (Quote records with status beyond DRAFT; one lead can have multiple)
+    quotes_sent_stmt = select(func.count(Quote.id)).where(
+        Quote.status.in_([QuoteStatus.SENT, QuoteStatus.VIEWED, QuoteStatus.ACCEPTED, QuoteStatus.REJECTED, QuoteStatus.EXPIRED])
+    )
+    if quote_date_filter is not None:
+        quotes_sent_stmt = quotes_sent_stmt.where(quote_date_filter)
+    quotes_sent_count = session.exec(quotes_sent_stmt).one()
+
+    # Leads by source (grouped count, with optional date filter)
+    leads_by_source_stmt = (
+        select(Lead.lead_source, func.count(Lead.id).label("count"))
+        .group_by(Lead.lead_source)
+    )
+    if date_filter is not None:
+        leads_by_source_stmt = leads_by_source_stmt.where(date_filter)
+    leads_by_source_rows = session.exec(leads_by_source_stmt).all()
+    leads_by_source = [
+        LeadSourceCount(source=row[0].value if hasattr(row[0], "value") else str(row[0]), count=row[1])
+        for row in leads_by_source_rows
+        if row[1] > 0
+    ]
+    leads_by_source.sort(key=lambda x: x.count, reverse=True)
     
     engaged_percentage = (engaged_count / total_leads * 100) if total_leads > 0 else 0.0
     qualified_percentage = (qualified_count / total_leads * 100) if total_leads > 0 else 0.0
@@ -71,10 +96,12 @@ async def get_dashboard_stats(
         engaged_count=engaged_count,
         qualified_count=qualified_count,
         quoted_count=quoted_count,
+        quotes_sent_count=quotes_sent_count,
         won_count=won_count,
         lost_count=lost_count,
         engaged_percentage=round(engaged_percentage, 1),
-        qualified_percentage=round(qualified_percentage, 1)
+        qualified_percentage=round(qualified_percentage, 1),
+        leads_by_source=leads_by_source,
     )
 
 
