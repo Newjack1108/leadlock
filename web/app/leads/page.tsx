@@ -53,7 +53,7 @@ function formatTimeAgo(dateString: string): string {
   return `${diffDays}d ago`;
 }
 
-const TERMINAL_STATUSES: LeadStatus[] = ['QUOTED', 'WON', 'LOST'];
+const TERMINAL_STATUSES: LeadStatus[] = [LeadStatus.QUOTED, LeadStatus.WON, LeadStatus.LOST];
 
 export default function LeadsPage() {
   const router = useRouter();
