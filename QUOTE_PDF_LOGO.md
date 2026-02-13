@@ -2,9 +2,13 @@
 
 The API generates quote PDFs and needs to load your logo.
 
+## Default placeholder logo
+
+The repo includes `web/public/logo1.jpg` and `web/public/logo1.png` as minimal placeholders. Replace these with your real logo (recommended size: at least 200×80px, PNG or JPG).
+
 ## Preferred: upload your logo in the app
 
-Go to **Settings → Company** and use **Company logo (for quote PDFs)** to upload an image. The logo is stored and used for all quote PDFs; no environment variables or file placement needed. This is the recommended way to set the quote PDF logo.
+Go to **Settings → Company** and use **Company logo (for quote PDFs)** to upload an image. The logo is stored and used for all quote PDFs; no environment variables or file placement needed. This is the recommended way to set the quote PDF logo. For production, configure Cloudinary so uploaded logos persist across deployments.
 
 The options below (logo filename and env vars) remain as a fallback for existing deployments.
 

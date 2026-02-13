@@ -19,14 +19,16 @@ static_dir = Path(__file__).parent.parent / "static"
 static_dir.mkdir(exist_ok=True)
 
 # Copy logo from frontend public folder if it exists and static doesn't have it
-frontend_logo = Path(__file__).parent.parent.parent / "web" / "public" / "logo1.jpg"
-static_logo = static_dir / "logo1.jpg"
-if frontend_logo.exists() and not static_logo.exists():
-    try:
-        shutil.copy2(frontend_logo, static_logo)
-        print(f"Copied logo from {frontend_logo} to {static_logo}", file=__import__('sys').stderr, flush=True)
-    except Exception as e:
-        print(f"Warning: Could not copy logo: {e}", file=__import__('sys').stderr, flush=True)
+_web_public = Path(__file__).parent.parent.parent / "web" / "public"
+for _logo_name in ("logo1.jpg", "logo1.png"):
+    _src = _web_public / _logo_name
+    _dst = static_dir / _logo_name
+    if _src.exists() and not _dst.exists():
+        try:
+            shutil.copy2(_src, _dst)
+            print(f"Copied logo from {_src} to {_dst}", file=__import__('sys').stderr, flush=True)
+        except Exception as e:
+            print(f"Warning: Could not copy logo: {e}", file=__import__('sys').stderr, flush=True)
 
 # Mount static files
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")

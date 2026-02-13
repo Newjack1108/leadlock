@@ -205,7 +205,7 @@ def _resolve_logo(company_settings: CompanySettings) -> Tuple[Optional[str], Opt
                 )
                 with urllib.request.urlopen(req, timeout=15) as response:
                     data = response.read()
-                if data and len(data) >= 100 and (data.startswith(JPEG_MAGIC) or data.startswith(PNG_MAGIC)):
+                if data and len(data) >= 50 and (data.startswith(JPEG_MAGIC) or data.startswith(PNG_MAGIC)):
                     return (None, data)
             except Exception:
                 pass
@@ -217,6 +217,21 @@ def _resolve_logo(company_settings: CompanySettings) -> Tuple[Optional[str], Opt
                 try:
                     with open(local_path, "rb") as f:
                         return (None, f.read())
+                except Exception:
+                    pass
+            # If local file missing (e.g. ephemeral FS on Railway), try fetching from API's own URL
+            api_base = (os.getenv("API_URL") or os.getenv("RAILWAY_STATIC_URL") or "").strip()
+            if api_base:
+                try:
+                    fetch_url = api_base.rstrip("/") + logo_url
+                    req = urllib.request.Request(
+                        fetch_url,
+                        headers={"User-Agent": "LeadLock-API/1.0 (Quote PDF)"},
+                    )
+                    with urllib.request.urlopen(req, timeout=10) as response:
+                        data = response.read()
+                    if data and len(data) >= 50 and (data.startswith(JPEG_MAGIC) or data.startswith(PNG_MAGIC)):
+                        return (None, data)
                 except Exception:
                     pass
 
@@ -281,7 +296,7 @@ def _resolve_logo(company_settings: CompanySettings) -> Tuple[Optional[str], Opt
             )
             with urllib.request.urlopen(req, timeout=15) as response:
                 data = response.read()
-            if not data or len(data) < 100:
+            if not data or len(data) < 50:
                 continue
             if data.startswith(JPEG_MAGIC) or data.startswith(PNG_MAGIC):
                 return (None, data)

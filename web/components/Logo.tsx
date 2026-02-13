@@ -12,7 +12,13 @@ export default function Logo() {
   };
 
   const handleImageError = () => {
-    setImgError(true);
+    // Fallback to logo1.png if logo1.jpg failed (e.g. only logo1.png in public)
+    if (imgSrc === '/logo1.jpg') {
+      setImgSrc('/logo1.png');
+      setImgError(false);
+    } else {
+      setImgError(true);
+    }
   };
 
   return (
