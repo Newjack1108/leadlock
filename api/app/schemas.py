@@ -386,6 +386,14 @@ class LeadSourceCount(BaseModel):
     count: int
 
 
+class LeadLocationItem(BaseModel):
+    """Geocoded lead location for map pins."""
+    lat: float
+    lng: float
+    postcode: str
+    count: int
+
+
 class DashboardStats(BaseModel):
     total_leads: int
     new_count: int

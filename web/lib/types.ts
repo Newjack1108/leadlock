@@ -174,6 +174,13 @@ export interface LeadSourceCount {
   count: number;
 }
 
+export interface LeadLocationItem {
+  lat: number;
+  lng: number;
+  postcode: string;
+  count: number;
+}
+
 export interface DashboardStats {
   total_leads: number;
   new_count: number;

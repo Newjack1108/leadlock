@@ -3,7 +3,7 @@ UK postcode geocoding via postcodes.io; Haversine (straight-line) and OpenRouteS
 """
 import math
 import os
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 
 import httpx
 
@@ -58,6 +58,54 @@ def get_postcode_coordinates(postcode: str) -> Tuple[float, float]:
     if lat is None or lon is None:
         raise ValueError("Postcode not found")
     return (float(lat), float(lon))
+
+
+BULK_BATCH_SIZE = 100
+
+
+def bulk_geocode_postcodes(postcodes: List[str]) -> List[Optional[Tuple[float, float]]]:
+    """
+    Bulk geocode UK postcodes via postcodes.io.
+    Returns list of (lat, lng) or None for each input postcode (same order).
+    Batches requests (max 100 per request).
+    """
+    if not postcodes:
+        return []
+    formatted = []
+    for pc in postcodes:
+        if not _normalise_postcode(pc):
+            formatted.append(None)
+        else:
+            formatted.append(_format_postcode_for_api(pc))
+    valid_with_idx = [(i, f) for i, f in enumerate(formatted) if f is not None]
+    if not valid_with_idx:
+        return [None] * len(postcodes)
+
+    results: List[Optional[Tuple[float, float]]] = [None] * len(postcodes)
+    for batch_start in range(0, len(valid_with_idx), BULK_BATCH_SIZE):
+        batch = valid_with_idx[batch_start : batch_start + BULK_BATCH_SIZE]
+        to_lookup = [f for _, f in batch]
+        url = f"{POSTCODES_IO_BASE}/postcodes"
+        try:
+            with httpx.Client(timeout=15.0) as client:
+                resp = client.post(url, json={"postcodes": to_lookup})
+        except (httpx.TimeoutException, httpx.RequestError):
+            continue
+        if resp.status_code != 200:
+            continue
+        try:
+            data = resp.json()
+        except Exception:
+            continue
+        api_results = data.get("result") or []
+        for k, (orig_idx, _) in enumerate(batch):
+            r = api_results[k] if k < len(api_results) else None
+            if r and isinstance(r, dict):
+                lat = r.get("latitude")
+                lon = r.get("longitude")
+                if lat is not None and lon is not None:
+                    results[orig_idx] = (float(lat), float(lon))
+    return results
 
 
 def get_road_distance_and_duration(

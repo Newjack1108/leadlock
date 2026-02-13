@@ -1,18 +1,21 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Header from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import ReminderList from '@/components/ReminderList';
-import api, { getStaleSummary, getCompanySettings, getUnreadSms, getUnreadMessenger } from '@/lib/api';
-import { DashboardStats, StaleSummary, CompanySettings, UnreadSmsSummary, UnreadMessengerSummary } from '@/lib/types';
+import api, { getStaleSummary, getCompanySettings, getUnreadSms, getUnreadMessenger, getLeadLocations } from '@/lib/api';
+import { DashboardStats, StaleSummary, CompanySettings, UnreadSmsSummary, UnreadMessengerSummary, LeadLocationItem } from '@/lib/types';
 import { toast } from 'sonner';
 import { TrendingUp, Users, CheckCircle2, Trophy, Bell, ArrowRight, Clock, MessageSquare } from 'lucide-react';
 import StatusPieChart from '@/components/StatusPieChart';
 import LeadsBySourceBarChart from '@/components/LeadsBySourceBarChart';
+
+const LeadMap = dynamic(() => import('@/components/LeadMap'), { ssr: false });
 
 type DatePeriod = 'all' | 'week' | 'month' | 'quarter' | 'year';
 
@@ -24,6 +27,7 @@ export default function DashboardPage() {
   const [staleSummary, setStaleSummary] = useState<StaleSummary | null>(null);
   const [unreadSms, setUnreadSms] = useState<UnreadSmsSummary | null>(null);
   const [unreadMessenger, setUnreadMessenger] = useState<UnreadMessengerSummary | null>(null);
+  const [leadLocations, setLeadLocations] = useState<LeadLocationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [datePeriod, setDatePeriod] = useState<DatePeriod>('all');
 
@@ -33,13 +37,14 @@ export default function DashboardPage() {
 
   const fetchDashboard = async () => {
     try {
-      const [statsRes, stuckRes, staleRes, companyRes, unreadSmsRes, unreadMessengerRes] = await Promise.all([
+      const [statsRes, stuckRes, staleRes, companyRes, unreadSmsRes, unreadMessengerRes, locationsRes] = await Promise.all([
         api.get('/api/dashboard/stats', { params: datePeriod === 'all' ? {} : { period: datePeriod } }),
         api.get('/api/dashboard/stuck-leads'),
         getStaleSummary().catch(() => null), // Don't fail if reminders not available
         getCompanySettings().catch(() => null), // Don't fail if settings not set up yet
         getUnreadSms().catch(() => ({ count: 0, messages: [] })),
         getUnreadMessenger().catch(() => ({ count: 0, messages: [] })),
+        getLeadLocations(datePeriod === 'all' ? undefined : datePeriod).catch(() => []),
       ]);
       setStats(statsRes.data);
       setStuckLeads(stuckRes.data);
@@ -47,6 +52,7 @@ export default function DashboardPage() {
       setCompanySettings(companyRes ?? null);
       setUnreadSms(unreadSmsRes ?? { count: 0, messages: [] });
       setUnreadMessenger(unreadMessengerRes ?? { count: 0, messages: [] });
+      setLeadLocations(Array.isArray(locationsRes) ? locationsRes : []);
     } catch (error: any) {
       if (error.response?.status === 401) {
         router.push('/login');
@@ -174,7 +180,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Charts */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">Lead Status</CardTitle>
@@ -194,6 +200,14 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               <LeadsBySourceBarChart data={stats.leads_by_source || []} />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Lead Locations</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <LeadMap locations={leadLocations} loading={loading} />
             </CardContent>
           </Card>
         </div>

@@ -2,8 +2,9 @@ from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session, select, func
 from app.database import get_session
 from app.models import Lead, LeadStatus, LeadSource, Quote, QuoteStatus, Activity, SmsMessage, SmsDirection, Customer, MessengerMessage, MessengerDirection
+from app.distance_service import bulk_geocode_postcodes
 from app.auth import get_current_user
-from app.schemas import DashboardStats, LeadSourceCount, UnreadSmsSummary, UnreadSmsMessageItem, UnreadMessengerSummary, UnreadMessengerMessageItem, UnreadByCustomerItem
+from app.schemas import DashboardStats, LeadSourceCount, LeadLocationItem, UnreadSmsSummary, UnreadSmsMessageItem, UnreadMessengerSummary, UnreadMessengerMessageItem, UnreadByCustomerItem
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -110,6 +111,46 @@ async def get_dashboard_stats(
         qualified_percentage=round(qualified_percentage, 1),
         leads_by_source=leads_by_source,
     )
+
+
+@router.get("/lead-locations", response_model=list[LeadLocationItem])
+async def get_lead_locations(
+    session: Session = Depends(get_session),
+    current_user = Depends(get_current_user),
+    period: Optional[str] = Query(None, description="Filter by period: week, month, quarter, year. Omit for all-time."),
+):
+    """Get geocoded lead locations for dashboard map. Aggregates by postcode."""
+    date_filter = None
+    if period and period.lower() in ("week", "month", "quarter", "year"):
+        start, end = get_date_range_for_period(period.lower())
+        date_filter = (Lead.created_at >= start) & (Lead.created_at <= end)
+
+    stmt = (
+        select(Lead.postcode, func.count(Lead.id).label("count"))
+        .where(Lead.postcode.isnot(None), Lead.postcode != "")
+        .group_by(Lead.postcode)
+    )
+    if date_filter is not None:
+        stmt = stmt.where(date_filter)
+    rows = session.exec(stmt).all()
+    if not rows:
+        return []
+
+    postcodes = [r[0] for r in rows]
+    counts = [r[1] for r in rows]
+    coords_list = bulk_geocode_postcodes(postcodes)
+    out = []
+    for i, coords in enumerate(coords_list):
+        if coords is not None:
+            out.append(
+                LeadLocationItem(
+                    lat=coords[0],
+                    lng=coords[1],
+                    postcode=postcodes[i] or "",
+                    count=counts[i],
+                )
+            )
+    return out
 
 
 @router.get("/stuck-leads")

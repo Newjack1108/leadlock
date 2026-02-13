@@ -186,6 +186,12 @@ export const getUnreadMessenger = async () => {
   return response.data;
 };
 
+export const getLeadLocations = async (period?: string) => {
+  const params = period && period !== 'all' ? { period } : {};
+  const response = await api.get('/api/dashboard/lead-locations', { params });
+  return response.data;
+};
+
 export const getUnreadCountsByCustomer = async (): Promise<{ customer_id: number; unread_count: number }[]> => {
   const response = await api.get('/api/dashboard/unread-by-customer');
   return response.data;
