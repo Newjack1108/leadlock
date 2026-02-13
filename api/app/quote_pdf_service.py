@@ -218,14 +218,35 @@ def _force_cloudinary_format(url: str, fmt: str = "png") -> str:
 
 
 def _resolve_logo(company_settings: CompanySettings) -> Tuple[Optional[str], Optional[bytes]]:
-    """Resolve logo to file path or raw bytes. Prefers company logo_url (upload); else logo_filename + static/env fallback."""
+    """Resolve logo: same source as header (logo1.jpg from static/public), then company logo_url fallback."""
     logo_path: Optional[str] = None
     logo_bytes: Optional[bytes] = None
     JPEG_MAGIC = b"\xff\xd8\xff"
     PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
     _debug = os.getenv("DEBUG", "false").lower() == "true"
 
-    # Prefer uploaded logo URL (from Settings -> Company -> upload)
+    # 1. Use same logo as header: logo1.jpg / logo1.png from static or web/public (bundled in Docker)
+    primary_filename = company_settings.logo_filename or "logo1.jpg"
+    base_dirs = [
+        Path(__file__).parent.parent / "static",
+        Path("static"),
+        Path(__file__).parent.parent.parent / "web" / "public",
+    ]
+    for fn in [primary_filename, "logo1.png", "logo1.jpg"]:
+        for base in base_dirs:
+            p = base / fn
+            if p.exists():
+                try:
+                    with open(p, "rb") as f:
+                        data = f.read()
+                    if data and len(data) >= 50 and (data.startswith(JPEG_MAGIC) or data.startswith(PNG_MAGIC)):
+                        return (None, data)
+                except Exception:
+                    pass
+        if os.path.exists(fn):
+            return (str(fn), None)
+
+    # 2. Fallback: company logo_url (Cloudinary or /static/)
     logo_url = (company_settings.logo_url or "").strip()
     if logo_url:
         if logo_url.startswith("http://") or logo_url.startswith("https://"):
@@ -242,13 +263,9 @@ def _resolve_logo(company_settings: CompanySettings) -> Tuple[Optional[str], Opt
                         data = response.read()
                     if data and len(data) >= 50 and (data.startswith(JPEG_MAGIC) or data.startswith(PNG_MAGIC)):
                         return (None, data)
-                    if _debug:
-                        print(f"PDF logo: {len(data)} bytes, bad format (first 4: {data[:4]!r})", file=__import__("sys").stderr, flush=True)
-                except Exception as e:
-                    if _debug:
-                        print(f"PDF logo: fetch failed: {e}", file=__import__("sys").stderr, flush=True)
+                except Exception:
+                    pass
         elif logo_url.startswith("/static/"):
-            # API static path e.g. /static/products/uuid.jpg
             static_base = Path(__file__).parent.parent
             local_path = static_base / logo_url.lstrip("/")
             if local_path.exists():
@@ -257,44 +274,9 @@ def _resolve_logo(company_settings: CompanySettings) -> Tuple[Optional[str], Opt
                         return (None, f.read())
                 except Exception:
                     pass
-            # If local file missing (e.g. ephemeral FS on Railway), try fetching from API's own URL
-            api_base = (os.getenv("API_URL") or os.getenv("RAILWAY_STATIC_URL") or "").strip()
-            if api_base:
-                try:
-                    fetch_url = api_base.rstrip("/") + logo_url
-                    req = urllib.request.Request(
-                        fetch_url,
-                        headers={"User-Agent": "LeadLock-API/1.0 (Quote PDF)"},
-                    )
-                    with urllib.request.urlopen(req, timeout=10) as response:
-                        data = response.read()
-                    if data and len(data) >= 50 and (data.startswith(JPEG_MAGIC) or data.startswith(PNG_MAGIC)):
-                        return (None, data)
-                except Exception:
-                    pass
 
-    # Fallback: logo_filename + local paths + env URL candidates
-    primary_filename = company_settings.logo_filename or "logo1.jpg"
-    base_dirs = [
-        Path(__file__).parent.parent / "static",
-        Path("static"),
-        Path(__file__).parent.parent.parent / "web" / "public",
-    ]
-    filenames_to_try = [primary_filename]
-    if primary_filename != "logo1.png":
-        filenames_to_try.append("logo1.png")
-    if primary_filename != "logo1.jpg":
-        filenames_to_try.append("logo1.jpg")
-    for fn in filenames_to_try:
-        for base in base_dirs:
-            p = base / fn
-            if p.exists():
-                logo_path = str(p)
-                return (logo_path, None)
-        if os.path.exists(fn):
-            logo_path = fn
-            return (logo_path, None)
-    # URL fallback (needed when API runs separately from frontend, e.g. on Railway).
+    # 3. URL fallback (frontend serves logo1.jpg like header)
+    filenames_to_try = ["logo1.jpg", "logo1.png"]
     # Set LOGO_URL on the API service to the full image URL (e.g. https://your-frontend.up.railway.app/logo1.jpg)
     # or FRONTEND_URL to the frontend origin (e.g. https://your-frontend.up.railway.app).
     DEFAULT_LOGO_BASE = "https://leadlock-frontend-production.up.railway.app"
@@ -341,16 +323,12 @@ def _resolve_logo(company_settings: CompanySettings) -> Tuple[Optional[str], Opt
                 data = response.read()
             if not data or len(data) < 50:
                 continue
-                if data.startswith(JPEG_MAGIC) or data.startswith(PNG_MAGIC):
-                    if _debug:
-                        print(f"PDF logo: fetched {len(data)} bytes from {fetch_url[:80]}...", file=__import__("sys").stderr, flush=True)
-                    return (None, data)
+            if data.startswith(JPEG_MAGIC) or data.startswith(PNG_MAGIC):
+                return (None, data)
         except Exception:
             continue
-    # Log when logo resolution fails (helps diagnose PDF placeholder)
     import sys
-    reason = "no logo_url" if not logo_url else "fetch failed or invalid image format"
-    print(f"PDF logo: showing placeholder ({reason})", file=sys.stderr, flush=True)
+    print("PDF logo: showing placeholder (logo1.jpg not found locally or via URL)", file=sys.stderr, flush=True)
     return (None, None)
 
 
