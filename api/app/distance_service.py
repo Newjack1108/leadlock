@@ -99,12 +99,14 @@ def bulk_geocode_postcodes(postcodes: List[str]) -> List[Optional[Tuple[float, f
             continue
         api_results = data.get("result") or []
         for k, (orig_idx, _) in enumerate(batch):
-            r = api_results[k] if k < len(api_results) else None
-            if r and isinstance(r, dict):
-                lat = r.get("latitude")
-                lon = r.get("longitude")
-                if lat is not None and lon is not None:
-                    results[orig_idx] = (float(lat), float(lon))
+            item = api_results[k] if k < len(api_results) else None
+            if item and isinstance(item, dict):
+                inner = item.get("result")
+                if inner and isinstance(inner, dict):
+                    lat = inner.get("latitude")
+                    lon = inner.get("longitude")
+                    if lat is not None and lon is not None:
+                        results[orig_idx] = (float(lat), float(lon))
     return results
 
 
