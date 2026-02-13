@@ -187,28 +187,45 @@ def _build_footer_flowables(
     return result
 
 
+def _force_cloudinary_format(url: str, fmt: str = "png") -> str:
+    """Force Cloudinary to deliver PNG/JPEG instead of WebP (ReportLab doesn't support WebP)."""
+    if "res.cloudinary.com" in url and "/image/upload/" in url:
+        # Insert f_png or f_jpg after upload/ e.g. .../upload/f_png/v123/...
+        marker = "/image/upload/"
+        transf = f"f_{fmt}/"
+        if marker in url and transf not in url:
+            idx = url.index(marker) + len(marker)
+            url = url[:idx] + transf + url[idx:]
+    return url
+
+
 def _resolve_logo(company_settings: CompanySettings) -> Tuple[Optional[str], Optional[bytes]]:
     """Resolve logo to file path or raw bytes. Prefers company logo_url (upload); else logo_filename + static/env fallback."""
     logo_path: Optional[str] = None
     logo_bytes: Optional[bytes] = None
     JPEG_MAGIC = b"\xff\xd8\xff"
     PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+    _debug = os.getenv("DEBUG", "false").lower() == "true"
 
     # Prefer uploaded logo URL (from Settings -> Company -> upload)
     logo_url = (company_settings.logo_url or "").strip()
     if logo_url:
         if logo_url.startswith("http://") or logo_url.startswith("https://"):
+            fetch_url = _force_cloudinary_format(logo_url, "png")
             try:
                 req = urllib.request.Request(
-                    logo_url,
+                    fetch_url,
                     headers={"User-Agent": "LeadLock-API/1.0 (Quote PDF)"},
                 )
                 with urllib.request.urlopen(req, timeout=15) as response:
                     data = response.read()
                 if data and len(data) >= 50 and (data.startswith(JPEG_MAGIC) or data.startswith(PNG_MAGIC)):
                     return (None, data)
-            except Exception:
-                pass
+                if _debug:
+                    print(f"PDF logo: fetched {len(data)} bytes but not valid JPEG/PNG (first 4: {data[:4]!r})", file=__import__("sys").stderr, flush=True)
+            except Exception as e:
+                if _debug:
+                    print(f"PDF logo: failed to fetch {fetch_url}: {e}", file=__import__("sys").stderr, flush=True)
         elif logo_url.startswith("/static/"):
             # API static path e.g. /static/products/uuid.jpg
             static_base = Path(__file__).parent.parent
@@ -512,14 +529,14 @@ def generate_quote_pdf(
     total_row_index = len(table_data)
     table_data.append(["Total (inc VAT):", "", "", format_currency(total_inc_vat, quote.currency)])
 
-    # Add deposit and balance rows (always show if total > 0) — Ex VAT
+    # Add deposit and balance rows (always show if total > 0) — inc VAT
     deposit_row_index = None
     balance_row_index = None
     if quote.total_amount > 0:
         deposit_row_index = len(table_data)
-        table_data.append(["Deposit (on order, Ex VAT):", "", "", format_currency(quote.deposit_amount, quote.currency)])
+        table_data.append(["Deposit (on order, inc VAT):", "", "", format_currency(quote.deposit_amount, quote.currency)])
         balance_row_index = len(table_data)
-        table_data.append(["Balance (Ex VAT):", "", "", format_currency(quote.balance_amount, quote.currency)])
+        table_data.append(["Balance (inc VAT):", "", "", format_currency(quote.balance_amount, quote.currency)])
     
     # Build table style list
     table_style_list = [
