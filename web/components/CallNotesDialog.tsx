@@ -69,9 +69,13 @@ export default function CallNotesDialog({
   };
 
   const handleEndCallAndSave = async () => {
+    if (!notes.trim()) {
+      toast.error('Please add notes before ending the call');
+      return;
+    }
     setSubmitting(true);
     try {
-      await logCallActivity(customerId, notes.trim() || 'Call completed');
+      await logCallActivity(customerId, notes.trim());
       toast.success('Call logged');
       onSuccess?.();
       handleClose(false);
@@ -148,7 +152,7 @@ export default function CallNotesDialog({
 
         <div className="space-y-4">
           <div>
-            <Label htmlFor="call-notes">Notes (optional)</Label>
+            <Label htmlFor="call-notes">{callInProgress ? 'Notes (required)' : 'Notes (optional)'}</Label>
             <Textarea
               id="call-notes"
               placeholder="Add any notes..."
@@ -163,7 +167,7 @@ export default function CallNotesDialog({
             <Button
               type="button"
               onClick={handleEndCallAndSave}
-              disabled={submitting}
+              disabled={submitting || !notes.trim()}
               className="w-full"
             >
               <PhoneOff className="h-4 w-4 mr-2" />
