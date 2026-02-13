@@ -674,6 +674,44 @@ def create_db_and_tables():
                     if "already exists" not in error_str and "duplicate" not in error_str:
                         print(f"Error adding last_viewed_at to quote: {e}", file=sys.stderr, flush=True)
         
+        # Step 8d: Migrate deposit/balance from ex VAT to inc VAT (one-time data migration)
+        try:
+            with engine.begin() as conn:
+                conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS applied_data_migrations (
+                        migration_name VARCHAR(255) PRIMARY KEY,
+                        applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+            with engine.connect() as conn:
+                result = conn.execute(text(
+                    "SELECT 1 FROM applied_data_migrations WHERE migration_name = 'deposit_balance_inc_vat'"
+                ))
+                if result.fetchone() is None:
+                    print("Migrating deposit/balance from ex VAT to inc VAT...", file=sys.stderr, flush=True)
+                    with engine.begin() as mig_conn:
+                        mig_conn.execute(text("""
+                            UPDATE quote
+                            SET deposit_amount = ROUND(deposit_amount * 1.2, 2),
+                                balance_amount = ROUND(balance_amount * 1.2, 2)
+                        """))
+                        if inspector.has_table("customer_order"):
+                            mig_conn.execute(text("""
+                                UPDATE customer_order
+                                SET deposit_amount = ROUND(deposit_amount * 1.2, 2),
+                                    balance_amount = ROUND(balance_amount * 1.2, 2)
+                            """))
+                        mig_conn.execute(text(
+                            "INSERT INTO applied_data_migrations (migration_name) VALUES ('deposit_balance_inc_vat')"
+                        ))
+                    print("Deposit/balance inc VAT migration completed", file=sys.stderr, flush=True)
+        except Exception as e:
+            error_str = str(e).lower()
+            if "already exists" not in error_str and "duplicate" not in error_str:
+                print(f"Error in deposit/balance inc VAT migration: {e}", file=sys.stderr, flush=True)
+                import traceback
+                print(traceback.format_exc(), file=sys.stderr, flush=True)
+        
         # Step 9: Create Reminder and ReminderRule tables
         has_reminder_table = inspector.has_table("reminder")
         has_reminder_rule_table = inspector.has_table("reminderrule")
@@ -790,6 +828,17 @@ def create_db_and_tables():
                 print(f"Error creating reminder rules: {e}", file=sys.stderr, flush=True)
                 import traceback
                 print(traceback.format_exc(), file=sys.stderr, flush=True)
+        
+        # Step 9a: Extend suggestedaction enum with PHONE_CALL if missing (before reminder seeding)
+        if has_reminder_rule_table or inspector.has_table("reminderrule"):
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text("ALTER TYPE suggestedaction ADD VALUE IF NOT EXISTS 'PHONE_CALL'"))
+                print("Added suggestedaction enum value: PHONE_CALL", file=sys.stderr, flush=True)
+            except Exception as e:
+                error_str = str(e).lower()
+                if "already exists" not in error_str:
+                    print(f"Warning: could not add suggestedaction value PHONE_CALL: {e}", file=sys.stderr, flush=True)
         
         # Step 9b: Seed quote open-tracking reminder rules if missing
         if has_reminder_rule_table or inspector.has_table("reminderrule"):
