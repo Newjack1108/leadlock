@@ -150,6 +150,21 @@ export default function CompanySettingsPage() {
     }
   };
 
+  const handleLogoChange = async (url: string) => {
+    setFormData((prev) => ({ ...prev, logo_url: url }));
+    if (!settings) return;
+    try {
+      setSaving(true);
+      await api.put('/api/settings/company', { logo_url: url || null });
+      setSettings((prev) => (prev ? { ...prev, logo_url: url || undefined } : null));
+      toast.success(url ? 'Logo saved' : 'Logo removed');
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || 'Failed to save logo');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleDownloadExample = async () => {
     try {
       await downloadCustomerImportExample();
@@ -383,7 +398,7 @@ export default function CompanySettingsPage() {
             <ImageUpload
               label="Company logo (for quote PDFs)"
               value={formData.logo_url}
-              onChange={(url) => setFormData({ ...formData, logo_url: url })}
+              onChange={handleLogoChange}
               disabled={saving}
             />
 
