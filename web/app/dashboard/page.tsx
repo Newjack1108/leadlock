@@ -14,7 +14,7 @@ import { TrendingUp, Users, CheckCircle2, Trophy, Bell, ArrowRight, Clock, Messa
 import StatusPieChart from '@/components/StatusPieChart';
 import LeadsBySourceBarChart from '@/components/LeadsBySourceBarChart';
 
-type DatePeriod = 'week' | 'month' | 'quarter' | 'year';
+type DatePeriod = 'all' | 'week' | 'month' | 'quarter' | 'year';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -25,7 +25,7 @@ export default function DashboardPage() {
   const [unreadSms, setUnreadSms] = useState<UnreadSmsSummary | null>(null);
   const [unreadMessenger, setUnreadMessenger] = useState<UnreadMessengerSummary | null>(null);
   const [loading, setLoading] = useState(true);
-  const [datePeriod, setDatePeriod] = useState<DatePeriod>('month');
+  const [datePeriod, setDatePeriod] = useState<DatePeriod>('all');
 
   useEffect(() => {
     fetchDashboard();
@@ -34,7 +34,7 @@ export default function DashboardPage() {
   const fetchDashboard = async () => {
     try {
       const [statsRes, stuckRes, staleRes, companyRes, unreadSmsRes, unreadMessengerRes] = await Promise.all([
-        api.get('/api/dashboard/stats', { params: { period: datePeriod } }),
+        api.get('/api/dashboard/stats', { params: datePeriod === 'all' ? {} : { period: datePeriod } }),
         api.get('/api/dashboard/stuck-leads'),
         getStaleSummary().catch(() => null), // Don't fail if reminders not available
         getCompanySettings().catch(() => null), // Don't fail if settings not set up yet
@@ -80,14 +80,14 @@ export default function DashboardPage() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
           <h1 className="text-3xl font-semibold">Dashboard</h1>
           <div className="flex gap-2">
-            {(['week', 'month', 'quarter', 'year'] as const).map((period) => (
+            {(['all', 'week', 'month', 'quarter', 'year'] as const).map((period) => (
               <Button
                 key={period}
                 variant={datePeriod === period ? 'default' : 'outline'}
                 size="sm"
                 onClick={() => setDatePeriod(period)}
               >
-                {period.charAt(0).toUpperCase() + period.slice(1)}
+                {period === 'all' ? 'All' : period.charAt(0).toUpperCase() + period.slice(1)}
               </Button>
             ))}
           </div>

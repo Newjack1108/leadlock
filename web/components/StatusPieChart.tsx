@@ -18,10 +18,10 @@ interface StatusPieChartProps {
 
 export default function StatusPieChart({ newCount, quotedCount, wonCount, lostCount }: StatusPieChartProps) {
   const data = [
-    { name: 'New', value: newCount, color: STATUS_COLORS.New },
-    { name: 'Quoted', value: quotedCount, color: STATUS_COLORS.Quoted },
-    { name: 'Won', value: wonCount, color: STATUS_COLORS.Won },
-    { name: 'Lost', value: lostCount, color: STATUS_COLORS.Lost },
+    { name: 'New', value: Number(newCount ?? 0), color: STATUS_COLORS.New },
+    { name: 'Quoted', value: Number(quotedCount ?? 0), color: STATUS_COLORS.Quoted },
+    { name: 'Won', value: Number(wonCount ?? 0), color: STATUS_COLORS.Won },
+    { name: 'Lost', value: Number(lostCount ?? 0), color: STATUS_COLORS.Lost },
   ].filter((d) => d.value > 0);
 
   const total = data.reduce((sum, d) => sum + d.value, 0);
@@ -35,6 +35,7 @@ export default function StatusPieChart({ newCount, quotedCount, wonCount, lostCo
   }
 
   return (
+    <div className="h-[280px] w-full min-h-[280px]">
     <ResponsiveContainer width="100%" height={280}>
       <PieChart>
         <Pie
@@ -62,5 +63,6 @@ export default function StatusPieChart({ newCount, quotedCount, wonCount, lostCo
         <Legend />
       </PieChart>
     </ResponsiveContainer>
+    </div>
   );
 }

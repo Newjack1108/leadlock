@@ -80,11 +80,18 @@ async def get_dashboard_stats(
     if date_filter is not None:
         leads_by_source_stmt = leads_by_source_stmt.where(date_filter)
     leads_by_source_rows = session.exec(leads_by_source_stmt).all()
-    leads_by_source = [
-        LeadSourceCount(source=row[0].value if hasattr(row[0], "value") else str(row[0]), count=row[1])
-        for row in leads_by_source_rows
-        if row[1] > 0
-    ]
+    leads_by_source = []
+    for row in leads_by_source_rows:
+        if row[1] <= 0:
+            continue
+        source_val = row[0]
+        if source_val is None:
+            source_str = "Unknown"
+        elif hasattr(source_val, "value"):
+            source_str = source_val.value
+        else:
+            source_str = str(source_val)
+        leads_by_source.append(LeadSourceCount(source=source_str, count=row[1]))
     leads_by_source.sort(key=lambda x: x.count, reverse=True)
     
     engaged_percentage = (engaged_count / total_leads * 100) if total_leads > 0 else 0.0

@@ -19,10 +19,10 @@ interface LeadsBySourceBarChartProps {
 }
 
 export default function LeadsBySourceBarChart({ data }: LeadsBySourceBarChartProps) {
-  const chartData = data.map((item) => ({
-    name: item.source.replace(/_/g, ' '),
-    count: item.count,
-  }));
+  const chartData = (data ?? []).map((item) => ({
+    name: (item?.source ?? 'Unknown').replace(/_/g, ' '),
+    count: Number(item?.count ?? 0),
+  })).filter((d) => d.count > 0);
 
   if (chartData.length === 0) {
     return (
@@ -33,6 +33,7 @@ export default function LeadsBySourceBarChart({ data }: LeadsBySourceBarChartPro
   }
 
   return (
+    <div className="h-[280px] w-full min-h-[280px]">
     <ResponsiveContainer width="100%" height={280}>
       <BarChart
         data={chartData}
@@ -66,5 +67,6 @@ export default function LeadsBySourceBarChart({ data }: LeadsBySourceBarChartPro
         </Bar>
       </BarChart>
     </ResponsiveContainer>
+    </div>
   );
 }
