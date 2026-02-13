@@ -211,21 +211,24 @@ def _resolve_logo(company_settings: CompanySettings) -> Tuple[Optional[str], Opt
     logo_url = (company_settings.logo_url or "").strip()
     if logo_url:
         if logo_url.startswith("http://") or logo_url.startswith("https://"):
-            fetch_url = _force_cloudinary_format(logo_url, "png")
-            try:
-                req = urllib.request.Request(
-                    fetch_url,
-                    headers={"User-Agent": "LeadLock-API/1.0 (Quote PDF)"},
-                )
-                with urllib.request.urlopen(req, timeout=15) as response:
-                    data = response.read()
-                if data and len(data) >= 50 and (data.startswith(JPEG_MAGIC) or data.startswith(PNG_MAGIC)):
-                    return (None, data)
-                if _debug:
-                    print(f"PDF logo: fetched {len(data)} bytes but not valid JPEG/PNG (first 4: {data[:4]!r})", file=__import__("sys").stderr, flush=True)
-            except Exception as e:
-                if _debug:
-                    print(f"PDF logo: failed to fetch {fetch_url}: {e}", file=__import__("sys").stderr, flush=True)
+            urls_to_try = [logo_url]
+            if "res.cloudinary.com" in logo_url:
+                urls_to_try.append(_force_cloudinary_format(logo_url, "png"))
+            for fetch_url in urls_to_try:
+                try:
+                    req = urllib.request.Request(
+                        fetch_url,
+                        headers={"User-Agent": "LeadLock-API/1.0 (Quote PDF)"},
+                    )
+                    with urllib.request.urlopen(req, timeout=15) as response:
+                        data = response.read()
+                    if data and len(data) >= 50 and (data.startswith(JPEG_MAGIC) or data.startswith(PNG_MAGIC)):
+                        return (None, data)
+                    if _debug:
+                        print(f"PDF logo: {len(data)} bytes, bad format (first 4: {data[:4]!r})", file=__import__("sys").stderr, flush=True)
+                except Exception as e:
+                    if _debug:
+                        print(f"PDF logo: fetch failed: {e}", file=__import__("sys").stderr, flush=True)
         elif logo_url.startswith("/static/"):
             # API static path e.g. /static/products/uuid.jpg
             static_base = Path(__file__).parent.parent
@@ -324,6 +327,10 @@ def _resolve_logo(company_settings: CompanySettings) -> Tuple[Optional[str], Opt
                 return (None, data)
         except Exception:
             continue
+    # Log when logo resolution fails (helps diagnose PDF placeholder)
+    import sys
+    reason = "no logo_url" if not logo_url else "fetch failed or invalid image format"
+    print(f"PDF logo: showing placeholder ({reason})", file=sys.stderr, flush=True)
     return (None, None)
 
 
