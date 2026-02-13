@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { logCallActivity, logCallAndOpenTel, createManualReminder } from '@/lib/api';
+import { logCallActivity, createManualReminder } from '@/lib/api';
 import { getTelUrl } from '@/lib/utils';
 import { toast } from 'sonner';
 import { Phone, PhoneOff, MessageSquare, Bell } from 'lucide-react';
@@ -45,12 +45,14 @@ export default function CallNotesDialog({
   const [reminderDate, setReminderDate] = useState('');
   const [reminderMessage, setReminderMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [callInProgress, setCallInProgress] = useState(false);
 
   const resetForm = () => {
     setNotes('');
     setShowSetReminder(false);
     setReminderDate('');
     setReminderMessage('');
+    setCallInProgress(false);
   };
 
   const handleClose = (open: boolean) => {
@@ -58,13 +60,21 @@ export default function CallNotesDialog({
     onOpenChange(open);
   };
 
-  const handleCall = async () => {
+  const handleCall = () => {
+    const telUrl = getTelUrl(phone);
+    if (telUrl && typeof window !== 'undefined') {
+      window.location.href = telUrl;
+    }
+    setCallInProgress(true);
+  };
+
+  const handleEndCallAndSave = async () => {
     setSubmitting(true);
     try {
-      await logCallAndOpenTel(customerId, phone, () => {
-        onSuccess?.();
-        handleClose(false);
-      }, notes.trim() || undefined);
+      await logCallActivity(customerId, notes.trim() || 'Call completed');
+      toast.success('Call logged');
+      onSuccess?.();
+      handleClose(false);
     } catch {
       toast.error('Failed to log call');
     } finally {
@@ -149,7 +159,17 @@ export default function CallNotesDialog({
             />
           </div>
 
-          {showSetReminder ? (
+          {callInProgress ? (
+            <Button
+              type="button"
+              onClick={handleEndCallAndSave}
+              disabled={submitting}
+              className="w-full"
+            >
+              <PhoneOff className="h-4 w-4 mr-2" />
+              End call & save
+            </Button>
+          ) : showSetReminder ? (
             <div className="space-y-3 rounded-md border p-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">Set reminder</span>
