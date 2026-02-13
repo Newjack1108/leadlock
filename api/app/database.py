@@ -561,9 +561,20 @@ def create_db_and_tables():
                         if "already exists" not in error_str and "duplicate" not in error_str:
                             print(f"Error adding {col_name} column: {e}", file=sys.stderr, flush=True)
 
-        # Step 7: Add email settings columns to User table
+        # Step 7: Add is_active and email settings columns to User table
         has_user_table = inspector.has_table("user")
         if has_user_table:
+            user_columns = [col['name'] for col in inspector.get_columns("user")]
+            if "is_active" not in user_columns:
+                print("Adding is_active column to user table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text('ALTER TABLE "user" ADD COLUMN is_active BOOLEAN DEFAULT TRUE'))
+                    print("Added is_active column to user table", file=sys.stderr, flush=True)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Error adding is_active column: {e}", file=sys.stderr, flush=True)
             user_columns = [col['name'] for col in inspector.get_columns("user")]
             email_settings_columns = [
                 "smtp_host", "smtp_port", "smtp_user", "smtp_password", "smtp_use_tls",

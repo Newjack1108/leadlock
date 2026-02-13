@@ -840,6 +840,35 @@ export const importCustomersFromCsv = async (file: File): Promise<{
   return response.data;
 };
 
+// Users API (DIRECTOR only)
+export const listUsers = async () => {
+  const response = await api.get('/api/users');
+  return response.data;
+};
+
+export const createUser = async (data: {
+  email: string;
+  full_name: string;
+  password: string;
+  role: string;
+}) => {
+  const response = await api.post('/api/users', data);
+  return response.data;
+};
+
+export const updateUser = async (
+  userId: number,
+  data: { full_name?: string; role?: string; password?: string }
+) => {
+  const response = await api.put(`/api/users/${userId}`, data);
+  return response.data;
+};
+
+export const deactivateUser = async (userId: number) => {
+  const response = await api.delete(`/api/users/${userId}`);
+  return response.data;
+};
+
 export const downloadCustomerExport = async () => {
   const response = await api.get('/api/settings/customers/export', {
     responseType: 'blob',

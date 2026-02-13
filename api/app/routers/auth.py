@@ -1,12 +1,33 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 from app.database import get_session
-from app.models import User
-from app.auth import verify_password, create_access_token, get_current_user
-from app.schemas import Token, UserLogin, UserResponse
+from app.models import User, UserRole
+from app.auth import verify_password, create_access_token, get_current_user, get_password_hash
+from app.schemas import Token, UserLogin, UserResponse, BootstrapCreate
 from datetime import timedelta
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+
+
+@router.post("/bootstrap", response_model=UserResponse)
+async def bootstrap(data: BootstrapCreate, session: Session = Depends(get_session)):
+    """Create the first director when no users exist. No auth required. Locked once any user exists."""
+    existing = session.exec(select(User)).first()
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Users already exist. Bootstrap is only available when the database has no users.",
+        )
+    user = User(
+        email=data.email,
+        full_name=data.full_name,
+        hashed_password=get_password_hash(data.password),
+        role=UserRole.DIRECTOR,
+    )
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return user
 
 
 @router.post("/login", response_model=Token)
@@ -18,6 +39,12 @@ async def login(credentials: UserLogin, session: Session = Depends(get_session))
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Account is deactivated",
             headers={"WWW-Authenticate": "Bearer"},
         )
     

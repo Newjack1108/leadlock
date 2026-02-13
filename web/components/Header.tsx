@@ -222,6 +222,12 @@ export default function Header() {
               </Link>
               {isDirector && (
                 <>
+                  <Link href="/settings/users">
+                    <DropdownMenuItem className="cursor-pointer">
+                      <Users className="h-4 w-4 mr-2" />
+                      Users
+                    </DropdownMenuItem>
+                  </Link>
                   <Link href="/settings/company">
                     <DropdownMenuItem className="cursor-pointer">
                       <Settings className="h-4 w-4 mr-2" />

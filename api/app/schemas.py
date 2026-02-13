@@ -22,11 +22,40 @@ class UserLogin(BaseModel):
     password: str
 
 
+class BootstrapCreate(BaseModel):
+    """Create first director when no users exist. No auth required."""
+    email: EmailStr
+    full_name: str
+    password: str
+
+
 class UserResponse(BaseModel):
     id: int
     email: str
     full_name: str
     role: UserRole
+
+
+class UserCreate(BaseModel):
+    email: EmailStr
+    full_name: str
+    password: str
+    role: UserRole
+
+
+class UserUpdate(BaseModel):
+    full_name: Optional[str] = None
+    role: Optional[UserRole] = None
+    password: Optional[str] = None
+
+
+class UserListResponse(BaseModel):
+    id: int
+    email: str
+    full_name: str
+    role: UserRole
+    is_active: bool
+    created_at: datetime
 
 
 class UserEmailSettingsUpdate(BaseModel):

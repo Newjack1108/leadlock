@@ -57,6 +57,8 @@ async def get_current_user(
     user = session.exec(statement).first()
     if user is None:
         raise credentials_exception
+    if not user.is_active:
+        raise credentials_exception
     return user
 
 

@@ -84,6 +84,7 @@ class User(SQLModel, table=True):
     hashed_password: str
     full_name: str
     role: UserRole
+    is_active: bool = Field(default=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
     # Email Settings (per-user)
