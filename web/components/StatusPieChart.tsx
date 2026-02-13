@@ -2,7 +2,12 @@
 
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
 
-const STATUS_COLORS = ['#1F6B3A', '#3FA86B', '#10B981', '#6B7280', '#9CA3AF'];
+const STATUS_COLORS: Record<string, string> = {
+  New: '#2563eb',
+  Quoted: '#7c3aed',
+  Won: '#16a34a',
+  Lost: '#dc2626',
+};
 
 interface StatusPieChartProps {
   newCount: number;
@@ -13,10 +18,10 @@ interface StatusPieChartProps {
 
 export default function StatusPieChart({ newCount, quotedCount, wonCount, lostCount }: StatusPieChartProps) {
   const data = [
-    { name: 'New', value: newCount },
-    { name: 'Quoted', value: quotedCount },
-    { name: 'Won', value: wonCount },
-    { name: 'Lost', value: lostCount },
+    { name: 'New', value: newCount, color: STATUS_COLORS.New },
+    { name: 'Quoted', value: quotedCount, color: STATUS_COLORS.Quoted },
+    { name: 'Won', value: wonCount, color: STATUS_COLORS.Won },
+    { name: 'Lost', value: lostCount, color: STATUS_COLORS.Lost },
   ].filter((d) => d.value > 0);
 
   const total = data.reduce((sum, d) => sum + d.value, 0);
@@ -42,8 +47,8 @@ export default function StatusPieChart({ newCount, quotedCount, wonCount, lostCo
           dataKey="value"
           animationDuration={500}
         >
-          {data.map((_, index) => (
-            <Cell key={`cell-${index}`} fill={STATUS_COLORS[index % STATUS_COLORS.length]} />
+          {data.map((entry, index) => (
+            <Cell key={`cell-${index}`} fill={entry.color} />
           ))}
         </Pie>
         <Tooltip

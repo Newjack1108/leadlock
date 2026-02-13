@@ -8,8 +8,11 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  Cell,
 } from 'recharts';
 import { LeadSourceCount } from '@/lib/types';
+
+const BAR_COLORS = ['#2563eb', '#7c3aed', '#16a34a', '#ea580c', '#0891b2', '#be185d', '#65a30d', '#4f46e5', '#0d9488', '#9333ea'];
 
 interface LeadsBySourceBarChartProps {
   data: LeadSourceCount[];
@@ -54,10 +57,13 @@ export default function LeadsBySourceBarChart({ data }: LeadsBySourceBarChartPro
         />
         <Bar
           dataKey="count"
-          fill="var(--primary)"
           radius={[0, 4, 4, 0]}
           animationDuration={500}
-        />
+        >
+          {chartData.map((_, index) => (
+            <Cell key={`cell-${index}`} fill={BAR_COLORS[index % BAR_COLORS.length]} />
+          ))}
+        </Bar>
       </BarChart>
     </ResponsiveContainer>
   );

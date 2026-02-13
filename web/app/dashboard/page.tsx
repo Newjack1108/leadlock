@@ -157,18 +157,20 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Won</CardTitle>
-              <Trophy className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.won_count}</div>
-              <p className="text-xs text-muted-foreground">
-                {stats.quoted_count} quoted
-              </p>
-            </CardContent>
-          </Card>
+          <Link href="/leads?status=WON" className="block">
+            <Card className="cursor-pointer transition-colors hover:border-primary/50">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Won</CardTitle>
+                <Trophy className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stats.won_count}</div>
+                <p className="text-xs text-muted-foreground">
+                  {stats.quoted_count} quoted
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
         </div>
 
         {/* Charts */}
@@ -197,9 +199,9 @@ export default function DashboardPage() {
         </div>
 
         {/* Status Breakdown */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <Link href="/leads?status=NEW">
-            <Card className="cursor-pointer transition-colors hover:border-primary/50">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
+          <Link href="/leads?status=NEW" className="block">
+            <Card className="cursor-pointer transition-colors hover:border-primary/50 h-full">
               <CardHeader>
                 <CardTitle className="text-lg">New</CardTitle>
               </CardHeader>
@@ -208,8 +210,8 @@ export default function DashboardPage() {
               </CardContent>
             </Card>
           </Link>
-          <Link href="/quotes?status=SENT">
-            <Card className="cursor-pointer transition-colors hover:border-primary/50">
+          <Link href="/quotes?status=SENT" className="block">
+            <Card className="cursor-pointer transition-colors hover:border-primary/50 h-full">
               <CardHeader>
                 <CardTitle className="text-lg">Quoted</CardTitle>
               </CardHeader>
@@ -221,8 +223,18 @@ export default function DashboardPage() {
               </CardContent>
             </Card>
           </Link>
-          <Link href="/leads?status=LOST">
-            <Card className="cursor-pointer transition-colors hover:border-primary/50">
+          <Link href="/leads?status=WON" className="block">
+            <Card className="cursor-pointer transition-colors hover:border-primary/50 h-full">
+              <CardHeader>
+                <CardTitle className="text-lg">Won</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold">{stats.won_count}</div>
+              </CardContent>
+            </Card>
+          </Link>
+          <Link href="/leads?status=LOST" className="block">
+            <Card className="cursor-pointer transition-colors hover:border-primary/50 h-full">
               <CardHeader>
                 <CardTitle className="text-lg">Lost</CardTitle>
               </CardHeader>
