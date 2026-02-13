@@ -14,6 +14,7 @@ from app.schemas import (
 )
 from app.quote_email_service import send_quote_email
 from app.quote_pdf_service import generate_quote_pdf
+from app.reminder_service import get_last_activity_date
 from app.constants import VAT_RATE_DECIMAL
 from datetime import datetime
 from decimal import Decimal
@@ -47,9 +48,11 @@ def build_quote_response(quote: Quote, quote_items: List[QuoteItem], session: Se
     discount_statement = select(QuoteDiscount).where(QuoteDiscount.quote_id == quote.id)
     quote_discounts = session.exec(discount_statement).all()
     customer_name = None
+    customer_last_interacted_at = None
     if quote.customer_id:
         customer = session.exec(select(Customer).where(Customer.id == quote.customer_id)).first()
         customer_name = customer.name if customer else None
+        customer_last_interacted_at = get_last_activity_date(quote.customer_id, session)
 
     # Computed VAT (all stored amounts are Ex VAT @ 20%)
     vat_amount = quote.total_amount * VAT_RATE_DECIMAL
@@ -109,6 +112,7 @@ def build_quote_response(quote: Quote, quote_items: List[QuoteItem], session: Se
         temperature=quote.temperature,
         total_open_count=total_open_count,
         order_id=order_id,
+        customer_last_interacted_at=customer_last_interacted_at,
     )
 
 

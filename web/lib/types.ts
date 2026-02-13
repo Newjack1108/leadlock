@@ -665,6 +665,7 @@ export interface Quote {
   temperature?: QuoteTemperature;
   total_open_count?: number;
   order_id?: number | null;
+  customer_last_interacted_at?: string | null;
 }
 
 /** Public quote view (no auth) - for customer view link. */

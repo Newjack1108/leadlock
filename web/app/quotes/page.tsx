@@ -206,6 +206,7 @@ export default function QuotesPage() {
                   <tr className="border-b bg-muted/50">
                     <th className="text-left p-3 font-medium">Quote #</th>
                     <th className="text-left p-3 font-medium">Customer</th>
+                    <th className="text-left p-3 font-medium">Last contacted</th>
                     <th className="text-left p-3 font-medium">Status</th>
                     <th className="text-left p-3 font-medium">Total</th>
                     <th className="text-left p-3 font-medium">Valid until</th>
@@ -229,6 +230,11 @@ export default function QuotesPage() {
                         </div>
                       </td>
                       <td className="p-3 text-muted-foreground">{quote.customer_name || '—'}</td>
+                      <td className="p-3 text-muted-foreground">
+                        {quote.customer_last_interacted_at
+                          ? new Date(quote.customer_last_interacted_at).toLocaleDateString()
+                          : '—'}
+                      </td>
                       <td className="p-3">
                         <div className="flex items-center gap-2 flex-wrap">
                           <Badge className={statusColors[quote.status]}>
@@ -342,6 +348,11 @@ export default function QuotesPage() {
                           </p>
                         )}
                         <p>Created: {new Date(quote.created_at).toLocaleDateString()}</p>
+                        <p>
+                          Last contacted: {quote.customer_last_interacted_at
+                            ? new Date(quote.customer_last_interacted_at).toLocaleDateString()
+                            : '—'}
+                        </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2 ml-4">

@@ -780,6 +780,7 @@ class QuoteResponse(BaseModel):
     temperature: Optional[QuoteTemperature] = None
     total_open_count: int = 0  # Total times quote view link was opened (across all sends)
     order_id: Optional[int] = None  # Order ID when quote is accepted (for View order link)
+    customer_last_interacted_at: Optional[datetime] = None  # Last Activity date for this customer
 
 
 class QuoteEmailResponse(BaseModel):
