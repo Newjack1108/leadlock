@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlmodel import Session, select, or_
 from typing import Optional, List
 from app.database import get_session
-from app.models import Lead, User, Activity, StatusHistory, LeadStatus, ActivityType, Customer
+from app.models import Lead, User, Activity, StatusHistory, LeadStatus, LeadType, LeadSource, ActivityType, Customer
 from app.auth import get_current_user
 from app.schemas import (
     LeadCreate, LeadUpdate, LeadResponse, StatusTransitionRequest,
@@ -95,7 +95,19 @@ def enrich_lead_response(lead: Lead, session: Session, current_user: User) -> Le
                 quote_locked = True
                 quote_lock_reason = error
     
-    from app.models import LeadType, LeadSource
+    from app.models import LeadType, LeadSource, Timeframe
+    
+    def _safe_enum(value, enum_cls, default):
+        if value is None:
+            return default
+        if isinstance(value, enum_cls):
+            return value
+        if isinstance(value, str):
+            try:
+                return enum_cls(value)
+            except ValueError:
+                return default
+        return default
     
     customer_response = None
     if customer:
@@ -123,12 +135,12 @@ def enrich_lead_response(lead: Lead, session: Session, current_user: User) -> Le
         phone=lead.phone,
         postcode=lead.postcode,
         description=lead.description,
-        status=lead.status,
-        timeframe=lead.timeframe,
+        status=_safe_enum(lead.status, LeadStatus, LeadStatus.NEW),
+        timeframe=_safe_enum(lead.timeframe, Timeframe, Timeframe.UNKNOWN),
         scope_notes=lead.scope_notes,
         product_interest=lead.product_interest,
-        lead_type=getattr(lead, 'lead_type', LeadType.UNKNOWN),
-        lead_source=getattr(lead, 'lead_source', LeadSource.UNKNOWN),
+        lead_type=_safe_enum(getattr(lead, 'lead_type', None), LeadType, LeadType.UNKNOWN),
+        lead_source=_safe_enum(getattr(lead, 'lead_source', None), LeadSource, LeadSource.UNKNOWN),
         assigned_to_id=lead.assigned_to_id,
         customer_id=lead.customer_id,
         created_at=lead.created_at,
@@ -143,16 +155,14 @@ def enrich_lead_response(lead: Lead, session: Session, current_user: User) -> Le
 @router.get("", response_model=List[LeadResponse])
 async def get_leads(
     status_filter: Optional[LeadStatus] = Query(None, alias="status"),
-    lead_type: Optional["LeadType"] = Query(None, alias="lead_type"),
-    lead_source: Optional["LeadSource"] = Query(None, alias="lead_source"),
+    lead_type: Optional[LeadType] = Query(None, alias="lead_type"),
+    lead_source: Optional[LeadSource] = Query(None, alias="lead_source"),
     search: Optional[str] = Query(None),
     my_leads_only: bool = Query(False, alias="myLeads"),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
     try:
-        from app.models import LeadType, LeadSource
-        
         statement = select(Lead)
 
         if status_filter:
