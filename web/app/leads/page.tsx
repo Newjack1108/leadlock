@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Header from '@/components/Header';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -53,11 +53,18 @@ function formatTimeAgo(dateString: string): string {
   return `${diffDays}d ago`;
 }
 
+const TERMINAL_STATUSES: LeadStatus[] = ['QUOTED', 'WON', 'LOST'];
+
 export default function LeadsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const statusFromUrl = searchParams.get('status');
+  const initialStatus = statusFromUrl && Object.values(LeadStatus).includes(statusFromUrl as LeadStatus)
+    ? (statusFromUrl as LeadStatus)
+    : 'ALL';
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState<LeadStatus | 'ALL'>('ALL');
+  const [statusFilter, setStatusFilter] = useState<LeadStatus | 'ALL'>(initialStatus);
   const [leadTypeFilter, setLeadTypeFilter] = useState<LeadType | 'ALL'>('ALL');
   const [leadSourceFilter, setLeadSourceFilter] = useState<LeadSource | 'ALL'>('ALL');
   const [search, setSearch] = useState('');
@@ -74,6 +81,14 @@ export default function LeadsPage() {
     lead_type: LeadType.UNKNOWN,
     lead_source: LeadSource.MANUAL_ENTRY,
   });
+
+  // Sync status filter from URL when search params change (e.g. navigation from dashboard)
+  useEffect(() => {
+    const status = searchParams.get('status');
+    if (status && Object.values(LeadStatus).includes(status as LeadStatus)) {
+      setStatusFilter(status as LeadStatus);
+    }
+  }, [searchParams]);
 
   // Debounce search input
   useEffect(() => {
@@ -110,8 +125,10 @@ export default function LeadsPage() {
       }
 
       const response = await api.get('/api/leads', { params });
-      // Filter out QUOTED, WON, and LOST leads
-      const filteredLeads = response.data.filter((lead: Lead) => !['QUOTED', 'WON', 'LOST'].includes(lead.status));
+      // When viewing QUOTED/WON/LOST, show them; otherwise filter out terminal statuses
+      const filteredLeads = TERMINAL_STATUSES.includes(statusFilter as LeadStatus)
+        ? response.data
+        : response.data.filter((lead: Lead) => !TERMINAL_STATUSES.includes(lead.status as LeadStatus));
       setLeads(filteredLeads);
     } catch (error: any) {
       if (error.response?.status === 401) {
@@ -157,7 +174,7 @@ export default function LeadsPage() {
     }
   };
 
-  const statusTabs: (LeadStatus | 'ALL')[] = ['ALL', ...Object.values(LeadStatus).filter(status => !['QUOTED', 'WON', 'LOST'].includes(status))];
+  const statusTabs: (LeadStatus | 'ALL')[] = ['ALL', ...Object.values(LeadStatus)];
 
   return (
     <div className="min-h-screen">

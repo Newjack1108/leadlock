@@ -10,7 +10,9 @@ import ReminderList from '@/components/ReminderList';
 import api, { getStaleSummary, getCompanySettings, getUnreadSms, getUnreadMessenger } from '@/lib/api';
 import { DashboardStats, StaleSummary, CompanySettings, UnreadSmsSummary, UnreadMessengerSummary } from '@/lib/types';
 import { toast } from 'sonner';
-import { TrendingUp, Users, CheckCircle2, DollarSign, Bell, ArrowRight, Clock, MessageSquare } from 'lucide-react';
+import { TrendingUp, Users, CheckCircle2, Trophy, Bell, ArrowRight, Clock, MessageSquare } from 'lucide-react';
+
+type DatePeriod = 'week' | 'month' | 'quarter' | 'year';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -21,15 +23,16 @@ export default function DashboardPage() {
   const [unreadSms, setUnreadSms] = useState<UnreadSmsSummary | null>(null);
   const [unreadMessenger, setUnreadMessenger] = useState<UnreadMessengerSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [datePeriod, setDatePeriod] = useState<DatePeriod>('month');
 
   useEffect(() => {
     fetchDashboard();
-  }, []);
+  }, [datePeriod]);
 
   const fetchDashboard = async () => {
     try {
       const [statsRes, stuckRes, staleRes, companyRes, unreadSmsRes, unreadMessengerRes] = await Promise.all([
-        api.get('/api/dashboard/stats'),
+        api.get('/api/dashboard/stats', { params: { period: datePeriod } }),
         api.get('/api/dashboard/stuck-leads'),
         getStaleSummary().catch(() => null), // Don't fail if reminders not available
         getCompanySettings().catch(() => null), // Don't fail if settings not set up yet
@@ -72,7 +75,21 @@ export default function DashboardPage() {
     <div className="min-h-screen">
       <Header />
       <main className="container mx-auto px-6 py-8">
-        <h1 className="text-3xl font-semibold mb-8">Dashboard</h1>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+          <h1 className="text-3xl font-semibold">Dashboard</h1>
+          <div className="flex gap-2">
+            {(['week', 'month', 'quarter', 'year'] as const).map((period) => (
+              <Button
+                key={period}
+                variant={datePeriod === period ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setDatePeriod(period)}
+              >
+                {period.charAt(0).toUpperCase() + period.slice(1)}
+              </Button>
+            ))}
+          </div>
+        </div>
 
         {/* Installation lead time – clear indicator for sales */}
         {companySettings?.installation_lead_time && (
@@ -141,7 +158,7 @@ export default function DashboardPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Won</CardTitle>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
+              <Trophy className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats.won_count}</div>
@@ -154,30 +171,36 @@ export default function DashboardPage() {
 
         {/* Status Breakdown */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">New</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">{stats.new_count}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Quoted</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">{stats.quoted_count}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Lost</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">{stats.lost_count}</div>
-            </CardContent>
-          </Card>
+          <Link href="/leads?status=NEW">
+            <Card className="cursor-pointer transition-colors hover:border-primary/50">
+              <CardHeader>
+                <CardTitle className="text-lg">New</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold">{stats.new_count}</div>
+              </CardContent>
+            </Card>
+          </Link>
+          <Link href="/quotes?status=SENT">
+            <Card className="cursor-pointer transition-colors hover:border-primary/50">
+              <CardHeader>
+                <CardTitle className="text-lg">Quoted</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold">{stats.quoted_count}</div>
+              </CardContent>
+            </Card>
+          </Link>
+          <Link href="/leads?status=LOST">
+            <Card className="cursor-pointer transition-colors hover:border-primary/50">
+              <CardHeader>
+                <CardTitle className="text-lg">Lost</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold">{stats.lost_count}</div>
+              </CardContent>
+            </Card>
+          </Link>
         </div>
 
         {/* Stale Items Summary */}

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Header from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -35,18 +35,33 @@ const temperatureColors: Record<QuoteTemperature, string> = {
   COLD: 'bg-slate-100 text-slate-600',
 };
 
+const VALID_QUOTE_STATUSES = Object.values(QuoteStatus);
+
 export default function QuotesPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const statusFromUrl = searchParams.get('status');
+  const initialStatus = statusFromUrl && VALID_QUOTE_STATUSES.includes(statusFromUrl as QuoteStatus)
+    ? (statusFromUrl as QuoteStatus)
+    : QuoteStatus.SENT;
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'list' | 'tile'>('list');
-  const [statusFilter, setStatusFilter] = useState<QuoteStatus | 'ALL'>(QuoteStatus.SENT);
+  const [statusFilter, setStatusFilter] = useState<QuoteStatus | 'ALL'>(initialStatus);
   const [temperatureFilter, setTemperatureFilter] = useState<QuoteTemperature | 'ALL'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     fetchQuotes();
   }, []);
+
+  // Sync status filter from URL when search params change (e.g. navigation from dashboard)
+  useEffect(() => {
+    const status = searchParams.get('status');
+    if (status && VALID_QUOTE_STATUSES.includes(status as QuoteStatus)) {
+      setStatusFilter(status as QuoteStatus);
+    }
+  }, [searchParams]);
 
   // Auto-refresh when user returns to this tab/window
   useEffect(() => {

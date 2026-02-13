@@ -1,31 +1,66 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session, select, func
 from app.database import get_session
 from app.models import Lead, LeadStatus, Activity, SmsMessage, SmsDirection, Customer, MessengerMessage, MessengerDirection
 from app.auth import get_current_user
 from app.schemas import DashboardStats, UnreadSmsSummary, UnreadSmsMessageItem, UnreadMessengerSummary, UnreadMessengerMessageItem, UnreadByCustomerItem
 from datetime import datetime, timedelta
+from typing import Optional
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
+
+
+def get_date_range_for_period(period: str) -> tuple[datetime, datetime]:
+    """Return (start, end) datetime for the given period (week, month, quarter, year)."""
+    now = datetime.utcnow()
+    end = now
+    if period == "week":
+        # This week: Monday 00:00 to now
+        start_of_week = now - timedelta(days=now.weekday())
+        start = start_of_week.replace(hour=0, minute=0, second=0, microsecond=0)
+    elif period == "month":
+        # This month: 1st 00:00 to now
+        start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    elif period == "quarter":
+        # This quarter: first day of quarter to now
+        quarter_start_month = ((now.month - 1) // 3) * 3 + 1
+        start = now.replace(month=quarter_start_month, day=1, hour=0, minute=0, second=0, microsecond=0)
+    elif period == "year":
+        # This year: Jan 1 00:00 to now
+        start = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+    else:
+        # Default: all time (epoch to now)
+        start = datetime(1970, 1, 1)
+    return start, end
 
 
 @router.get("/stats", response_model=DashboardStats)
 async def get_dashboard_stats(
     session: Session = Depends(get_session),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user),
+    period: Optional[str] = Query(None, description="Filter by period: week, month, quarter, year. Omit for all-time."),
 ):
-    # Count leads by status
-    total_leads = session.exec(select(func.count(Lead.id))).one()
-    new_count = session.exec(select(func.count(Lead.id)).where(Lead.status == LeadStatus.NEW)).one()
-    engaged_count = session.exec(select(func.count(Lead.id)).where(
-        Lead.status.in_([LeadStatus.ENGAGED, LeadStatus.QUALIFIED, LeadStatus.QUOTED, LeadStatus.WON])
-    )).one()
-    qualified_count = session.exec(select(func.count(Lead.id)).where(
-        Lead.status.in_([LeadStatus.QUALIFIED, LeadStatus.QUOTED, LeadStatus.WON])
-    )).one()
-    quoted_count = session.exec(select(func.count(Lead.id)).where(Lead.status == LeadStatus.QUOTED)).one()
-    won_count = session.exec(select(func.count(Lead.id)).where(Lead.status == LeadStatus.WON)).one()
-    lost_count = session.exec(select(func.count(Lead.id)).where(Lead.status == LeadStatus.LOST)).one()
+    date_filter = None
+    if period and period.lower() in ("week", "month", "quarter", "year"):
+        start, end = get_date_range_for_period(period.lower())
+        date_filter = (Lead.created_at >= start) & (Lead.created_at <= end)
+
+    def count_leads(extra_cond=None):
+        stmt = select(func.count(Lead.id))
+        if extra_cond is not None:
+            stmt = stmt.where(extra_cond)
+        if date_filter is not None:
+            stmt = stmt.where(date_filter)
+        return session.exec(stmt).one()
+
+    # Count leads by status (with optional date filter)
+    total_leads = count_leads()
+    new_count = count_leads(Lead.status == LeadStatus.NEW)
+    engaged_count = count_leads(Lead.status.in_([LeadStatus.ENGAGED, LeadStatus.QUALIFIED, LeadStatus.QUOTED, LeadStatus.WON]))
+    qualified_count = count_leads(Lead.status.in_([LeadStatus.QUALIFIED, LeadStatus.QUOTED, LeadStatus.WON]))
+    quoted_count = count_leads(Lead.status == LeadStatus.QUOTED)
+    won_count = count_leads(Lead.status == LeadStatus.WON)
+    lost_count = count_leads(Lead.status == LeadStatus.LOST)
     
     engaged_percentage = (engaged_count / total_leads * 100) if total_leads > 0 else 0.0
     qualified_percentage = (qualified_count / total_leads * 100) if total_leads > 0 else 0.0
