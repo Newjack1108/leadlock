@@ -40,7 +40,7 @@ export default function QuotesPage() {
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'list' | 'tile'>('list');
-  const [statusFilter, setStatusFilter] = useState<QuoteStatus | 'ALL'>('SENT');
+  const [statusFilter, setStatusFilter] = useState<QuoteStatus | 'ALL'>(QuoteStatus.SENT);
   const [temperatureFilter, setTemperatureFilter] = useState<QuoteTemperature | 'ALL'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
 
