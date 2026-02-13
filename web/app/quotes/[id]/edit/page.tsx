@@ -401,10 +401,11 @@ function EditQuoteContent() {
     );
   };
 
-  const calculateDefaultDeposit = () => calculateSubtotal() * 0.5;
+  const calculateTotalIncVat = () => calculateSubtotal() * 1.2;
+  const calculateDefaultDeposit = () => calculateTotalIncVat() * 0.5;
   const getDepositAmount = () =>
     depositAmount === '' ? calculateDefaultDeposit() : Number(depositAmount);
-  const getBalanceAmount = () => Math.max(0, calculateSubtotal() - getDepositAmount());
+  const getBalanceAmount = () => Math.max(0, calculateTotalIncVat() - getDepositAmount());
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -937,7 +938,7 @@ function EditQuoteContent() {
                   />
                   <div className="text-sm text-muted-foreground">
                     {depositAmount === ''
-                      ? `Default deposit: £${calculateDefaultDeposit().toFixed(2)} (50% of total)`
+                      ? `Default deposit: £${calculateDefaultDeposit().toFixed(2)} (50% of total inc VAT)`
                       : `Balance: £${getBalanceAmount().toFixed(2)}`}
                   </div>
                 </div>

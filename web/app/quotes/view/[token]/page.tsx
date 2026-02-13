@@ -154,8 +154,14 @@ export default function PublicQuoteViewPage() {
               )}
               {data.deposit_amount > 0 && (
                 <div className="flex justify-between text-muted-foreground pt-1">
-                  <span>Deposit</span>
+                  <span>Deposit (inc VAT)</span>
                   <span>{formatAmount(data.deposit_amount, data.currency)}</span>
+                </div>
+              )}
+              {data.balance_amount > 0 && (
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Balance (inc VAT)</span>
+                  <span>{formatAmount(data.balance_amount, data.currency)}</span>
                 </div>
               )}
             </div>

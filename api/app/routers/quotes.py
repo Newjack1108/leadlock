@@ -54,11 +54,11 @@ def build_quote_response(quote: Quote, quote_items: List[QuoteItem], session: Se
         customer_name = customer.name if customer else None
         customer_last_interacted_at = get_last_activity_date(quote.customer_id, session)
 
-    # Computed VAT (all stored amounts are Ex VAT @ 20%)
+    # Computed VAT (total_amount is Ex VAT @ 20%; deposit/balance stored as inc VAT)
     vat_amount = quote.total_amount * VAT_RATE_DECIMAL
     total_amount_inc_vat = quote.total_amount + vat_amount
-    deposit_amount_inc_vat = quote.deposit_amount * VAT_RATE_DECIMAL + quote.deposit_amount
-    balance_amount_inc_vat = quote.balance_amount * VAT_RATE_DECIMAL + quote.balance_amount
+    deposit_amount_inc_vat = quote.deposit_amount  # Stored as inc VAT
+    balance_amount_inc_vat = quote.balance_amount  # Stored as inc VAT
 
     total_open_count = session.exec(
         select(func.coalesce(func.sum(QuoteEmail.open_count), 0)).where(QuoteEmail.quote_id == quote.id)
@@ -278,9 +278,10 @@ def apply_custom_discount_to_quote(
     quote.total_amount = quote.subtotal - quote.discount_total
     if quote.total_amount < 0:
         quote.total_amount = Decimal(0)
-    if quote.deposit_amount > quote.total_amount:
-        quote.deposit_amount = quote.total_amount
-    quote.balance_amount = quote.total_amount - quote.deposit_amount
+    total_inc_vat = quote.total_amount * (Decimal("1") + VAT_RATE_DECIMAL)
+    if quote.deposit_amount > total_inc_vat:
+        quote.deposit_amount = total_inc_vat
+    quote.balance_amount = total_inc_vat - quote.deposit_amount
     session.add(quote)
     return total_discount
 
@@ -424,20 +425,19 @@ async def create_quote(
             )
             items.append(item)
     
-        # Calculate deposit and balance
-        # Default to 50% deposit if not provided
+        # Calculate deposit and balance (inc VAT)
+        # Default to 50% of total inc VAT if not provided
         total_amount = subtotal  # No discounts applied yet
+        total_inc_vat = total_amount * (Decimal("1") + VAT_RATE_DECIMAL)
         if quote_data.deposit_amount is not None:
-            deposit_amount = Decimal(str(quote_data.deposit_amount))
+            deposit_amount = Decimal(str(quote_data.deposit_amount))  # Client sends inc VAT
         else:
-            # Default to 50% of total
-            deposit_amount = total_amount * Decimal("0.5")
+            deposit_amount = total_inc_vat * Decimal("0.5")
         
-        # Ensure deposit doesn't exceed total
-        if deposit_amount > total_amount:
-            deposit_amount = total_amount
+        if deposit_amount > total_inc_vat:
+            deposit_amount = total_inc_vat
         
-        balance_amount = total_amount - deposit_amount
+        balance_amount = total_inc_vat - deposit_amount
         
         # Create quote
         quote = Quote(
@@ -559,17 +559,18 @@ async def create_quote(
         if quote.total_amount < 0:
             quote.total_amount = Decimal(0)
         
-        # Recalculate deposit and balance
+        # Recalculate deposit and balance (inc VAT)
+        total_inc_vat = quote.total_amount * (Decimal("1") + VAT_RATE_DECIMAL)
         if quote_data.deposit_amount is not None:
-            deposit_amount = Decimal(str(quote_data.deposit_amount))
+            deposit_amount = Decimal(str(quote_data.deposit_amount))  # Client sends inc VAT
         else:
-            deposit_amount = quote.total_amount * Decimal("0.5")
+            deposit_amount = total_inc_vat * Decimal("0.5")
         
-        if deposit_amount > quote.total_amount:
-            deposit_amount = quote.total_amount
+        if deposit_amount > total_inc_vat:
+            deposit_amount = total_inc_vat
         
         quote.deposit_amount = deposit_amount
-        quote.balance_amount = quote.total_amount - deposit_amount
+        quote.balance_amount = total_inc_vat - deposit_amount
         
         session.add(quote)
         session.commit()
@@ -922,14 +923,15 @@ async def update_draft_quote(
     if quote_data.temperature is not None:
         quote.temperature = quote_data.temperature
     
+    total_inc_vat = quote.total_amount * (Decimal("1") + VAT_RATE_DECIMAL)
     if quote_data.deposit_amount is not None:
-        deposit_amount = Decimal(str(quote_data.deposit_amount))
+        deposit_amount = Decimal(str(quote_data.deposit_amount))  # Client sends inc VAT
     else:
-        deposit_amount = quote.total_amount * Decimal("0.5")
-    if deposit_amount > quote.total_amount:
-        deposit_amount = quote.total_amount
+        deposit_amount = total_inc_vat * Decimal("0.5")
+    if deposit_amount > total_inc_vat:
+        deposit_amount = total_inc_vat
     quote.deposit_amount = deposit_amount
-    quote.balance_amount = quote.total_amount - deposit_amount
+    quote.balance_amount = total_inc_vat - deposit_amount
     quote.updated_at = datetime.utcnow()
     session.add(quote)
     session.commit()
@@ -987,9 +989,10 @@ async def update_draft_quote(
     quote.total_amount = quote.subtotal - quote.discount_total
     if quote.total_amount < 0:
         quote.total_amount = Decimal(0)
-    if quote.deposit_amount > quote.total_amount:
-        quote.deposit_amount = quote.total_amount
-    quote.balance_amount = quote.total_amount - quote.deposit_amount
+    total_inc_vat = quote.total_amount * (Decimal("1") + VAT_RATE_DECIMAL)
+    if quote.deposit_amount > total_inc_vat:
+        quote.deposit_amount = total_inc_vat
+    quote.balance_amount = total_inc_vat - quote.deposit_amount
     quote.updated_at = datetime.utcnow()
     session.add(quote)
     session.commit()
@@ -1199,6 +1202,15 @@ async def update_quote(
     for field, value in update_data.items():
         setattr(quote, field, value)
     
+    # Recalculate balance when deposit is updated (deposit/balance are inc VAT)
+    if "deposit_amount" in update_data:
+        total_inc_vat = quote.total_amount * (Decimal("1") + VAT_RATE_DECIMAL)
+        deposit = Decimal(str(update_data["deposit_amount"]))
+        if deposit > total_inc_vat:
+            deposit = total_inc_vat
+        quote.deposit_amount = deposit
+        quote.balance_amount = total_inc_vat - deposit
+    
     # Sync quote status from opportunity_stage when stage is WON/LOST (so status updates when only stage is sent)
     if quote.opportunity_stage == OpportunityStage.WON and quote.status != QuoteStatus.ACCEPTED:
         quote.status = QuoteStatus.ACCEPTED
@@ -1340,10 +1352,11 @@ async def apply_discount_to_quote_endpoint(
     if quote.total_amount < 0:
         quote.total_amount = Decimal(0)
     
-    # Recalculate deposit and balance
-    if quote.deposit_amount > quote.total_amount:
-        quote.deposit_amount = quote.total_amount
-    quote.balance_amount = quote.total_amount - quote.deposit_amount
+    # Recalculate deposit and balance (inc VAT)
+    total_inc_vat = quote.total_amount * (Decimal("1") + VAT_RATE_DECIMAL)
+    if quote.deposit_amount > total_inc_vat:
+        quote.deposit_amount = total_inc_vat
+    quote.balance_amount = total_inc_vat - quote.deposit_amount
     
     session.add(quote)
     session.commit()

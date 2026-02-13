@@ -377,11 +377,11 @@ export default function OrderDetailPage() {
               <CardContent className="space-y-4">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
-                    <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Deposit</div>
+                    <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Deposit (inc VAT)</div>
                     <div className="font-medium">{formatCurrency(order.deposit_amount, order.currency)}</div>
                   </div>
                   <div>
-                    <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Balance due</div>
+                    <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Balance due (inc VAT)</div>
                     <div className="font-medium">{formatCurrency(order.balance_amount, order.currency)}</div>
                   </div>
                 </div>

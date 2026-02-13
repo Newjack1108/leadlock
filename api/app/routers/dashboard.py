@@ -119,7 +119,7 @@ async def get_lead_locations(
     current_user = Depends(get_current_user),
     period: Optional[str] = Query(None, description="Filter by period: week, month, quarter, year. Omit for all-time."),
 ):
-    """Get geocoded lead locations for dashboard map. Uses lead postcode, or customer postcode when lead has none."""
+    """Get geocoded lead locations for dashboard map. Includes all leads that came in during the period (any status). Uses lead postcode, or customer postcode when lead has none."""
     date_filter = None
     if period and period.lower() in ("week", "month", "quarter", "year"):
         start, end = get_date_range_for_period(period.lower())

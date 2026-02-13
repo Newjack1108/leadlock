@@ -417,11 +417,11 @@ export default function QuoteDetailPage() {
                     {Number(quote.deposit_amount) > 0 && (
                       <>
                         <div className="flex justify-between border-t pt-2">
-                          <span className="font-medium">Deposit (on order, Ex VAT):</span>
+                          <span className="font-medium">Deposit (on order, inc VAT):</span>
                           <span className="font-medium">£{Number(quote.deposit_amount).toFixed(2)}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="font-medium">Balance (Ex VAT):</span>
+                          <span className="font-medium">Balance (inc VAT):</span>
                           <span className="font-medium">£{Number(quote.balance_amount).toFixed(2)}</span>
                         </div>
                       </>

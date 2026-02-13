@@ -753,7 +753,7 @@ class QuoteCreate(BaseModel):
     valid_until: Optional[datetime] = None
     terms_and_conditions: Optional[str] = None
     notes: Optional[str] = None
-    deposit_amount: Optional[Decimal] = None  # Optional deposit amount (defaults to 50% of total if not provided)
+    deposit_amount: Optional[Decimal] = None  # Optional deposit amount inc VAT (defaults to 50% of total inc VAT if not provided)
     items: List[QuoteItemCreate]
     discount_template_ids: Optional[List[int]] = None  # List of discount template IDs to apply
     temperature: Optional[QuoteTemperature] = None
@@ -764,7 +764,7 @@ class QuoteDraftUpdate(BaseModel):
     valid_until: Optional[datetime] = None
     terms_and_conditions: Optional[str] = None
     notes: Optional[str] = None
-    deposit_amount: Optional[Decimal] = None
+    deposit_amount: Optional[Decimal] = None  # inc VAT
     items: List[QuoteItemCreate]
     discount_template_ids: Optional[List[int]] = None
     temperature: Optional[QuoteTemperature] = None
@@ -775,7 +775,7 @@ class QuoteUpdate(BaseModel):
     valid_until: Optional[datetime] = None
     terms_and_conditions: Optional[str] = None
     notes: Optional[str] = None
-    deposit_amount: Optional[Decimal] = None
+    deposit_amount: Optional[Decimal] = None  # inc VAT
     # Opportunity fields
     opportunity_stage: Optional["OpportunityStage"] = None
     close_probability: Optional[Decimal] = None

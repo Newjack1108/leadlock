@@ -655,7 +655,9 @@ export interface Quote {
   subtotal: number;
   discount_total: number;
   total_amount: number;
+  /** Deposit amount inc VAT */
   deposit_amount: number;
+  /** Balance amount inc VAT */
   balance_amount: number;
   currency: string;
   /** Computed: VAT @ 20% on total_amount (Ex VAT). */
@@ -723,7 +725,9 @@ export interface PublicQuoteView {
   subtotal: number;
   discount_total: number;
   total_amount: number;
+  /** Deposit amount inc VAT */
   deposit_amount: number;
+  /** Balance amount inc VAT */
   balance_amount: number;
   vat_amount?: number;
   total_amount_inc_vat?: number;

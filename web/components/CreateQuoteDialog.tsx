@@ -172,8 +172,10 @@ export default function CreateQuoteDialog({
     return calculateSubtotal();
   };
 
+  const calculateTotalIncVat = () => calculateTotal() * 1.2;
+
   const calculateDefaultDeposit = () => {
-    return calculateTotal() * 0.5;
+    return calculateTotalIncVat() * 0.5;
   };
 
   const getDepositAmount = () => {
@@ -184,9 +186,9 @@ export default function CreateQuoteDialog({
   };
 
   const getBalanceAmount = () => {
-    const total = calculateTotal();
+    const totalIncVat = calculateTotalIncVat();
     const deposit = getDepositAmount();
-    return Math.max(0, total - deposit);
+    return Math.max(0, totalIncVat - deposit);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -465,7 +467,7 @@ export default function CreateQuoteDialog({
                   />
                   <div className="text-sm text-muted-foreground">
                     {depositAmount === '' ? (
-                      <>Default deposit: £{calculateDefaultDeposit().toFixed(2)} (50% of total)</>
+                      <>Default deposit: £{calculateDefaultDeposit().toFixed(2)} (50% of total inc VAT)</>
                     ) : (
                       <>Balance: £{getBalanceAmount().toFixed(2)}</>
                     )}
