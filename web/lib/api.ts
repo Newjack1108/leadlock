@@ -57,7 +57,13 @@ export const sendEmail = async (emailData: {
       formData.append('attachments', file);
     }
   }
-  const response = await api.post('/api/emails', formData);
+  // Must not set Content-Type when sending FormData - let browser set multipart/form-data with boundary
+  const response = await api.post('/api/emails', formData, {
+    transformRequest: [(data: unknown, headers?: Record<string, unknown>) => {
+      if (data instanceof FormData && headers) delete (headers as Record<string, unknown>)['Content-Type'];
+      return data;
+    }],
+  });
   return response.data;
 };
 
@@ -84,7 +90,13 @@ export const replyToEmail = async (emailId: number, replyData: {
       formData.append('attachments', file);
     }
   }
-  const response = await api.post(`/api/emails/${emailId}/reply`, formData);
+  // Must not set Content-Type when sending FormData - let browser set multipart/form-data with boundary
+  const response = await api.post(`/api/emails/${emailId}/reply`, formData, {
+    transformRequest: [(data: unknown, headers?: Record<string, unknown>) => {
+      if (data instanceof FormData && headers) delete (headers as Record<string, unknown>)['Content-Type'];
+      return data;
+    }],
+  });
   return response.data;
 };
 

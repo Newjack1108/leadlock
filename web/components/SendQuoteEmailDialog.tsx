@@ -101,7 +101,15 @@ export default function SendQuoteEmailDialog({
         setTimeout(() => onSuccess?.(), 100);
       }
     } catch (error: any) {
-      const errorMessage = error.response?.data?.detail || error.message || 'Failed to send quote email';
+      const detail = error.response?.data?.detail;
+      let errorMessage = 'Failed to send quote email';
+      if (typeof detail === 'string') {
+        errorMessage = detail;
+      } else if (Array.isArray(detail) && detail.length > 0) {
+        errorMessage = detail.map((e: { msg?: string }) => e.msg || JSON.stringify(e)).join('; ');
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
       toast.error(errorMessage);
       console.error('Quote email send error:', error);
     } finally {
