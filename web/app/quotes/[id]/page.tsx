@@ -7,13 +7,30 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import api, { getQuote, previewQuotePdf, getDiscountRequestsForQuote, getQuoteViewLink, acceptQuote } from '@/lib/api';
-import { Quote, QuoteItem, Customer, QuoteDiscount, DiscountRequest, DiscountRequestStatus, QuoteTemperature } from '@/lib/types';
+import { Quote, QuoteItem, Customer, QuoteDiscount, DiscountRequest, DiscountRequestStatus, QuoteTemperature, LossCategory } from '@/lib/types';
 import SendQuoteEmailDialog from '@/components/SendQuoteEmailDialog';
 import CallNotesDialog from '@/components/CallNotesDialog';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { formatDateTime } from '@/lib/utils';
-import { ArrowLeft, Mail, Eye, Tag, Pencil, ChevronDown, ChevronUp, Send, ExternalLink, CheckCircle, ShoppingBag } from 'lucide-react';
+import { ArrowLeft, Mail, Eye, Tag, Pencil, ChevronDown, ChevronUp, Send, ExternalLink, CheckCircle, ShoppingBag, XCircle, MinusCircle } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import RequestDiscountDialog from '@/components/RequestDiscountDialog';
 
 const temperatureColors: Record<QuoteTemperature, string> = {
@@ -36,6 +53,12 @@ export default function QuoteDetailPage() {
   const [requestDialogOpen, setRequestDialogOpen] = useState(false);
   const [callNotesOpen, setCallNotesOpen] = useState(false);
   const [accepting, setAccepting] = useState(false);
+  const [lostDialogOpen, setLostDialogOpen] = useState(false);
+  const [closeDialogOpen, setCloseDialogOpen] = useState(false);
+  const [lossReason, setLossReason] = useState('');
+  const [lossCategory, setLossCategory] = useState<LossCategory | ''>('');
+  const [markingLost, setMarkingLost] = useState(false);
+  const [markingClose, setMarkingClose] = useState(false);
 
   useEffect(() => {
     if (quoteId) {
@@ -79,6 +102,45 @@ export default function QuoteDetailPage() {
       setLoading(false);
     }
   };
+
+  const handleMarkLost = async () => {
+    if (!lossReason || !lossCategory) {
+      toast.error('Loss reason and category are required');
+      return;
+    }
+    try {
+      setMarkingLost(true);
+      await api.post(`/api/quotes/opportunities/${quoteId}/lost`, {
+        loss_reason: lossReason,
+        loss_category: lossCategory,
+      });
+      toast.success('Quote marked as lost. Lead updated to LOST.');
+      setLostDialogOpen(false);
+      setLossReason('');
+      setLossCategory('');
+      fetchQuote();
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || 'Failed to mark quote as lost');
+    } finally {
+      setMarkingLost(false);
+    }
+  };
+
+  const handleClose = async () => {
+    try {
+      setMarkingClose(true);
+      await api.post(`/api/quotes/opportunities/${quoteId}/close`, {});
+      toast.success('Quote closed. Lead status unchanged (another quote may have won).');
+      setCloseDialogOpen(false);
+      fetchQuote();
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || 'Failed to close quote');
+    } finally {
+      setMarkingClose(false);
+    }
+  };
+
+  const isClosable = quote && ['SENT', 'VIEWED'].includes(quote.status);
 
   if (loading) {
     return (
@@ -199,6 +261,24 @@ export default function QuoteDetailPage() {
                     View order
                   </Link>
                 </Button>
+              )}
+              {isClosable && (
+                <>
+                  <Button
+                    variant="destructive"
+                    onClick={() => setLostDialogOpen(true)}
+                  >
+                    <XCircle className="h-4 w-4 mr-2" />
+                    Lose
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setCloseDialogOpen(true)}
+                  >
+                    <MinusCircle className="h-4 w-4 mr-2" />
+                    Close
+                  </Button>
+                </>
               )}
             </div>
           </div>
@@ -624,6 +704,79 @@ export default function QuoteDetailPage() {
           </div>
         </div>
       </main>
+
+        {/* Lost Dialog */}
+        <Dialog open={lostDialogOpen} onOpenChange={setLostDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Lose Quote</DialogTitle>
+              <DialogDescription>
+                This will mark the quote as lost and transition associated leads to LOST status.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div>
+                <Label>Loss Category *</Label>
+                <Select
+                  value={lossCategory}
+                  onValueChange={(value) => setLossCategory(value as LossCategory)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.values(LossCategory).map((category) => (
+                      <SelectItem key={category} value={category}>
+                        {category}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Loss Reason *</Label>
+                <Textarea
+                  value={lossReason}
+                  onChange={(e) => setLossReason(e.target.value)}
+                  placeholder="Explain why this quote was lost..."
+                  rows={4}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setLostDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleMarkLost}
+                disabled={markingLost || !lossReason || !lossCategory}
+                variant="destructive"
+              >
+                {markingLost ? 'Marking...' : 'Mark as Lost'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Close Dialog */}
+        <Dialog open={closeDialogOpen} onOpenChange={setCloseDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Close Quote</DialogTitle>
+              <DialogDescription>
+                Close this quote without changing the lead status. Use when another quote from the same lead may have won.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setCloseDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleClose} disabled={markingClose}>
+                {markingClose ? 'Closing...' : 'Close Quote'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
       {customer && (
         <SendQuoteEmailDialog

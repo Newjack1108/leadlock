@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from fastapi.responses import Response
 from sqlmodel import Session, select, or_, and_
 from sqlalchemy import func
@@ -9,7 +9,7 @@ from app.auth import get_current_user
 from app.schemas import (
     QuoteCreate, QuoteUpdate, QuoteDraftUpdate, QuoteResponse, QuoteItemCreate, QuoteItemResponse,
     QuoteEmailSendRequest, QuoteEmailSendResponse, QuoteViewLinkResponse,
-    OpportunityWonRequest, OpportunityLostRequest,
+    OpportunityWonRequest, OpportunityLostRequest, OpportunityCloseRequest,
     QuoteDiscountResponse
 )
 from app.quote_email_service import send_quote_email
@@ -746,6 +746,37 @@ async def mark_opportunity_won(
     return build_quote_response(quote, quote_items, session)
 
 
+@router.post("/opportunities/{quote_id}/close", response_model=QuoteResponse)
+async def mark_opportunity_close(
+    quote_id: int,
+    body: Optional[OpportunityCloseRequest] = Body(None),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    """Mark a quote as closed without transitioning leads (e.g. another quote from same lead won)."""
+    statement = select(Quote).where(Quote.id == quote_id)
+    quote = session.exec(statement).first()
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    if quote.status not in (QuoteStatus.SENT, QuoteStatus.VIEWED):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Only sent or viewed quotes can be closed. This quote has status: {quote.status}"
+        )
+    quote.status = QuoteStatus.REJECTED
+    quote.opportunity_stage = OpportunityStage.LOST
+    if body and body.reason:
+        quote.loss_reason = body.reason
+    quote.updated_at = datetime.utcnow()
+    session.add(quote)
+    session.commit()
+    session.refresh(quote)
+    # Do NOT transition leads - close means another quote may have won
+    statement = select(QuoteItem).where(QuoteItem.quote_id == quote.id).order_by(QuoteItem.sort_order)
+    quote_items = session.exec(statement).all()
+    return build_quote_response(quote, quote_items, session)
+
+
 @router.post("/opportunities/{quote_id}/lost", response_model=QuoteResponse)
 async def mark_opportunity_lost(
     quote_id: int,
@@ -753,13 +784,19 @@ async def mark_opportunity_lost(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
-    """Mark an opportunity as LOST (quote rejected)."""
+    """Mark an opportunity as LOST (quote rejected). Transitions associated leads to LOST."""
     statement = select(Quote).where(Quote.id == quote_id)
     quote = session.exec(statement).first()
     if not quote:
         raise HTTPException(status_code=404, detail="Opportunity not found")
+    if quote.status not in (QuoteStatus.SENT, QuoteStatus.VIEWED):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Only sent or viewed quotes can be marked as lost. This quote has status: {quote.status}"
+        )
+    # Promote to opportunity if not already (allows Lose on any sent quote)
     if quote.opportunity_stage is None:
-        raise HTTPException(status_code=404, detail="Quote is not an opportunity")
+        quote.opportunity_stage = OpportunityStage.LOST
     old_status = quote.status
     quote.status = QuoteStatus.REJECTED
     quote.opportunity_stage = OpportunityStage.LOST
@@ -993,7 +1030,7 @@ async def get_quote_view_link(
     quote = session.exec(select(Quote).where(Quote.id == quote_id)).first()
     if not quote:
         raise HTTPException(status_code=404, detail="Quote not found")
-    frontend_base_url = os.getenv("FRONTEND_BASE_URL", "").strip() or None
+    frontend_base_url = (os.getenv("FRONTEND_BASE_URL") or os.getenv("FRONTEND_URL") or os.getenv("PUBLIC_FRONTEND_URL") or "").strip() or None
     statement = (
         select(QuoteEmail)
         .where(QuoteEmail.quote_id == quote_id, QuoteEmail.view_token.isnot(None))
@@ -1040,7 +1077,7 @@ async def send_quote_email_endpoint(
 
         # Generate view token for "View your quote" link (open tracking)
         view_token = uuid.uuid4().hex
-        frontend_base_url = os.getenv("FRONTEND_BASE_URL", "").strip() or None
+        frontend_base_url = (os.getenv("FRONTEND_BASE_URL") or os.getenv("FRONTEND_URL") or os.getenv("PUBLIC_FRONTEND_URL") or "").strip() or None
 
         # Send quote email
         success, message_id, error, pdf_buffer, email_subject, email_body_html = send_quote_email(

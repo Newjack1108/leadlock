@@ -303,6 +303,10 @@ class OpportunityLostRequest(BaseModel):
     loss_category: "LossCategory"
 
 
+class OpportunityCloseRequest(BaseModel):
+    reason: Optional[str] = None  # e.g. "Another quote won"
+
+
 class LeadCreate(BaseModel):
     name: str
     email: Optional[str] = None
