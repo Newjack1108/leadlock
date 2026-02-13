@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, Query
-from sqlmodel import Session, select, func
+from sqlmodel import Session, select, func, or_
 from app.database import get_session
 from app.models import Lead, LeadStatus, LeadSource, Quote, QuoteStatus, Activity, SmsMessage, SmsDirection, Customer, MessengerMessage, MessengerDirection
 from app.distance_service import bulk_geocode_postcodes
@@ -119,12 +119,13 @@ async def get_lead_locations(
     current_user = Depends(get_current_user),
     period: Optional[str] = Query(None, description="Filter by period: week, month, quarter, year. Omit for all-time."),
 ):
-    """Get geocoded lead locations for dashboard map. Aggregates by postcode."""
+    """Get geocoded lead locations for dashboard map. Uses lead postcode, or customer postcode when lead has none."""
     date_filter = None
     if period and period.lower() in ("week", "month", "quarter", "year"):
         start, end = get_date_range_for_period(period.lower())
         date_filter = (Lead.created_at >= start) & (Lead.created_at <= end)
 
+    # 1. Leads with postcode
     stmt = (
         select(Lead.postcode, func.count(Lead.id).label("count"))
         .where(Lead.postcode.isnot(None), Lead.postcode != "")
@@ -133,11 +134,36 @@ async def get_lead_locations(
     if date_filter is not None:
         stmt = stmt.where(date_filter)
     rows = session.exec(stmt).all()
-    if not rows:
+    postcode_counts: dict[str, int] = {}
+    for postcode, count in rows:
+        pc = (postcode or "").strip()
+        if pc:
+            postcode_counts[pc] = postcode_counts.get(pc, 0) + count
+
+    # 2. Leads without postcode but with qualified customer that has postcode
+    stmt2 = (
+        select(Customer.postcode, func.count(Lead.id).label("count"))
+        .join(Customer, Lead.customer_id == Customer.id)
+        .where(
+            or_(Lead.postcode.is_(None), Lead.postcode == ""),
+            Customer.postcode.isnot(None),
+            Customer.postcode != "",
+        )
+        .group_by(Customer.postcode)
+    )
+    if date_filter is not None:
+        stmt2 = stmt2.where(date_filter)
+    rows2 = session.exec(stmt2).all()
+    for postcode, count in rows2:
+        pc = (postcode or "").strip()
+        if pc:
+            postcode_counts[pc] = postcode_counts.get(pc, 0) + count
+
+    if not postcode_counts:
         return []
 
-    postcodes = [r[0] for r in rows]
-    counts = [r[1] for r in rows]
+    postcodes = list(postcode_counts.keys())
+    counts = [postcode_counts[pc] for pc in postcodes]
     coords_list = bulk_geocode_postcodes(postcodes)
     out = []
     for i, coords in enumerate(coords_list):
@@ -146,7 +172,7 @@ async def get_lead_locations(
                 LeadLocationItem(
                     lat=coords[0],
                     lng=coords[1],
-                    postcode=postcodes[i] or "",
+                    postcode=postcodes[i],
                     count=counts[i],
                 )
             )

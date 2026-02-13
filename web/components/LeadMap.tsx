@@ -31,9 +31,12 @@ export default function LeadMap({ locations, loading = false }: LeadMapProps) {
 
   if (!locations || locations.length === 0) {
     return (
-      <div className="flex h-[300px] items-center justify-center rounded-lg border border-border bg-muted/30">
+      <div className="flex h-[300px] flex-col items-center justify-center gap-1 rounded-lg border border-border bg-muted/30 px-4 text-center">
         <p className="text-sm text-muted-foreground">
           No leads with postcodes in this period
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Add postcodes to leads or customers to see them on the map. Try &quot;All&quot; for all-time.
         </p>
       </div>
     );
