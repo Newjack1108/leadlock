@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { Suspense, useEffect, useState, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Header from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -37,7 +37,7 @@ const temperatureColors: Record<QuoteTemperature, string> = {
 
 const VALID_QUOTE_STATUSES = Object.values(QuoteStatus);
 
-export default function QuotesPage() {
+function QuotesPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const statusFromUrl = searchParams.get('status');
@@ -411,5 +411,20 @@ export default function QuotesPage() {
         )}
       </main>
     </div>
+  );
+}
+
+export default function QuotesPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen">
+        <Header />
+        <main className="container mx-auto px-6 py-8">
+          <div className="text-center py-12 text-muted-foreground">Loading...</div>
+        </main>
+      </div>
+    }>
+      <QuotesPageContent />
+    </Suspense>
   );
 }

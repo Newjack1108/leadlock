@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Header from '@/components/Header';
 import { Card, CardContent } from '@/components/ui/card';
@@ -55,7 +55,7 @@ function formatTimeAgo(dateString: string): string {
 
 const TERMINAL_STATUSES: LeadStatus[] = [LeadStatus.QUOTED, LeadStatus.WON, LeadStatus.LOST];
 
-export default function LeadsPage() {
+function LeadsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const statusFromUrl = searchParams.get('status');
@@ -430,5 +430,20 @@ export default function LeadsPage() {
         </Dialog>
       </main>
     </div>
+  );
+}
+
+export default function LeadsPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen">
+        <Header />
+        <main className="container mx-auto px-6 py-8">
+          <div className="text-center py-12 text-muted-foreground">Loading...</div>
+        </main>
+      </div>
+    }>
+      <LeadsPageContent />
+    </Suspense>
   );
 }

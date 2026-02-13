@@ -11,6 +11,8 @@ import api, { getStaleSummary, getCompanySettings, getUnreadSms, getUnreadMessen
 import { DashboardStats, StaleSummary, CompanySettings, UnreadSmsSummary, UnreadMessengerSummary } from '@/lib/types';
 import { toast } from 'sonner';
 import { TrendingUp, Users, CheckCircle2, Trophy, Bell, ArrowRight, Clock, MessageSquare } from 'lucide-react';
+import StatusPieChart from '@/components/StatusPieChart';
+import LeadsBySourceBarChart from '@/components/LeadsBySourceBarChart';
 
 type DatePeriod = 'week' | 'month' | 'quarter' | 'year';
 
@@ -165,6 +167,31 @@ export default function DashboardPage() {
               <p className="text-xs text-muted-foreground">
                 {stats.quoted_count} quoted
               </p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Charts */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Lead Status</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <StatusPieChart
+                newCount={stats.new_count}
+                quotedCount={stats.quoted_count}
+                wonCount={stats.won_count}
+                lostCount={stats.lost_count}
+              />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Leads by Source</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <LeadsBySourceBarChart data={stats.leads_by_source || []} />
             </CardContent>
           </Card>
         </div>
