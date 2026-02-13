@@ -10,6 +10,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY api/ ./
 
+# Copy logo into static/ so PDF generation can find it (api/ has no access to web/ at runtime)
+RUN mkdir -p static
+COPY web/public/logo1.jpg web/public/logo1.png static/
+
 ENV PORT=8000
 EXPOSE 8000
 

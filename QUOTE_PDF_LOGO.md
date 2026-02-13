@@ -2,9 +2,13 @@
 
 The API generates quote PDFs and needs to load your logo.
 
-## Default placeholder logo
+## Default: logo bundled in API (Railway)
 
-The repo includes `web/public/logo1.jpg` and `web/public/logo1.png` as minimal placeholders. Replace these with your real logo (recommended size: at least 200×80px, PNG or JPG).
+When the API is built from the repo root (Railway Root Directory empty), `web/public/logo1.jpg` and `logo1.png` are copied into the Docker image. The logo will appear in PDFs after you deploy. Replace the logo files in `web/public/` and push to update.
+
+## Custom logo (web/public/)
+
+The repo includes `web/public/logo1.jpg` and `web/public/logo1.png`. Replace these with your real logo (recommended size: at least 200×80px, PNG or JPG), then push. The next API deploy will include the new logo.
 
 ## Preferred: upload your logo in the app
 
@@ -34,7 +38,7 @@ Replace with your real frontend URL if it’s different. No trailing slash.
 
 ### Option B: frontend base URL
 
-- **Name:** `FRONTEND_URL`
+- **Name:** `FRONTEND_URL` (or `FRONTEND_BASE_URL`)
 - **Value:** The base URL of your frontend (no path, no trailing slash).
 
 Example:

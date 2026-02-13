@@ -263,7 +263,12 @@ def _resolve_logo(company_settings: CompanySettings) -> Tuple[Optional[str], Opt
     url_candidates = []
     env_logo_url = (os.getenv("LOGO_URL") or "").strip()
     env_logo_base = os.getenv("LOGO_BASE_URL")
-    env_frontend_url = (os.getenv("FRONTEND_URL") or os.getenv("PUBLIC_FRONTEND_URL") or "").strip()
+    env_frontend_url = (
+        os.getenv("FRONTEND_BASE_URL")
+        or os.getenv("FRONTEND_URL")
+        or os.getenv("PUBLIC_FRONTEND_URL")
+        or ""
+    ).strip()
     if not env_frontend_url:
         env_frontend_url = DEFAULT_LOGO_BASE
     cors_origins = os.getenv("CORS_ORIGINS", "")
