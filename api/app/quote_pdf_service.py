@@ -59,7 +59,6 @@ def _build_header_flowables(
             logo = None
     elif logo_bytes:
         try:
-            # Use ImageReader + fresh BytesIO so ReportLab can read the image reliably
             buf = BytesIO(logo_bytes)
             buf.seek(0)
             reader = ImageReader(buf)
@@ -70,8 +69,27 @@ def _build_header_flowables(
                 if logo.height > 18*mm:
                     logo.height = 18*mm
                     logo.width = logo.height * aspect_ratio
-        except Exception:
-            logo = None
+        except Exception as e1:
+            # Fallback: normalize via Pillow (handles progressive JPEG, color profiles, etc.)
+            try:
+                from PIL import Image as PILImage
+                img = PILImage.open(BytesIO(logo_bytes))
+                img = img.convert("RGB")  # normalizes format for ReportLab
+                out = BytesIO()
+                img.save(out, format="PNG")
+                out.seek(0)
+                reader = ImageReader(out)
+                logo = Image(reader, width=50*mm, height=None)
+                if logo.imageHeight > 0:
+                    ar = logo.imageWidth / logo.imageHeight
+                    logo.height = logo.width / ar
+                    if logo.height > 18*mm:
+                        logo.height = 18*mm
+                        logo.width = logo.height * ar
+            except Exception as e2:
+                import sys
+                print(f"PDF logo: ReportLab failed ({e1}), Pillow fallback failed ({e2})", file=sys.stderr, flush=True)
+                logo = None
     # Company info (used with or without logo)
     company_info_lines = []
     trading_name = company_settings.trading_name or "Cheshire Stables"
@@ -323,8 +341,10 @@ def _resolve_logo(company_settings: CompanySettings) -> Tuple[Optional[str], Opt
                 data = response.read()
             if not data or len(data) < 50:
                 continue
-            if data.startswith(JPEG_MAGIC) or data.startswith(PNG_MAGIC):
-                return (None, data)
+                if data.startswith(JPEG_MAGIC) or data.startswith(PNG_MAGIC):
+                    if _debug:
+                        print(f"PDF logo: fetched {len(data)} bytes from {fetch_url[:80]}...", file=__import__("sys").stderr, flush=True)
+                    return (None, data)
         except Exception:
             continue
     # Log when logo resolution fails (helps diagnose PDF placeholder)
