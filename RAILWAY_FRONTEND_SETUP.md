@@ -32,7 +32,7 @@
 
 5. **Set Environment Variables:**
    - Go to "Variables" tab
-   - Add: `NEXT_PUBLIC_API_URL` = `https://leadlock-production.up.railway.app` (your backend URL)
+   - **Required:** `NEXT_PUBLIC_API_URL` = `https://leadlock-production.up.railway.app` (your backend URL). This must be set before build so the customer quote view can call the API.
    - Click "Add"
 
 6. **Deploy:**
@@ -103,5 +103,18 @@ After successful deployment:
 ## Backend (API) deployment
 
 - **Root Directory:** Leave **empty** (repo root) so the start script `api/start.sh` is used. If you set Root Directory to `api`, set the start command in Railway to: `sh start.sh`.
+
+### API environment variables for customer quote view
+
+For the "View your quote online" link in quote emails to work, the API must know the frontend URL. Add one of these to the API service Variables:
+
+| Variable | Description |
+|----------|-------------|
+| `FRONTEND_BASE_URL` | Preferred. Full frontend URL, e.g. `https://leadlock-frontend-production.up.railway.app` |
+| `FRONTEND_URL` | Fallback. Same usage as above; also used for logo URLs |
+| `PUBLIC_FRONTEND_URL` | Fallback. Same usage as above |
+
+If none are set, quote emails are sent without the "View your quote online" link and the customer view will not work.
+
 - **Required variable:** `DATABASE_URL` (Postgres connection string). Add it in the API service’s Variables tab (e.g. from a Railway Postgres plugin).
 - **If the container fails to start:** Open the API service → Deployments → latest deployment → **View logs**. Check for errors (e.g. database connection, missing env vars).
