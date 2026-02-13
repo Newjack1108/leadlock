@@ -1,0 +1,15 @@
+# Backup cron service - runs pg_dump daily, rotates to 5 backups.
+# Use with Railway Cron; mount a Volume at /app/backups.
+FROM python:3.11-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Minimal deps: dotenv for .env, boto3 for optional S3 upload
+RUN pip install --no-cache-dir python-dotenv boto3
+
+COPY backup.py ./
+
+CMD ["python", "backup.py"]
