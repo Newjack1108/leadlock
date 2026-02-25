@@ -43,9 +43,16 @@ def _image_from_bytes(
     """Create ReportLab Image from bytes (writes temp file - platypus Image needs path)."""
     path = None
     try:
+        if not data or len(data) < 10:
+            return None
         ext = ".png" if len(data) >= 8 and data[:8] == b"\x89PNG\r\n\x1a\n" else ".jpg"
         with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as f:
             f.write(data)
+            f.flush()
+            try:
+                os.fsync(f.fileno())
+            except (AttributeError, OSError):
+                pass
             path = f.name
         img = Image(path, width=width, height=height)
         if hasattr(img, "imageHeight") and img.imageHeight > 0 and height is None:
@@ -56,7 +63,8 @@ def _image_from_bytes(
                 img.height = cap
                 img.width = img.height * ratio
         return img
-    except Exception:
+    except Exception as e:
+        print(f"PDF _image_from_bytes failed: {e}", file=sys.stderr, flush=True)
         return None
 
 
@@ -101,8 +109,8 @@ def _build_header_flowables(
             except Exception:
                 logo = None
     if not logo:
-        # Use same embedded fallback as footer (no placeholder)
-        fallback_bytes = logo_bytes or _make_embedded_footer_logo()
+        # Always try embedded PNG when main logo fails (logo_bytes may be corrupt/unsupported)
+        fallback_bytes = _make_embedded_footer_logo()
         if fallback_bytes:
             logo = _image_from_bytes(fallback_bytes, width=50*mm, height=None, max_height=18*mm)
     # Company info (used with or without logo)
@@ -196,18 +204,21 @@ def _build_footer_flowables(
         footer_lines.append(" | ".join(contact))
     footer_para = Paragraph("<br/>".join(footer_lines) if footer_lines else " ", footer_style)
     logo_to_show = logo_bytes or _make_embedded_footer_logo()
+    small_logo = None
     if logo_to_show:
         small_logo = _image_from_bytes(logo_to_show, width=35*mm, height=None, max_height=10*mm)
-        if small_logo:
-            footer_table = Table([[footer_para, small_logo]], colWidths=[120*mm, 50*mm])
-            footer_table.setStyle(TableStyle([
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("ALIGN", (0, 0), (0, 0), "LEFT"),
-                ("ALIGN", (1, 0), (1, 0), "RIGHT"),
-            ]))
-            result.append(footer_table)
-        else:
-            result.append(footer_para)
+    if not small_logo:
+        fallback_bytes = _make_embedded_footer_logo()
+        if fallback_bytes:
+            small_logo = _image_from_bytes(fallback_bytes, width=35*mm, height=None, max_height=10*mm)
+    if small_logo:
+        footer_table = Table([[footer_para, small_logo]], colWidths=[120*mm, 50*mm])
+        footer_table.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("ALIGN", (0, 0), (0, 0), "LEFT"),
+            ("ALIGN", (1, 0), (1, 0), "RIGHT"),
+        ]))
+        result.append(footer_table)
     else:
         result.append(footer_para)
     return result
