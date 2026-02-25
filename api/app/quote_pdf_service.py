@@ -143,8 +143,10 @@ def _build_header_flowables(
 def _build_footer_flowables(
     company_settings: CompanySettings,
     footer_style: ParagraphStyle,
+    logo_path: Optional[str] = None,
+    logo_bytes: Optional[bytes] = None,
 ) -> List[Any]:
-    """Build footer flowables (company details, text only)."""
+    """Build footer flowables (company details, then logo under)."""
     result: List[Any] = []
     footer_lines = []
     if company_settings.company_name:
@@ -169,6 +171,26 @@ def _build_footer_flowables(
         footer_lines.append(" | ".join(contact))
     if footer_lines:
         result.append(Paragraph("<br/>".join(footer_lines), footer_style))
+    # Logo under footer (smaller, centered)
+    logo = None
+    if logo_bytes:
+        logo = _image_from_bytes(logo_bytes, width=30 * mm, max_height=12 * mm)
+    elif logo_path:
+        try:
+            with open(logo_path, "rb") as f:
+                data = f.read()
+            logo = _image_from_bytes(data, width=30 * mm, max_height=12 * mm)
+        except Exception:
+            logo = None
+    if logo:
+        result.append(Spacer(1, 4))
+        # Full-width table to center logo on page (A4 content ~180mm)
+        t = Table([[logo]], colWidths=[180 * mm])
+        t.setStyle(TableStyle([
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ]))
+        result.append(t)
     return result
 
 
@@ -588,10 +610,10 @@ def generate_quote_pdf(
     elements.append(items_table)
     elements.append(Spacer(1, 8))
 
-    # Footer with company details (page 1)
+    # Footer with company details and logo (page 1)
     if company_settings:
         elements.append(Spacer(1, 8))
-        elements.extend(_build_footer_flowables(company_settings, footer_style))
+        elements.extend(_build_footer_flowables(company_settings, footer_style, logo_path, logo_bytes))
 
     # Page 2: Terms and Conditions – quote terms when present, else company default (same header and footer)
     terms_text = (quote.terms_and_conditions or "").strip() or (
@@ -605,7 +627,7 @@ def generate_quote_pdf(
             if line.strip():
                 elements.append(Paragraph(line.strip(), terms_style))
         elements.append(Spacer(1, 8))
-        elements.extend(_build_footer_flowables(company_settings, footer_style))
+        elements.extend(_build_footer_flowables(company_settings, footer_style, logo_path, logo_bytes))
     
     # Notes (Internal - typically not shown to customer, but included for completeness)
     # Note: In a real scenario, you might want to exclude this from customer-facing PDFs
