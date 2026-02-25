@@ -37,7 +37,9 @@ def format_currency(amount: Decimal, currency: str = "GBP") -> str:
     return f"{currency} {amount:,.2f}"
 
 
-def _image_from_bytes(data: bytes, width: float, height: Optional[float] = None) -> Optional[Any]:
+def _image_from_bytes(
+    data: bytes, width: float, height: Optional[float] = None, max_height: Optional[float] = None
+) -> Optional[Any]:
     """Create ReportLab Image from bytes (writes temp file - platypus Image needs path)."""
     path = None
     try:
@@ -49,8 +51,9 @@ def _image_from_bytes(data: bytes, width: float, height: Optional[float] = None)
         if hasattr(img, "imageHeight") and img.imageHeight > 0 and height is None:
             ratio = img.imageWidth / img.imageHeight
             img.height = img.width / ratio
-            if img.height > 18 * mm:
-                img.height = 18 * mm
+            cap = max_height if max_height is not None else 18 * mm
+            if img.height > cap:
+                img.height = cap
                 img.width = img.height * ratio
         return img
     except Exception:
@@ -225,7 +228,7 @@ def _build_footer_flowables(
     footer_para = Paragraph("<br/>".join(footer_lines) if footer_lines else " ", footer_style)
     logo_to_show = logo_bytes or _make_embedded_footer_logo()
     if logo_to_show:
-        small_logo = _image_from_bytes(logo_to_show, width=25*mm, height=8*mm)
+        small_logo = _image_from_bytes(logo_to_show, width=35*mm, height=None, max_height=10*mm)
         if small_logo:
             footer_table = Table([[footer_para, small_logo]], colWidths=[120*mm, 50*mm])
             footer_table.setStyle(TableStyle([
