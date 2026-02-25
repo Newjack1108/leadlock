@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 
 export default function Logo() {
-  const [imgSrc, setImgSrc] = useState('/logo1.jpg');
+  const [imgSrc, setImgSrc] = useState('/logo.png');
   const [imgError, setImgError] = useState(false);
 
   const handleImageLoad = () => {
@@ -12,8 +12,11 @@ export default function Logo() {
   };
 
   const handleImageError = () => {
-    // Fallback to logo1.png if logo1.jpg failed (e.g. only logo1.png in public)
-    if (imgSrc === '/logo1.jpg') {
+    // Fallback to logo1.jpg then logo1.png if logo.png not found
+    if (imgSrc === '/logo.png') {
+      setImgSrc('/logo1.jpg');
+      setImgError(false);
+    } else if (imgSrc === '/logo1.jpg') {
       setImgSrc('/logo1.png');
       setImgError(false);
     } else {
