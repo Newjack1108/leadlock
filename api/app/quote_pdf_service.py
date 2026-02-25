@@ -68,7 +68,7 @@ def _build_header_flowables(
     company_name_style: ParagraphStyle,
     customer_number: Optional[str] = None,
 ) -> List[Any]:
-    """Build header flowables (logo + company info). When no logo is found, a placeholder is shown."""
+    """Build header flowables (logo + company info). Uses same logo as footer; fallback bar if resolution fails."""
     result: List[Any] = []
     logo = None
     if logo_path and os.path.exists(logo_path):
@@ -85,7 +85,6 @@ def _build_header_flowables(
     elif logo_bytes:
         logo = _image_from_bytes(logo_bytes, width=50*mm, height=None)
         if not logo:
-            # Fallback: normalize via Pillow (handles progressive JPEG, color profiles, WebP, etc.)
             try:
                 from PIL import Image as PILImage
                 img = PILImage.open(BytesIO(logo_bytes))
@@ -99,9 +98,13 @@ def _build_header_flowables(
                     if logo.height > 18*mm:
                         logo.height = 18*mm
                         logo.width = logo.height * ar
-            except Exception as e2:
-                print(f"PDF logo: Pillow fallback failed ({e2})", file=sys.stderr, flush=True)
+            except Exception:
                 logo = None
+    if not logo:
+        # Use same embedded fallback as footer (no placeholder)
+        fallback_bytes = logo_bytes or _make_embedded_footer_logo()
+        if fallback_bytes:
+            logo = _image_from_bytes(fallback_bytes, width=50*mm, height=None, max_height=18*mm)
     # Company info (used with or without logo)
     company_info_lines = []
     trading_name = company_settings.trading_name or "Cheshire Stables"
@@ -134,7 +137,6 @@ def _build_header_flowables(
     company_info_para = Paragraph(company_info_text, normal_style)
 
     if logo:
-        # Logo on the right: [company info | logo]
         header_table = Table([[company_info_para, logo]], colWidths=[120*mm, 60*mm])
         header_table.setStyle(TableStyle([
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
@@ -147,40 +149,7 @@ def _build_header_flowables(
         ]))
         result.append(header_table)
     else:
-        # Placeholder on the right so layout matches
-        placeholder_style = ParagraphStyle(
-            "LogoPlaceholder",
-            parent=normal_style,
-            fontSize=8,
-            textColor=colors.HexColor("#888888"),
-            alignment=1,  # center
-        )
-        placeholder_para = Paragraph(
-            "<b>Your logo here</b><br/><font size='6'>See QUOTE_PDF_LOGO.md</font>",
-            placeholder_style,
-        )
-        placeholder_table = Table([[placeholder_para]], colWidths=[50*mm])
-        placeholder_table.setStyle(TableStyle([
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f0f0f0")),
-            ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#cccccc")),
-            ("LEFTPADDING", (0, 0), (-1, -1), 4),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 4),
-            ("TOPPADDING", (0, 0), (-1, -1), 12),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 12),
-        ]))
-        header_table = Table([[company_info_para, placeholder_table]], colWidths=[120*mm, 60*mm])
-        header_table.setStyle(TableStyle([
-            ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("ALIGN", (0, 0), (0, 0), "LEFT"),
-            ("ALIGN", (1, 0), (1, 0), "RIGHT"),
-            ("LEFTPADDING", (0, 0), (-1, -1), 0),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-            ("TOPPADDING", (0, 0), (-1, -1), 0),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
-        ]))
-        result.append(header_table)
+        result.append(company_info_para)
     result.append(Spacer(1, 8))
     return result
 
