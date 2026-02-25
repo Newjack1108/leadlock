@@ -68,6 +68,17 @@ def _image_from_bytes(
         return None
 
 
+def _build_logo_image(logo_bytes: Optional[bytes], width: float = 35*mm, max_height: float = 10*mm) -> Optional[Any]:
+    """Build logo Image using exact same logic as footer (known to work)."""
+    logo_to_show = logo_bytes or _make_embedded_footer_logo()
+    logo = _image_from_bytes(logo_to_show, width=width, height=None, max_height=max_height) if logo_to_show else None
+    if not logo:
+        fallback = _make_embedded_footer_logo()
+        if fallback:
+            logo = _image_from_bytes(fallback, width=width, height=None, max_height=max_height)
+    return logo
+
+
 def _build_header_flowables(
     company_settings: CompanySettings,
     logo_path: Optional[str],
@@ -76,43 +87,22 @@ def _build_header_flowables(
     company_name_style: ParagraphStyle,
     customer_number: Optional[str] = None,
 ) -> List[Any]:
-    """Build header flowables (logo + company info). Uses same logo as footer; fallback bar if resolution fails."""
+    """Build header flowables (logo + company info). Uses same logo-building as footer (known to work)."""
     result: List[Any] = []
     logo = None
     if logo_path and os.path.exists(logo_path):
         try:
-            logo = Image(logo_path, width=50*mm, height=None)
+            logo = Image(logo_path, width=35*mm, height=None)
             if logo.imageHeight > 0:
-                aspect_ratio = logo.imageWidth / logo.imageHeight
-                logo.height = logo.width / aspect_ratio
-                if logo.height > 18*mm:
-                    logo.height = 18*mm
-                    logo.width = logo.height * aspect_ratio
+                ar = logo.imageWidth / logo.imageHeight
+                logo.height = logo.width / ar
+                if logo.height > 10*mm:
+                    logo.height = 10*mm
+                    logo.width = logo.height * ar
         except Exception:
             logo = None
-    elif logo_bytes:
-        logo = _image_from_bytes(logo_bytes, width=50*mm, height=None)
-        if not logo:
-            try:
-                from PIL import Image as PILImage
-                img = PILImage.open(BytesIO(logo_bytes))
-                img = img.convert("RGB")
-                out = BytesIO()
-                img.save(out, format="PNG")
-                logo = _image_from_bytes(out.getvalue(), width=50*mm, height=None)
-                if logo and logo.imageHeight > 0:
-                    ar = logo.imageWidth / logo.imageHeight
-                    logo.height = logo.width / ar
-                    if logo.height > 18*mm:
-                        logo.height = 18*mm
-                        logo.width = logo.height * ar
-            except Exception:
-                logo = None
     if not logo:
-        # Always try embedded PNG when main logo fails (logo_bytes may be corrupt/unsupported)
-        fallback_bytes = _make_embedded_footer_logo()
-        if fallback_bytes:
-            logo = _image_from_bytes(fallback_bytes, width=50*mm, height=None, max_height=18*mm)
+        logo = _build_logo_image(logo_bytes, width=35*mm, max_height=10*mm)
     # Company info (used with or without logo)
     company_info_lines = []
     trading_name = company_settings.trading_name or "Cheshire Stables"
@@ -145,7 +135,7 @@ def _build_header_flowables(
     company_info_para = Paragraph(company_info_text, normal_style)
 
     if logo:
-        header_table = Table([[company_info_para, logo]], colWidths=[120*mm, 60*mm])
+        header_table = Table([[company_info_para, logo]], colWidths=[120*mm, 50*mm])
         header_table.setStyle(TableStyle([
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
             ("ALIGN", (0, 0), (0, 0), "LEFT"),
@@ -203,14 +193,7 @@ def _build_footer_flowables(
             contact.append(f"Email: {company_settings.email}")
         footer_lines.append(" | ".join(contact))
     footer_para = Paragraph("<br/>".join(footer_lines) if footer_lines else " ", footer_style)
-    logo_to_show = logo_bytes or _make_embedded_footer_logo()
-    small_logo = None
-    if logo_to_show:
-        small_logo = _image_from_bytes(logo_to_show, width=35*mm, height=None, max_height=10*mm)
-    if not small_logo:
-        fallback_bytes = _make_embedded_footer_logo()
-        if fallback_bytes:
-            small_logo = _image_from_bytes(fallback_bytes, width=35*mm, height=None, max_height=10*mm)
+    small_logo = _build_logo_image(logo_bytes, width=35*mm, max_height=10*mm)
     if small_logo:
         footer_table = Table([[footer_para, small_logo]], colWidths=[120*mm, 50*mm])
         footer_table.setStyle(TableStyle([
