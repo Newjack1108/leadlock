@@ -257,6 +257,12 @@ export const getPublicQuoteView = async (viewToken: string) => {
   return response.data;
 };
 
+/** Company logo URL for header and login page (no auth required). */
+export const getPublicCompanyLogo = async (): Promise<{ logo_url: string | null }> => {
+  const response = await api.get('/api/public/company-logo');
+  return response.data;
+};
+
 /** Base URL for API (same as axios baseURL). */
 export const getApiBaseUrl = () => process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 

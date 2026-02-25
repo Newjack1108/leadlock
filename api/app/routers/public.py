@@ -69,6 +69,26 @@ def _resolve_public_logo_url(
     return f"{frontend.rstrip('/')}/{filename}"
 
 
+@router.get("/company-logo")
+def get_public_company_logo(
+    request: Request,
+    session: Session = Depends(get_session),
+):
+    """
+    Public endpoint: return company logo URL for web app header and login page.
+    No authentication required. Resolves Cloudinary, /static/, or fallback filename.
+    """
+    company_settings = session.exec(select(CompanySettings).limit(1)).first()
+    if not company_settings:
+        return {"logo_url": None}
+    logo_url = _resolve_public_logo_url(
+        request,
+        company_settings.logo_url,
+        company_settings.logo_filename or "logo1.jpg",
+    )
+    return {"logo_url": logo_url}
+
+
 @router.get("/quotes/view/{view_token}", response_model=PublicQuoteViewResponse)
 def get_public_quote_view(
     request: Request,

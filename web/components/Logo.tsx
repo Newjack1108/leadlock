@@ -1,28 +1,54 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { getPublicCompanyLogo } from '@/lib/api';
+
+const STATIC_FALLBACKS = ['/logo.png', '/logo1.jpg', '/logo1.png'];
 
 export default function Logo() {
-  const [imgSrc, setImgSrc] = useState('/logo.png');
+  const [imgSrc, setImgSrc] = useState<string | null>(null);
   const [imgError, setImgError] = useState(false);
+
+  useEffect(() => {
+    getPublicCompanyLogo()
+      .then(({ logo_url }) => {
+        if (logo_url) {
+          setImgSrc(logo_url);
+        } else {
+          setImgSrc(STATIC_FALLBACKS[0]);
+        }
+      })
+      .catch(() => {
+        setImgSrc(STATIC_FALLBACKS[0]);
+      });
+  }, []);
 
   const handleImageLoad = () => {
     setImgError(false);
   };
 
   const handleImageError = () => {
-    // Fallback to logo1.jpg then logo1.png if logo.png not found
-    if (imgSrc === '/logo.png') {
-      setImgSrc('/logo1.jpg');
+    const idx = STATIC_FALLBACKS.indexOf(imgSrc || '');
+    if (idx >= 0 && idx < STATIC_FALLBACKS.length - 1) {
+      setImgSrc(STATIC_FALLBACKS[idx + 1]);
       setImgError(false);
-    } else if (imgSrc === '/logo1.jpg') {
-      setImgSrc('/logo1.png');
+    } else if (idx === -1) {
+      // Company logo failed; fall back to static
+      setImgSrc(STATIC_FALLBACKS[0]);
       setImgError(false);
     } else {
       setImgError(true);
     }
   };
+
+  if (imgSrc === null) {
+    return (
+      <Link href="/dashboard" className="flex items-center cursor-pointer hover:opacity-80 transition-opacity">
+        <div className="relative h-32 w-auto flex-shrink-0 animate-pulse bg-muted rounded" style={{ minWidth: '120px' }} />
+      </Link>
+    );
+  }
 
   return (
     <Link href="/dashboard" className="flex items-center cursor-pointer hover:opacity-80 transition-opacity">
