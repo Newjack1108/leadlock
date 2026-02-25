@@ -217,6 +217,26 @@ def _force_cloudinary_format(url: str, fmt: str = "png") -> str:
     return url
 
 
+def _ensure_png_or_jpeg_bytes(data: bytes) -> Optional[bytes]:
+    """Convert WebP or other formats to PNG so ReportLab can use them. Returns None on failure."""
+    JPEG_MAGIC = b"\xff\xd8\xff"
+    PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+    if data.startswith(JPEG_MAGIC) or data.startswith(PNG_MAGIC):
+        return data
+    is_webp = len(data) >= 12 and data[0:4] == b"RIFF" and data[8:12] == b"WEBP"
+    if not is_webp:
+        return None
+    try:
+        from PIL import Image as PILImage
+        img = PILImage.open(BytesIO(data))
+        img = img.convert("RGB")
+        out = BytesIO()
+        img.save(out, format="PNG")
+        return out.getvalue()
+    except Exception:
+        return None
+
+
 def _resolve_logo(company_settings: CompanySettings) -> Tuple[Optional[str], Optional[bytes]]:
     """Resolve logo: same source as header (logo1.jpg from static/public), then company logo_url fallback."""
     logo_path: Optional[str] = None
@@ -250,10 +270,17 @@ def _resolve_logo(company_settings: CompanySettings) -> Tuple[Optional[str], Opt
     logo_url = (company_settings.logo_url or "").strip()
     if logo_url:
         if logo_url.startswith("http://") or logo_url.startswith("https://"):
-            urls_to_try = [logo_url]
-            if "res.cloudinary.com" in logo_url:
-                urls_to_try.append(_force_cloudinary_format(logo_url, "png"))
+            # Try f_png URL first for Cloudinary (often returns WebP by default)
+            urls_to_try = (
+                [_force_cloudinary_format(logo_url, "png"), logo_url]
+                if "res.cloudinary.com" in logo_url
+                else [logo_url]
+            )
+            seen = set()
             for fetch_url in urls_to_try:
+                if fetch_url in seen:
+                    continue
+                seen.add(fetch_url)
                 try:
                     req = urllib.request.Request(
                         fetch_url,
@@ -261,8 +288,14 @@ def _resolve_logo(company_settings: CompanySettings) -> Tuple[Optional[str], Opt
                     )
                     with urllib.request.urlopen(req, timeout=15) as response:
                         data = response.read()
-                    if data and len(data) >= 50 and (data.startswith(JPEG_MAGIC) or data.startswith(PNG_MAGIC)):
+                    if not data or len(data) < 50:
+                        continue
+                    if data.startswith(JPEG_MAGIC) or data.startswith(PNG_MAGIC):
                         return (None, data)
+                    # Cloudinary often returns WebP; convert to PNG for ReportLab
+                    converted = _ensure_png_or_jpeg_bytes(data)
+                    if converted:
+                        return (None, converted)
                 except Exception:
                     pass
         elif logo_url.startswith("/static/"):
