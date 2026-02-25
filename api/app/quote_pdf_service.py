@@ -14,7 +14,6 @@ from decimal import Decimal
 from app.models import Quote, Customer, QuoteItem, CompanySettings
 from app.constants import VAT_RATE_DECIMAL
 from sqlmodel import Session, select
-import base64
 import os
 import sys
 import tempfile
@@ -68,17 +67,6 @@ def _image_from_bytes(
         return None
 
 
-def _build_logo_image(logo_bytes: Optional[bytes], width: float = 35*mm, max_height: float = 10*mm) -> Optional[Any]:
-    """Build logo Image using exact same logic as footer (known to work)."""
-    logo_to_show = logo_bytes or _make_embedded_footer_logo()
-    logo = _image_from_bytes(logo_to_show, width=width, height=None, max_height=max_height) if logo_to_show else None
-    if not logo:
-        fallback = _make_embedded_footer_logo()
-        if fallback:
-            logo = _image_from_bytes(fallback, width=width, height=None, max_height=max_height)
-    return logo
-
-
 def _build_header_flowables(
     company_settings: CompanySettings,
     logo_path: Optional[str],
@@ -87,22 +75,22 @@ def _build_header_flowables(
     company_name_style: ParagraphStyle,
     customer_number: Optional[str] = None,
 ) -> List[Any]:
-    """Build header flowables (logo + company info). Uses same logo-building as footer (known to work)."""
+    """Build header flowables (logo + company info). Logo from company settings (logo_url) or local files."""
     result: List[Any] = []
     logo = None
     if logo_path and os.path.exists(logo_path):
         try:
-            logo = Image(logo_path, width=35*mm, height=None)
+            logo = Image(logo_path, width=50*mm, height=None)
             if logo.imageHeight > 0:
                 ar = logo.imageWidth / logo.imageHeight
                 logo.height = logo.width / ar
-                if logo.height > 10*mm:
-                    logo.height = 10*mm
+                if logo.height > 18*mm:
+                    logo.height = 18*mm
                     logo.width = logo.height * ar
         except Exception:
             logo = None
-    if not logo:
-        logo = _build_logo_image(logo_bytes, width=35*mm, max_height=10*mm)
+    elif logo_bytes:
+        logo = _image_from_bytes(logo_bytes, width=50*mm, height=None, max_height=18*mm)
     # Company info (used with or without logo)
     company_info_lines = []
     trading_name = company_settings.trading_name or "Cheshire Stables"
@@ -135,7 +123,7 @@ def _build_header_flowables(
     company_info_para = Paragraph(company_info_text, normal_style)
 
     if logo:
-        header_table = Table([[company_info_para, logo]], colWidths=[120*mm, 50*mm])
+        header_table = Table([[company_info_para, logo]], colWidths=[120*mm, 60*mm])
         header_table.setStyle(TableStyle([
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
             ("ALIGN", (0, 0), (0, 0), "LEFT"),
@@ -152,24 +140,11 @@ def _build_header_flowables(
     return result
 
 
-# 20x10 bright red PNG (test bar - very visible) - no Pillow needed at runtime
-_FOOTER_LOGO_B64 = "iVBORw0KGgoAAAANSUhEUgAAABQAAAAKCAIAAAA7N+mxAAAAGElEQVR4nGM8wUA+YKJAL8OoZhLBEA0wAPYNANzTg2ReAAAAAElFTkSuQmCC"
-
-
-def _make_embedded_footer_logo() -> Optional[bytes]:
-    """Return embedded PNG bytes for footer (no external deps)."""
-    try:
-        return base64.b64decode(_FOOTER_LOGO_B64)
-    except Exception:
-        return None
-
-
 def _build_footer_flowables(
     company_settings: CompanySettings,
     footer_style: ParagraphStyle,
-    logo_bytes: Optional[bytes] = None,
 ) -> List[Any]:
-    """Build footer flowables (company details). Small logo on right if provided or use embedded test logo."""
+    """Build footer flowables (company details, text only)."""
     result: List[Any] = []
     footer_lines = []
     if company_settings.company_name:
@@ -192,18 +167,8 @@ def _build_footer_flowables(
         if company_settings.email:
             contact.append(f"Email: {company_settings.email}")
         footer_lines.append(" | ".join(contact))
-    footer_para = Paragraph("<br/>".join(footer_lines) if footer_lines else " ", footer_style)
-    small_logo = _build_logo_image(logo_bytes, width=35*mm, max_height=10*mm)
-    if small_logo:
-        footer_table = Table([[footer_para, small_logo]], colWidths=[120*mm, 50*mm])
-        footer_table.setStyle(TableStyle([
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("ALIGN", (0, 0), (0, 0), "LEFT"),
-            ("ALIGN", (1, 0), (1, 0), "RIGHT"),
-        ]))
-        result.append(footer_table)
-    else:
-        result.append(footer_para)
+    if footer_lines:
+        result.append(Paragraph("<br/>".join(footer_lines), footer_style))
     return result
 
 
@@ -626,7 +591,7 @@ def generate_quote_pdf(
     # Footer with company details (page 1)
     if company_settings:
         elements.append(Spacer(1, 8))
-        elements.extend(_build_footer_flowables(company_settings, footer_style, logo_bytes))
+        elements.extend(_build_footer_flowables(company_settings, footer_style))
 
     # Page 2: Terms and Conditions – quote terms when present, else company default (same header and footer)
     terms_text = (quote.terms_and_conditions or "").strip() or (
@@ -640,7 +605,7 @@ def generate_quote_pdf(
             if line.strip():
                 elements.append(Paragraph(line.strip(), terms_style))
         elements.append(Spacer(1, 8))
-        elements.extend(_build_footer_flowables(company_settings, footer_style, logo_bytes))
+        elements.extend(_build_footer_flowables(company_settings, footer_style))
     
     # Notes (Internal - typically not shown to customer, but included for completeness)
     # Note: In a real scenario, you might want to exclude this from customer-facing PDFs
