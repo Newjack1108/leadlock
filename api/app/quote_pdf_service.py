@@ -149,14 +149,55 @@ def _build_header_flowables(
     return result
 
 
-def _build_footer_flowables(
+FOOTER_BOTTOM_MARGIN = 35 * mm  # Space for footer on every page
+
+
+def _resolve_logo_path_for_canvas(
+    logo_path: Optional[str], logo_bytes: Optional[bytes]
+) -> Tuple[Optional[str], float, float]:
+    """Return (path, width_mm, height_mm) for canvas.drawImage. Width/height in points."""
+    logo_file: Optional[str] = None
+    w_pt, h_pt = 30 * mm, 12 * mm
+    if logo_bytes:
+        try:
+            from PIL import Image as PILImage
+            pil_img = PILImage.open(BytesIO(logo_bytes))
+            iw, ih = pil_img.size
+            pil_img.close()
+            if ih > 0:
+                ratio = iw / ih
+                h_pt = min(12 * mm, (30 * mm) / ratio)
+                w_pt = h_pt * ratio
+            ext = ".png" if len(logo_bytes) >= 8 and logo_bytes[:8] == b"\x89PNG\r\n\x1a\n" else ".jpg"
+            with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as f:
+                f.write(logo_bytes)
+                f.flush()
+                logo_file = f.name
+        except Exception:
+            logo_file = None
+    elif logo_path and os.path.exists(logo_path):
+        try:
+            from PIL import Image as PILImage
+            pil_img = PILImage.open(logo_path)
+            iw, ih = pil_img.size
+            pil_img.close()
+            if ih > 0:
+                ratio = iw / ih
+                h_pt = min(12 * mm, (30 * mm) / ratio)
+                w_pt = h_pt * ratio
+            logo_file = logo_path
+        except Exception:
+            logo_file = logo_path
+    return (logo_file, w_pt, h_pt)
+
+
+def _make_footer_canvas_drawer(
     company_settings: CompanySettings,
     footer_style: ParagraphStyle,
-    logo_path: Optional[str] = None,
-    logo_bytes: Optional[bytes] = None,
-) -> List[Any]:
-    """Build footer flowables (company details, then logo under)."""
-    result: List[Any] = []
+    logo_path: Optional[str],
+    logo_bytes: Optional[bytes],
+):
+    """Return (canvas, doc) -> None to draw footer at bottom of every page."""
     footer_lines = []
     if company_settings.company_name:
         footer_lines.append(company_settings.company_name)
@@ -164,7 +205,7 @@ def _build_footer_flowables(
         address_parts = [
             company_settings.address_line1,
             company_settings.city,
-            company_settings.postcode
+            company_settings.postcode,
         ]
         footer_lines.append(", ".join([p for p in address_parts if p]))
     if company_settings.company_registration_number:
@@ -178,29 +219,31 @@ def _build_footer_flowables(
         if company_settings.email:
             contact.append(f"Email: {company_settings.email}")
         footer_lines.append(" | ".join(contact))
-    if footer_lines:
-        result.append(Paragraph("<br/>".join(footer_lines), footer_style))
-    # Logo under footer (smaller, centered)
-    logo = None
-    if logo_bytes:
-        logo = _image_from_bytes(logo_bytes, width=30 * mm, max_height=12 * mm)
-    elif logo_path:
-        try:
-            with open(logo_path, "rb") as f:
-                data = f.read()
-            logo = _image_from_bytes(data, width=30 * mm, max_height=12 * mm)
-        except Exception:
-            logo = None
-    if logo:
-        result.append(Spacer(1, 4))
-        # Full-width table to center logo on page (A4 content ~180mm)
-        t = Table([[logo]], colWidths=[180 * mm])
-        t.setStyle(TableStyle([
-            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ]))
-        result.append(t)
-    return result
+    footer_para = Paragraph("<br/>".join(footer_lines), footer_style) if footer_lines else None
+    logo_path_canvas, logo_w, logo_h = _resolve_logo_path_for_canvas(logo_path, logo_bytes)
+
+    def drawer(canvas: Any, doc: Any) -> None:
+        canvas.saveState()
+        y = 3 * mm
+        # Logo at bottom, centered
+        if logo_path_canvas:
+            try:
+                x_logo = doc.leftMargin + (doc.width - logo_w) / 2
+                canvas.drawImage(logo_path_canvas, x_logo, y, width=logo_w, height=logo_h)
+            except Exception:
+                pass
+            y += logo_h + 3 * mm
+        # Footer text above logo
+        if footer_para:
+            try:
+                avail_h = FOOTER_BOTTOM_MARGIN - y
+                pw, ph = footer_para.wrap(doc.width, avail_h)
+                footer_para.drawOn(canvas, doc.leftMargin, y)
+            except Exception:
+                pass
+        canvas.restoreState()
+
+    return drawer
 
 
 def _force_cloudinary_format(url: str, fmt: str = "png") -> str:
@@ -389,7 +432,14 @@ def generate_quote_pdf(
         company_settings = session.exec(statement).first()
     
     buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=10*mm, bottomMargin=10*mm, leftMargin=15*mm, rightMargin=15*mm)
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        topMargin=10 * mm,
+        bottomMargin=FOOTER_BOTTOM_MARGIN,
+        leftMargin=15 * mm,
+        rightMargin=15 * mm,
+    )
     
     # Container for the 'Flowable' objects
     elements = []
@@ -619,10 +669,12 @@ def generate_quote_pdf(
     elements.append(items_table)
     elements.append(Spacer(1, 8))
 
-    # Footer with company details and logo (page 1)
-    if company_settings:
-        elements.append(Spacer(1, 8))
-        elements.extend(_build_footer_flowables(company_settings, footer_style, logo_path, logo_bytes))
+    # Footer drawn on every page via onFirstPage/onLaterPages (not flowables)
+    footer_drawer = (
+        _make_footer_canvas_drawer(company_settings, footer_style, logo_path, logo_bytes)
+        if company_settings
+        else None
+    )
 
     # Page 2: Terms and Conditions – quote terms when present, else company default (same header and footer)
     terms_text = (quote.terms_and_conditions or "").strip() or (
@@ -636,7 +688,6 @@ def generate_quote_pdf(
             if line.strip():
                 elements.append(Paragraph(line.strip(), terms_style))
         elements.append(Spacer(1, 8))
-        elements.extend(_build_footer_flowables(company_settings, footer_style, logo_path, logo_bytes))
     
     # Notes (Internal - typically not shown to customer, but included for completeness)
     # Note: In a real scenario, you might want to exclude this from customer-facing PDFs
@@ -645,7 +696,10 @@ def generate_quote_pdf(
     #     elements.append(Paragraph("Internal Notes:", heading_style))
     #     elements.append(Paragraph(quote.notes, normal_style))
     
-    # Build PDF
-    doc.build(elements)
+    # Build PDF (footer drawn on every page by canvas callback)
+    if footer_drawer:
+        doc.build(elements, onFirstPage=footer_drawer, onLaterPages=footer_drawer)
+    else:
+        doc.build(elements)
     buffer.seek(0)
     return buffer

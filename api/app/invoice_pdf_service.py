@@ -14,8 +14,9 @@ from app.constants import VAT_RATE_DECIMAL
 from app.quote_pdf_service import (
     format_currency,
     _build_header_flowables,
-    _build_footer_flowables,
+    _make_footer_canvas_drawer,
     _resolve_logo,
+    FOOTER_BOTTOM_MARGIN,
 )
 from sqlmodel import Session, select
 
@@ -42,7 +43,7 @@ def _build_invoice_elements(
         buffer,
         pagesize=A4,
         topMargin=10 * mm,
-        bottomMargin=10 * mm,
+        bottomMargin=FOOTER_BOTTOM_MARGIN,
         leftMargin=15 * mm,
         rightMargin=15 * mm,
     )
@@ -266,11 +267,16 @@ def _build_invoice_elements(
     if note_text:
         elements.append(Paragraph(note_text, note_style))
 
-    if company_settings:
-        elements.append(Spacer(1, 8))
-        elements.extend(_build_footer_flowables(company_settings, footer_style, logo_path, logo_bytes))
+    footer_drawer = (
+        _make_footer_canvas_drawer(company_settings, footer_style, logo_path, logo_bytes)
+        if company_settings
+        else None
+    )
 
-    doc.build(elements)
+    if footer_drawer:
+        doc.build(elements, onFirstPage=footer_drawer, onLaterPages=footer_drawer)
+    else:
+        doc.build(elements)
     buffer.seek(0)
     return buffer
 
