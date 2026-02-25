@@ -173,11 +173,24 @@ def _build_header_flowables(
     return result
 
 
+def _make_embedded_footer_logo() -> Optional[bytes]:
+    """Create a tiny embedded PNG for footer (debug: proves ReportLab can render images)."""
+    try:
+        from PIL import Image as PILImage
+        img = PILImage.new("RGB", (40, 12), (11, 61, 46))  # brand green bar
+        out = BytesIO()
+        img.save(out, format="PNG")
+        return out.getvalue()
+    except Exception:
+        return None
+
+
 def _build_footer_flowables(
     company_settings: CompanySettings,
     footer_style: ParagraphStyle,
+    logo_bytes: Optional[bytes] = None,
 ) -> List[Any]:
-    """Build footer flowables (company details)."""
+    """Build footer flowables (company details). Small logo on right if provided or use embedded test logo."""
     result: List[Any] = []
     footer_lines = []
     if company_settings.company_name:
@@ -200,8 +213,31 @@ def _build_footer_flowables(
         if company_settings.email:
             contact.append(f"Email: {company_settings.email}")
         footer_lines.append(" | ".join(contact))
-    for line in footer_lines:
-        result.append(Paragraph(line, footer_style))
+    footer_text = [Paragraph(line, footer_style) for line in footer_lines]
+    if not footer_text:
+        footer_text = [Paragraph(" ", footer_style)]
+    # Add small logo: use resolved logo if available, else embedded test image (proves images render)
+    logo_to_show = logo_bytes or _make_embedded_footer_logo()
+    if logo_to_show:
+        try:
+            buf = BytesIO(logo_to_show)
+            reader = ImageReader(buf)
+            small_logo = Image(reader, width=25*mm, height=8*mm)
+            footer_table = Table([[footer_text, small_logo]], colWidths=[120*mm, 50*mm])
+            footer_table.setStyle(TableStyle([
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("ALIGN", (0, 0), (0, 0), "LEFT"),
+                ("ALIGN", (1, 0), (1, 0), "RIGHT"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+            ]))
+            result.append(footer_table)
+        except Exception:
+            for p in footer_text:
+                result.append(p)
+    else:
+        for p in footer_text:
+            result.append(p)
     return result
 
 
@@ -624,7 +660,7 @@ def generate_quote_pdf(
     # Footer with company details (page 1)
     if company_settings:
         elements.append(Spacer(1, 8))
-        elements.extend(_build_footer_flowables(company_settings, footer_style))
+        elements.extend(_build_footer_flowables(company_settings, footer_style, logo_bytes))
 
     # Page 2: Terms and Conditions – quote terms when present, else company default (same header and footer)
     terms_text = (quote.terms_and_conditions or "").strip() or (
@@ -638,7 +674,7 @@ def generate_quote_pdf(
             if line.strip():
                 elements.append(Paragraph(line.strip(), terms_style))
         elements.append(Spacer(1, 8))
-        elements.extend(_build_footer_flowables(company_settings, footer_style))
+        elements.extend(_build_footer_flowables(company_settings, footer_style, logo_bytes))
     
     # Notes (Internal - typically not shown to customer, but included for completeness)
     # Note: In a real scenario, you might want to exclude this from customer-facing PDFs

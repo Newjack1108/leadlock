@@ -268,7 +268,7 @@ def _build_invoice_elements(
 
     if company_settings:
         elements.append(Spacer(1, 8))
-        elements.extend(_build_footer_flowables(company_settings, footer_style))
+        elements.extend(_build_footer_flowables(company_settings, footer_style, logo_bytes))
 
     doc.build(elements)
     buffer.seek(0)
