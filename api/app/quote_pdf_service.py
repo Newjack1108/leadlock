@@ -40,10 +40,27 @@ def _image_from_bytes(
     data: bytes, width: float, height: Optional[float] = None, max_height: Optional[float] = None
 ) -> Optional[Any]:
     """Create ReportLab Image from bytes (writes temp file - platypus Image needs path)."""
-    path = None
     try:
         if not data or len(data) < 10:
             return None
+        # Compute dimensions with PIL to avoid ReportLab attribute issues
+        try:
+            from PIL import Image as PILImage
+            pil_img = PILImage.open(BytesIO(data))
+            iw, ih = pil_img.size
+            pil_img.close()
+        except Exception:
+            iw, ih = 100, 100  # fallback
+        if ih <= 0:
+            ih = 1
+        ratio = iw / ih
+        out_h = width / ratio
+        cap = max_height if max_height is not None else 18 * mm
+        if out_h > cap:
+            out_h = cap
+            out_w = cap * ratio
+        else:
+            out_w = width
         ext = ".png" if len(data) >= 8 and data[:8] == b"\x89PNG\r\n\x1a\n" else ".jpg"
         with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as f:
             f.write(data)
@@ -53,15 +70,7 @@ def _image_from_bytes(
             except (AttributeError, OSError):
                 pass
             path = f.name
-        img = Image(path, width=width, height=height)
-        if hasattr(img, "imageHeight") and img.imageHeight > 0 and height is None:
-            ratio = img.imageWidth / img.imageHeight
-            img.height = img.width / ratio
-            cap = max_height if max_height is not None else 18 * mm
-            if img.height > cap:
-                img.height = cap
-                img.width = img.height * ratio
-        return img
+        return Image(path, width=out_w, height=out_h)
     except Exception as e:
         print(f"PDF _image_from_bytes failed: {e}", file=sys.stderr, flush=True)
         return None
