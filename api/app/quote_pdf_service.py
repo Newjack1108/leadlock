@@ -232,7 +232,7 @@ def _resolve_logo(company_settings: CompanySettings) -> Tuple[Optional[str], Opt
         Path("static"),
         Path(__file__).parent.parent.parent / "web" / "public",
     ]
-    for fn in [primary_filename, "logo1.png", "logo1.jpg"]:
+    for fn in [primary_filename, "logo1.png", "logo1.jpg", "logo.png"]:
         for base in base_dirs:
             p = base / fn
             if p.exists():
@@ -276,7 +276,7 @@ def _resolve_logo(company_settings: CompanySettings) -> Tuple[Optional[str], Opt
                     pass
 
     # 3. URL fallback (frontend serves logo1.jpg like header)
-    filenames_to_try = ["logo1.jpg", "logo1.png"]
+    filenames_to_try = ["logo1.jpg", "logo1.png", "logo.png"]
     # Set LOGO_URL on the API service to the full image URL (e.g. https://your-frontend.up.railway.app/logo1.jpg)
     # or FRONTEND_URL to the frontend origin (e.g. https://your-frontend.up.railway.app).
     DEFAULT_LOGO_BASE = "https://leadlock-frontend-production.up.railway.app"
