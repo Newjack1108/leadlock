@@ -15,7 +15,9 @@ from decimal import Decimal
 from app.models import Quote, Customer, QuoteItem, CompanySettings
 from app.constants import VAT_RATE_DECIMAL
 from sqlmodel import Session, select
+import base64
 import os
+import sys
 import urllib.request
 from pathlib import Path
 from urllib.parse import quote
@@ -173,14 +175,14 @@ def _build_header_flowables(
     return result
 
 
+# 20x10 bright red PNG (test bar - very visible) - no Pillow needed at runtime
+_FOOTER_LOGO_B64 = "iVBORw0KGgoAAAANSUhEUgAAABQAAAAKCAIAAAA7N+mxAAAAGElEQVR4nGM8wUA+YKJAL8OoZhLBEA0wAPYNANzTg2ReAAAAAElFTkSuQmCC"
+
+
 def _make_embedded_footer_logo() -> Optional[bytes]:
-    """Create a tiny embedded PNG for footer (debug: proves ReportLab can render images)."""
+    """Return embedded PNG bytes for footer (no external deps)."""
     try:
-        from PIL import Image as PILImage
-        img = PILImage.new("RGB", (40, 12), (11, 61, 46))  # brand green bar
-        out = BytesIO()
-        img.save(out, format="PNG")
-        return out.getvalue()
+        return base64.b64decode(_FOOTER_LOGO_B64)
     except Exception:
         return None
 
@@ -213,31 +215,26 @@ def _build_footer_flowables(
         if company_settings.email:
             contact.append(f"Email: {company_settings.email}")
         footer_lines.append(" | ".join(contact))
-    footer_text = [Paragraph(line, footer_style) for line in footer_lines]
-    if not footer_text:
-        footer_text = [Paragraph(" ", footer_style)]
-    # Add small logo: use resolved logo if available, else embedded test image (proves images render)
+    footer_para = Paragraph("<br/>".join(footer_lines) if footer_lines else " ", footer_style)
     logo_to_show = logo_bytes or _make_embedded_footer_logo()
     if logo_to_show:
         try:
             buf = BytesIO(logo_to_show)
+            buf.seek(0)
             reader = ImageReader(buf)
             small_logo = Image(reader, width=25*mm, height=8*mm)
-            footer_table = Table([[footer_text, small_logo]], colWidths=[120*mm, 50*mm])
+            footer_table = Table([[footer_para, small_logo]], colWidths=[120*mm, 50*mm])
             footer_table.setStyle(TableStyle([
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
                 ("ALIGN", (0, 0), (0, 0), "LEFT"),
                 ("ALIGN", (1, 0), (1, 0), "RIGHT"),
-                ("LEFTPADDING", (0, 0), (-1, -1), 0),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
             ]))
             result.append(footer_table)
-        except Exception:
-            for p in footer_text:
-                result.append(p)
+        except Exception as e:
+            print(f"PDF footer logo failed: {e}", file=sys.stderr, flush=True)
+            result.append(footer_para)
     else:
-        for p in footer_text:
-            result.append(p)
+        result.append(footer_para)
     return result
 
 
