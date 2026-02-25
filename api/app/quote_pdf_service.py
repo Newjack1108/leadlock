@@ -7,7 +7,6 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak, Image, KeepTogether
 from reportlab.pdfgen import canvas
-from reportlab.lib.utils import ImageReader
 from typing import Optional, Tuple, List, Any
 from io import BytesIO
 from datetime import datetime
@@ -18,6 +17,7 @@ from sqlmodel import Session, select
 import base64
 import os
 import sys
+import tempfile
 import urllib.request
 from pathlib import Path
 from urllib.parse import quote
@@ -35,6 +35,26 @@ def format_currency(amount: Decimal, currency: str = "GBP") -> str:
     if currency == "GBP":
         return f"£{amount:,.2f}"
     return f"{currency} {amount:,.2f}"
+
+
+def _image_from_bytes(data: bytes, width: float, height: Optional[float] = None) -> Optional[Any]:
+    """Create ReportLab Image from bytes (writes temp file - platypus Image needs path)."""
+    path = None
+    try:
+        ext = ".png" if len(data) >= 8 and data[:8] == b"\x89PNG\r\n\x1a\n" else ".jpg"
+        with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as f:
+            f.write(data)
+            path = f.name
+        img = Image(path, width=width, height=height)
+        if hasattr(img, "imageHeight") and img.imageHeight > 0 and height is None:
+            ratio = img.imageWidth / img.imageHeight
+            img.height = img.width / ratio
+            if img.height > 18 * mm:
+                img.height = 18 * mm
+                img.width = img.height * ratio
+        return img
+    except Exception:
+        return None
 
 
 def _build_header_flowables(
@@ -60,37 +80,24 @@ def _build_header_flowables(
         except Exception:
             logo = None
     elif logo_bytes:
-        try:
-            buf = BytesIO(logo_bytes)
-            buf.seek(0)
-            reader = ImageReader(buf)
-            logo = Image(reader, width=50*mm, height=None)
-            if logo.imageHeight > 0:
-                aspect_ratio = logo.imageWidth / logo.imageHeight
-                logo.height = logo.width / aspect_ratio
-                if logo.height > 18*mm:
-                    logo.height = 18*mm
-                    logo.width = logo.height * aspect_ratio
-        except Exception as e1:
-            # Fallback: normalize via Pillow (handles progressive JPEG, color profiles, etc.)
+        logo = _image_from_bytes(logo_bytes, width=50*mm, height=None)
+        if not logo:
+            # Fallback: normalize via Pillow (handles progressive JPEG, color profiles, WebP, etc.)
             try:
                 from PIL import Image as PILImage
                 img = PILImage.open(BytesIO(logo_bytes))
-                img = img.convert("RGB")  # normalizes format for ReportLab
+                img = img.convert("RGB")
                 out = BytesIO()
                 img.save(out, format="PNG")
-                out.seek(0)
-                reader = ImageReader(out)
-                logo = Image(reader, width=50*mm, height=None)
-                if logo.imageHeight > 0:
+                logo = _image_from_bytes(out.getvalue(), width=50*mm, height=None)
+                if logo and logo.imageHeight > 0:
                     ar = logo.imageWidth / logo.imageHeight
                     logo.height = logo.width / ar
                     if logo.height > 18*mm:
                         logo.height = 18*mm
                         logo.width = logo.height * ar
             except Exception as e2:
-                import sys
-                print(f"PDF logo: ReportLab failed ({e1}), Pillow fallback failed ({e2})", file=sys.stderr, flush=True)
+                print(f"PDF logo: Pillow fallback failed ({e2})", file=sys.stderr, flush=True)
                 logo = None
     # Company info (used with or without logo)
     company_info_lines = []
@@ -218,11 +225,8 @@ def _build_footer_flowables(
     footer_para = Paragraph("<br/>".join(footer_lines) if footer_lines else " ", footer_style)
     logo_to_show = logo_bytes or _make_embedded_footer_logo()
     if logo_to_show:
-        try:
-            buf = BytesIO(logo_to_show)
-            buf.seek(0)
-            reader = ImageReader(buf)
-            small_logo = Image(reader, width=25*mm, height=8*mm)
+        small_logo = _image_from_bytes(logo_to_show, width=25*mm, height=8*mm)
+        if small_logo:
             footer_table = Table([[footer_para, small_logo]], colWidths=[120*mm, 50*mm])
             footer_table.setStyle(TableStyle([
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
@@ -230,8 +234,7 @@ def _build_footer_flowables(
                 ("ALIGN", (1, 0), (1, 0), "RIGHT"),
             ]))
             result.append(footer_table)
-        except Exception as e:
-            print(f"PDF footer logo failed: {e}", file=sys.stderr, flush=True)
+        else:
             result.append(footer_para)
     else:
         result.append(footer_para)
