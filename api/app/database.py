@@ -543,6 +543,7 @@ def create_db_and_tables():
             # Bank details (quote/invoice PDFs)
             for col_name, col_sql in [
                 ("bank_name", "VARCHAR(255)"),
+                ("bank_account_name", "VARCHAR(255)"),
                 ("account_number", "VARCHAR(50)"),
                 ("sort_code", "VARCHAR(20)"),
             ]:

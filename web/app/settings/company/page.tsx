@@ -58,6 +58,7 @@ export default function CompanySettingsPage() {
     average_speed_mph: '',
     product_import_gross_margin_pct: '',
     bank_name: '',
+    bank_account_name: '',
     account_number: '',
     sort_code: '',
   });
@@ -97,6 +98,7 @@ export default function CompanySettingsPage() {
         average_speed_mph: response.data.average_speed_mph != null ? String(response.data.average_speed_mph) : '',
         product_import_gross_margin_pct: response.data.product_import_gross_margin_pct != null ? String(response.data.product_import_gross_margin_pct) : '',
         bank_name: response.data.bank_name || '',
+        bank_account_name: response.data.bank_account_name || '',
         account_number: response.data.account_number || '',
         sort_code: response.data.sort_code || '',
       });
@@ -372,7 +374,7 @@ export default function CompanySettingsPage() {
               <p className="text-sm text-muted-foreground">
                 Shown on quote and invoice PDFs for payment instructions.
               </p>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="bank_name">Bank Name</Label>
                   <Input
@@ -382,6 +384,17 @@ export default function CompanySettingsPage() {
                     placeholder="e.g. Barclays"
                     disabled={saving}
                   />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="bank_account_name">Account Name</Label>
+                  <Input
+                    id="bank_account_name"
+                    value={formData.bank_account_name}
+                    onChange={(e) => setFormData({ ...formData, bank_account_name: e.target.value })}
+                    placeholder="e.g. Cheshire Stables Ltd"
+                    disabled={saving}
+                  />
+                  <p className="text-xs text-muted-foreground">Name on the account for BACS payments</p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="account_number">Account Number</Label>

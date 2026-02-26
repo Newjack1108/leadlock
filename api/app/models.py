@@ -362,6 +362,7 @@ class CompanySettings(SQLModel, table=True):
     product_import_gross_margin_pct: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(5, 2)))  # e.g. 30 for 30%; applied when products pushed from production to set RRP
     # Bank details (shown on quote and invoice PDFs)
     bank_name: Optional[str] = None
+    bank_account_name: Optional[str] = None  # Name on the account (payee for BACS)
     account_number: Optional[str] = None
     sort_code: Optional[str] = None
     updated_by_id: int = Field(foreign_key="user.id")

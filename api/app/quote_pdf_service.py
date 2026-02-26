@@ -222,6 +222,8 @@ def _make_footer_canvas_drawer(
     bank_parts = []
     if company_settings.bank_name:
         bank_parts.append(f"Bank: {company_settings.bank_name}")
+    if company_settings.bank_account_name:
+        bank_parts.append(f"Account Name: {company_settings.bank_account_name}")
     if company_settings.sort_code:
         bank_parts.append(f"Sort Code: {company_settings.sort_code}")
     if company_settings.account_number:

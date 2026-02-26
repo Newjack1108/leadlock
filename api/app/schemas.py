@@ -642,6 +642,7 @@ class CompanySettingsCreate(BaseModel):
     average_speed_mph: Optional[Decimal] = None
     product_import_gross_margin_pct: Optional[Decimal] = None
     bank_name: Optional[str] = None
+    bank_account_name: Optional[str] = None
     account_number: Optional[str] = None
     sort_code: Optional[str] = None
 
@@ -672,6 +673,7 @@ class CompanySettingsUpdate(BaseModel):
     average_speed_mph: Optional[Decimal] = None
     product_import_gross_margin_pct: Optional[Decimal] = None
     bank_name: Optional[str] = None
+    bank_account_name: Optional[str] = None
     account_number: Optional[str] = None
     sort_code: Optional[str] = None
 
@@ -703,6 +705,7 @@ class CompanySettingsResponse(BaseModel):
     average_speed_mph: Optional[Decimal] = None
     product_import_gross_margin_pct: Optional[Decimal] = None
     bank_name: Optional[str] = None
+    bank_account_name: Optional[str] = None
     account_number: Optional[str] = None
     sort_code: Optional[str] = None
     updated_at: datetime

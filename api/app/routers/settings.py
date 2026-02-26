@@ -28,7 +28,7 @@ def get_company_settings(session: Session) -> CompanySettings:
     return settings
 
 
-BANK_DETAIL_FIELDS = ("bank_name", "account_number", "sort_code")
+BANK_DETAIL_FIELDS = ("bank_name", "bank_account_name", "account_number", "sort_code")
 
 
 @router.get("/company", response_model=CompanySettingsResponse)
