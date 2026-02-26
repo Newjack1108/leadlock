@@ -4,7 +4,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from app.database import create_db_and_tables, engine
 from sqlmodel import Session
-from app.routers import auth, leads, dashboard, webhooks, products, settings, quotes, customers, emails, email_templates, sms_templates, reminders, discounts, discount_requests, sms, messenger, public, delivery_install, orders, users
+from app.routers import auth, leads, dashboard, reports, webhooks, products, settings, quotes, customers, emails, email_templates, sms_templates, reminders, discounts, discount_requests, sms, messenger, public, delivery_install, orders, users
 from sqlmodel import Session, select
 from app.models import User
 import os
@@ -91,6 +91,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 app.include_router(auth.router)
 app.include_router(leads.router)
 app.include_router(dashboard.router)
+app.include_router(reports.router)
 app.include_router(webhooks.router)
 app.include_router(products.router)
 app.include_router(settings.router)

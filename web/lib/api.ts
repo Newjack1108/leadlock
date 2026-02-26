@@ -908,3 +908,113 @@ export const downloadCustomerExport = async () => {
   document.body.removeChild(link);
   window.URL.revokeObjectURL(url);
 };
+
+// Sales Reports API functions
+export const getPipelineValueReport = async (period?: string) => {
+  const params = period ? { period } : {};
+  const response = await api.get('/api/reports/pipeline-value', { params });
+  return response.data;
+};
+
+export const downloadPipelineValueReportPdf = async (period?: string) => {
+  const params = period ? { period } : {};
+  const response = await api.get('/api/reports/pipeline-value/pdf', {
+    responseType: 'blob',
+    params,
+  });
+  const blob = new Blob([response.data], { type: 'application/pdf' });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', `Pipeline_Value_Report_${new Date().toISOString().slice(0, 10)}.pdf`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
+};
+
+export const getSourcePerformanceReport = async (period?: string) => {
+  const params = period ? { period } : {};
+  const response = await api.get('/api/reports/source-performance', { params });
+  return response.data;
+};
+
+export const downloadSourcePerformanceReportPdf = async (period?: string) => {
+  const params = period ? { period } : {};
+  const response = await api.get('/api/reports/source-performance/pdf', {
+    responseType: 'blob',
+    params,
+  });
+  const blob = new Blob([response.data], { type: 'application/pdf' });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', `Source_Performance_Report_${new Date().toISOString().slice(0, 10)}.pdf`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
+};
+
+export const getCloserPerformanceReport = async () => {
+  const response = await api.get('/api/reports/closer-performance');
+  return response.data;
+};
+
+export const downloadCloserPerformanceReportPdf = async () => {
+  const response = await api.get('/api/reports/closer-performance/pdf', {
+    responseType: 'blob',
+  });
+  const blob = new Blob([response.data], { type: 'application/pdf' });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', `Closer_Performance_Report_${new Date().toISOString().slice(0, 10)}.pdf`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
+};
+
+export const getQuoteEngagementReport = async (period?: string) => {
+  const params = period ? { period } : {};
+  const response = await api.get('/api/reports/quote-engagement', { params });
+  return response.data;
+};
+
+export const downloadQuoteEngagementReportPdf = async (period?: string) => {
+  const params = period ? { period } : {};
+  const response = await api.get('/api/reports/quote-engagement/pdf', {
+    responseType: 'blob',
+    params,
+  });
+  const blob = new Blob([response.data], { type: 'application/pdf' });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', `Quote_Engagement_Report_${new Date().toISOString().slice(0, 10)}.pdf`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
+};
+
+export const getWeeklySummaryReport = async () => {
+  const response = await api.get('/api/reports/weekly-summary');
+  return response.data;
+};
+
+export const downloadWeeklySummaryReportPdf = async () => {
+  const response = await api.get('/api/reports/weekly-summary/pdf', {
+    responseType: 'blob',
+  });
+  const blob = new Blob([response.data], { type: 'application/pdf' });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', `Weekly_Pipeline_Summary_${new Date().toISOString().slice(0, 10)}.pdf`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
+};

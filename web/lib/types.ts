@@ -205,6 +205,72 @@ export interface DashboardStats {
   leads_by_source: LeadSourceCount[];
 }
 
+// Sales Report types
+export interface PipelineValueStageItem {
+  stage: string;
+  count: number;
+  total_value: number;
+  weighted_value: number;
+}
+
+export interface PipelineValueReport {
+  period?: string | null;
+  generated_at: string;
+  stages: PipelineValueStageItem[];
+  total_value: number;
+  total_weighted_value: number;
+}
+
+export interface SourcePerformanceItem {
+  source: string;
+  leads_count: number;
+  quoted_count: number;
+  won_count: number;
+  conversion_rate: number;
+}
+
+export interface SourcePerformanceReport {
+  period?: string | null;
+  generated_at: string;
+  sources: SourcePerformanceItem[];
+  total_leads: number;
+}
+
+export interface CloserPerformanceItem {
+  user_id: number;
+  full_name: string;
+  leads_assigned: number;
+  won_count: number;
+  total_revenue: number;
+}
+
+export interface CloserPerformanceReport {
+  generated_at: string;
+  closers: CloserPerformanceItem[];
+}
+
+export interface QuoteEngagementReport {
+  period?: string | null;
+  generated_at: string;
+  sent_count: number;
+  viewed_count: number;
+  not_opened_count: number;
+  viewed_no_reply_count: number;
+  accepted_count: number;
+  rejected_count: number;
+}
+
+export interface WeeklyPipelineSummaryReport {
+  week_label: string;
+  generated_at: string;
+  new_count: number;
+  quoted_count: number;
+  won_count: number;
+  lost_count: number;
+  start_date: string;
+  end_date: string;
+}
+
 export interface Product {
   id: number;
   name: string;

@@ -442,6 +442,72 @@ class DashboardStats(BaseModel):
     leads_by_source: List[LeadSourceCount] = []
 
 
+# Sales Report schemas
+class PipelineValueStageItem(BaseModel):
+    stage: str
+    count: int
+    total_value: Decimal
+    weighted_value: Decimal
+
+
+class PipelineValueReport(BaseModel):
+    period: Optional[str] = None
+    generated_at: datetime
+    stages: List[PipelineValueStageItem] = []
+    total_value: Decimal
+    total_weighted_value: Decimal
+
+
+class SourcePerformanceItem(BaseModel):
+    source: str
+    leads_count: int
+    quoted_count: int
+    won_count: int
+    conversion_rate: float
+
+
+class SourcePerformanceReport(BaseModel):
+    period: Optional[str] = None
+    generated_at: datetime
+    sources: List[SourcePerformanceItem] = []
+    total_leads: int
+
+
+class CloserPerformanceItem(BaseModel):
+    user_id: int
+    full_name: str
+    leads_assigned: int
+    won_count: int
+    total_revenue: Decimal
+
+
+class CloserPerformanceReport(BaseModel):
+    generated_at: datetime
+    closers: List[CloserPerformanceItem] = []
+
+
+class QuoteEngagementReport(BaseModel):
+    period: Optional[str] = None
+    generated_at: datetime
+    sent_count: int
+    viewed_count: int
+    not_opened_count: int
+    viewed_no_reply_count: int
+    accepted_count: int
+    rejected_count: int
+
+
+class WeeklyPipelineSummaryReport(BaseModel):
+    week_label: str
+    generated_at: datetime
+    new_count: int
+    quoted_count: int
+    won_count: int
+    lost_count: int
+    start_date: datetime
+    end_date: datetime
+
+
 class UnreadSmsMessageItem(BaseModel):
     """Single unread SMS for dashboard list."""
     id: int

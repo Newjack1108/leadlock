@@ -8,10 +8,21 @@ import Header from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import ReminderList from '@/components/ReminderList';
-import api, { getStaleSummary, getCompanySettings, getUnreadSms, getUnreadMessenger, getLeadLocations } from '@/lib/api';
+import api, {
+  getStaleSummary,
+  getCompanySettings,
+  getUnreadSms,
+  getUnreadMessenger,
+  getLeadLocations,
+  downloadPipelineValueReportPdf,
+  downloadSourcePerformanceReportPdf,
+  downloadCloserPerformanceReportPdf,
+  downloadQuoteEngagementReportPdf,
+  downloadWeeklySummaryReportPdf,
+} from '@/lib/api';
 import { DashboardStats, StaleSummary, CompanySettings, UnreadSmsSummary, UnreadMessengerSummary, LeadLocationItem } from '@/lib/types';
 import { toast } from 'sonner';
-import { TrendingUp, Users, CheckCircle2, Trophy, Bell, ArrowRight, Clock, MessageSquare } from 'lucide-react';
+import { TrendingUp, Users, CheckCircle2, Trophy, Bell, ArrowRight, Clock, MessageSquare, FileDown, BarChart3, Target, MessageCircle, Calendar } from 'lucide-react';
 import StatusPieChart from '@/components/StatusPieChart';
 import LeadsBySourceBarChart from '@/components/LeadsBySourceBarChart';
 
@@ -258,6 +269,113 @@ export default function DashboardPage() {
             </Card>
           </Link>
         </div>
+
+        {/* Sales Reports */}
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <BarChart3 className="h-5 w-5" />
+              Sales Reports
+            </CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Download PDF reports to assist sales analysis
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+              <div className="flex flex-col p-4 rounded-lg border border-border">
+                <div className="flex items-center gap-2 mb-2">
+                  <Target className="h-4 w-4 text-primary" />
+                  <span className="font-medium">Pipeline Value</span>
+                </div>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Weighted pipeline by stage and close probability
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => downloadPipelineValueReportPdf(datePeriod === 'all' ? undefined : datePeriod)}
+                  className="mt-auto"
+                >
+                  <FileDown className="h-4 w-4 mr-1" />
+                  Download PDF
+                </Button>
+              </div>
+              <div className="flex flex-col p-4 rounded-lg border border-border">
+                <div className="flex items-center gap-2 mb-2">
+                  <BarChart3 className="h-4 w-4 text-primary" />
+                  <span className="font-medium">Source Performance</span>
+                </div>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Leads and conversion by lead source
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => downloadSourcePerformanceReportPdf(datePeriod === 'all' ? undefined : datePeriod)}
+                  className="mt-auto"
+                >
+                  <FileDown className="h-4 w-4 mr-1" />
+                  Download PDF
+                </Button>
+              </div>
+              <div className="flex flex-col p-4 rounded-lg border border-border">
+                <div className="flex items-center gap-2 mb-2">
+                  <Users className="h-4 w-4 text-primary" />
+                  <span className="font-medium">Closer Performance</span>
+                </div>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Wins and revenue by salesperson
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => downloadCloserPerformanceReportPdf()}
+                  className="mt-auto"
+                >
+                  <FileDown className="h-4 w-4 mr-1" />
+                  Download PDF
+                </Button>
+              </div>
+              <div className="flex flex-col p-4 rounded-lg border border-border">
+                <div className="flex items-center gap-2 mb-2">
+                  <MessageCircle className="h-4 w-4 text-primary" />
+                  <span className="font-medium">Quote Engagement</span>
+                </div>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Sent vs viewed vs no reply
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => downloadQuoteEngagementReportPdf(datePeriod === 'all' ? undefined : datePeriod)}
+                  className="mt-auto"
+                >
+                  <FileDown className="h-4 w-4 mr-1" />
+                  Download PDF
+                </Button>
+              </div>
+              <div className="flex flex-col p-4 rounded-lg border border-border">
+                <div className="flex items-center gap-2 mb-2">
+                  <Calendar className="h-4 w-4 text-primary" />
+                  <span className="font-medium">Weekly Summary</span>
+                </div>
+                <p className="text-xs text-muted-foreground mb-3">
+                  New, quoted, won, lost this week
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => downloadWeeklySummaryReportPdf()}
+                  className="mt-auto"
+                >
+                  <FileDown className="h-4 w-4 mr-1" />
+                  Download PDF
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Leads by Source */}
         {stats.leads_by_source && stats.leads_by_source.length > 0 && (
