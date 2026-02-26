@@ -551,6 +551,7 @@ export const updateDraftQuote = async (quoteId: number, quoteData: {
   }>;
   discount_template_ids?: number[];
   temperature?: QuoteTemperature;
+  include_spec_sheets?: boolean;
 }) => {
   const response = await api.put(`/api/quotes/${quoteId}/draft`, quoteData);
   return response.data;
@@ -592,6 +593,11 @@ export const createProduct = async (productData: {
   sku?: string;
   image_url?: string;
   specifications?: string;
+  size?: string;
+  height?: string;
+  floor_plan_url?: string;
+  width?: number;
+  length?: number;
   installation_hours?: number;
   boxes_per_product?: number;
   optional_extras?: number[];
@@ -611,6 +617,11 @@ export const updateProduct = async (productId: number, productData: {
   sku?: string;
   image_url?: string;
   specifications?: string;
+  size?: string;
+  height?: string;
+  floor_plan_url?: string;
+  width?: number;
+  length?: number;
   installation_hours?: number;
   boxes_per_product?: number;
   optional_extras?: number[];
