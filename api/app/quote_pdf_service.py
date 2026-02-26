@@ -229,7 +229,7 @@ def _make_footer_canvas_drawer(
     if company_settings.account_number:
         bank_parts.append(f"Account: {company_settings.account_number}")
     if bank_parts:
-        footer_lines.append(" | ".join(bank_parts))
+        footer_lines.append("<b>" + " | ".join(bank_parts) + "</b>")
     footer_para = Paragraph("<br/>".join(footer_lines), footer_style) if footer_lines else None
     logo_path_canvas, logo_w, logo_h = _resolve_logo_path_for_canvas(logo_path, logo_bytes)
 
@@ -662,6 +662,8 @@ def generate_quote_pdf(
     if discount_row_index is not None:
         table_style_list.append(("SPAN", (0, discount_row_index), (2, discount_row_index)))
         table_style_list.append(("ALIGN", (0, discount_row_index), (2, discount_row_index), "RIGHT"))
+        table_style_list.append(("TEXTCOLOR", (0, discount_row_index), (3, discount_row_index), colors.red))
+        table_style_list.append(("FONTNAME", (0, discount_row_index), (3, discount_row_index), "Helvetica-Bold"))
     table_style_list.append(("SPAN", (0, total_ex_vat_row_index), (2, total_ex_vat_row_index)))
     table_style_list.append(("ALIGN", (0, total_ex_vat_row_index), (2, total_ex_vat_row_index), "RIGHT"))
     table_style_list.append(("SPAN", (0, vat_row_index), (2, vat_row_index)))

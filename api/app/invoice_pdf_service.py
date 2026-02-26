@@ -249,6 +249,8 @@ def _build_invoice_elements(
     if discount_row_index is not None:
         table_style_list.append(("SPAN", (0, discount_row_index), (2, discount_row_index)))
         table_style_list.append(("ALIGN", (0, discount_row_index), (2, discount_row_index), "RIGHT"))
+        table_style_list.append(("TEXTCOLOR", (0, discount_row_index), (3, discount_row_index), colors.red))
+        table_style_list.append(("FONTNAME", (0, discount_row_index), (3, discount_row_index), "Helvetica-Bold"))
     if deposit_row_index is not None:
         table_style_list.append(("SPAN", (0, deposit_row_index), (2, deposit_row_index)))
         table_style_list.append(("ALIGN", (0, deposit_row_index), (2, deposit_row_index), "RIGHT"))

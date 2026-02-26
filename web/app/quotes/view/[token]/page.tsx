@@ -133,7 +133,7 @@ export default function PublicQuoteViewPage() {
               {data.discount_total > 0 && (
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Discount</span>
-                  <span>-{formatAmount(data.discount_total, data.currency)}</span>
+                  <span className="font-bold text-red-600 dark:text-red-500">-{formatAmount(data.discount_total, data.currency)}</span>
                 </div>
               )}
               <div className="flex justify-between font-medium">
