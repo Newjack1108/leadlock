@@ -339,7 +339,7 @@ export default function CreateProductPage() {
                         <input
                           type="checkbox"
                           checked={selectedExtras.includes(extra.id)}
-                          onChange={() => toggleExtra(extra.id)}
+                          readOnly
                           className="h-4 w-4"
                           disabled={loading}
                         />
