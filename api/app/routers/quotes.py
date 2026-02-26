@@ -1374,6 +1374,7 @@ async def apply_discount_to_quote_endpoint(
 @router.get("/{quote_id}/preview-pdf")
 async def preview_quote_pdf(
     quote_id: int,
+    include_spec_sheets: bool | None = Query(default=None, description="Override quote setting. False to exclude spec sheets (e.g. for order/invoice context)."),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
@@ -1405,10 +1406,10 @@ async def preview_quote_pdf(
     
     # Generate PDF
     try:
-        include_spec_sheets = getattr(quote, "include_spec_sheets", True)
+        use_spec_sheets = include_spec_sheets if include_spec_sheets is not None else getattr(quote, "include_spec_sheets", True)
         pdf_buffer = generate_quote_pdf(
             quote, customer, quote_items, company_settings, session,
-            include_spec_sheets=include_spec_sheets,
+            include_spec_sheets=use_spec_sheets,
         )
         pdf_content = pdf_buffer.read()
         

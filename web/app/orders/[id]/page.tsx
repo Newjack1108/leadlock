@@ -119,6 +119,22 @@ export default function OrderDetailPage() {
     }
   };
 
+  const handleDownloadPdf = async () => {
+    if (!order) return;
+    try {
+      if (order.paid_in_full && order.invoice_number) {
+        await handlePaidInFullInvoice();
+      } else if ((order.deposit_paid || order.paid_in_full) && order.invoice_number) {
+        await handleDepositInvoice();
+      } else {
+        await previewQuotePdf(order.quote_id, { includeSpecSheets: false });
+        toast.info('No invoice yet; showing quote. Mark deposit or paid in full to generate invoice.');
+      }
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || error.message || 'Failed to download PDF');
+    }
+  };
+
   const handleAttachDepositInvoiceToEmail = async () => {
     if (!customer || !order) return;
     try {
@@ -278,16 +294,7 @@ export default function OrderDetailPage() {
               >
                 Balance paid
               </Badge>
-              <Button
-                variant="outline"
-                onClick={async () => {
-                  try {
-                    await previewQuotePdf(order.quote_id);
-                  } catch (error: any) {
-                    toast.error(error.response?.data?.detail || error.message || 'Failed to download PDF');
-                  }
-                }}
-              >
+              <Button variant="outline" onClick={handleDownloadPdf}>
                 <Eye className="h-4 w-4 mr-2" />
                 Download PDF
               </Button>

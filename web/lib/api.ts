@@ -562,9 +562,15 @@ export const getCustomerQuotes = async (customerId: number) => {
   return response.data;
 };
 
-export const previewQuotePdf = async (quoteId: number) => {
+export const previewQuotePdf = async (
+  quoteId: number,
+  options?: { includeSpecSheets?: boolean }
+) => {
+  const params =
+    options?.includeSpecSheets === false ? { include_spec_sheets: 'false' } : {};
   const response = await api.get(`/api/quotes/${quoteId}/preview-pdf`, {
     responseType: 'blob',
+    params,
   });
   const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
   window.open(url, '_blank');
