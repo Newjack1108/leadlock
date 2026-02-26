@@ -172,7 +172,7 @@ export default function DashboardPage() {
               <CardContent>
                 <div className="text-2xl font-bold">{stats.won_count}</div>
                 <p className="text-xs text-muted-foreground">
-                  {stats.quoted_count} quoted
+                  {stats.leads_with_sent_quotes_count} quoted
                 </p>
               </CardContent>
             </Card>
@@ -188,7 +188,7 @@ export default function DashboardPage() {
             <CardContent>
               <StatusPieChart
                 newCount={stats.new_count}
-                quotedCount={stats.quoted_count}
+                quotedCount={stats.leads_with_sent_quotes_count}
                 wonCount={stats.won_count}
                 lostCount={stats.lost_count}
               />
@@ -230,7 +230,7 @@ export default function DashboardPage() {
                 <CardTitle className="text-lg">Quoted</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold">{stats.quoted_count}</div>
+                <div className="text-3xl font-bold">{stats.leads_with_sent_quotes_count}</div>
                 <p className="text-xs text-muted-foreground mt-1">
                   {stats.quotes_sent_count} quotes sent
                 </p>

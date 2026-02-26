@@ -434,6 +434,7 @@ class DashboardStats(BaseModel):
     qualified_count: int
     quoted_count: int
     quotes_sent_count: int
+    leads_with_sent_quotes_count: int
     won_count: int
     lost_count: int
     engaged_percentage: float

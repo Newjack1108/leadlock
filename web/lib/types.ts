@@ -197,6 +197,7 @@ export interface DashboardStats {
   qualified_count: number;
   quoted_count: number;
   quotes_sent_count: number;
+  leads_with_sent_quotes_count: number;
   won_count: number;
   lost_count: number;
   engaged_percentage: number;

@@ -73,6 +73,20 @@ async def get_dashboard_stats(
         quotes_sent_stmt = quotes_sent_stmt.where(quote_date_filter)
     quotes_sent_count = session.exec(quotes_sent_stmt).one()
 
+    # Count unique leads that have at least one sent quote (Quote linked via customer_id)
+    leads_with_sent_quotes_subq = (
+        select(Lead.id)
+        .join(Quote, (Lead.customer_id == Quote.customer_id) & (Lead.customer_id.isnot(None)))
+        .where(
+            Quote.status.in_([QuoteStatus.SENT, QuoteStatus.VIEWED, QuoteStatus.ACCEPTED, QuoteStatus.REJECTED, QuoteStatus.EXPIRED])
+        )
+    )
+    if quote_date_filter is not None:
+        leads_with_sent_quotes_subq = leads_with_sent_quotes_subq.where(quote_date_filter)
+    leads_with_sent_quotes_subq = leads_with_sent_quotes_subq.distinct()
+    leads_with_sent_quotes_stmt = select(func.count()).select_from(leads_with_sent_quotes_subq.subquery())
+    leads_with_sent_quotes_count = session.exec(leads_with_sent_quotes_stmt).one()
+
     # Leads by source (grouped count, with optional date filter)
     leads_by_source_stmt = (
         select(Lead.lead_source, func.count(Lead.id).label("count"))
@@ -105,6 +119,7 @@ async def get_dashboard_stats(
         qualified_count=qualified_count,
         quoted_count=quoted_count,
         quotes_sent_count=quotes_sent_count,
+        leads_with_sent_quotes_count=leads_with_sent_quotes_count,
         won_count=won_count,
         lost_count=lost_count,
         engaged_percentage=round(engaged_percentage, 1),
