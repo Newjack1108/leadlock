@@ -65,10 +65,12 @@ def generate_pipeline_value_pdf(data: Dict[str, Any], company_name: str = "") ->
     """Generate PDF for Pipeline Value Report."""
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=40, leftMargin=40, topMargin=40, bottomMargin=40)
+    styles = getSampleStyleSheet()
+    normal = styles["Normal"]
     flowables = _build_report_header(company_name, "Pipeline Value Report")
 
     period = data.get("period") or "All time"
-    flowables.append(Paragraph(f"Period: {period}", doc.styles["Normal"]))
+    flowables.append(Paragraph(f"Period: {period}", normal))
     flowables.append(Spacer(1, 12))
 
     stages = data.get("stages", [])
@@ -90,7 +92,7 @@ def generate_pipeline_value_pdf(data: Dict[str, Any], company_name: str = "") ->
     flowables.append(Paragraph(
         f"<b>Total Value:</b> {format_currency(data.get('total_value', 0))} | "
         f"<b>Total Weighted:</b> {format_currency(data.get('total_weighted_value', 0))}",
-        doc.styles["Normal"]
+        normal
     ))
 
     doc.build(flowables)
@@ -102,10 +104,12 @@ def generate_source_performance_pdf(data: Dict[str, Any], company_name: str = ""
     """Generate PDF for Source Performance Report."""
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=40, leftMargin=40, topMargin=40, bottomMargin=40)
+    styles = getSampleStyleSheet()
+    normal = styles["Normal"]
     flowables = _build_report_header(company_name, "Source Performance Report")
 
     period = data.get("period") or "All time"
-    flowables.append(Paragraph(f"Period: {period} | Total Leads: {data.get('total_leads', 0)}", doc.styles["Normal"]))
+    flowables.append(Paragraph(f"Period: {period} | Total Leads: {data.get('total_leads', 0)}", normal))
     flowables.append(Spacer(1, 12))
 
     sources = data.get("sources", [])
@@ -133,6 +137,8 @@ def generate_closer_performance_pdf(data: Dict[str, Any], company_name: str = ""
     """Generate PDF for Closer Performance Report."""
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=40, leftMargin=40, topMargin=40, bottomMargin=40)
+    styles = getSampleStyleSheet()
+    normal = styles["Normal"]
     flowables = _build_report_header(company_name, "Closer Performance Report")
 
     closers = data.get("closers", [])
@@ -150,7 +156,7 @@ def generate_closer_performance_pdf(data: Dict[str, Any], company_name: str = ""
         t.setStyle(_table_style())
         flowables.append(t)
     else:
-        flowables.append(Paragraph("No closer data available.", doc.styles["Normal"]))
+        flowables.append(Paragraph("No closer data available.", normal))
 
     doc.build(flowables)
     buffer.seek(0)
@@ -161,10 +167,12 @@ def generate_quote_engagement_pdf(data: Dict[str, Any], company_name: str = "") 
     """Generate PDF for Quote Engagement Report."""
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=40, leftMargin=40, topMargin=40, bottomMargin=40)
+    styles = getSampleStyleSheet()
+    normal = styles["Normal"]
     flowables = _build_report_header(company_name, "Quote Engagement Report")
 
     period = data.get("period") or "All time"
-    flowables.append(Paragraph(f"Period: {period}", doc.styles["Normal"]))
+    flowables.append(Paragraph(f"Period: {period}", normal))
     flowables.append(Spacer(1, 12))
 
     table_data = [
@@ -190,9 +198,11 @@ def generate_weekly_summary_pdf(data: Dict[str, Any], company_name: str = "") ->
     """Generate PDF for Weekly Pipeline Summary Report."""
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=40, leftMargin=40, topMargin=40, bottomMargin=40)
+    styles = getSampleStyleSheet()
+    normal = styles["Normal"]
     flowables = _build_report_header(company_name, "Weekly Pipeline Summary")
 
-    flowables.append(Paragraph(f"Week: {data.get('week_label', '')}", doc.styles["Normal"]))
+    flowables.append(Paragraph(f"Week: {data.get('week_label', '')}", normal))
     flowables.append(Spacer(1, 12))
 
     table_data = [
