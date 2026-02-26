@@ -540,6 +540,24 @@ def create_db_and_tables():
                     if "already exists" not in error_str and "duplicate" not in error_str:
                         print(f"Warning: Could not add logo_url column: {col_error}", file=sys.stderr, flush=True)
 
+            # Bank details (quote/invoice PDFs)
+            for col_name, col_sql in [
+                ("bank_name", "VARCHAR(255)"),
+                ("account_number", "VARCHAR(50)"),
+                ("sort_code", "VARCHAR(20)"),
+            ]:
+                company_columns = [col['name'] for col in inspector.get_columns("companysettings")]
+                if col_name not in company_columns:
+                    print(f"Adding {col_name} column to companysettings table...", file=sys.stderr, flush=True)
+                    try:
+                        with engine.begin() as conn:
+                            conn.execute(text(f'ALTER TABLE companysettings ADD COLUMN {col_name} {col_sql}'))
+                        print(f"Added {col_name} column to companysettings table", file=sys.stderr, flush=True)
+                    except Exception as e:
+                        error_str = str(e).lower()
+                        if "already exists" not in error_str and "duplicate" not in error_str:
+                            print(f"Error adding {col_name} column: {e}", file=sys.stderr, flush=True)
+
             # Installation & travel (mileage, overnight, 2-man team) + product import gross margin
             for col_name, col_sql in [
                 ("distance_before_overnight_miles", "NUMERIC(10, 2)"),

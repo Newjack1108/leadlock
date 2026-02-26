@@ -641,6 +641,9 @@ class CompanySettingsCreate(BaseModel):
     meal_allowance_per_day: Optional[Decimal] = None
     average_speed_mph: Optional[Decimal] = None
     product_import_gross_margin_pct: Optional[Decimal] = None
+    bank_name: Optional[str] = None
+    account_number: Optional[str] = None
+    sort_code: Optional[str] = None
 
 
 class CompanySettingsUpdate(BaseModel):
@@ -668,6 +671,9 @@ class CompanySettingsUpdate(BaseModel):
     meal_allowance_per_day: Optional[Decimal] = None
     average_speed_mph: Optional[Decimal] = None
     product_import_gross_margin_pct: Optional[Decimal] = None
+    bank_name: Optional[str] = None
+    account_number: Optional[str] = None
+    sort_code: Optional[str] = None
 
 
 class CompanySettingsResponse(BaseModel):
@@ -696,6 +702,9 @@ class CompanySettingsResponse(BaseModel):
     meal_allowance_per_day: Optional[Decimal] = None
     average_speed_mph: Optional[Decimal] = None
     product_import_gross_margin_pct: Optional[Decimal] = None
+    bank_name: Optional[str] = None
+    account_number: Optional[str] = None
+    sort_code: Optional[str] = None
     updated_at: datetime
 
 

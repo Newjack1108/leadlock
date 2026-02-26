@@ -360,6 +360,10 @@ class CompanySettings(SQLModel, table=True):
     meal_allowance_per_day: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(10, 2)))  # Per person when staying away
     average_speed_mph: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(5, 2)))  # For travel time calculation
     product_import_gross_margin_pct: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(5, 2)))  # e.g. 30 for 30%; applied when products pushed from production to set RRP
+    # Bank details (shown on quote and invoice PDFs)
+    bank_name: Optional[str] = None
+    account_number: Optional[str] = None
+    sort_code: Optional[str] = None
     updated_by_id: int = Field(foreign_key="user.id")
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     

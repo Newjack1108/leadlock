@@ -258,6 +258,9 @@ export interface CompanySettings {
   meal_allowance_per_day?: number;
   average_speed_mph?: number;
   product_import_gross_margin_pct?: number;
+  bank_name?: string;
+  account_number?: string;
+  sort_code?: string;
   updated_at: string;
 }
 

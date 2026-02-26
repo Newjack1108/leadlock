@@ -57,6 +57,9 @@ export default function CompanySettingsPage() {
     meal_allowance_per_day: '',
     average_speed_mph: '',
     product_import_gross_margin_pct: '',
+    bank_name: '',
+    account_number: '',
+    sort_code: '',
   });
 
   useEffect(() => {
@@ -93,6 +96,9 @@ export default function CompanySettingsPage() {
         meal_allowance_per_day: response.data.meal_allowance_per_day != null ? String(response.data.meal_allowance_per_day) : '',
         average_speed_mph: response.data.average_speed_mph != null ? String(response.data.average_speed_mph) : '',
         product_import_gross_margin_pct: response.data.product_import_gross_margin_pct != null ? String(response.data.product_import_gross_margin_pct) : '',
+        bank_name: response.data.bank_name || '',
+        account_number: response.data.account_number || '',
+        sort_code: response.data.sort_code || '',
       });
     } catch (error: any) {
       if (error.response?.status === 401) {
@@ -359,6 +365,45 @@ export default function CompanySettingsPage() {
                 placeholder="United Kingdom"
                 disabled={saving}
               />
+            </div>
+
+            <div className="space-y-4 border-t pt-6">
+              <h3 className="text-lg font-medium">Bank details</h3>
+              <p className="text-sm text-muted-foreground">
+                Shown on quote and invoice PDFs for payment instructions.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="bank_name">Bank Name</Label>
+                  <Input
+                    id="bank_name"
+                    value={formData.bank_name}
+                    onChange={(e) => setFormData({ ...formData, bank_name: e.target.value })}
+                    placeholder="e.g. Barclays"
+                    disabled={saving}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="account_number">Account Number</Label>
+                  <Input
+                    id="account_number"
+                    value={formData.account_number}
+                    onChange={(e) => setFormData({ ...formData, account_number: e.target.value })}
+                    placeholder="e.g. 12345678"
+                    disabled={saving}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="sort_code">Sort Code</Label>
+                  <Input
+                    id="sort_code"
+                    value={formData.sort_code}
+                    onChange={(e) => setFormData({ ...formData, sort_code: e.target.value })}
+                    placeholder="e.g. 12-34-56"
+                    disabled={saving}
+                  />
+                </div>
+              </div>
             </div>
 
             <div className="grid grid-cols-3 gap-4">
