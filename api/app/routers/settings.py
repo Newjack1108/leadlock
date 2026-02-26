@@ -28,18 +28,25 @@ def get_company_settings(session: Session) -> CompanySettings:
     return settings
 
 
+BANK_DETAIL_FIELDS = ("bank_name", "account_number", "sort_code")
+
+
 @router.get("/company", response_model=CompanySettingsResponse)
 async def get_company_settings_endpoint(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
-    """Get company settings. All authenticated users can view."""
+    """Get company settings. All authenticated users can view. Bank details are excluded for non-DIRECTORs."""
     settings = get_company_settings(session)
     
     if not settings:
         raise HTTPException(status_code=404, detail="Company settings not found. Please create them first.")
     
-    return CompanySettingsResponse(**settings.dict())
+    data = settings.dict()
+    if current_user.role != UserRole.DIRECTOR:
+        for field in BANK_DETAIL_FIELDS:
+            data.pop(field, None)
+    return CompanySettingsResponse(**data)
 
 
 @router.post("/company", response_model=CompanySettingsResponse)
