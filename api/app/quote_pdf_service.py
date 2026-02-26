@@ -716,23 +716,26 @@ def generate_quote_pdf(
         doc.build(elements)
     buffer.seek(0)
 
-    # Optionally append product spec sheets for products in the quote (use quote.include_spec_sheets when passed)
+    # Optionally append product spec sheets for main products only (exclude optional extras)
     if include_spec_sheets and session and len(quote_items) > 0:
-        product_ids = set()
-        for item in quote_items:
-            line_type = getattr(item, "line_type", None)
+        ordered_product_ids = []
+        main_items = [i for i in quote_items if getattr(i, "parent_quote_item_id", None) is None]
+        main_items.sort(key=lambda i: getattr(i, "sort_order", 0) or 0)
+        for main_item in main_items:
+            line_type = getattr(main_item, "line_type", None)
             if line_type in (QuoteItemLineType.DELIVERY, QuoteItemLineType.INSTALLATION):
                 continue
-            pid = getattr(item, "product_id", None)
-            if pid is not None:
-                product_ids.add(pid)
-        if product_ids:
+            pid = getattr(main_item, "product_id", None)
+            if pid is not None and pid not in ordered_product_ids:
+                ordered_product_ids.append(pid)
+        if ordered_product_ids:
             try:
                 products_stmt = select(Product).where(
-                    Product.id.in_(product_ids),
+                    Product.id.in_(ordered_product_ids),
                     Product.is_active == True,
                 )
-                products = list(session.exec(products_stmt).all())
+                products_by_id = {p.id: p for p in session.exec(products_stmt).all()}
+                products = [products_by_id[pid] for pid in ordered_product_ids if pid in products_by_id]
                 if products:
                     from app.product_spec_pdf_service import generate_products_spec_sheets_pdf
                     from pypdf import PdfWriter, PdfReader
