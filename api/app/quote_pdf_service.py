@@ -11,7 +11,7 @@ from typing import Optional, Tuple, List, Any
 from io import BytesIO
 from datetime import datetime
 from decimal import Decimal
-from app.models import Quote, Customer, QuoteItem, CompanySettings
+from app.models import Quote, Customer, QuoteItem, CompanySettings, Product, QuoteItemLineType
 from app.constants import VAT_RATE_DECIMAL
 from sqlmodel import Session, select
 import os
@@ -422,7 +422,8 @@ def generate_quote_pdf(
     customer: Customer,
     quote_items: list[QuoteItem],
     company_settings: Optional[CompanySettings] = None,
-    session: Optional[Session] = None
+    session: Optional[Session] = None,
+    include_spec_sheets: bool = True,
 ) -> BytesIO:
     """
     Generate a PDF document for a quote.
@@ -433,6 +434,7 @@ def generate_quote_pdf(
         quote_items: List of QuoteItem objects
         company_settings: Optional CompanySettings for header/footer
         session: Optional database session to fetch company settings
+        include_spec_sheets: If True, append product spec sheets for products in the quote
     
     Returns:
         BytesIO buffer containing PDF data
@@ -712,5 +714,43 @@ def generate_quote_pdf(
         doc.build(elements, onFirstPage=footer_drawer, onLaterPages=footer_drawer)
     else:
         doc.build(elements)
+    buffer.seek(0)
+
+    # Optionally append product spec sheets for products in the quote (use quote.include_spec_sheets when passed)
+    if include_spec_sheets and session and len(quote_items) > 0:
+        product_ids = set()
+        for item in quote_items:
+            line_type = getattr(item, "line_type", None)
+            if line_type in (QuoteItemLineType.DELIVERY, QuoteItemLineType.INSTALLATION):
+                continue
+            pid = getattr(item, "product_id", None)
+            if pid is not None:
+                product_ids.add(pid)
+        if product_ids:
+            try:
+                products_stmt = select(Product).where(
+                    Product.id.in_(product_ids),
+                    Product.is_active == True,
+                )
+                products = list(session.exec(products_stmt).all())
+                if products:
+                    from app.product_spec_pdf_service import generate_products_spec_sheets_pdf
+                    from pypdf import PdfWriter, PdfReader
+
+                    spec_buffer = generate_products_spec_sheets_pdf(
+                        products,
+                        company_settings=company_settings,
+                        session=session,
+                    )
+                    writer = PdfWriter()
+                    writer.append(PdfReader(buffer))
+                    writer.append(PdfReader(spec_buffer))
+                    merged = BytesIO()
+                    writer.write(merged)
+                    merged.seek(0)
+                    return merged
+            except Exception as e:
+                print(f"Could not append product spec sheets: {e}", file=sys.stderr, flush=True)
+
     buffer.seek(0)
     return buffer

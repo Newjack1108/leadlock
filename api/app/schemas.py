@@ -513,6 +513,11 @@ class ProductCreate(BaseModel):
     sku: Optional[str] = None
     image_url: Optional[str] = None
     specifications: Optional[str] = None
+    size: Optional[str] = None
+    height: Optional[str] = None
+    floor_plan_url: Optional[str] = None
+    width: Optional[Decimal] = None
+    length: Optional[Decimal] = None
     installation_hours: Optional[Decimal] = None
     boxes_per_product: Optional[int] = None  # Number of boxes per product (optional; used in installation calculation)
     optional_extras: Optional[List[int]] = None  # List of product IDs that are optional extras
@@ -537,6 +542,11 @@ class ProductUpdate(BaseModel):
     is_active: Optional[bool] = None
     image_url: Optional[str] = None
     specifications: Optional[str] = None
+    size: Optional[str] = None
+    height: Optional[str] = None
+    floor_plan_url: Optional[str] = None
+    width: Optional[Decimal] = None
+    length: Optional[Decimal] = None
     installation_hours: Optional[Decimal] = None
     boxes_per_product: Optional[int] = None
     optional_extras: Optional[List[int]] = None  # List of product IDs that are optional extras
@@ -564,6 +574,11 @@ class ProductResponse(BaseModel):
     is_active: bool
     image_url: Optional[str]
     specifications: Optional[str]
+    size: Optional[str] = None
+    height: Optional[str] = None
+    floor_plan_url: Optional[str] = None
+    width: Optional[Decimal] = None
+    length: Optional[Decimal] = None
     installation_hours: Optional[Decimal] = None
     boxes_per_product: Optional[int] = None
     optional_extras: Optional[List["ProductResponse"]] = None  # Nested optional extras
@@ -769,6 +784,7 @@ class QuoteCreate(BaseModel):
     items: List[QuoteItemCreate]
     discount_template_ids: Optional[List[int]] = None  # List of discount template IDs to apply
     temperature: Optional[QuoteTemperature] = None
+    include_spec_sheets: bool = True  # Include product spec sheets when generating quote PDF
 
 
 class QuoteDraftUpdate(BaseModel):
@@ -780,6 +796,7 @@ class QuoteDraftUpdate(BaseModel):
     items: List[QuoteItemCreate]
     discount_template_ids: Optional[List[int]] = None
     temperature: Optional[QuoteTemperature] = None
+    include_spec_sheets: Optional[bool] = None  # Include product spec sheets when generating quote PDF
 
 
 class QuoteUpdate(BaseModel):
@@ -788,6 +805,7 @@ class QuoteUpdate(BaseModel):
     terms_and_conditions: Optional[str] = None
     notes: Optional[str] = None
     deposit_amount: Optional[Decimal] = None  # inc VAT
+    include_spec_sheets: Optional[bool] = None  # Include product spec sheets when generating quote PDF
     # Opportunity fields
     opportunity_stage: Optional["OpportunityStage"] = None
     close_probability: Optional[Decimal] = None
@@ -838,6 +856,7 @@ class QuoteResponse(BaseModel):
     loss_category: Optional["LossCategory"] = None
     owner_id: Optional[int] = None
     temperature: Optional[QuoteTemperature] = None
+    include_spec_sheets: bool = True  # Include product spec sheets when generating quote PDF
     total_open_count: int = 0  # Total times quote view link was opened (across all sends)
     order_id: Optional[int] = None  # Order ID when quote is accepted (for View order link)
     customer_last_interacted_at: Optional[datetime] = None  # Last Activity date for this customer

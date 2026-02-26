@@ -110,6 +110,7 @@ def build_quote_response(quote: Quote, quote_items: List[QuoteItem], session: Se
         loss_category=quote.loss_category,
         owner_id=quote.owner_id,
         temperature=quote.temperature,
+        include_spec_sheets=getattr(quote, "include_spec_sheets", True),
         total_open_count=total_open_count,
         order_id=order_id,
         customer_last_interacted_at=customer_last_interacted_at,
@@ -454,7 +455,8 @@ async def create_quote(
             terms_and_conditions=quote_data.terms_and_conditions,
             notes=quote_data.notes,
             created_by_id=current_user.id,
-            temperature=quote_data.temperature
+            temperature=quote_data.temperature,
+            include_spec_sheets=getattr(quote_data, "include_spec_sheets", True),
         )
         session.add(quote)
         session.commit()
@@ -922,7 +924,9 @@ async def update_draft_quote(
         quote.notes = quote_data.notes
     if quote_data.temperature is not None:
         quote.temperature = quote_data.temperature
-    
+    if quote_data.include_spec_sheets is not None:
+        quote.include_spec_sheets = quote_data.include_spec_sheets
+
     total_inc_vat = quote.total_amount * (Decimal("1") + VAT_RATE_DECIMAL)
     if quote_data.deposit_amount is not None:
         deposit_amount = Decimal(str(quote_data.deposit_amount))  # Client sends inc VAT
@@ -1098,6 +1102,8 @@ async def send_quote_email_endpoint(
         )
         
         if not success:
+            import sys
+            print(f"Quote email send failed: {error}", file=sys.stderr, flush=True)
             raise HTTPException(status_code=500, detail=f"Failed to send quote email: {error}")
         
         # Use rendered subject and body_html, fallback to defaults if None
@@ -1399,7 +1405,11 @@ async def preview_quote_pdf(
     
     # Generate PDF
     try:
-        pdf_buffer = generate_quote_pdf(quote, customer, quote_items, company_settings, session)
+        include_spec_sheets = getattr(quote, "include_spec_sheets", True)
+        pdf_buffer = generate_quote_pdf(
+            quote, customer, quote_items, company_settings, session,
+            include_spec_sheets=include_spec_sheets,
+        )
         pdf_content = pdf_buffer.read()
         
         # Sanitize customer name for filename (remove invalid characters)

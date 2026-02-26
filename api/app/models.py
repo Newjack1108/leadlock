@@ -314,6 +314,11 @@ class Product(SQLModel, table=True):
     is_active: bool = Field(default=True)  # For soft deletion
     image_url: Optional[str] = None  # Product image URL
     specifications: Optional[str] = None  # Technical specs (JSON or text)
+    size: Optional[str] = None  # Display dimensions, e.g. "3m x 4m", "12ft x 16ft"
+    height: Optional[str] = None  # Eave/ridge height, e.g. "2.4m"
+    floor_plan_url: Optional[str] = None  # URL to floor plan image
+    width: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(10, 2)))  # Numeric width (for calculations)
+    length: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(10, 2)))  # Numeric length (for calculations)
     installation_hours: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(10, 2)))  # Hours required for installation
     boxes_per_product: Optional[int] = None  # Number of boxes per product (optional; used in installation calculation)
     production_product_id: Optional[int] = Field(default=None, index=True)  # Production app's product ID for sync
@@ -451,6 +456,7 @@ class Quote(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     
     temperature: Optional[QuoteTemperature] = Field(default=None)
+    include_spec_sheets: bool = Field(default=True)  # Include product spec sheets when generating quote PDF
     
     # Opportunity management fields
     opportunity_stage: Optional["OpportunityStage"] = Field(default=None)

@@ -404,6 +404,7 @@ export const createQuote = async (quoteData: {
   }>;
   discount_template_ids?: number[];
   temperature?: QuoteTemperature;
+  include_spec_sheets?: boolean;
 }) => {
   const response = await api.post('/api/quotes', quoteData);
   return response.data;

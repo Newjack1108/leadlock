@@ -105,6 +105,7 @@ function EditQuoteContent() {
   const [termsAndConditions, setTermsAndConditions] = useState('');
   const [notes, setNotes] = useState('');
   const [temperature, setTemperature] = useState<QuoteTemperature | ''>('');
+  const [includeSpecSheets, setIncludeSpecSheets] = useState(true);
   const [depositAmount, setDepositAmount] = useState<number | ''>('');
   const [companySettings, setCompanySettings] = useState<any>(null);
   const [availableDiscounts, setAvailableDiscounts] = useState<DiscountTemplate[]>([]);
@@ -160,6 +161,7 @@ function EditQuoteContent() {
       setTermsAndConditions(quoteData.terms_and_conditions ?? '');
       setNotes(quoteData.notes ?? '');
       setTemperature(quoteData.temperature ?? '');
+      setIncludeSpecSheets(quoteData.include_spec_sheets ?? true);
       setDepositAmount(quoteData.deposit_amount ?? '');
       setSelectedDiscountIds(
         (quoteData.discounts ?? [])
@@ -452,6 +454,7 @@ function EditQuoteContent() {
       if (termsAndConditions?.trim()) payload.terms_and_conditions = termsAndConditions.trim();
       if (notes?.trim()) payload.notes = notes.trim();
       if (temperature) payload.temperature = temperature;
+      payload.include_spec_sheets = includeSpecSheets;
       if (depositAmount !== '') payload.deposit_amount = Number(depositAmount);
 
       await updateDraftQuote(quoteId, payload);
@@ -987,6 +990,18 @@ function EditQuoteContent() {
                       rows={6}
                     />
                   )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="include_spec_sheets"
+                    checked={includeSpecSheets}
+                    onChange={(e) => setIncludeSpecSheets(e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300"
+                  />
+                  <Label htmlFor="include_spec_sheets" className="font-normal cursor-pointer">
+                    Include product spec sheets with PDF (dimensions, floor plan, specs for products in quote)
+                  </Label>
                 </div>
                 <div className="space-y-2">
                   <Label>Notes</Label>

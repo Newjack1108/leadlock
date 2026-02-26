@@ -47,6 +47,7 @@ export default function CreateQuoteDialog({
   const [termsAndConditions, setTermsAndConditions] = useState('');
   const [notes, setNotes] = useState('');
   const [depositAmount, setDepositAmount] = useState<number | ''>('');
+  const [includeSpecSheets, setIncludeSpecSheets] = useState(true);
   const [productDetails, setProductDetails] = useState<Record<number, Product>>({});
   const [termsExpanded, setTermsExpanded] = useState(false);
 
@@ -245,6 +246,7 @@ export default function CreateQuoteDialog({
       if (depositAmount !== '') {
         quoteData.deposit_amount = Number(depositAmount);
       }
+      quoteData.include_spec_sheets = includeSpecSheets;
 
       await createQuote(quoteData);
       toast.success('Quote created successfully');
@@ -503,6 +505,18 @@ export default function CreateQuoteDialog({
                     rows={4}
                   />
                 )}
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="include_spec_sheets"
+                  checked={includeSpecSheets}
+                  onChange={(e) => setIncludeSpecSheets(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300"
+                />
+                <Label htmlFor="include_spec_sheets" className="font-normal cursor-pointer">
+                  Include product spec sheets with PDF
+                </Label>
               </div>
               <div className="space-y-2">
                 <Label>Notes</Label>

@@ -251,8 +251,10 @@ def get_public_quote_pdf(
     company_settings = session.exec(select(CompanySettings).limit(1)).first()
 
     try:
+        include_spec_sheets = getattr(quote, "include_spec_sheets", True)
         pdf_buffer = generate_quote_pdf(
-            quote, customer, list(quote_items), company_settings, session
+            quote, customer, list(quote_items), company_settings, session,
+            include_spec_sheets=include_spec_sheets,
         )
         pdf_content = pdf_buffer.read()
     except Exception as e:

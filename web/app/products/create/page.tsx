@@ -39,6 +39,11 @@ export default function CreateProductPage() {
     sku: '',
     image_url: '',
     specifications: '',
+    size: '',
+    height: '',
+    floor_plan_url: '',
+    width: '',
+    length: '',
     installation_hours: '',
     boxes_per_product: '',
   });
@@ -80,6 +85,11 @@ export default function CreateProductPage() {
         sku: formData.sku.trim() || undefined,
         image_url: formData.image_url.trim() || undefined,
         specifications: formData.specifications.trim() || undefined,
+        size: formData.size.trim() || undefined,
+        height: formData.height.trim() || undefined,
+        floor_plan_url: formData.floor_plan_url.trim() || undefined,
+        width: formData.width ? parseFloat(formData.width) : undefined,
+        length: formData.length ? parseFloat(formData.length) : undefined,
         optional_extras: selectedExtras.length > 0 ? selectedExtras : undefined,
       };
 
@@ -377,6 +387,87 @@ export default function CreateProductPage() {
                     rows={4}
                     disabled={loading}
                   />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Product Spec Sheet */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Product Spec Sheet</CardTitle>
+                <p className="text-sm font-normal text-muted-foreground">
+                  Dimensions and floor plan for quote spec sheets
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="size">Size</Label>
+                    <Input
+                      id="size"
+                      value={formData.size}
+                      onChange={(e) =>
+                        setFormData({ ...formData, size: e.target.value })
+                      }
+                      placeholder="e.g. 3m x 4m, 12ft x 16ft"
+                      disabled={loading}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="height">Height</Label>
+                    <Input
+                      id="height"
+                      value={formData.height}
+                      onChange={(e) =>
+                        setFormData({ ...formData, height: e.target.value })
+                      }
+                      placeholder="e.g. 2.4m, 8ft to eaves"
+                      disabled={loading}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="width">Width (numeric)</Label>
+                    <Input
+                      id="width"
+                      type="number"
+                      step="0.01"
+                      value={formData.width}
+                      onChange={(e) =>
+                        setFormData({ ...formData, width: e.target.value })
+                      }
+                      placeholder="e.g. 3.0"
+                      disabled={loading}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="length">Length (numeric)</Label>
+                    <Input
+                      id="length"
+                      type="number"
+                      step="0.01"
+                      value={formData.length}
+                      onChange={(e) =>
+                        setFormData({ ...formData, length: e.target.value })
+                      }
+                      placeholder="e.g. 4.0"
+                      disabled={loading}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Floor Plan Image</Label>
+                  <ImageUpload
+                    value={formData.floor_plan_url}
+                    onChange={(url) =>
+                      setFormData({ ...formData, floor_plan_url: url })
+                    }
+                    disabled={loading}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Upload a floor plan diagram to include in product spec sheets
+                  </p>
                 </div>
               </CardContent>
             </Card>

@@ -217,6 +217,56 @@ export default function ProductDetailPage() {
                 </CardContent>
               </Card>
             )}
+
+            {(product.size || product.height || product.floor_plan_url) && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Product Spec Sheet</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {(product.size || product.height) && (
+                    <div className="space-y-1">
+                      {product.size && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Size:</span>
+                          <span>{product.size}</span>
+                        </div>
+                      )}
+                      {product.height && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Height:</span>
+                          <span>{product.height}</span>
+                        </div>
+                      )}
+                      {(product.width != null || product.length != null) && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Dimensions (W x L):</span>
+                          <span>
+                            {product.width != null && product.length != null
+                              ? `${product.width}m x ${product.length}m`
+                              : product.width != null
+                              ? `${product.width}m`
+                              : `${product.length}m`}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {product.floor_plan_url && (
+                    <div className="space-y-2">
+                      <span className="text-muted-foreground text-sm">Floor Plan:</span>
+                      <div className="relative w-full h-48 rounded-md overflow-hidden bg-muted">
+                        <img
+                          src={product.floor_plan_url}
+                          alt={`${product.name} floor plan`}
+                          className="w-full h-full object-contain"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
           </div>
         </div>
 

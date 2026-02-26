@@ -93,6 +93,7 @@ function CreateQuoteContent() {
   const [termsAndConditions, setTermsAndConditions] = useState('');
   const [notes, setNotes] = useState('');
   const [temperature, setTemperature] = useState<QuoteTemperature | ''>(QuoteTemperature.WARM);
+  const [includeSpecSheets, setIncludeSpecSheets] = useState(true);
   const [depositAmount, setDepositAmount] = useState<number | ''>('');
   const [companySettings, setCompanySettings] = useState<any>(null);
   const [availableDiscounts, setAvailableDiscounts] = useState<DiscountTemplate[]>([]);
@@ -465,6 +466,7 @@ function CreateQuoteContent() {
       if (temperature) {
         quoteData.temperature = temperature;
       }
+      quoteData.include_spec_sheets = includeSpecSheets;
 
       const newQuote = await createQuote(quoteData);
       toast.success('Quote created successfully');
@@ -931,6 +933,18 @@ function CreateQuoteContent() {
                       rows={6}
                     />
                   )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="include_spec_sheets"
+                    checked={includeSpecSheets}
+                    onChange={(e) => setIncludeSpecSheets(e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300"
+                  />
+                  <Label htmlFor="include_spec_sheets" className="font-normal cursor-pointer">
+                    Include product spec sheets with PDF (dimensions, floor plan, specs for products in quote)
+                  </Label>
                 </div>
                 <div className="space-y-2">
                   <Label>Notes</Label>

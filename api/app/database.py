@@ -474,6 +474,19 @@ def create_db_and_tables():
                     error_str = str(col_error).lower()
                     if "already exists" not in error_str and "duplicate" not in error_str:
                         print(f"Warning: Could not add temperature column: {col_error}", file=sys.stderr, flush=True)
+
+            # Add include_spec_sheets to quote table (product spec sheets in quote PDF)
+            quote_columns = [col['name'] for col in inspector.get_columns("quote")]
+            if "include_spec_sheets" not in quote_columns:
+                print("Adding include_spec_sheets column to quote table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE quote ADD COLUMN include_spec_sheets BOOLEAN DEFAULT TRUE"))
+                    print("Added include_spec_sheets column to quote table", file=sys.stderr, flush=True)
+                except Exception as col_error:
+                    error_str = str(col_error).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Warning: Could not add include_spec_sheets column: {col_error}", file=sys.stderr, flush=True)
         
         # Step 6: Add trading_name and default_terms_and_conditions to CompanySettings table
         has_company_settings = inspector.has_table("companysettings")
@@ -946,7 +959,27 @@ def create_db_and_tables():
                     error_str = str(e).lower()
                     if "already exists" not in error_str and "duplicate" not in error_str:
                         print(f"Error adding production_product_id column: {e}", file=sys.stderr, flush=True)
-        
+
+            # Product spec sheet fields: size, height, floor_plan_url, width, length
+            for col_name, col_sql in [
+                ("size", "VARCHAR(100)"),
+                ("height", "VARCHAR(100)"),
+                ("floor_plan_url", "VARCHAR(2048)"),
+                ("width", "NUMERIC(10, 2)"),
+                ("length", "NUMERIC(10, 2)"),
+            ]:
+                product_columns = [col["name"] for col in inspector.get_columns("product")]
+                if col_name not in product_columns:
+                    print(f"Adding {col_name} column to product table...", file=sys.stderr, flush=True)
+                    try:
+                        with engine.begin() as conn:
+                            conn.execute(text(f"ALTER TABLE product ADD COLUMN {col_name} {col_sql}"))
+                        print(f"Added {col_name} column to product table", file=sys.stderr, flush=True)
+                    except Exception as e:
+                        error_str = str(e).lower()
+                        if "already exists" not in error_str and "duplicate" not in error_str:
+                            print(f"Error adding {col_name} column: {e}", file=sys.stderr, flush=True)
+
         # Step 11: Add is_giveaway to DiscountTemplate table
         has_discount_template_table = inspector.has_table("discounttemplate")
         if has_discount_template_table:

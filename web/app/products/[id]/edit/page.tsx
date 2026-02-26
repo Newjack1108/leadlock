@@ -43,6 +43,11 @@ export default function EditProductPage() {
     sku: '',
     image_url: '',
     specifications: '',
+    size: '',
+    height: '',
+    floor_plan_url: '',
+    width: '',
+    length: '',
     installation_hours: '',
     boxes_per_product: '',
   });
@@ -71,6 +76,11 @@ export default function EditProductPage() {
         sku: product.sku || '',
         image_url: product.image_url || '',
         specifications: product.specifications || '',
+        size: product.size || '',
+        height: product.height || '',
+        floor_plan_url: product.floor_plan_url || '',
+        width: product.width?.toString() || '',
+        length: product.length?.toString() || '',
         installation_hours: product.installation_hours?.toString() || '',
         boxes_per_product: product.boxes_per_product?.toString() || '',
       });
@@ -121,6 +131,11 @@ export default function EditProductPage() {
         subcategory: formData.subcategory.trim() || undefined,
         sku: formData.sku.trim() || undefined,
         specifications: formData.specifications.trim() || undefined,
+        size: formData.size.trim() || undefined,
+        height: formData.height.trim() || undefined,
+        floor_plan_url: formData.floor_plan_url.trim() || undefined,
+        width: formData.width ? parseFloat(formData.width) : undefined,
+        length: formData.length ? parseFloat(formData.length) : undefined,
       };
       if (formData.is_extra) {
         productData.image_url = undefined;
@@ -463,6 +478,91 @@ export default function EditProductPage() {
                 </div>
               </CardContent>
             </Card>
+
+            {!formData.is_extra && (
+              <>
+                {/* Product Spec Sheet */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Product Spec Sheet</CardTitle>
+                    <p className="text-sm font-normal text-muted-foreground">
+                      Dimensions and floor plan for quote spec sheets
+                    </p>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="size">Size</Label>
+                        <Input
+                          id="size"
+                          value={formData.size}
+                          onChange={(e) =>
+                            setFormData({ ...formData, size: e.target.value })
+                          }
+                          placeholder="e.g. 3m x 4m, 12ft x 16ft"
+                          disabled={loading}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="height">Height</Label>
+                        <Input
+                          id="height"
+                          value={formData.height}
+                          onChange={(e) =>
+                            setFormData({ ...formData, height: e.target.value })
+                          }
+                          placeholder="e.g. 2.4m, 8ft to eaves"
+                          disabled={loading}
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="width">Width (numeric)</Label>
+                        <Input
+                          id="width"
+                          type="number"
+                          step="0.01"
+                          value={formData.width}
+                          onChange={(e) =>
+                            setFormData({ ...formData, width: e.target.value })
+                          }
+                          placeholder="e.g. 3.0"
+                          disabled={loading}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="length">Length (numeric)</Label>
+                        <Input
+                          id="length"
+                          type="number"
+                          step="0.01"
+                          value={formData.length}
+                          onChange={(e) =>
+                            setFormData({ ...formData, length: e.target.value })
+                          }
+                          placeholder="e.g. 4.0"
+                          disabled={loading}
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Floor Plan Image</Label>
+                      <ImageUpload
+                        value={formData.floor_plan_url}
+                        onChange={(url) =>
+                          setFormData({ ...formData, floor_plan_url: url })
+                        }
+                        disabled={loading}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Upload a floor plan diagram to include in product spec sheets
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            )}
 
             {/* Action Buttons */}
             <div className="flex items-center justify-end gap-4 pb-6">

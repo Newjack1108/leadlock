@@ -217,6 +217,11 @@ export interface Product {
   is_active: boolean;
   image_url?: string;
   specifications?: string;
+  size?: string;
+  height?: string;
+  floor_plan_url?: string;
+  width?: number;
+  length?: number;
   installation_hours?: number;
   boxes_per_product?: number;
   optional_extras?: Product[];
@@ -692,6 +697,7 @@ export interface Quote {
   loss_category?: LossCategory;
   owner_id?: number;
   temperature?: QuoteTemperature;
+  include_spec_sheets?: boolean;
   total_open_count?: number;
   order_id?: number | null;
   customer_last_interacted_at?: string | null;
