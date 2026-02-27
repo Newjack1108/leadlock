@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Settings, Save, Mail, FileText } from 'lucide-react';
-import { getUserEmailSettings, updateUserEmailSettings } from '@/lib/api';
+import { getUserEmailSettings, updateUserEmailSettings, getPublicCompanyLogo } from '@/lib/api';
 import { UserEmailSettings } from '@/lib/types';
 import { toast } from 'sonner';
 
@@ -119,13 +119,19 @@ export default function UserSettingsPage() {
     }
   };
 
-  const insertLogo = () => {
-    // Use absolute URL to ensure logo loads correctly from any page
-    const logoUrl = typeof window !== 'undefined' 
+  const insertLogo = async () => {
+    const fallbackUrl = typeof window !== 'undefined'
       ? `${window.location.origin}/logo1.jpg`
       : '/logo1.jpg';
+    let logoUrl = fallbackUrl;
+    try {
+      const { logo_url } = await getPublicCompanyLogo();
+      if (logo_url) logoUrl = logo_url;
+    } catch {
+      // Keep fallback on error
+    }
     const logoHtml = `<img src="${logoUrl}" alt="Company Logo" style="max-height: 60px; margin: 10px 0;" />`;
-    setSignature(signature + '\n' + logoHtml);
+    setSignature((prev) => prev + '\n' + logoHtml);
   };
 
   if (loading) {
