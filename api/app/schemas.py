@@ -714,6 +714,7 @@ class CompanySettingsCreate(BaseModel):
     website: Optional[str] = None
     logo_filename: str = "logo1.jpg"
     logo_url: Optional[str] = None
+    footer_logo_url: Optional[str] = None
     default_terms_and_conditions: Optional[str] = None
     hourly_install_rate: Optional[Decimal] = None
     installation_lead_time: Optional[InstallationLeadTime] = None
@@ -745,6 +746,7 @@ class CompanySettingsUpdate(BaseModel):
     website: Optional[str] = None
     logo_filename: Optional[str] = None
     logo_url: Optional[str] = None
+    footer_logo_url: Optional[str] = None
     default_terms_and_conditions: Optional[str] = None
     hourly_install_rate: Optional[Decimal] = None
     installation_lead_time: Optional[InstallationLeadTime] = None
@@ -777,6 +779,7 @@ class CompanySettingsResponse(BaseModel):
     website: Optional[str]
     logo_filename: str
     logo_url: Optional[str] = None
+    footer_logo_url: Optional[str] = None
     default_terms_and_conditions: Optional[str]
     hourly_install_rate: Optional[Decimal] = None
     installation_lead_time: Optional[InstallationLeadTime] = None

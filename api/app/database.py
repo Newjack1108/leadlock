@@ -553,6 +553,19 @@ def create_db_and_tables():
                     if "already exists" not in error_str and "duplicate" not in error_str:
                         print(f"Warning: Could not add logo_url column: {col_error}", file=sys.stderr, flush=True)
 
+            # Footer logo URL (separate logo for PDF footer)
+            company_columns = [col['name'] for col in inspector.get_columns("companysettings")]
+            if "footer_logo_url" not in company_columns:
+                print("Adding footer_logo_url column to companysettings table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text('ALTER TABLE companysettings ADD COLUMN footer_logo_url VARCHAR(2048)'))
+                    print("Added footer_logo_url column to companysettings table", file=sys.stderr, flush=True)
+                except Exception as col_error:
+                    error_str = str(col_error).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Warning: Could not add footer_logo_url column: {col_error}", file=sys.stderr, flush=True)
+
             # Bank details (quote/invoice PDFs)
             for col_name, col_sql in [
                 ("bank_name", "VARCHAR(255)"),

@@ -16,6 +16,7 @@ from app.quote_pdf_service import (
     _build_header_flowables,
     _make_footer_canvas_drawer,
     _resolve_logo,
+    _resolve_footer_logo,
     FOOTER_BOTTOM_MARGIN,
 )
 from sqlmodel import Session, select
@@ -50,7 +51,7 @@ def _build_invoice_elements(
     elements: List[Any] = []
 
     styles = getSampleStyleSheet()
-    brand_color = colors.HexColor("#0b3d2e")
+    brand_color = colors.HexColor("#0e4a38")
     title_style = ParagraphStyle(
         "InvoiceTitle",
         parent=styles["Heading1"],
@@ -108,8 +109,11 @@ def _build_invoice_elements(
 
     logo_path: Optional[str] = None
     logo_bytes: Optional[bytes] = None
+    footer_logo_path: Optional[str] = None
+    footer_logo_bytes: Optional[bytes] = None
     if company_settings:
         logo_path, logo_bytes = _resolve_logo(company_settings)
+        footer_logo_path, footer_logo_bytes = _resolve_footer_logo(company_settings)
         customer_number = getattr(customer, "customer_number", None)
         elements.extend(
             _build_header_flowables(
@@ -270,7 +274,7 @@ def _build_invoice_elements(
         elements.append(Paragraph(note_text, note_style))
 
     footer_drawer = (
-        _make_footer_canvas_drawer(company_settings, footer_style, logo_path, logo_bytes)
+        _make_footer_canvas_drawer(company_settings, footer_style, footer_logo_path, footer_logo_bytes)
         if company_settings
         else None
     )

@@ -48,6 +48,7 @@ export default function CompanySettingsPage() {
     website: '',
     logo_filename: 'logo1.jpg',
     logo_url: '',
+    footer_logo_url: '',
     default_terms_and_conditions: '',
     installation_lead_time: '' as InstallationLeadTime | '',
     hourly_install_rate: '',
@@ -88,6 +89,7 @@ export default function CompanySettingsPage() {
         website: response.data.website || '',
         logo_filename: response.data.logo_filename || 'logo1.jpg',
         logo_url: response.data.logo_url || '',
+        footer_logo_url: response.data.footer_logo_url || '',
         default_terms_and_conditions: response.data.default_terms_and_conditions || '',
         installation_lead_time: response.data.installation_lead_time || '',
         hourly_install_rate: response.data.hourly_install_rate != null ? String(response.data.hourly_install_rate) : '',
@@ -165,9 +167,24 @@ export default function CompanySettingsPage() {
       setSaving(true);
       await api.put('/api/settings/company', { logo_url: url || null });
       setSettings((prev) => (prev ? { ...prev, logo_url: url || undefined } : null));
-      toast.success(url ? 'Logo saved' : 'Logo removed');
+      toast.success(url ? 'Header logo saved' : 'Header logo removed');
     } catch (error: any) {
       toast.error(error.response?.data?.detail || 'Failed to save logo');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleFooterLogoChange = async (url: string) => {
+    setFormData((prev) => ({ ...prev, footer_logo_url: url }));
+    if (!settings) return;
+    try {
+      setSaving(true);
+      await api.put('/api/settings/company', { footer_logo_url: url || null });
+      setSettings((prev) => (prev ? { ...prev, footer_logo_url: url || undefined } : null));
+      toast.success(url ? 'Footer logo saved' : 'Footer logo removed');
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || 'Failed to save footer logo');
     } finally {
       setSaving(false);
     }
@@ -453,12 +470,20 @@ export default function CompanySettingsPage() {
               </div>
             </div>
 
-            <ImageUpload
-              label="Company logo (for quote PDFs)"
-              value={formData.logo_url}
-              onChange={handleLogoChange}
-              disabled={saving}
-            />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <ImageUpload
+                label="Header logo (quote/invoice PDFs)"
+                value={formData.logo_url}
+                onChange={handleLogoChange}
+                disabled={saving}
+              />
+              <ImageUpload
+                label="Footer logo (PDF footer)"
+                value={formData.footer_logo_url}
+                onChange={handleFooterLogoChange}
+                disabled={saving}
+              />
+            </div>
 
             <div className="space-y-2 border-t pt-6">
               <Label>Installation lead time</Label>

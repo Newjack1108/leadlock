@@ -250,7 +250,7 @@ def generate_products_spec_sheets_pdf(
 
     elements: List[Any] = []
     styles = getSampleStyleSheet()
-    brand_color = colors.HexColor("#0b3d2e")
+    brand_color = colors.HexColor("#0e4a38")
     heading_style = ParagraphStyle(
         "SpecHeading",
         parent=styles["Heading2"],

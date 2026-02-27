@@ -149,7 +149,7 @@ def _build_header_flowables(
     return result
 
 
-FOOTER_BOTTOM_MARGIN = 35 * mm  # Space for footer on every page
+FOOTER_BOTTOM_MARGIN = 45 * mm  # Space for footer on every page (logo + text + padding)
 
 
 def _resolve_logo_path_for_canvas(
@@ -417,6 +417,53 @@ def _resolve_logo(company_settings: CompanySettings) -> Tuple[Optional[str], Opt
     return (None, None)
 
 
+def _resolve_footer_logo(company_settings: CompanySettings) -> Tuple[Optional[str], Optional[bytes]]:
+    """Resolve footer logo: use footer_logo_url if set, otherwise fall back to header logo."""
+    footer_url = (getattr(company_settings, "footer_logo_url", None) or "").strip()
+    JPEG_MAGIC = b"\xff\xd8\xff"
+    PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+
+    if footer_url:
+        if footer_url.startswith("http://") or footer_url.startswith("https://"):
+            urls_to_try = (
+                [_force_cloudinary_format(footer_url, "png"), footer_url]
+                if "res.cloudinary.com" in footer_url
+                else [footer_url]
+            )
+            seen = set()
+            for fetch_url in urls_to_try:
+                if fetch_url in seen:
+                    continue
+                seen.add(fetch_url)
+                try:
+                    req = urllib.request.Request(
+                        fetch_url,
+                        headers={"User-Agent": "LeadLock-API/1.0 (Quote PDF)"},
+                    )
+                    with urllib.request.urlopen(req, timeout=15) as response:
+                        data = response.read()
+                    if not data or len(data) < 50:
+                        continue
+                    if data.startswith(JPEG_MAGIC) or data.startswith(PNG_MAGIC):
+                        return (None, data)
+                    converted = _ensure_png_or_jpeg_bytes(data)
+                    if converted:
+                        return (None, converted)
+                except Exception:
+                    pass
+        elif footer_url.startswith("/static/"):
+            static_base = Path(__file__).parent.parent
+            local_path = static_base / footer_url.lstrip("/")
+            if local_path.exists():
+                try:
+                    with open(local_path, "rb") as f:
+                        return (None, f.read())
+                except Exception:
+                    pass
+
+    return _resolve_logo(company_settings)
+
+
 def generate_quote_pdf(
     quote: Quote,
     customer: Customer,
@@ -459,7 +506,7 @@ def generate_quote_pdf(
     
     # Define styles
     styles = getSampleStyleSheet()
-    brand_color = colors.HexColor("#0b3d2e")
+    brand_color = colors.HexColor("#0e4a38")
     title_style = ParagraphStyle(
         "CustomTitle",
         parent=styles["Heading1"],
@@ -514,11 +561,14 @@ def generate_quote_pdf(
         spaceAfter=3,
     )
 
-    # Header - Company Info with Logo
+    # Header - Company Info with Logo; Footer - separate logo if footer_logo_url set
     logo_path: Optional[str] = None
     logo_bytes: Optional[bytes] = None
+    footer_logo_path: Optional[str] = None
+    footer_logo_bytes: Optional[bytes] = None
     if company_settings:
         logo_path, logo_bytes = _resolve_logo(company_settings)
+        footer_logo_path, footer_logo_bytes = _resolve_footer_logo(company_settings)
         elements.extend(_build_header_flowables(company_settings, logo_path, logo_bytes, normal_style, company_name_style, customer.customer_number))
 
     # Quote Title and Details Section
@@ -686,7 +736,7 @@ def generate_quote_pdf(
 
     # Footer drawn on every page via onFirstPage/onLaterPages (not flowables)
     footer_drawer = (
-        _make_footer_canvas_drawer(company_settings, footer_style, logo_path, logo_bytes)
+        _make_footer_canvas_drawer(company_settings, footer_style, footer_logo_path, footer_logo_bytes)
         if company_settings
         else None
     )
