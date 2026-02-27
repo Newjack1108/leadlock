@@ -42,7 +42,10 @@ export default function UserSettingsPage() {
   const fetchSettings = async () => {
     try {
       setLoading(true);
-      const response = await getUserEmailSettings();
+      const [response, logoResult] = await Promise.all([
+        getUserEmailSettings(),
+        getPublicCompanyLogo().catch(() => ({ logo_url: null as string | null })),
+      ]);
       setSettings(response);
       setEmailFormData({
         smtp_host: response.smtp_host || '',
@@ -59,7 +62,18 @@ export default function UserSettingsPage() {
         imap_use_ssl: response.imap_use_ssl ?? true,
         email_test_mode: response.email_test_mode ?? false,
       });
-      setSignature(response.email_signature || '');
+      let sig = response.email_signature || '';
+      // Replace broken relative logo paths with resolved company logo URL (same as PDF)
+      const logoUrl = logoResult?.logo_url ?? (typeof window !== 'undefined'
+        ? `${window.location.origin}/logo1.jpg`
+        : null);
+      if (logoUrl) {
+        sig = sig.replace(
+          /src=["']\/?(?:logo1\.(?:jpg|png)|logo\.png)["']/gi,
+          `src="${logoUrl}"`
+        );
+      }
+      setSignature(sig);
     } catch (error: any) {
       if (error.response?.status === 401) {
         router.push('/login');
