@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import {
   Dialog,
   DialogContent,
@@ -43,6 +44,7 @@ export default function SendQuoteEmailDialog({
   onSuccess,
 }: SendQuoteEmailDialogProps) {
   const [loading, setLoading] = useState(false);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [successResponse, setSuccessResponse] = useState<QuoteEmailSendResponse | null>(null);
   const [templates, setTemplates] = useState<QuoteTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | undefined>(undefined);
@@ -65,11 +67,16 @@ export default function SendQuoteEmailDialog({
       });
       setSelectedTemplateId(undefined);
       const fetchTemplates = async () => {
+        setLoadingTemplates(true);
         try {
           const data = await getQuoteTemplates();
           setTemplates(data);
-        } catch {
+        } catch (error) {
           setTemplates([]);
+          toast.error('Failed to load quote templates');
+          console.error('Quote templates fetch error:', error);
+        } finally {
+          setLoadingTemplates(false);
         }
       };
       fetchTemplates();
@@ -201,6 +208,7 @@ export default function SendQuoteEmailDialog({
             <Select
               value={selectedTemplateId?.toString() || 'default'}
               onValueChange={(value) => setSelectedTemplateId(value === 'default' ? undefined : parseInt(value))}
+              disabled={loadingTemplates}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Select template or use default" />
@@ -214,6 +222,18 @@ export default function SendQuoteEmailDialog({
                 ))}
               </SelectContent>
             </Select>
+            {loadingTemplates && (
+              <p className="text-xs text-muted-foreground">Loading templates...</p>
+            )}
+            {!loadingTemplates && templates.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                No custom templates yet. Create templates in{' '}
+                <Link href="/settings/quote-templates" className="text-primary underline hover:no-underline">
+                  Quote Templates settings
+                </Link>{' '}
+                to customize quote emails.
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">
