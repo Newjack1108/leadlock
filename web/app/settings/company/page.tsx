@@ -50,6 +50,7 @@ export default function CompanySettingsPage() {
     logo_url: '',
     footer_logo_url: '',
     default_terms_and_conditions: '',
+    email_disclaimer: '',
     installation_lead_time: '' as InstallationLeadTime | '',
     hourly_install_rate: '',
     distance_before_overnight_miles: '',
@@ -91,6 +92,7 @@ export default function CompanySettingsPage() {
         logo_url: response.data.logo_url || '',
         footer_logo_url: response.data.footer_logo_url || '',
         default_terms_and_conditions: response.data.default_terms_and_conditions || '',
+        email_disclaimer: response.data.email_disclaimer || '',
         installation_lead_time: response.data.installation_lead_time || '',
         hourly_install_rate: response.data.hourly_install_rate != null ? String(response.data.hourly_install_rate) : '',
         distance_before_overnight_miles: response.data.distance_before_overnight_miles != null ? String(response.data.distance_before_overnight_miles) : '',
@@ -658,6 +660,21 @@ export default function CompanySettingsPage() {
                   </p>
                 </>
               )}
+            </div>
+
+            <div className="space-y-2 border-t pt-6">
+              <Label htmlFor="email_disclaimer">Email disclaimer</Label>
+              <Textarea
+                id="email_disclaimer"
+                value={formData.email_disclaimer}
+                onChange={(e) => setFormData({ ...formData, email_disclaimer: e.target.value })}
+                placeholder="e.g. This email and any attachments are confidential. If you are not the intended recipient, please delete it immediately."
+                rows={4}
+                disabled={saving}
+              />
+              <p className="text-sm text-muted-foreground">
+                Appended to all outgoing emails (quotes, orders, compose, replies). HTML supported. Leave blank for no disclaimer.
+              </p>
             </div>
 
             <div className="flex justify-end pt-4">

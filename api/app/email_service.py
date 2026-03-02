@@ -1,6 +1,7 @@
 """
 Email service for sending and receiving emails via SMTP and IMAP.
 """
+import re
 import smtplib
 import imaplib
 import email
@@ -16,6 +17,75 @@ import uuid
 from dotenv import load_dotenv
 
 load_dotenv()
+
+
+def _html_to_plain(html: str) -> str:
+    """Convert HTML to plain text by stripping tags and normalizing whitespace."""
+    if not html or not html.strip():
+        return ""
+    text = re.sub(r"<[^>]+>", " ", html)
+    text = re.sub(r"\s+", " ", text)
+    return text.strip()
+
+
+def _append_signature_and_disclaimer(
+    body_html: Optional[str],
+    body_text: Optional[str],
+    user_id: Optional[int],
+) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Append user signature and company disclaimer to email body.
+    Order: [body] -> [signature] -> [disclaimer]
+    """
+    if not user_id:
+        return body_html, body_text
+
+    try:
+        from sqlmodel import Session, select
+        from app.database import engine
+        from app.models import User, CompanySettings
+
+        with Session(engine) as session:
+            user = session.exec(select(User).where(User.id == user_id)).first()
+            company = session.exec(select(CompanySettings).limit(1)).first()
+
+            signature = (user.email_signature or "").strip() if user else ""
+            disclaimer = (getattr(company, "email_disclaimer", None) or "").strip() if company else ""
+
+            if not signature and not disclaimer:
+                return body_html, body_text
+
+            footer_html_parts = []
+            footer_text_parts = []
+
+            if signature:
+                footer_html_parts.append(signature)
+                footer_text_parts.append(_html_to_plain(signature))
+            if disclaimer:
+                footer_html_parts.append(disclaimer)
+                footer_text_parts.append(_html_to_plain(disclaimer))
+
+            if not footer_html_parts:
+                return body_html, body_text
+
+            footer_html = "<br><br>".join(footer_html_parts)
+            footer_text = "\n\n".join(footer_text_parts)
+
+            sep_html = '<br><br>' if (body_html or "").strip() else ''
+            out_html = (body_html or "") + sep_html + footer_html
+
+            if body_text is not None:
+                sep_text = '\n\n' if body_text.strip() else ''
+                out_text = body_text + sep_text + footer_text
+            else:
+                out_text = None
+
+            return out_html or None, out_text
+
+    except Exception as e:
+        import sys
+        print(f"Error appending signature/disclaimer: {e}", file=sys.stderr, flush=True)
+        return body_html, body_text
 
 
 def get_smtp_config(user_id: Optional[int] = None) -> Dict:
@@ -186,7 +256,10 @@ def send_email(
     # Normal mode: Send via SMTP
     if not config["user"] or not config["password"]:
         return False, None, "SMTP credentials not configured"
-    
+
+    # Append user signature and company disclaimer to all outgoing emails
+    body_html, body_text = _append_signature_and_disclaimer(body_html, body_text, user_id)
+
     try:
         # Create message
         msg = MIMEMultipart("alternative")

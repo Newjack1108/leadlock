@@ -189,26 +189,15 @@ export default function ComposeEmailDialog({
 
     setLoading(true);
     try {
-      // Combine body and signature (signature is HTML, so append properly)
-      let bodyWithSignature = formData.body;
-      if (signature) {
-        // If body ends with HTML, append signature. Otherwise add line break.
-        if (formData.body.trim().endsWith('</p>') || formData.body.trim().endsWith('</div>')) {
-          bodyWithSignature = `${formData.body}\n${signature}`;
-        } else {
-          bodyWithSignature = `${formData.body}\n\n${signature}`;
-        }
-      }
-
-      // Send email (axios already has 30s timeout configured)
+      // Signature and disclaimer are appended by the backend for all outgoing emails
       await sendEmail(
         {
           customer_id: customer.id,
           to_email: formData.to_email,
           cc: formData.cc || undefined,
           subject: formData.subject,
-          body_html: bodyWithSignature,
-          body_text: bodyWithSignature, // Use same content for plain text fallback
+          body_html: formData.body,
+          body_text: formData.body, // Plain text fallback
           template_id: selectedTemplateId,
         },
         attachments.length > 0 ? attachments : undefined
