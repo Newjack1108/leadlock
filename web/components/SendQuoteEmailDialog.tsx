@@ -34,6 +34,7 @@ interface SendQuoteEmailDialogProps {
   quoteId: number;
   customer: Customer;
   onSuccess?: () => void;
+  variant?: 'quote' | 'order';
 }
 
 export default function SendQuoteEmailDialog({
@@ -42,7 +43,9 @@ export default function SendQuoteEmailDialog({
   quoteId,
   customer,
   onSuccess,
+  variant = 'quote',
 }: SendQuoteEmailDialogProps) {
+  const docLabel = variant === 'order' ? 'order' : 'quote';
   const [loading, setLoading] = useState(false);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [successResponse, setSuccessResponse] = useState<QuoteEmailSendResponse | null>(null);
@@ -108,7 +111,7 @@ export default function SendQuoteEmailDialog({
         template_id: selectedTemplateId,
       });
       setLoading(false);
-      toast.success('Quote email sent successfully');
+      toast.success(`${docLabel.charAt(0).toUpperCase() + docLabel.slice(1)} email sent successfully`);
       if (response.view_url) {
         setSuccessResponse(response);
       } else {
@@ -117,7 +120,7 @@ export default function SendQuoteEmailDialog({
       }
     } catch (error: any) {
       const detail = error.response?.data?.detail;
-      let errorMessage = 'Failed to send quote email';
+      let errorMessage = `Failed to send ${docLabel} email`;
       if (typeof detail === 'string') {
         errorMessage = detail;
       } else if (Array.isArray(detail) && detail.length > 0) {
@@ -149,7 +152,7 @@ export default function SendQuoteEmailDialog({
       <Dialog open={open} onOpenChange={handleClose}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Quote email sent</DialogTitle>
+            <DialogTitle>{docLabel.charAt(0).toUpperCase() + docLabel.slice(1)} email sent</DialogTitle>
             <DialogDescription>
               {successResponse.test_mode
                 ? 'Test mode: no email was sent. Use the link below to test the customer quote view and open tracking.'
@@ -196,9 +199,9 @@ export default function SendQuoteEmailDialog({
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Send Quote via Email</DialogTitle>
+          <DialogTitle>Send {docLabel.charAt(0).toUpperCase() + docLabel.slice(1)} via Email</DialogTitle>
           <DialogDescription>
-            Send this quote to the customer with a PDF attachment. Select a template or use the default.
+            Send this {docLabel} to the customer with a PDF attachment. Select a template or use the default.
           </DialogDescription>
         </DialogHeader>
 
@@ -302,7 +305,7 @@ export default function SendQuoteEmailDialog({
               Download PDF
             </Button>
             <Button type="submit" disabled={loading || !formData.to_email}>
-              {loading ? 'Sending...' : 'Send Quote Email'}
+              {loading ? 'Sending...' : `Send ${docLabel.charAt(0).toUpperCase() + docLabel.slice(1)} Email`}
             </Button>
           </DialogFooter>
         </form>

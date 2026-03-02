@@ -303,7 +303,7 @@ export default function OrderDetailPage() {
                 disabled={!customer}
               >
                 <Mail className="h-4 w-4 mr-2" />
-                Send Quote
+                Send Order
               </Button>
               <Button variant="outline" asChild>
                 <Link href={`/quotes/${order.quote_id}`}>
@@ -694,6 +694,7 @@ export default function OrderDetailPage() {
           quoteId={order.quote_id}
           customer={customer}
           onSuccess={fetchOrder}
+          variant="order"
         />
       )}
     </div>
