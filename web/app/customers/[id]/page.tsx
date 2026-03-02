@@ -272,7 +272,12 @@ export default function CustomerDetailPage() {
           <Button variant="ghost" onClick={() => router.push('/customers')} className="mb-4">
             ← Back to Customers
           </Button>
-          <h1 className="text-3xl font-semibold">{customer.name}</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-3xl font-semibold">{customer.name}</h1>
+            {customer.source_system === 'Ninox' && (
+              <Badge variant="secondary" className="font-normal">Ninox</Badge>
+            )}
+          </div>
         </div>
 
         <div className="space-y-6">

@@ -123,7 +123,16 @@ export default function CustomersPage() {
                       <td className="p-3 text-muted-foreground font-mono text-sm">
                         {customer.customer_number}
                       </td>
-                      <td className="p-3 font-semibold">{customer.name}</td>
+                      <td className="p-3 font-semibold">
+                        <span className="inline-flex items-center gap-1.5">
+                          {customer.name}
+                          {customer.source_system === 'Ninox' && (
+                            <span className="inline-flex px-1.5 py-0.5 rounded text-xs font-medium bg-muted text-muted-foreground">
+                              Ninox
+                            </span>
+                          )}
+                        </span>
+                      </td>
                       <td className="p-3 text-muted-foreground">
                         {customer.email || '—'}
                       </td>

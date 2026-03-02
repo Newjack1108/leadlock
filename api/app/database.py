@@ -161,6 +161,16 @@ def create_db_and_tables():
                     error_str = str(e).lower()
                     if "already exists" not in error_str and "duplicate" not in error_str:
                         print(f"Error adding messenger_psid to customer: {e}", file=sys.stderr, flush=True)
+            if "source_system" not in customer_columns:
+                print("Adding source_system column to customer table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE customer ADD COLUMN source_system VARCHAR(50)"))
+                    print("Added source_system column to customer table", file=sys.stderr, flush=True)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str:
+                        print(f"Error adding source_system to customer: {e}", file=sys.stderr, flush=True)
         if has_lead_table:
             lead_columns = [col['name'] for col in inspector.get_columns("lead")]
             if "messenger_psid" not in lead_columns:

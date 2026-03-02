@@ -125,7 +125,9 @@ def enrich_lead_response(lead: Lead, session: Session, current_user: User) -> Le
             country=customer.country,
             customer_since=customer.customer_since,
             created_at=customer.created_at,
-            updated_at=customer.updated_at
+            updated_at=customer.updated_at,
+            messenger_psid=customer.messenger_psid,
+            source_system=customer.source_system,
         )
     
     return LeadResponse(
@@ -546,5 +548,7 @@ async def get_lead_customer(
         country=customer.country,
         customer_since=customer.customer_since,
         created_at=customer.created_at,
-        updated_at=customer.updated_at
+        updated_at=customer.updated_at,
+        messenger_psid=customer.messenger_psid,
+        source_system=customer.source_system,
     )

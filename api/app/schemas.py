@@ -131,6 +131,7 @@ class CustomerResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     messenger_psid: Optional[str] = None
+    source_system: Optional[str] = None
 
 
 class WebsiteVisitResponse(BaseModel):

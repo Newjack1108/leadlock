@@ -50,6 +50,7 @@ export enum LeadSource {
   INSTAGRAM = "INSTAGRAM",
   WEBSITE = "WEBSITE",
   MANUAL_ENTRY = "MANUAL_ENTRY",
+  NINOX = "NINOX",
   SMS = "SMS",
   EMAIL = "EMAIL",
   PHONE = "PHONE",
@@ -128,6 +129,7 @@ export interface Customer {
   created_at: string;
   updated_at: string;
   messenger_psid?: string | null;
+  source_system?: string | null;
 }
 
 export interface Lead {

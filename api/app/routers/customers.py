@@ -73,6 +73,7 @@ async def get_customers(
             created_at=customer.created_at,
             updated_at=customer.updated_at,
             messenger_psid=customer.messenger_psid,
+            source_system=customer.source_system,
         )
         for customer in customers
     ]
@@ -234,6 +235,7 @@ async def update_customer(
         created_at=customer.created_at,
         updated_at=customer.updated_at,
         messenger_psid=customer.messenger_psid,
+        source_system=customer.source_system,
     )
 
 

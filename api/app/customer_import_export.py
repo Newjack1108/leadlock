@@ -183,6 +183,7 @@ def import_customers_from_csv(
                 phone=phone,
                 postcode=postcode,
                 updated_at=last_modified or datetime.utcnow(),
+                source_system="Ninox",
             )
             session.add(customer)
             session.flush()
@@ -194,7 +195,7 @@ def import_customers_from_csv(
                 postcode=postcode,
                 status=LeadStatus.QUALIFIED,
                 lead_type=product_type,
-                lead_source=LeadSource.MANUAL_ENTRY,
+                lead_source=LeadSource.NINOX,
                 customer_id=customer.id,
             )
             session.add(lead)

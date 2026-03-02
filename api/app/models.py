@@ -65,6 +65,7 @@ class LeadSource(str, Enum):
     INSTAGRAM = "INSTAGRAM"
     WEBSITE = "WEBSITE"
     MANUAL_ENTRY = "MANUAL_ENTRY"
+    NINOX = "NINOX"
     SMS = "SMS"
     EMAIL = "EMAIL"
     PHONE = "PHONE"
@@ -124,6 +125,7 @@ class Customer(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     messenger_psid: Optional[str] = Field(default=None, unique=True, index=True)  # Facebook Page-Scoped ID for Messenger
+    source_system: Optional[str] = None  # e.g. "Ninox" for CSV imports from old system
     
     # Relationships
     leads: List["Lead"] = Relationship(back_populates="customer")

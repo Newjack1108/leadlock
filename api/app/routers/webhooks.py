@@ -139,7 +139,9 @@ async def create_lead_webhook(
                     country=customer.country,
                     customer_since=customer.customer_since,
                     created_at=customer.created_at,
-                    updated_at=customer.updated_at
+                    updated_at=customer.updated_at,
+                    messenger_psid=customer.messenger_psid,
+                    source_system=customer.source_system,
                 )
         
         return LeadResponse(
