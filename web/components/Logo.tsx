@@ -44,21 +44,21 @@ export default function Logo() {
 
   if (imgSrc === null) {
     return (
-      <Link href="/dashboard" className="flex items-center cursor-pointer hover:opacity-80 transition-opacity">
-        <div className="relative h-32 w-auto flex-shrink-0 animate-pulse bg-muted rounded" style={{ minWidth: '120px' }} />
+      <Link href="/dashboard" className="flex items-center cursor-pointer hover:opacity-80 transition-opacity py-2">
+        <div className="relative h-20 w-auto flex-shrink-0 animate-pulse bg-muted rounded" style={{ minWidth: '80px' }} />
       </Link>
     );
   }
 
   return (
-    <Link href="/dashboard" className="flex items-center cursor-pointer hover:opacity-80 transition-opacity">
+    <Link href="/dashboard" className="flex items-center cursor-pointer hover:opacity-80 transition-opacity py-2">
       {/* Logo Image - using regular img tag for reliability */}
-      <div className="relative h-32 w-auto flex-shrink-0">
+      <div className="relative h-20 w-auto flex-shrink-0">
         <img
           src={imgSrc}
           alt="LeadLock Logo"
-          className="h-32 w-auto object-contain"
-          style={{ maxWidth: '600px' }}
+          className="h-20 w-auto object-contain"
+          style={{ maxWidth: '380px' }}
           onLoad={handleImageLoad}
           onError={handleImageError}
         />
