@@ -600,6 +600,34 @@ export interface EmailTemplatePreviewResponse {
   body_html: string;
 }
 
+export interface QuoteTemplate {
+  id: number;
+  name: string;
+  description?: string;
+  email_subject_template: string;
+  email_body_template: string;
+  is_default: boolean;
+  created_by_id: number;
+  created_at: string;
+  created_by_name?: string;
+}
+
+export interface QuoteTemplateCreate {
+  name: string;
+  description?: string;
+  email_subject_template: string;
+  email_body_template: string;
+  is_default?: boolean;
+}
+
+export interface QuoteTemplateUpdate {
+  name?: string;
+  description?: string;
+  email_subject_template?: string;
+  email_body_template?: string;
+  is_default?: boolean;
+}
+
 export enum QuoteStatus {
   DRAFT = "DRAFT",
   SENT = "SENT",

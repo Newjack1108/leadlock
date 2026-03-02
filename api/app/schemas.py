@@ -303,6 +303,43 @@ class EmailTemplatePreviewResponse(BaseModel):
     body_html: str
 
 
+class QuoteTemplateCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    email_subject_template: str
+    email_body_template: str
+    is_default: Optional[bool] = False
+
+
+class QuoteTemplateUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    email_subject_template: Optional[str] = None
+    email_body_template: Optional[str] = None
+    is_default: Optional[bool] = None
+
+
+class QuoteTemplateResponse(BaseModel):
+    id: int
+    name: str
+    description: Optional[str]
+    email_subject_template: str
+    email_body_template: str
+    is_default: bool
+    created_by_id: int
+    created_at: datetime
+    created_by_name: Optional[str] = None
+
+
+class QuoteTemplatePreviewRequest(BaseModel):
+    quote_id: Optional[int] = None  # If provided, use real quote/customer; otherwise use sample
+
+
+class QuoteTemplatePreviewResponse(BaseModel):
+    subject: str
+    body_html: str
+
+
 class QuoteEmailSendRequest(BaseModel):
     template_id: Optional[int] = None  # QuoteTemplate ID, None for default
     to_email: str

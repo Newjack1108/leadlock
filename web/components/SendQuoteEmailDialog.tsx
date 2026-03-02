@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { sendQuoteEmail, previewQuotePdf } from '@/lib/api';
+import { sendQuoteEmail, previewQuotePdf, getQuoteTemplates } from '@/lib/api';
 import { QuoteEmailSendRequest, QuoteEmailSendResponse, Customer } from '@/lib/types';
 import { toast } from 'sonner';
 import { Eye, ExternalLink, Copy } from 'lucide-react';
@@ -53,7 +53,7 @@ export default function SendQuoteEmailDialog({
     custom_message: '',
   });
 
-  // Reset form and success state when dialog opens
+  // Fetch templates and reset form when dialog opens
   useEffect(() => {
     if (open) {
       setSuccessResponse(null);
@@ -64,7 +64,15 @@ export default function SendQuoteEmailDialog({
         custom_message: '',
       });
       setSelectedTemplateId(undefined);
-      setTemplates([]);
+      const fetchTemplates = async () => {
+        try {
+          const data = await getQuoteTemplates();
+          setTemplates(data);
+        } catch {
+          setTemplates([]);
+        }
+      };
+      fetchTemplates();
     }
   }, [open, customer]);
 

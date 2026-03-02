@@ -240,6 +240,12 @@ export default function Header() {
                       Email Templates
                     </DropdownMenuItem>
                   </Link>
+                  <Link href="/settings/quote-templates">
+                    <DropdownMenuItem className="cursor-pointer">
+                      <FileText className="h-4 w-4 mr-2" />
+                      Quote Templates
+                    </DropdownMenuItem>
+                  </Link>
                   <Link href="/settings/sms-templates">
                     <DropdownMenuItem className="cursor-pointer">
                       <MessageSquare className="h-4 w-4 mr-2" />

@@ -1,13 +1,46 @@
 """
 Service for sending quote emails (link only; customer downloads/prints from tracked view).
 """
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Dict, Any
+from datetime import datetime
 from jinja2 import Template
 from sqlmodel import Session, select
 from app.models import Quote, QuoteTemplate, Customer, CompanySettings
 from app.email_service import send_email
 from app.constants import VAT_RATE_DECIMAL
 from decimal import Decimal
+
+
+def get_sample_quote_preview_data() -> Dict[str, Any]:
+    """Get sample quote, customer, company data for template preview."""
+    # Use simple objects for template rendering (Jinja2 accesses attributes)
+    class SampleQuote:
+        quote_number = "QT-2024-001"
+        total_amount = Decimal("1500.00")
+        currency = "GBP"
+        valid_until = datetime(2025, 3, 15, 12, 0, 0)
+
+    class SampleCustomer:
+        name = "John Doe"
+        email = "john.doe@example.com"
+        phone = "+44 1234 567890"
+
+    class SampleCompany:
+        company_name = "LeadLock CRM"
+
+    currency_symbol = "£"
+    vat_amount = Decimal("300.00")
+    total_amount_inc_vat = Decimal("1800.00")
+
+    return {
+        "quote": SampleQuote(),
+        "customer": SampleCustomer(),
+        "company_settings": SampleCompany(),
+        "custom_message": "Thank you for your interest. Please review the quote at your convenience.",
+        "currency_symbol": currency_symbol,
+        "vat_amount": vat_amount,
+        "total_amount_inc_vat": total_amount_inc_vat,
+    }
 
 
 def get_default_email_template() -> Tuple[str, str]:

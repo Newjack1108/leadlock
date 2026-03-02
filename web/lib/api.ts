@@ -337,6 +337,51 @@ export const previewEmailTemplate = async (templateId: number, previewData?: {
   return response.data;
 };
 
+// Quote Template API functions
+export const getQuoteTemplates = async () => {
+  const response = await api.get('/api/quote-templates');
+  return response.data;
+};
+
+export const getQuoteTemplate = async (templateId: number) => {
+  const response = await api.get(`/api/quote-templates/${templateId}`);
+  return response.data;
+};
+
+export const createQuoteTemplate = async (templateData: {
+  name: string;
+  description?: string;
+  email_subject_template: string;
+  email_body_template: string;
+  is_default?: boolean;
+}) => {
+  const response = await api.post('/api/quote-templates', templateData);
+  return response.data;
+};
+
+export const updateQuoteTemplate = async (templateId: number, templateData: {
+  name?: string;
+  description?: string;
+  email_subject_template?: string;
+  email_body_template?: string;
+  is_default?: boolean;
+}) => {
+  const response = await api.put(`/api/quote-templates/${templateId}`, templateData);
+  return response.data;
+};
+
+export const deleteQuoteTemplate = async (templateId: number) => {
+  const response = await api.delete(`/api/quote-templates/${templateId}`);
+  return response.data;
+};
+
+export const previewQuoteTemplate = async (templateId: number, previewData?: {
+  quote_id?: number;
+}) => {
+  const response = await api.post(`/api/quote-templates/${templateId}/preview`, previewData || {});
+  return response.data;
+};
+
 // User Email Settings API functions
 export const getUserEmailSettings = async () => {
   const response = await api.get('/api/settings/user/email');
