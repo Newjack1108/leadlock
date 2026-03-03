@@ -208,6 +208,39 @@ export const getSmsTemplate = async (templateId: number) => {
   return response.data;
 };
 
+// Sales Documents API functions
+export const getSalesDocuments = async (category?: string): Promise<import('@/lib/types').SalesDocument[]> => {
+  const params = category ? { category } : {};
+  const response = await api.get('/api/sales-documents', { params });
+  return response.data;
+};
+
+export const uploadSalesDocument = async (file: File, name: string, category?: string) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('name', name);
+  if (category) formData.append('category', category);
+  const response = await api.post('/api/sales-documents', formData, {
+    transformRequest: [(data: unknown, headers?: Record<string, unknown>) => {
+      if (data instanceof FormData && headers) delete (headers as Record<string, unknown>)['Content-Type'];
+      return data;
+    }],
+  });
+  return response.data;
+};
+
+export const downloadSalesDocument = async (id: number): Promise<Blob> => {
+  const response = await api.get(`/api/sales-documents/${id}/download`, {
+    responseType: 'blob',
+  });
+  return response.data;
+};
+
+export const deleteSalesDocument = async (id: number) => {
+  const response = await api.delete(`/api/sales-documents/${id}`);
+  return response.data;
+};
+
 export const createSmsTemplate = async (data: {
   name: string;
   description?: string;

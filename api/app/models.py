@@ -242,6 +242,19 @@ class SmsMessage(SQLModel, table=True):
     created_by: Optional["User"] = Relationship()
 
 
+class SalesDocument(SQLModel, table=True):
+    """Reusable sales documents (price lists, spec sheets) for attaching to emails."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str  # Display name (e.g. "2024 Price List")
+    filename: str  # Original/stored filename
+    file_path: str  # Path on disk or cloud URL
+    content_type: Optional[str] = None  # application/pdf, etc.
+    file_size: Optional[int] = None
+    category: Optional[str] = None  # e.g. "Price List", "Spec Sheet"
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_by_id: Optional[int] = Field(default=None, foreign_key="user.id")
+
+
 class MessengerDirection(str, Enum):
     SENT = "SENT"
     RECEIVED = "RECEIVED"

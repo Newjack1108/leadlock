@@ -266,6 +266,16 @@ class SmsTemplatePreviewResponse(BaseModel):
     body: str
 
 
+class SalesDocumentResponse(BaseModel):
+    id: int
+    name: str
+    filename: str
+    content_type: Optional[str] = None
+    file_size: Optional[int] = None
+    category: Optional[str] = None
+    created_at: Optional[str] = None
+
+
 class EmailTemplateCreate(BaseModel):
     name: str
     description: Optional[str] = None
@@ -929,7 +939,7 @@ class QuoteUpdate(BaseModel):
 
 class QuoteResponse(BaseModel):
     id: int
-    customer_id: int
+    customer_id: Optional[int] = None
     customer_name: Optional[str] = None
     quote_number: str
     version: int

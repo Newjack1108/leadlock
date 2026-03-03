@@ -117,7 +117,7 @@ export default function CreateQuoteDialog({
           ...newItems[index],
           product_id: product.id,
           description: product.name,
-          unit_price: Number(product.base_price),
+          unit_price: Math.round(Number(product.base_price) * 100) / 100,
           is_custom: false,
         };
         setItems(newItems);
@@ -146,7 +146,7 @@ export default function CreateQuoteDialog({
       product_id: extra.id,
       description: extra.name,
       quantity,
-      unit_price: Number(extra.base_price),
+      unit_price: Math.round(Number(extra.base_price) * 100) / 100,
       is_custom: false,
       sort_order: parentIndex + 1,
       parent_index: parentIndex,
@@ -382,7 +382,7 @@ export default function CreateQuoteDialog({
                         step="0.01"
                         min="0"
                         value={item.unit_price}
-                        onChange={(e) => updateItem(index, 'unit_price', parseFloat(e.target.value) || 0)}
+                        onChange={(e) => updateItem(index, 'unit_price', Math.round((parseFloat(e.target.value) || 0) * 100) / 100)}
                         required
                       />
                     </div>

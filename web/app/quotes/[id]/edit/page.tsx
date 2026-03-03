@@ -82,7 +82,7 @@ function quoteItemsToFormItems(items: QuoteItem[]): QuoteItemCreate[] {
     product_id: item.product_id ?? undefined,
     description: item.description,
     quantity: Number(item.quantity),
-    unit_price: Number(item.unit_price),
+    unit_price: Math.round(Number(item.unit_price) * 100) / 100,
     is_custom: item.is_custom ?? false,
     sort_order: item.sort_order ?? 0,
     parent_index: item.parent_quote_item_id != null ? idToIndex[item.parent_quote_item_id] : undefined,
@@ -256,7 +256,7 @@ function EditQuoteContent() {
           ...newItems[index],
           product_id: product.id,
           description: product.name,
-          unit_price: Number(product.base_price),
+          unit_price: Math.round(Number(product.base_price) * 100) / 100,
           is_custom: false,
         };
         setItems(newItems);
@@ -285,7 +285,7 @@ function EditQuoteContent() {
       product_id: extra.id,
       description: extra.name,
       quantity,
-      unit_price: Number(extra.base_price),
+      unit_price: Math.round(Number(extra.base_price) * 100) / 100,
       is_custom: false,
       sort_order: parentIndex + 1,
       parent_index: parentIndex,
@@ -352,7 +352,7 @@ function EditQuoteContent() {
     newItems.push({
       description: DELIVERY_INSTALL_LEGACY_DESCRIPTION,
       quantity: 1,
-      unit_price: totalCost,
+      unit_price: Math.round(totalCost * 100) / 100,
       is_custom: true,
       sort_order: items.length,
       line_type: 'DELIVERY',
@@ -440,8 +440,15 @@ function EditQuoteContent() {
       toast.success('Draft quote updated');
       router.push(`/quotes/${quoteId}`);
     } catch (error: any) {
+      const detail = error.response?.data?.detail;
       const msg =
-        error.response?.data?.detail || error.message || 'Failed to update draft quote';
+        typeof detail === 'string'
+          ? detail
+          : Array.isArray(detail)
+            ? detail.map((e: { msg?: string }) => e?.msg || JSON.stringify(e)).join('; ')
+            : detail
+              ? String(detail)
+              : error.message || 'Failed to update draft quote';
       toast.error(msg);
       console.error('Update draft error:', error);
     } finally {
@@ -607,7 +614,7 @@ function EditQuoteContent() {
                           min="0"
                           value={item.unit_price}
                           onChange={(e) =>
-                            updateItem(index, 'unit_price', parseFloat(e.target.value) || 0)
+                            updateItem(index, 'unit_price', Math.round((parseFloat(e.target.value) || 0) * 100) / 100)
                           }
                           required
                         />

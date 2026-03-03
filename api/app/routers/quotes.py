@@ -849,6 +849,30 @@ async def update_draft_quote(
     current_user: User = Depends(get_current_user)
 ):
     """Update a draft quote (items, metadata, discounts). Only allowed when status is DRAFT."""
+    import traceback
+    import sys
+    try:
+        return _update_draft_quote_impl(quote_id, quote_data, session, current_user)
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"update_draft_quote error: {e}", file=sys.stderr, flush=True)
+        print(traceback.format_exc(), file=sys.stderr, flush=True)
+        raise HTTPException(
+            status_code=500,
+            detail=os.getenv("DEBUG", "false").lower() == "true"
+            and str(e)
+            or "Failed to update draft quote. Check server logs for details."
+        )
+
+
+def _update_draft_quote_impl(
+    quote_id: int,
+    quote_data: QuoteDraftUpdate,
+    session: Session,
+    current_user: User
+):
+    """Implementation of update_draft_quote."""
     statement = select(Quote).where(Quote.id == quote_id)
     quote = session.exec(statement).first()
     

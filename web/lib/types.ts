@@ -549,6 +549,16 @@ export interface SmsTemplatePreviewResponse {
   body: string;
 }
 
+export interface SalesDocument {
+  id: number;
+  name: string;
+  filename: string;
+  content_type?: string;
+  file_size?: number;
+  category?: string;
+  created_at?: string;
+}
+
 export interface QuoteEmailSendRequest {
   template_id?: number;
   to_email: string;

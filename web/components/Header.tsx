@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Logo from './Logo';
 import { Button } from '@/components/ui/button';
-import { LogOut, Users, Settings, Package, User, Mail, Bell, FileText, ShoppingCart, ChevronDown, Gift, Send, MessageSquare } from 'lucide-react';
+import { LogOut, Users, Settings, Package, User, Mail, Bell, FileText, ShoppingCart, ChevronDown, Gift, Send, MessageSquare, FolderOpen } from 'lucide-react';
 import api from '@/lib/api';
 import { getStaleSummary, getDiscountRequests, getUnreadSms, getUnreadMessenger } from '@/lib/api';
 import {
@@ -184,6 +184,16 @@ export default function Header() {
                 {reminderCount > 99 ? '99+' : reminderCount}
               </span>
             )}
+          </Link>
+          <Link href="/sales-documents">
+            <Button
+              variant={pathname?.startsWith('/sales-documents') ? 'default' : 'ghost'}
+              size="sm"
+              className={pathname?.startsWith('/sales-documents') ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}
+            >
+              <FolderOpen className="h-4 w-4 mr-2" />
+              Documents
+            </Button>
           </Link>
           <Link href="/discount-requests" className="relative">
             <Button

@@ -228,7 +228,7 @@ function CreateQuoteContent() {
           ...newItems[index],
           product_id: product.id,
           description: product.name,
-          unit_price: Number(product.base_price),
+          unit_price: Math.round(Number(product.base_price) * 100) / 100,
           is_custom: false,
         };
         setItems(newItems);
@@ -257,7 +257,7 @@ function CreateQuoteContent() {
       product_id: extra.id,
       description: extra.name,
       quantity,
-      unit_price: Number(extra.base_price),
+      unit_price: Math.round(Number(extra.base_price) * 100) / 100,
       is_custom: false,
       sort_order: parentIndex + 1,
       parent_index: parentIndex,
@@ -324,7 +324,7 @@ function CreateQuoteContent() {
     newItems.push({
       description: DELIVERY_INSTALL_LEGACY_DESCRIPTION,
       quantity: 1,
-      unit_price: totalCost,
+      unit_price: Math.round(totalCost * 100) / 100,
       is_custom: true,
       sort_order: items.length,
       line_type: 'DELIVERY',
@@ -601,7 +601,7 @@ function CreateQuoteContent() {
                           step="0.01"
                           min="0"
                           value={item.unit_price}
-                          onChange={(e) => updateItem(index, 'unit_price', parseFloat(e.target.value) || 0)}
+                          onChange={(e) => updateItem(index, 'unit_price', Math.round((parseFloat(e.target.value) || 0) * 100) / 100)}
                           required
                         />
                       </div>
