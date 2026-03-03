@@ -650,9 +650,18 @@ export const previewQuotePdf = async (
     responseType: 'blob',
     params,
   });
-  const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
-  window.open(url, '_blank');
-  // Clean up the URL after a delay
+  const blob = new Blob([response.data], { type: 'application/pdf' });
+  const url = window.URL.createObjectURL(blob);
+  const disposition = response.headers['content-disposition'];
+  let filename = 'Quote.pdf';
+  if (disposition) {
+    const match = /filename="?([^";\n]+)"?/.exec(disposition);
+    if (match) filename = match[1].trim();
+  }
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
   setTimeout(() => window.URL.revokeObjectURL(url), 100);
 };
 
