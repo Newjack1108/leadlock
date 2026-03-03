@@ -30,6 +30,7 @@ import {
   Globe,
   ChevronDown,
   ChevronUp,
+  Pencil,
 } from 'lucide-react';
 import api, { getCustomerHistory } from '@/lib/api';
 import { formatDateTime } from '@/lib/utils';
@@ -123,6 +124,8 @@ export default function CustomerDetailPage() {
   const [composeEmailDialogOpen, setComposeEmailDialogOpen] = useState(false);
   const [callNotesDialogOpen, setCallNotesDialogOpen] = useState(false);
   const [historyExpanded, setHistoryExpanded] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [nameBeforeEdit, setNameBeforeEdit] = useState('');
 
   useEffect(() => {
     if (customerId) {
@@ -272,8 +275,50 @@ export default function CustomerDetailPage() {
           <Button variant="ghost" onClick={() => router.push('/customers')} className="mb-4">
             ← Back to Customers
           </Button>
-          <div className="flex items-center gap-2">
-            <h1 className="text-3xl font-semibold">{customer.name}</h1>
+          <div className="flex items-center gap-2 flex-wrap">
+            {editingName ? (
+              <Input
+                className="text-3xl font-semibold h-12 max-w-md"
+                value={customer.name}
+                onChange={(e) => handleFieldChange('name', e.target.value)}
+                onBlur={async (e) => {
+                  const v = e.target.value.trim();
+                  if (v && v !== nameBeforeEdit) {
+                    await handleUpdateCustomer('name', v);
+                  } else if (!v) {
+                    handleFieldChange('name', nameBeforeEdit);
+                  }
+                  setEditingName(false);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.currentTarget.blur();
+                  } else if (e.key === 'Escape') {
+                    handleFieldChange('name', nameBeforeEdit);
+                    setEditingName(false);
+                    (e.target as HTMLInputElement).blur();
+                  }
+                }}
+                autoFocus
+              />
+            ) : (
+              <h1 className="text-3xl font-semibold">{customer.name}</h1>
+            )}
+            {!editingName && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="shrink-0"
+                title="Edit name"
+                onClick={() => {
+                  setNameBeforeEdit(customer.name);
+                  setEditingName(true);
+                }}
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+            )}
             {customer.source_system === 'Ninox' && (
               <Badge variant="secondary" className="font-normal">Ninox</Badge>
             )}
