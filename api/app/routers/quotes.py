@@ -886,7 +886,9 @@ def _update_draft_quote_impl(
         )
     
     # Delete existing items and discounts for this quote
-    existing_items = session.exec(select(QuoteItem).where(QuoteItem.quote_id == quote_id)).all()
+    # Delete children (optional extras) before parents to avoid FK violation on parent_quote_item_id
+    existing_items = list(session.exec(select(QuoteItem).where(QuoteItem.quote_id == quote_id)).all())
+    existing_items.sort(key=lambda i: (0 if i.parent_quote_item_id is not None else 1, i.id or 0))
     for item in existing_items:
         session.delete(item)
     discount_statement = select(QuoteDiscount).where(QuoteDiscount.quote_id == quote_id)
