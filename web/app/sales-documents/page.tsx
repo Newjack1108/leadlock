@@ -58,7 +58,7 @@ export default function SalesDocumentsPage() {
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadName, setUploadName] = useState('');
-  const [uploadCategory, setUploadCategory] = useState<string>('');
+  const [uploadCategory, setUploadCategory] = useState<string>('none');
   const [uploading, setUploading] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
@@ -110,12 +110,12 @@ export default function SalesDocumentsPage() {
     }
     try {
       setUploading(true);
-      await uploadSalesDocument(uploadFile, name, uploadCategory || undefined);
+      await uploadSalesDocument(uploadFile, name, uploadCategory && uploadCategory !== 'none' ? uploadCategory : undefined);
       toast.success('Document uploaded successfully');
       setUploadDialogOpen(false);
       setUploadFile(null);
       setUploadName('');
-      setUploadCategory('');
+      setUploadCategory('none');
       fetchDocuments();
     } catch (error: unknown) {
       const err = error as { response?: { data?: { detail?: string } } };
@@ -350,7 +350,7 @@ export default function SalesDocumentsPage() {
                   <SelectValue placeholder="Select category (optional)" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">None</SelectItem>
+                  <SelectItem value="none">None</SelectItem>
                   {CATEGORIES.map((c) => (
                     <SelectItem key={c} value={c}>
                       {c}
