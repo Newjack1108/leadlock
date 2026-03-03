@@ -315,43 +315,22 @@ function CreateQuoteContent() {
 
   const addDeliveryInstallToQuote = () => {
     if (!deliveryEstimate) return;
-    const deliveryCost =
-      (deliveryEstimate.cost_mileage ?? 0) + (deliveryEstimate.cost_hotel ?? 0) + (deliveryEstimate.cost_meals ?? 0);
-    const installCost = deliveryEstimate.cost_labour ?? 0;
-    if (deliveryCost <= 0 && installCost <= 0) {
+    const totalCost = deliveryEstimate.cost_total ?? 0;
+    if (totalCost <= 0) {
       toast.error('No delivery or installation costs to add');
       return;
     }
     const newItems: QuoteItemCreate[] = [...items];
-    let sortOrder = items.length;
-    if (deliveryCost > 0) {
-      newItems.push({
-        description: DELIVERY_LINE_DESCRIPTION,
-        quantity: 1,
-        unit_price: deliveryCost,
-        is_custom: true,
-        sort_order: sortOrder++,
-        line_type: 'DELIVERY',
-      });
-    }
-    if (installCost > 0) {
-      newItems.push({
-        description: INSTALLATION_LINE_DESCRIPTION,
-        quantity: 1,
-        unit_price: installCost,
-        is_custom: true,
-        sort_order: sortOrder++,
-        line_type: 'INSTALLATION',
-      });
-    }
+    newItems.push({
+      description: DELIVERY_INSTALL_LEGACY_DESCRIPTION,
+      quantity: 1,
+      unit_price: totalCost,
+      is_custom: true,
+      sort_order: items.length,
+      line_type: 'DELIVERY',
+    });
     setItems(newItems.map((it, i) => ({ ...it, sort_order: i })));
-    toast.success(
-      deliveryCost > 0 && installCost > 0
-        ? 'Delivery & Installation added to quote'
-        : deliveryCost > 0
-          ? 'Delivery added to quote'
-          : 'Installation added to quote'
-    );
+    toast.success('Delivery & Installation added to quote');
   };
 
   const removeDeliveryInstallFromQuote = () => {
