@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, select, or_
 from typing import Optional, List
 from app.database import get_session
-from app.models import Customer, User, Activity, Quote, Lead, LeadStatus, QuoteItem, StatusHistory, Email, QuoteEmail, EmailDirection, QuoteStatus, WebsiteVisit
+from app.models import Customer, User, Activity, Quote, Lead, LeadStatus, QuoteItem, StatusHistory, Email, QuoteEmail, EmailDirection, QuoteStatus, WebsiteVisit, Order, OrderItem
 from app.auth import get_current_user
 from app.schemas import (
     CustomerResponse, CustomerUpdate, ActivityCreate, ActivityResponse, QuoteResponse, QuoteItemResponse,
@@ -257,6 +257,50 @@ async def get_customer_quotes(
         item_statement = select(QuoteItem).where(QuoteItem.quote_id == quote.id).order_by(QuoteItem.sort_order)
         quote_items = session.exec(item_statement).all()
         result.append(build_quote_response(quote, list(quote_items), session))
+
+    return result
+
+
+@router.get("/{customer_id}/orders")
+async def get_customer_orders(
+    customer_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    """Get all orders for a customer."""
+    from app.routers.orders import build_order_response
+
+    statement = select(Order).where(Order.customer_id == customer_id).order_by(Order.created_at.desc())
+    orders = session.exec(statement).all()
+
+    result = []
+    for order in orders:
+        items = session.exec(
+            select(OrderItem).where(OrderItem.order_id == order.id).order_by(OrderItem.sort_order)
+        ).all()
+        result.append(build_order_response(order, list(items), session))
+
+    return result
+
+
+@router.get("/{customer_id}/orders")
+async def get_customer_orders(
+    customer_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    """Get all orders for a customer."""
+    from app.routers.orders import build_order_response
+
+    statement = select(Order).where(Order.customer_id == customer_id).order_by(Order.created_at.desc())
+    orders = session.exec(statement).all()
+
+    result = []
+    for order in orders:
+        items = session.exec(
+            select(OrderItem).where(OrderItem.order_id == order.id).order_by(OrderItem.sort_order)
+        ).all()
+        result.append(build_order_response(order, list(items), session))
 
     return result
 

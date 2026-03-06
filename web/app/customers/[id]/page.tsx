@@ -34,7 +34,7 @@ import {
 } from 'lucide-react';
 import api, { getCustomerHistory } from '@/lib/api';
 import { formatDateTime } from '@/lib/utils';
-import { Customer, Activity, ActivityType, Lead, OpportunityStage, CustomerHistoryEvent, CustomerHistoryEventType, WebsiteVisit } from '@/lib/types';
+import { Customer, Activity, ActivityType, Lead, CustomerHistoryEvent, CustomerHistoryEventType, WebsiteVisit, Order } from '@/lib/types';
 import SendQuoteEmailDialog from '@/components/SendQuoteEmailDialog';
 import ComposeEmailDialog from '@/components/ComposeEmailDialog';
 import CallNotesDialog from '@/components/CallNotesDialog';
@@ -114,7 +114,7 @@ export default function CustomerDetailPage() {
   const [history, setHistory] = useState<CustomerHistoryEvent[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [quotes, setQuotes] = useState<any[]>([]);
-  const [opportunities, setOpportunities] = useState<any[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [websiteVisits, setWebsiteVisits] = useState<WebsiteVisit[]>([]);
   const [loading, setLoading] = useState(true);
   const [quoteLocked, setQuoteLocked] = useState(false);
@@ -134,7 +134,7 @@ export default function CustomerDetailPage() {
       fetchHistory();
       fetchLeads();
       fetchQuotes();
-      fetchOpportunities();
+      fetchOrders();
       fetchWebsiteVisits();
     }
   }, [customerId]);
@@ -195,14 +195,12 @@ export default function CustomerDetailPage() {
     }
   };
 
-  const fetchOpportunities = async () => {
+  const fetchOrders = async () => {
     try {
-      // Get opportunities for this customer (quotes with opportunity_stage)
-      const response = await api.get('/api/quotes/opportunities');
-      const customerOpportunities = response.data.filter((opp: any) => opp.customer_id === customerId);
-      setOpportunities(customerOpportunities);
+      const response = await api.get(`/api/customers/${customerId}/orders`);
+      setOrders(response.data);
     } catch (error: any) {
-      console.error('Failed to load opportunities');
+      console.error('Failed to load orders');
     }
   };
 
@@ -574,57 +572,46 @@ export default function CustomerDetailPage() {
             <Card className="flex-1 min-w-0">
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <CardTitle>Opportunities</CardTitle>
+                  <CardTitle>Orders</CardTitle>
                 </div>
               </CardHeader>
               <CardContent>
-                {opportunities.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No opportunities yet</p>
+                {orders.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No orders yet. Orders are created when quotes are accepted.</p>
                 ) : (
                   <div className="space-y-2">
-                    {opportunities.map((opp) => {
-                      const isOverdue = opp.next_action_due_date && new Date(opp.next_action_due_date) < new Date();
-                      return (
-                        <div
-                          key={opp.id}
-                          className={`p-3 border rounded-md ${isOverdue ? 'border-red-500 bg-red-50 dark:bg-red-500/10' : ''}`}
-                        >
-                          <div className="flex items-center justify-between mb-2">
-                            <div 
-                              className="flex-1 cursor-pointer hover:text-primary"
-                              onClick={() => router.push(`/opportunities/${opp.id}`)}
-                            >
-                              <span className="font-medium">{opp.quote_number}</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              {opp.opportunity_stage && (
-                                <Badge className={opp.opportunity_stage === 'WON' ? 'bg-green-100 text-green-700' : opp.opportunity_stage === 'LOST' ? 'bg-red-100 text-red-700' : ''}>
-                                  {opp.opportunity_stage.replace('_', ' ')}
-                                </Badge>
-                              )}
-                              {isOverdue && (
-                                <Badge variant="destructive" className="text-xs">
-                                  Overdue
-                                </Badge>
-                              )}
-                            </div>
+                    {orders.map((order) => (
+                      <div
+                        key={order.id}
+                        className="p-3 border rounded-md"
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <div
+                            className="flex-1 cursor-pointer hover:text-primary"
+                            onClick={() => router.push(`/orders/${order.id}`)}
+                          >
+                            <span className="font-medium">{order.order_number}</span>
                           </div>
-                          {opp.next_action && (
-                            <div className="text-sm text-muted-foreground mb-1">
-                              Next: {opp.next_action}
-                            </div>
-                          )}
-                          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                            {opp.close_probability !== undefined && (
-                              <span>{opp.close_probability}% probability</span>
+                          <div className="flex items-center gap-2">
+                            {(order.deposit_paid ?? false) && (
+                              <Badge variant="secondary" className="text-xs">Deposit paid</Badge>
                             )}
-                            {opp.total_amount > 0 && (
-                              <span className="font-semibold">£{opp.total_amount.toLocaleString()}</span>
+                            {(order.installation_booked ?? false) && (
+                              <Badge variant="secondary" className="text-xs">Inst. booked</Badge>
+                            )}
+                            {(order.installation_completed ?? false) && (
+                              <Badge variant="default" className="text-xs">Inst. done</Badge>
                             )}
                           </div>
                         </div>
-                      );
-                    })}
+                        <div
+                          className="text-sm text-muted-foreground cursor-pointer hover:text-primary"
+                          onClick={() => router.push(`/orders/${order.id}`)}
+                        >
+                          £{Number(order.total_amount).toFixed(2)}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </CardContent>

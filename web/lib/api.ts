@@ -508,6 +508,11 @@ export const getOrders = async () => {
   return response.data;
 };
 
+export const getCustomerOrders = async (customerId: number) => {
+  const response = await api.get(`/api/customers/${customerId}/orders`);
+  return response.data;
+};
+
 export const getOrder = async (orderId: number) => {
   const response = await api.get(`/api/orders/${orderId}`);
   return response.data;
