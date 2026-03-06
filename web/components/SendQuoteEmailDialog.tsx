@@ -179,7 +179,6 @@ export default function SendQuoteEmailDialog({
                   </a>
                 </Button>
               </div>
-              </div>
             </div>
           </div>
           <DialogFooter>
