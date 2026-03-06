@@ -171,12 +171,14 @@ export default function SendQuoteEmailDialog({
                   type="button"
                   variant="outline"
                   asChild
+                  className="border-green-600 text-green-700 hover:bg-green-50 hover:text-green-800 hover:border-green-700"
                 >
                   <a href={successResponse.view_url} target="_blank" rel="noopener noreferrer">
                     <ExternalLink className="h-4 w-4 mr-2" />
                     Open
                   </a>
                 </Button>
+              </div>
               </div>
             </div>
           </div>

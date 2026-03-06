@@ -155,7 +155,8 @@ def send_quote_email(
         # Append "View your quote online" link for open tracking (URL-based)
         if view_token and frontend_base_url:
             base = frontend_base_url.rstrip("/")
-            view_link = f'<p style="margin-top:1.5em;"><a href="{base}/quotes/view/{view_token}" style="font-weight:bold;">View your quote online</a></p>'
+            link_style = "color:#15803d;font-weight:bold;background-color:#dcfce7;padding:4px 8px;border-radius:4px;text-decoration:underline;"
+            view_link = f'<p style="margin-top:1.5em;"><a href="{base}/quotes/view/{view_token}" style="{link_style}">View your quote online</a></p>'
             body_html = (body_html or "") + view_link
 
         # Send email (no PDF attachment; customer uses Print/Download PDF on the tracked view)
@@ -166,7 +167,8 @@ def send_quote_email(
             cc=cc,
             bcc=bcc,
             attachments=None,
-            user_id=user_id
+            user_id=user_id,
+            customer_number=customer.customer_number
         )
 
         if success:

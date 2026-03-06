@@ -220,6 +220,7 @@ export default function QuoteDetailPage() {
               {quote.status === 'SENT' && (
                 <Button
                   variant="outline"
+                  className="border-green-600 text-green-700 hover:bg-green-50 hover:text-green-800 hover:border-green-700"
                   onClick={async () => {
                     try {
                       const { view_url } = await getQuoteViewLink(quoteId);
