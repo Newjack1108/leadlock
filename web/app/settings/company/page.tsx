@@ -274,11 +274,12 @@ export default function CompanySettingsPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="company_name">
-                Company Name <span className="text-destructive">*</span>
-              </Label>
-              <Input
+            <div className="rounded-lg p-4 bg-blue-50/30 dark:bg-blue-950/20 border-l-4 border-l-blue-200 dark:border-l-blue-800 space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="company_name">
+                  Company Name <span className="text-destructive">*</span>
+                </Label>
+                <Input
                 id="company_name"
                 value={formData.company_name}
                 onChange={(e) => setFormData({ ...formData, company_name: e.target.value })}
@@ -390,12 +391,12 @@ export default function CompanySettingsPage() {
               />
             </div>
 
-            <div className="space-y-4 border-t pt-6">
+            <div className="rounded-lg p-4 bg-amber-50/30 dark:bg-amber-950/20 border-l-4 border-l-amber-200 dark:border-l-amber-800 mt-6">
               <h3 className="text-lg font-medium">Quote requirements</h3>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-muted-foreground mt-1">
                 When enabled, customers must have at least one engagement activity (SMS, email, WhatsApp, or live call) before a quote can be sent.
               </p>
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-2 mt-3">
                 <input
                   type="checkbox"
                   id="require_engagement_proof"
@@ -408,7 +409,7 @@ export default function CompanySettingsPage() {
               </div>
             </div>
 
-            <div className="space-y-4 border-t pt-6">
+            <div className="rounded-lg p-4 bg-emerald-50/30 dark:bg-emerald-950/20 border-l-4 border-l-emerald-200 dark:border-l-emerald-800 mt-6">
               <h3 className="text-lg font-medium">Bank details</h3>
               <p className="text-sm text-muted-foreground">
                 Shown on quote and invoice PDFs for payment instructions.
@@ -458,57 +459,62 @@ export default function CompanySettingsPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="phone">Phone</Label>
-                <Input
-                  id="phone"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  placeholder="+44 1234 567890"
+            <div className="rounded-lg p-4 bg-slate-50/30 dark:bg-slate-950/20 border-l-4 border-l-slate-200 dark:border-l-slate-800 mt-6 space-y-4">
+              <h3 className="text-lg font-medium">Contact & branding</h3>
+              <p className="text-sm text-muted-foreground">
+                Contact details and logos used on quotes and invoices.
+              </p>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="phone">Phone</Label>
+                  <Input
+                    id="phone"
+                    value={formData.phone}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    placeholder="+44 1234 567890"
+                    disabled={saving}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    placeholder="info@cheshirestables.com"
+                    disabled={saving}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="website">Website</Label>
+                  <Input
+                    id="website"
+                    value={formData.website}
+                    onChange={(e) => setFormData({ ...formData, website: e.target.value })}
+                    placeholder="https://cheshirestables.com"
+                    disabled={saving}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <ImageUpload
+                  label="Header logo (quote/invoice PDFs)"
+                  value={formData.logo_url}
+                  onChange={handleLogoChange}
                   disabled={saving}
                 />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  placeholder="info@cheshirestables.com"
-                  disabled={saving}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="website">Website</Label>
-                <Input
-                  id="website"
-                  value={formData.website}
-                  onChange={(e) => setFormData({ ...formData, website: e.target.value })}
-                  placeholder="https://cheshirestables.com"
+                <ImageUpload
+                  label="Footer logo (PDF footer)"
+                  value={formData.footer_logo_url}
+                  onChange={handleFooterLogoChange}
                   disabled={saving}
                 />
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <ImageUpload
-                label="Header logo (quote/invoice PDFs)"
-                value={formData.logo_url}
-                onChange={handleLogoChange}
-                disabled={saving}
-              />
-              <ImageUpload
-                label="Footer logo (PDF footer)"
-                value={formData.footer_logo_url}
-                onChange={handleFooterLogoChange}
-                disabled={saving}
-              />
-            </div>
-
-            <div className="space-y-2 border-t pt-6">
-              <Label>Installation lead time</Label>
+            <div className="rounded-lg p-4 bg-violet-50/30 dark:bg-violet-950/20 border-l-4 border-l-violet-200 dark:border-l-violet-800 mt-6 space-y-2">
+              <h3 className="text-lg font-medium">Installation lead time</h3>
               <Select
                 value={formData.installation_lead_time || ''}
                 onValueChange={(v) => setFormData({ ...formData, installation_lead_time: v ? (v as InstallationLeadTime) : '' })}
@@ -530,7 +536,7 @@ export default function CompanySettingsPage() {
               </p>
             </div>
 
-            <div className="space-y-4 border-t pt-6">
+            <div className="rounded-lg p-4 bg-indigo-50/30 dark:bg-indigo-950/20 border-l-4 border-l-indigo-200 dark:border-l-indigo-800 mt-6 space-y-4">
               <h3 className="text-lg font-medium">Product import from production</h3>
               <p className="text-sm text-muted-foreground">
                 Applied when products are pushed from production. Cost ex VAT × (1 / (1 - margin%)) = RRP. Leave blank to use cost as RRP.
@@ -551,7 +557,7 @@ export default function CompanySettingsPage() {
               </div>
             </div>
 
-            <div className="space-y-4 border-t pt-6">
+            <div className="rounded-lg p-4 bg-teal-50/30 dark:bg-teal-950/20 border-l-4 border-l-teal-200 dark:border-l-teal-800 mt-6 space-y-4">
               <h3 className="text-lg font-medium">Installation & travel</h3>
               <p className="text-sm text-muted-foreground">
                 Used for delivery & installation estimates (mileage from factory, travel time, 8hr fitting days, overnight threshold). Factory postcode is the company postcode above.
@@ -649,7 +655,8 @@ export default function CompanySettingsPage() {
               </div>
             </div>
 
-            <div className="space-y-2 border-t pt-6">
+            <div className="rounded-lg p-4 bg-stone-50/30 dark:bg-stone-950/20 border-l-4 border-l-stone-200 dark:border-l-stone-800 mt-6 space-y-2">
+              <h3 className="text-lg font-medium">Terms and Conditions</h3>
               <button
                 type="button"
                 className="flex items-center justify-between w-full text-left font-medium leading-none hover:opacity-80 py-2"
@@ -682,7 +689,8 @@ export default function CompanySettingsPage() {
               )}
             </div>
 
-            <div className="space-y-2 border-t pt-6">
+            <div className="rounded-lg p-4 bg-zinc-50/30 dark:bg-zinc-950/20 border-l-4 border-l-zinc-200 dark:border-l-zinc-800 mt-6 space-y-2">
+              <h3 className="text-lg font-medium">Email disclaimer</h3>
               <Label htmlFor="email_disclaimer">Email disclaimer</Label>
               <Textarea
                 id="email_disclaimer"
@@ -697,7 +705,7 @@ export default function CompanySettingsPage() {
               </p>
             </div>
 
-            <div className="flex justify-end pt-4">
+            <div className="flex justify-end pt-4 mt-6">
               <Button onClick={handleSave} disabled={saving || !formData.company_name.trim()}>
                 <Save className="h-4 w-4 mr-2" />
                 {saving ? 'Saving...' : settings ? 'Update Settings' : 'Create Settings'}
@@ -706,7 +714,7 @@ export default function CompanySettingsPage() {
           </CardContent>
         </Card>
 
-        <Card className="mt-8">
+        <Card className="mt-8 bg-muted/20 dark:bg-muted/10">
           <CardHeader>
             <CardTitle>Customer Data Migration</CardTitle>
             <CardDescription>
