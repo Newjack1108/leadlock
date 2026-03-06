@@ -5,6 +5,7 @@ import re
 import smtplib
 import imaplib
 import email
+from urllib.parse import quote
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
@@ -26,6 +27,30 @@ def _html_to_plain(html: str) -> str:
     text = re.sub(r"<[^>]+>", " ", html)
     text = re.sub(r"\s+", " ", text)
     return text.strip()
+
+
+def _build_website_tracking_link_html(customer_number: Optional[str]) -> str:
+    """Return HTML with visit-tracking links, or empty string if no customer_number."""
+    if not customer_number or not customer_number.strip():
+        return ""
+    from app.constants import TRACKING_WEBSITE_BASE_URLS
+    token = quote(customer_number.strip(), safe="")
+    link_style = "color:#0066cc;font-weight:bold;background-color:#e8f4fc;padding:2px 6px;border-radius:4px;text-decoration:underline;"
+    links = [
+        f'<a href="{base}?ltk={token}" style="{link_style}">{label}</a>'
+        for base, label in TRACKING_WEBSITE_BASE_URLS
+    ]
+    return '<p style="margin-top:1em;">Visit us: ' + " | ".join(links) + '</p>'
+
+
+def _build_website_tracking_link_text(customer_number: Optional[str]) -> str:
+    """Return plain-text version of visit-tracking links."""
+    if not customer_number or not customer_number.strip():
+        return ""
+    from app.constants import TRACKING_WEBSITE_BASE_URLS
+    token = quote(customer_number.strip(), safe="")
+    urls = [f"{base}?ltk={token}" for base, _ in TRACKING_WEBSITE_BASE_URLS]
+    return "\n\nVisit us: " + " | ".join(urls)
 
 
 def _append_signature_and_disclaimer(
@@ -208,7 +233,8 @@ def send_email(
     attachments: Optional[List[Dict]] = None,
     in_reply_to: Optional[str] = None,
     references: Optional[str] = None,
-    user_id: Optional[int] = None
+    user_id: Optional[int] = None,
+    customer_number: Optional[str] = None
 ) -> Tuple[bool, Optional[str], Optional[str]]:
     """
     Send an email via SMTP.
@@ -224,6 +250,7 @@ def send_email(
         in_reply_to: Message-ID of email being replied to
         references: References header for threading
         user_id: Optional user ID to use their SMTP settings
+        customer_number: Optional customer number for website visit tracking links
     
     Returns:
         Tuple of (success, message_id, error_message)
@@ -256,6 +283,16 @@ def send_email(
     # Normal mode: Send via SMTP
     if not config["user"] or not config["password"]:
         return False, None, "SMTP credentials not configured"
+
+    # Append website visit tracking link before signature (order: body -> tracking link -> signature -> disclaimer)
+    if customer_number:
+        tracking_html = _build_website_tracking_link_html(customer_number)
+        tracking_text = _build_website_tracking_link_text(customer_number)
+        if tracking_html:
+            sep_html = '<br><br>' if (body_html or "").strip() else ''
+            body_html = (body_html or "") + sep_html + tracking_html
+        if tracking_text and body_text is not None:
+            body_text = body_text + tracking_text
 
     # Append user signature and company disclaimer to all outgoing emails
     body_html, body_text = _append_signature_and_disclaimer(body_html, body_text, user_id)

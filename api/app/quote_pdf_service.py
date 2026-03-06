@@ -12,7 +12,7 @@ from io import BytesIO
 from datetime import datetime
 from decimal import Decimal
 from app.models import Quote, Customer, QuoteItem, CompanySettings, Product, QuoteItemLineType
-from app.constants import VAT_RATE_DECIMAL
+from app.constants import VAT_RATE_DECIMAL, TRACKING_WEBSITE_BASE_URLS
 from sqlmodel import Session, select
 import os
 import sys
@@ -20,14 +20,6 @@ import tempfile
 import urllib.request
 from pathlib import Path
 from urllib.parse import quote
-
-# Tracking links for quote PDF header (each URL gets ?ltk=customer_number when generating)
-QUOTE_WEBSITE_BASE_URLS = [
-    ("https://www.csgbgroup.co.uk", "www.csgbgroup.co.uk"),
-    ("https://www.beaverlogcabins.co.uk", "www.beaverlogcabins.co.uk"),
-    ("https://www.cheshirestables.co.uk", "www.cheshirestables.co.uk"),
-]
-
 
 def format_currency(amount: Decimal, currency: str = "GBP") -> str:
     """Format decimal amount as currency string."""
@@ -122,8 +114,8 @@ def _build_header_flowables(
         # Three tracking links with ltk=customer_number for website visit attribution
         token = quote(customer_number, safe="")
         link_parts = [
-            f'<a href="{base}?ltk={token}">{label}</a>'
-            for base, label in QUOTE_WEBSITE_BASE_URLS
+            f'<font color="#0066cc"><b><a href="{base}?ltk={token}">{label}</a></b></font>'
+            for base, label in TRACKING_WEBSITE_BASE_URLS
         ]
         company_info_lines.append("Websites: " + " | ".join(link_parts))
     elif company_settings.website:
