@@ -1,7 +1,6 @@
 'use client';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { CheckCircle2, XCircle, Lock, Unlock } from 'lucide-react';
 import { Customer } from '@/lib/types';
 
@@ -20,18 +19,12 @@ export default function QuoteLockCard({ customer, quoteLocked = false, quoteLock
   const reason = quoteLockReason;
 
   const missingItems = reason?.missing || [];
-  const hasAddressLine1 = !!customer.address_line1;
-  const hasCity = !!customer.city;
-  const hasCounty = !!customer.county;
   const hasPostcode = !!customer.postcode;
   const hasEmail = !!customer.email;
   const hasPhone = !!customer.phone;
   
   // Map missing field names to display names
   const fieldDisplayNames: Record<string, string> = {
-    'address_line1': 'Address Line 1',
-    'city': 'City',
-    'county': 'County',
     'postcode': 'Postcode',
     'email': 'Email',
     'phone': 'Phone',
@@ -63,39 +56,6 @@ export default function QuoteLockCard({ customer, quoteLocked = false, quoteLock
             <div className="space-y-2">
               <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
                 Customer Profile
-              </div>
-              <div className="flex items-center gap-2">
-                {hasAddressLine1 ? (
-                  <CheckCircle2 className="h-4 w-4 text-success" />
-                ) : (
-                  <XCircle className="h-4 w-4 text-destructive" />
-                )}
-                <span className={hasAddressLine1 ? 'text-foreground' : missingItems.includes('address_line1') ? 'text-destructive font-medium' : 'text-muted-foreground'}>
-                  Address Line 1
-                  {missingItems.includes('address_line1') && <span className="ml-1 text-xs">(Required)</span>}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                {hasCity ? (
-                  <CheckCircle2 className="h-4 w-4 text-success" />
-                ) : (
-                  <XCircle className="h-4 w-4 text-destructive" />
-                )}
-                <span className={hasCity ? 'text-foreground' : missingItems.includes('city') ? 'text-destructive font-medium' : 'text-muted-foreground'}>
-                  City
-                  {missingItems.includes('city') && <span className="ml-1 text-xs">(Required)</span>}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                {hasCounty ? (
-                  <CheckCircle2 className="h-4 w-4 text-success" />
-                ) : (
-                  <XCircle className="h-4 w-4 text-destructive" />
-                )}
-                <span className={hasCounty ? 'text-foreground' : missingItems.includes('county') ? 'text-destructive font-medium' : 'text-muted-foreground'}>
-                  County
-                  {missingItems.includes('county') && <span className="ml-1 text-xs">(Required)</span>}
-                </span>
               </div>
               <div className="flex items-center gap-2">
                 {hasPostcode ? (

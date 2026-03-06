@@ -338,6 +338,7 @@ export interface CompanySettings {
   bank_account_name?: string;
   account_number?: string;
   sort_code?: string;
+  require_engagement_proof?: boolean;
   updated_at: string;
 }
 

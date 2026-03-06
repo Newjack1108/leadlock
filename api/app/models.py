@@ -387,6 +387,7 @@ class CompanySettings(SQLModel, table=True):
     bank_account_name: Optional[str] = None  # Name on the account (payee for BACS)
     account_number: Optional[str] = None
     sort_code: Optional[str] = None
+    require_engagement_proof: bool = Field(default=False)  # When True, customers need engagement (SMS/email/WhatsApp/call) before quoting
     updated_by_id: int = Field(foreign_key="user.id")
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     

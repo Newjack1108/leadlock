@@ -1,5 +1,5 @@
 from typing import Optional
-from app.models import LeadStatus, UserRole, ActivityType, Timeframe, Lead, Activity, Customer
+from app.models import LeadStatus, UserRole, ActivityType, Timeframe, Lead, Activity, Customer, CompanySettings
 from sqlmodel import Session, select
 from datetime import datetime, timedelta
 from decimal import Decimal
@@ -53,16 +53,7 @@ def check_quote_prerequisites(customer: Customer, session: Session) -> tuple[boo
     """
     missing = []
     
-    # Customer profile requirements
-    if not customer.address_line1:
-        missing.append("address_line1")
-    
-    if not customer.city:
-        missing.append("city")
-    
-    if not customer.county:
-        missing.append("county")
-    
+    # Customer profile requirements (address_line1, city, county are optional)
     if not customer.postcode:
         missing.append("postcode")
     
@@ -78,18 +69,19 @@ def check_quote_prerequisites(customer: Customer, session: Session) -> tuple[boo
             "missing": missing
         }
     
-    # Check for engagement proof (activities linked to customer)
-    statement = select(Activity).where(
-        Activity.customer_id == customer.id,
-        Activity.activity_type.in_(list(ENGAGEMENT_PROOF_TYPES))
-    )
-    engagement_activities = session.exec(statement).all()
-    
-    if not engagement_activities:
-        return False, {
-            "error": "NO_ENGAGEMENT_PROOF",
-            "message": "No engagement proof found (SMS_RECEIVED, EMAIL_RECEIVED, EMAIL_SENT, WHATSAPP_RECEIVED, or LIVE_CALL)"
-        }
+    # Engagement proof: only required when company setting is enabled
+    company_settings = session.exec(select(CompanySettings)).first()
+    if company_settings and getattr(company_settings, "require_engagement_proof", False):
+        statement = select(Activity).where(
+            Activity.customer_id == customer.id,
+            Activity.activity_type.in_(list(ENGAGEMENT_PROOF_TYPES))
+        )
+        engagement_activities = session.exec(statement).all()
+        if not engagement_activities:
+            return False, {
+                "error": "NO_ENGAGEMENT_PROOF",
+                "message": "No engagement proof found (SMS_RECEIVED, EMAIL_RECEIVED, EMAIL_SENT, WHATSAPP_RECEIVED, or LIVE_CALL)"
+            }
     
     return True, None
 

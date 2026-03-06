@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr, field_validator, model_validator
 from typing import Optional, List
 from datetime import datetime, date
 from decimal import Decimal
@@ -385,13 +385,35 @@ class OpportunityCloseRequest(BaseModel):
 
 
 class LeadCreate(BaseModel):
-    name: str
+    """Create a lead. name is required unless first_name/last_name or full_name are provided."""
+    name: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    full_name: Optional[str] = None
     email: Optional[str] = None
     phone: Optional[str] = None
+    phone_number: Optional[str] = None
     postcode: Optional[str] = None
     description: Optional[str] = None
+    product_interest: Optional[str] = None
     lead_type: Optional[LeadType] = None
     lead_source: Optional[LeadSource] = None
+
+    @model_validator(mode="after")
+    def build_name_and_phone(self):
+        # Build name from aliases if not provided
+        name = (self.name or "").strip()
+        if not name and self.full_name:
+            name = (self.full_name or "").strip()
+        if not name and (self.first_name or self.last_name):
+            name = f"{(self.first_name or '').strip()} {(self.last_name or '').strip()}".strip()
+        if not name:
+            name = "Lead"
+        self.name = name
+        # Use phone_number as fallback for phone
+        if not (self.phone or "").strip() and (self.phone_number or "").strip():
+            self.phone = (self.phone_number or "").strip()
+        return self
 
 
 class LeadUpdate(BaseModel):
@@ -777,6 +799,7 @@ class CompanySettingsCreate(BaseModel):
     bank_account_name: Optional[str] = None
     account_number: Optional[str] = None
     sort_code: Optional[str] = None
+    require_engagement_proof: Optional[bool] = None
 
 
 class CompanySettingsUpdate(BaseModel):
@@ -810,6 +833,7 @@ class CompanySettingsUpdate(BaseModel):
     bank_account_name: Optional[str] = None
     account_number: Optional[str] = None
     sort_code: Optional[str] = None
+    require_engagement_proof: Optional[bool] = None
 
 
 class CompanySettingsResponse(BaseModel):
@@ -844,6 +868,7 @@ class CompanySettingsResponse(BaseModel):
     bank_account_name: Optional[str] = None
     account_number: Optional[str] = None
     sort_code: Optional[str] = None
+    require_engagement_proof: Optional[bool] = None
     updated_at: datetime
 
 

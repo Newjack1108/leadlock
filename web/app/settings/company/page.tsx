@@ -63,6 +63,7 @@ export default function CompanySettingsPage() {
     bank_account_name: '',
     account_number: '',
     sort_code: '',
+    require_engagement_proof: false,
   });
 
   useEffect(() => {
@@ -105,6 +106,7 @@ export default function CompanySettingsPage() {
         bank_account_name: response.data.bank_account_name || '',
         account_number: response.data.account_number || '',
         sort_code: response.data.sort_code || '',
+        require_engagement_proof: response.data.require_engagement_proof ?? false,
       });
     } catch (error: any) {
       if (error.response?.status === 401) {
@@ -386,6 +388,24 @@ export default function CompanySettingsPage() {
                 placeholder="United Kingdom"
                 disabled={saving}
               />
+            </div>
+
+            <div className="space-y-4 border-t pt-6">
+              <h3 className="text-lg font-medium">Quote requirements</h3>
+              <p className="text-sm text-muted-foreground">
+                When enabled, customers must have at least one engagement activity (SMS, email, WhatsApp, or live call) before a quote can be sent.
+              </p>
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="require_engagement_proof"
+                  checked={formData.require_engagement_proof}
+                  onChange={(e) => setFormData({ ...formData, require_engagement_proof: e.target.checked })}
+                  className="rounded"
+                  disabled={saving}
+                />
+                <Label htmlFor="require_engagement_proof">Require engagement proof before quoting</Label>
+              </div>
             </div>
 
             <div className="space-y-4 border-t pt-6">
