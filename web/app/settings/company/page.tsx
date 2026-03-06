@@ -391,6 +391,8 @@ export default function CompanySettingsPage() {
               />
             </div>
 
+            </div>
+
             <div className="rounded-lg p-4 bg-amber-50/30 dark:bg-amber-950/20 border-l-4 border-l-amber-200 dark:border-l-amber-800 mt-6">
               <h3 className="text-lg font-medium">Quote requirements</h3>
               <p className="text-sm text-muted-foreground mt-1">
