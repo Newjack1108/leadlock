@@ -885,15 +885,21 @@ def _update_draft_quote_impl(
             detail=f"Only draft quotes can be edited. This quote has status: {quote.status}"
         )
     
-    # Delete existing items and discounts for this quote
-    # Delete children (optional extras) before parents to avoid FK violation on parent_quote_item_id
-    existing_items = list(session.exec(select(QuoteItem).where(QuoteItem.quote_id == quote_id)).all())
-    existing_items.sort(key=lambda i: (0 if i.parent_quote_item_id is not None else 1, i.id or 0))
-    for item in existing_items:
-        session.delete(item)
+    # Delete existing items and discounts for this quote.
+    # 1. Delete discounts first (QuoteDiscount.quote_item_id references QuoteItem)
+    # 2. Null out parent_quote_item_id to avoid FK violation when deleting items (autoflush can reorder deletes)
     discount_statement = select(QuoteDiscount).where(QuoteDiscount.quote_id == quote_id)
     for discount in session.exec(discount_statement).all():
         session.delete(discount)
+    session.flush()
+    existing_items = list(session.exec(select(QuoteItem).where(QuoteItem.quote_id == quote_id)).all())
+    for item in existing_items:
+        if item.parent_quote_item_id is not None:
+            item.parent_quote_item_id = None
+            session.add(item)
+    session.flush()
+    for item in existing_items:
+        session.delete(item)
     session.commit()
     
     # Build new items (same logic as create)
