@@ -57,7 +57,10 @@ def compute_delivery_install_estimate(
 
     cost_mileage: Optional[Decimal] = None
     if cost_per_mile is not None and cost_per_mile > 0:
-        cost_mileage = cost_per_mile * Decimal(str(distance_miles)) * 2  # return trip
+        # When no overnight: drive there and back each day = fitting_days round trips
+        # When overnight: one round trip total
+        round_trips = fitting_days if not requires_overnight else 1
+        cost_mileage = cost_per_mile * Decimal(str(distance_miles)) * 2 * round_trips
 
     cost_labour: Optional[Decimal] = None
     if hourly_install_rate is not None and hourly_install_rate > 0:
