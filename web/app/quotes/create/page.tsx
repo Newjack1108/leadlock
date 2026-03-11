@@ -191,6 +191,7 @@ function CreateQuoteContent() {
         unit_price: 0,
         is_custom: false,
         sort_order: items.length,
+        parent_index: undefined,
       },
     ]);
   };
@@ -531,7 +532,7 @@ function CreateQuoteContent() {
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm font-medium">
                         {item.parent_index != null ? (
-                          <>Optional extra</>
+                          <>Optional extra for Product {items.filter((_, i) => i <= (item.parent_index ?? -1) && items[i].parent_index == null).length}</>
                         ) : (
                           <>Product {items.filter((_, i) => i <= index && items[i].parent_index == null).length}</>
                         )}
