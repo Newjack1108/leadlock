@@ -302,7 +302,6 @@ function EditQuoteContent() {
 
   const calculateTotalInstallationHours = (): number => {
     return items.reduce((total, item) => {
-      if (item.parent_index != null) return total;
       const product = getSelectedProduct(item);
       if (!product?.installation_hours) return total;
       const qty = Number(item.quantity) || 0;
