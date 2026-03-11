@@ -381,6 +381,7 @@ class CompanySettings(SQLModel, table=True):
     hotel_allowance_per_night: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(10, 2)))  # Per person; ×2 for 2-man team
     meal_allowance_per_day: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(10, 2)))  # Per person when staying away
     average_speed_mph: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(5, 2)))  # For travel time calculation
+    install_quote_margin_pct: Optional[Decimal] = Field(default=30, sa_column=Column(Numeric(5, 2)))  # Margin % added to install quote cost (e.g. 30 = 30%); defaults to 30
     product_import_gross_margin_pct: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(5, 2)))  # e.g. 30 for 30%; applied when products pushed from production to set RRP
     # Bank details (shown on quote and invoice PDFs)
     bank_name: Optional[str] = None

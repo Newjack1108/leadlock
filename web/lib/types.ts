@@ -333,6 +333,7 @@ export interface CompanySettings {
   hotel_allowance_per_night?: number;
   meal_allowance_per_day?: number;
   average_speed_mph?: number;
+  install_quote_margin_pct?: number;
   product_import_gross_margin_pct?: number;
   bank_name?: string;
   bank_account_name?: string;

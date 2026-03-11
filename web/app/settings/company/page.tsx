@@ -58,7 +58,7 @@ export default function CompanySettingsPage() {
     hotel_allowance_per_night: '',
     meal_allowance_per_day: '',
     average_speed_mph: '',
-    product_import_gross_margin_pct: '',
+    install_quote_margin_pct: '30',
     bank_name: '',
     bank_account_name: '',
     account_number: '',
@@ -101,6 +101,7 @@ export default function CompanySettingsPage() {
         hotel_allowance_per_night: response.data.hotel_allowance_per_night != null ? String(response.data.hotel_allowance_per_night) : '',
         meal_allowance_per_day: response.data.meal_allowance_per_day != null ? String(response.data.meal_allowance_per_day) : '',
         average_speed_mph: response.data.average_speed_mph != null ? String(response.data.average_speed_mph) : '',
+        install_quote_margin_pct: response.data.install_quote_margin_pct != null ? String(response.data.install_quote_margin_pct) : '30',
         product_import_gross_margin_pct: response.data.product_import_gross_margin_pct != null ? String(response.data.product_import_gross_margin_pct) : '',
         bank_name: response.data.bank_name || '',
         bank_account_name: response.data.bank_account_name || '',
@@ -127,9 +128,14 @@ export default function CompanySettingsPage() {
       toast.error('Company name is required');
       return;
     }
-    const marginVal = formData.product_import_gross_margin_pct ? parseFloat(formData.product_import_gross_margin_pct) : null;
-    if (marginVal != null && (marginVal < 0 || marginVal >= 99)) {
-      toast.error('Gross margin % must be between 0 and 99');
+    const productMarginVal = formData.product_import_gross_margin_pct ? parseFloat(formData.product_import_gross_margin_pct) : null;
+    if (productMarginVal != null && (productMarginVal < 0 || productMarginVal >= 99)) {
+      toast.error('Product gross margin % must be between 0 and 99');
+      return;
+    }
+    const installMarginVal = formData.install_quote_margin_pct ? parseFloat(formData.install_quote_margin_pct) : null;
+    if (installMarginVal != null && (installMarginVal < 0 || installMarginVal >= 99)) {
+      toast.error('Install quote margin % must be between 0 and 99');
       return;
     }
 
@@ -144,6 +150,7 @@ export default function CompanySettingsPage() {
         hotel_allowance_per_night: formData.hotel_allowance_per_night ? parseFloat(formData.hotel_allowance_per_night) : undefined,
         meal_allowance_per_day: formData.meal_allowance_per_day ? parseFloat(formData.meal_allowance_per_day) : undefined,
         average_speed_mph: formData.average_speed_mph ? parseFloat(formData.average_speed_mph) : undefined,
+        install_quote_margin_pct: formData.install_quote_margin_pct ? parseFloat(formData.install_quote_margin_pct) : undefined,
         product_import_gross_margin_pct: formData.product_import_gross_margin_pct ? parseFloat(formData.product_import_gross_margin_pct) : undefined,
       };
       if (settings) {
@@ -597,6 +604,21 @@ export default function CompanySettingsPage() {
                     disabled={saving}
                   />
                   <p className="text-xs text-muted-foreground">Used for installation cost calculation.</p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="install_quote_margin_pct">Install quote margin %</Label>
+                  <Input
+                    id="install_quote_margin_pct"
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="99"
+                    value={formData.install_quote_margin_pct}
+                    onChange={(e) => setFormData({ ...formData, install_quote_margin_pct: e.target.value })}
+                    placeholder="e.g. 30"
+                    disabled={saving}
+                  />
+                  <p className="text-xs text-muted-foreground">Margin added to delivery &amp; installation cost (0–99). Default 30%.</p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="cost_per_mile">Cost per mile (£)</Label>

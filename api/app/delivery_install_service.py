@@ -27,6 +27,7 @@ def compute_delivery_install_estimate(
     hotel_allowance_per_night: Optional[Decimal] = None,
     meal_allowance_per_day: Optional[Decimal] = None,
     average_speed_mph: Optional[Decimal] = None,
+    install_quote_margin_pct: Optional[Decimal] = None,
 ) -> DeliveryInstallEstimateResponse:
     """
     Compute distance, travel time, fitting days, overnight stay, and cost breakdown.
@@ -74,7 +75,10 @@ def compute_delivery_install_estimate(
     if meal_allowance_per_day is not None and meal_allowance_per_day > 0 and requires_overnight:
         cost_meals = meal_allowance_per_day * 2 * max(fitting_days, 1)  # 2 men, per day away
 
-    total = _dec(cost_mileage) + _dec(cost_labour) + _dec(cost_hotel) + _dec(cost_meals)
+    cost_total_raw = _dec(cost_mileage) + _dec(cost_labour) + _dec(cost_hotel) + _dec(cost_meals)
+    margin_pct = install_quote_margin_pct if install_quote_margin_pct is not None else Decimal("30")
+    total_raw = cost_total_raw * (Decimal("1") + margin_pct / Decimal("100")) if cost_total_raw > 0 else Decimal("0")
+    total = total_raw.quantize(Decimal("0.01"))
     settings_incomplete = (
         (distance_miles > 0 and cost_per_mile is None)
         or (installation_hours > 0 and hourly_install_rate is None)

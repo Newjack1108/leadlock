@@ -46,6 +46,7 @@ async def estimate_delivery_install(
             hotel_allowance_per_night=settings.hotel_allowance_per_night,
             meal_allowance_per_day=settings.meal_allowance_per_day,
             average_speed_mph=settings.average_speed_mph,
+            install_quote_margin_pct=settings.install_quote_margin_pct,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

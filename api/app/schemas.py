@@ -795,6 +795,7 @@ class CompanySettingsCreate(BaseModel):
     hotel_allowance_per_night: Optional[Decimal] = None
     meal_allowance_per_day: Optional[Decimal] = None
     average_speed_mph: Optional[Decimal] = None
+    install_quote_margin_pct: Optional[Decimal] = None  # Margin % added to install quote cost; default 30
     product_import_gross_margin_pct: Optional[Decimal] = None
     bank_name: Optional[str] = None
     bank_account_name: Optional[str] = None
@@ -829,6 +830,7 @@ class CompanySettingsUpdate(BaseModel):
     hotel_allowance_per_night: Optional[Decimal] = None
     meal_allowance_per_day: Optional[Decimal] = None
     average_speed_mph: Optional[Decimal] = None
+    install_quote_margin_pct: Optional[Decimal] = None  # Margin % added to install quote cost; default 30
     product_import_gross_margin_pct: Optional[Decimal] = None
     bank_name: Optional[str] = None
     bank_account_name: Optional[str] = None
@@ -864,6 +866,7 @@ class CompanySettingsResponse(BaseModel):
     hotel_allowance_per_night: Optional[Decimal] = None
     meal_allowance_per_day: Optional[Decimal] = None
     average_speed_mph: Optional[Decimal] = None
+    install_quote_margin_pct: Optional[Decimal] = None  # Margin % added to install quote cost; default 30
     product_import_gross_margin_pct: Optional[Decimal] = None
     bank_name: Optional[str] = None
     bank_account_name: Optional[str] = None
