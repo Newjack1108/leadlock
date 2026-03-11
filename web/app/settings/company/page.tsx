@@ -59,6 +59,7 @@ export default function CompanySettingsPage() {
     meal_allowance_per_day: '',
     average_speed_mph: '',
     install_quote_margin_pct: '30',
+    product_import_gross_margin_pct: '',
     bank_name: '',
     bank_account_name: '',
     account_number: '',
