@@ -463,6 +463,7 @@ def generate_quote_pdf(
     company_settings: Optional[CompanySettings] = None,
     session: Optional[Session] = None,
     include_spec_sheets: bool = True,
+    available_optional_extras: Optional[List[Any]] = None,
 ) -> BytesIO:
     """
     Generate a PDF document for a quote.
@@ -725,6 +726,47 @@ def generate_quote_pdf(
     items_table.setStyle(TableStyle(table_style_list))
     elements.append(items_table)
     elements.append(Spacer(1, 8))
+
+    # Other Available Options (optional extras not in quote) – after totals, before terms
+    if available_optional_extras and len(available_optional_extras) > 0:
+        elements.append(Spacer(1, 6))
+        elements.append(Paragraph("Other Available Options:", heading_style))
+        extras_header_style = ParagraphStyle(
+            "ExtrasHeader",
+            parent=styles["Normal"],
+            fontSize=8,
+            textColor=brand_color,
+            fontName="Helvetica-Bold",
+        )
+        extras_data = [
+            [
+                Paragraph("Description", extras_header_style),
+                Paragraph("Price (Ex VAT)", extras_header_style),
+                Paragraph("Available for", extras_header_style),
+            ]
+        ]
+        for extra in available_optional_extras:
+            name = getattr(extra, "name", str(extra.get("name", ""))) if hasattr(extra, "name") else str(extra.get("name", ""))
+            price = getattr(extra, "base_price", extra.get("base_price", 0)) if hasattr(extra, "base_price") else extra.get("base_price", 0)
+            for_product = getattr(extra, "for_product", str(extra.get("for_product", ""))) if hasattr(extra, "for_product") else str(extra.get("for_product", ""))
+            extras_data.append([
+                name,
+                format_currency(Decimal(str(price)), quote.currency),
+                for_product,
+            ])
+        extras_table = Table(extras_data, colWidths=[70*mm, 35*mm, 55*mm])
+        extras_table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e8f5e9")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), brand_color),
+            ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+            ("ALIGN", (1, 0), (1, -1), "RIGHT"),
+            ("FONTSIZE", (0, 0), (-1, -1), 9),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+            ("TOPPADDING", (0, 0), (-1, -1), 3),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#e0e0e0")),
+        ]))
+        elements.append(extras_table)
+        elements.append(Spacer(1, 8))
 
     # Footer drawn on every page via onFirstPage/onLaterPages (not flowables)
     footer_drawer = (

@@ -1168,6 +1168,7 @@ async def send_quote_email_endpoint(
             body_html=final_body_html,  # Template rendered content
             tracking_id=message_id or f"quote-{quote.id}-{datetime.utcnow().timestamp()}",
             view_token=view_token,
+            include_available_extras=getattr(email_data, "include_available_extras", False) or False,
         )
         session.add(quote_email)
         

@@ -566,6 +566,7 @@ export interface QuoteEmailSendRequest {
   cc?: string;
   bcc?: string;
   custom_message?: string;
+  include_available_extras?: boolean;
 }
 
 export interface QuoteEmailSendResponse {
@@ -837,6 +838,12 @@ export interface PublicQuoteCompanyDisplay {
   website?: string;
 }
 
+export interface AvailableExtraResponse {
+  name: string;
+  base_price: number;
+  for_product: string;
+}
+
 export interface PublicQuoteView {
   quote_number: string;
   customer_name: string;
@@ -854,6 +861,7 @@ export interface PublicQuoteView {
   items: PublicQuoteViewItem[];
   terms_and_conditions?: string;
   company_display?: PublicQuoteCompanyDisplay;
+  available_optional_extras?: AvailableExtraResponse[];
 }
 
 export interface QuoteCreate {

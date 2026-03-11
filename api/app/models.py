@@ -533,6 +533,7 @@ class QuoteEmail(SQLModel, table=True):
     tracking_id: str = Field(unique=True, index=True)  # For email tracking
     view_token: Optional[str] = Field(default=None, unique=True, index=True)  # For public quote view URL
     open_count: int = Field(default=0)  # Number of times view link was opened
+    include_available_extras: bool = Field(default=False)  # Show optional extras section in view/PDF
 
     # Relationships
     quote: Quote = Relationship(back_populates="email_sends")

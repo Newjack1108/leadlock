@@ -279,6 +279,7 @@ export const sendQuoteEmail = async (quoteId: number, emailData: {
   cc?: string;
   bcc?: string;
   custom_message?: string;
+  include_available_extras?: boolean;
 }) => {
   const response = await api.post(`/api/quotes/${quoteId}/send-email`, emailData);
   return response.data;

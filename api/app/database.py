@@ -739,6 +739,16 @@ def create_db_and_tables():
                     error_str = str(e).lower()
                     if "already exists" not in error_str and "duplicate" not in error_str:
                         print(f"Error adding open_count to quoteemail: {e}", file=sys.stderr, flush=True)
+            if "include_available_extras" not in quoteemail_columns:
+                print("Adding include_available_extras column to quoteemail table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE quoteemail ADD COLUMN include_available_extras BOOLEAN DEFAULT FALSE"))
+                    print("Added include_available_extras column to quoteemail table", file=sys.stderr, flush=True)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Error adding include_available_extras to quoteemail: {e}", file=sys.stderr, flush=True)
         
         # Step 8c: Add last_viewed_at to quote table
         if has_quote_table:

@@ -172,6 +172,30 @@ export default function PublicQuoteViewPage() {
               </p>
             )}
 
+            {data.available_optional_extras && data.available_optional_extras.length > 0 && (
+              <div className="pt-4 border-t">
+                <h3 className="font-medium mb-3">Other Available Options</h3>
+                <table className="w-full text-sm border-collapse">
+                  <thead>
+                    <tr className="border-b text-left text-muted-foreground">
+                      <th className="py-2 pr-2">Description</th>
+                      <th className="py-2 pr-2 w-24 text-right">Price (Ex VAT)</th>
+                      <th className="py-2 w-32 text-left">Available for</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.available_optional_extras.map((extra, i) => (
+                      <tr key={i} className="border-b">
+                        <td className="py-2 pr-2">{extra.name}</td>
+                        <td className="py-2 pr-2 text-right">{formatAmount(extra.base_price, data.currency)}</td>
+                        <td className="py-2">{extra.for_product}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
             {data.terms_and_conditions && (
               <div className="pt-2 print:hidden">
                 <a

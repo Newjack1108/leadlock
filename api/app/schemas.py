@@ -357,6 +357,7 @@ class QuoteEmailSendRequest(BaseModel):
     cc: Optional[str] = None
     bcc: Optional[str] = None
     custom_message: Optional[str] = None  # Optional message appended to template
+    include_available_extras: Optional[bool] = False  # Show optional extras section in view/PDF
 
 
 class QuoteEmailSendResponse(BaseModel):
@@ -1029,6 +1030,13 @@ class PublicQuoteViewItemResponse(BaseModel):
     sort_order: int
 
 
+class AvailableExtraResponse(BaseModel):
+    """Optional extra available for products in the quote (not already quoted)."""
+    name: str
+    base_price: Decimal
+    for_product: str  # Parent product name
+
+
 class PublicQuoteCompanyDisplay(BaseModel):
     """Company display info for public quote view header (logo + contact)."""
     trading_name: Optional[str] = None
@@ -1059,6 +1067,7 @@ class PublicQuoteViewResponse(BaseModel):
     items: List[PublicQuoteViewItemResponse]
     terms_and_conditions: Optional[str] = None
     company_display: Optional[PublicQuoteCompanyDisplay] = None
+    available_optional_extras: Optional[List[AvailableExtraResponse]] = None
 
 
 class QuoteSendRequest(BaseModel):

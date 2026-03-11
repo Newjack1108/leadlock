@@ -56,6 +56,7 @@ export default function SendQuoteEmailDialog({
     cc: '',
     bcc: '',
     custom_message: '',
+    include_available_extras: false,
   });
 
   // Fetch templates and reset form when dialog opens
@@ -67,6 +68,7 @@ export default function SendQuoteEmailDialog({
         cc: '',
         bcc: '',
         custom_message: '',
+        include_available_extras: false,
       });
       setSelectedTemplateId(undefined);
       const fetchTemplates = async () => {
@@ -109,6 +111,7 @@ export default function SendQuoteEmailDialog({
       const response = await sendQuoteEmail(quoteId, {
         ...formData,
         template_id: selectedTemplateId,
+        include_available_extras: formData.include_available_extras ?? false,
       });
       setLoading(false);
       toast.success(`${docLabel.charAt(0).toUpperCase() + docLabel.slice(1)} email sent successfully`);
@@ -274,6 +277,21 @@ export default function SendQuoteEmailDialog({
               onChange={(e) => setFormData({ ...formData, bcc: e.target.value })}
               placeholder="bcc@example.com"
             />
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              id="include_extras"
+              checked={formData.include_available_extras ?? false}
+              onChange={(e) =>
+                setFormData({ ...formData, include_available_extras: e.target.checked })
+              }
+              className="h-4 w-4 rounded border-gray-300"
+            />
+            <Label htmlFor="include_extras" className="font-normal cursor-pointer">
+              Show available optional extras after quote
+            </Label>
           </div>
 
           <div className="space-y-2">
