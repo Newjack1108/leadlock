@@ -1,6 +1,9 @@
 """
-Email service for sending and receiving emails via SMTP and IMAP.
+Email service for sending and receiving emails via SMTP, IMAP, or Resend API.
+When RESEND_API_KEY is set, outbound email uses Resend (HTTPS - works on Railway).
+Otherwise SMTP is used.
 """
+import base64
 import re
 import smtplib
 import imaplib
@@ -223,6 +226,61 @@ def generate_message_id() -> str:
     return f"<{uuid.uuid4()}@{domain}>"
 
 
+def _send_via_resend(
+    to_email: str,
+    subject: str,
+    body_html: Optional[str],
+    body_text: Optional[str],
+    from_email: str,
+    from_name: str,
+    cc: Optional[str],
+    bcc: Optional[str],
+    attachments: Optional[List[Dict]],
+    message_id: str,
+    in_reply_to: Optional[str],
+    references: Optional[str],
+) -> Tuple[bool, Optional[str], Optional[str]]:
+    """Send email via Resend API (HTTPS - works when SMTP is blocked)."""
+    try:
+        import resend
+        api_key = os.getenv("RESEND_API_KEY", "").strip()
+        if not api_key:
+            return False, None, "RESEND_API_KEY not configured"
+        resend.api_key = api_key
+
+        from_str = f"{from_name} <{from_email}>" if from_name else from_email
+        params = {
+            "from": from_str,
+            "to": [e.strip() for e in to_email.split(",") if e.strip()],
+            "subject": subject,
+            "html": body_html or body_text or "",
+        }
+        if body_text and not body_html:
+            params["text"] = body_text
+        if cc:
+            params["cc"] = [e.strip() for e in cc.split(",") if e.strip()]
+        if bcc:
+            params["bcc"] = [e.strip() for e in bcc.split(",") if e.strip()]
+        params["headers"] = {"Message-ID": message_id}
+        if in_reply_to:
+            params["headers"]["In-Reply-To"] = in_reply_to
+        if references:
+            params["headers"]["References"] = references
+        if attachments:
+            params["attachments"] = [
+                {"filename": a.get("filename", "attachment"), "content": base64.b64encode(a["content"]).decode("ascii")}
+                for a in attachments
+            ]
+
+        result = resend.Emails.send(params)
+        rid = result.get("id") if isinstance(result, dict) else getattr(result, "id", None)
+        if result and rid:
+            return True, message_id, None
+        return False, None, str(result) if result else "Unknown Resend error"
+    except Exception as e:
+        return False, None, str(e)
+
+
 def send_email(
     to_email: str,
     subject: str,
@@ -256,7 +314,9 @@ def send_email(
         Tuple of (success, message_id, error_message)
     """
     config = get_smtp_config(user_id)
-    
+    from_email = config.get("from_email") or config.get("user") or os.getenv("RESEND_FROM_EMAIL", "onboarding@resend.dev")
+    from_name = config.get("from_name") or os.getenv("RESEND_FROM_NAME", "LeadLock CRM")
+
     # Generate message ID (needed for both test mode and real sending)
     message_id = generate_message_id()
     
@@ -264,10 +324,10 @@ def send_email(
     test_mode = config.get("test_mode", False)
     
     if test_mode:
-        # Test mode: Log email details but don't send via SMTP
+        # Test mode: Log email details but don't send
         import sys
         print(f"[EMAIL TEST MODE] Email would be sent:", file=sys.stderr, flush=True)
-        print(f"  From: {config.get('from_name', 'N/A')} <{config.get('from_email', 'N/A')}>", file=sys.stderr, flush=True)
+        print(f"  From: {from_name} <{from_email}>", file=sys.stderr, flush=True)
         print(f"  To: {to_email}", file=sys.stderr, flush=True)
         if cc:
             print(f"  CC: {cc}", file=sys.stderr, flush=True)
@@ -277,12 +337,8 @@ def send_email(
         print(f"  Message-ID: {message_id}", file=sys.stderr, flush=True)
         if attachments:
             print(f"  Attachments: {[a.get('filename', 'unknown') for a in attachments]}", file=sys.stderr, flush=True)
-        print(f"[EMAIL TEST MODE] Email saved to database but NOT sent via SMTP", file=sys.stderr, flush=True)
+        print(f"[EMAIL TEST MODE] Email saved to database but NOT sent", file=sys.stderr, flush=True)
         return True, message_id, None
-    
-    # Normal mode: Send via SMTP
-    if not config["user"] or not config["password"]:
-        return False, None, "SMTP credentials not configured"
 
     # Append website visit tracking link before signature (order: body -> tracking link -> signature -> disclaimer)
     if customer_number:
@@ -296,6 +352,18 @@ def send_email(
 
     # Append user signature and company disclaimer to all outgoing emails
     body_html, body_text = _append_signature_and_disclaimer(body_html, body_text, user_id)
+
+    # Use Resend when configured (works when SMTP is blocked e.g. on Railway)
+    if os.getenv("RESEND_API_KEY", "").strip():
+        return _send_via_resend(
+            to_email=to_email, subject=subject, body_html=body_html, body_text=body_text,
+            from_email=from_email, from_name=from_name, cc=cc, bcc=bcc,
+            attachments=attachments, message_id=message_id, in_reply_to=in_reply_to, references=references,
+        )
+
+    # SMTP path
+    if not config["user"] or not config["password"]:
+        return False, None, "SMTP not configured. Set RESEND_API_KEY in Railway variables, or configure SMTP in My Settings."
 
     try:
         # Create message

@@ -1094,12 +1094,14 @@ async def send_quote_email_endpoint(
 ):
     """Send a quote as an email with PDF attachment."""
     try:
-        # Check SMTP is configured before attempting (clearer error than generic 500)
+        # Check email configured: Resend or SMTP
+        resend_key = os.getenv("RESEND_API_KEY", "").strip()
         smtp_config = get_smtp_config(current_user.id)
-        if not smtp_config.get("user") or not smtp_config.get("password"):
+        has_smtp = smtp_config.get("user") and smtp_config.get("password")
+        if not resend_key and not has_smtp:
             raise HTTPException(
                 status_code=400,
-                detail="SMTP credentials not configured. Go to My Settings → Email Settings and add your SMTP host, username, and password."
+                detail="Email not configured. Add RESEND_API_KEY in Railway (recommended) or configure SMTP in My Settings → Email Settings."
             )
         # Get quote
         statement = select(Quote).where(Quote.id == quote_id)

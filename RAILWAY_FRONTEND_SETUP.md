@@ -116,5 +116,6 @@ For the "View your quote online" link in quote emails to work, the API must know
 
 If none are set, quote emails are sent without the "View your quote online" link and the customer view will not work.
 
+- **Email (quote emails):** Add `RESEND_API_KEY` from [resend.com](https://resend.com) — see [RESEND_EMAIL_SETUP.md](RESEND_EMAIL_SETUP.md). SMTP often times out on Railway.
 - **Required variable:** `DATABASE_URL` (Postgres connection string). Add it in the API service’s Variables tab (e.g. from a Railway Postgres plugin).
 - **If the container fails to start:** Open the API service → Deployments → latest deployment → **View logs**. Check for errors (e.g. database connection, missing env vars).
