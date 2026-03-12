@@ -51,8 +51,11 @@ async def create_lead_webhook(
     Requires X-API-Key header for authentication.
     Links to existing Customer if email or phone matches (no Customer creation).
     """
-    # Build lead dict (exclude alias fields not on Lead model)
-    lead_dict = lead_data.model_dump(exclude={"first_name", "last_name", "full_name", "phone_number"})
+    # Build lead dict (exclude alias fields not on Lead model; exclude_none so Lead uses defaults for unset enums)
+    lead_dict = lead_data.model_dump(
+        exclude={"first_name", "last_name", "full_name", "phone_number"},
+        exclude_none=True,
+    )
     lead = Lead(**lead_dict)
 
     # Link to existing Customer if email or phone matches (returning submitter)
@@ -124,7 +127,6 @@ async def create_lead_webhook(
         
         # Check quote prerequisites if lead has customer
         if lead.status == LeadStatus.QUALIFIED and lead.customer_id:
-            from app.models import Customer
             from app.workflow import check_quote_prerequisites
             statement = select(Customer).where(Customer.id == lead.customer_id)
             customer = session.exec(statement).first()
@@ -137,7 +139,6 @@ async def create_lead_webhook(
         from app.schemas import CustomerResponse
         customer_response = None
         if lead.customer_id:
-            from app.models import Customer
             statement = select(Customer).where(Customer.id == lead.customer_id)
             customer = session.exec(statement).first()
             if customer:
