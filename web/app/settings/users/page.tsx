@@ -16,7 +16,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Users, Plus, Pencil, UserX } from 'lucide-react';
 import api from '@/lib/api';
 import { listUsers, createUser, updateUser, deactivateUser } from '@/lib/api';
@@ -327,22 +326,19 @@ export default function UsersPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="role">Role</Label>
-                <Select
+                <select
+                  id="role"
                   value={formData.role}
-                  onValueChange={(v) => setFormData({ ...formData, role: v })}
+                  onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                   disabled={saving}
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ROLES.map((r) => (
-                      <SelectItem key={r} value={r}>
-                        {r.replace('_', ' ')}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  {ROLES.map((r) => (
+                    <option key={r} value={r}>
+                      {r.replace('_', ' ')}
+                    </option>
+                  ))}
+                </select>
                 <p className="text-xs text-muted-foreground">
                   Director: full access. Sales Manager: can approve discounts. Closer: standard access.
                 </p>
