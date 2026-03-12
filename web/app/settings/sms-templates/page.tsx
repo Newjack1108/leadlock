@@ -163,14 +163,22 @@ export default function SmsTemplatesPage() {
 
         <div className="mb-4 p-4 bg-muted rounded-md">
           <h3 className="font-semibold mb-2">Available Variables</h3>
-          <p className="text-sm text-muted-foreground">
-            Use in your template: <code className="bg-background px-1 rounded">{'{{ customer.name }}'}</code>,{' '}
+          <p className="text-sm text-muted-foreground mb-2">
+            <strong>Recipient:</strong> <code className="bg-background px-1 rounded">{'{{ customer.name }}'}</code>,{' '}
             <code className="bg-background px-1 rounded">{'{{ customer.email }}'}</code>,{' '}
             <code className="bg-background px-1 rounded">{'{{ customer.phone }}'}</code>,{' '}
             <code className="bg-background px-1 rounded">{'{{ customer.customer_number }}'}</code>,{' '}
             <code className="bg-background px-1 rounded">{'{{ customer.address_line1 }}'}</code>,{' '}
             <code className="bg-background px-1 rounded">{'{{ customer.city }}'}</code>,{' '}
             <code className="bg-background px-1 rounded">{'{{ customer.postcode }}'}</code>
+          </p>
+          <p className="text-sm text-muted-foreground">
+            <strong>Sender & company:</strong> <code className="bg-background px-1 rounded">{'{{ user.name }}'}</code>{' '}
+            (sending user), <code className="bg-background px-1 rounded">{'{{ company.company_name }}'}</code>,{' '}
+            <code className="bg-background px-1 rounded">{'{{ company.trading_name }}'}</code>
+          </p>
+          <p className="text-xs text-muted-foreground mt-2">
+            Example: <code className="bg-background px-1 rounded">{"Hi {{ customer.name }}, it's {{ user.name }} from {{ company.company_name }}"}</code>
           </p>
         </div>
 
@@ -274,7 +282,7 @@ export default function SmsTemplatesPage() {
                   id="body_template"
                   value={formData.body_template}
                   onChange={(e) => setFormData({ ...formData, body_template: e.target.value })}
-                  placeholder="Hi {{ customer.name }}, thanks for your interest. We'll call you soon."
+                  placeholder="Hi {{ customer.name }}, it's {{ user.name }} from {{ company.company_name }}. Thanks for your interest!"
                   rows={6}
                   className="font-mono text-sm"
                 />

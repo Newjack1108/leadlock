@@ -8,7 +8,7 @@ from datetime import datetime
 from jinja2 import Template as JinjaTemplate
 
 from app.database import get_session
-from app.models import SmsTemplate, Customer, User
+from app.models import SmsTemplate, Customer, User, CompanySettings
 from app.auth import get_current_user
 from app.schemas import (
     SmsTemplateCreate,
@@ -17,7 +17,7 @@ from app.schemas import (
     SmsTemplatePreviewRequest,
     SmsTemplatePreviewResponse,
 )
-from app.sms_template_service import render_sms_template, get_sample_customer_data
+from app.sms_template_service import render_sms_template, get_sample_sms_context
 
 router = APIRouter(prefix="/api/sms-templates", tags=["sms-templates"])
 
@@ -189,8 +189,11 @@ async def preview_sms_template(
         customer = session.get(Customer, preview_data.customer_id)
         if not customer:
             raise HTTPException(status_code=404, detail="Customer not found")
-        body = render_sms_template(template, customer)
+        company_settings = session.exec(select(CompanySettings).limit(1)).first()
+        body = render_sms_template(
+            template, customer, user=current_user, company_settings=company_settings
+        )
     else:
-        sample_data = get_sample_customer_data()
+        sample_data = get_sample_sms_context()
         body = JinjaTemplate(template.body_template).render(**sample_data)
     return SmsTemplatePreviewResponse(body=body)
