@@ -75,6 +75,7 @@ function CreateQuoteContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const customerId = searchParams.get('customer_id') ? parseInt(searchParams.get('customer_id')!) : null;
+  const leadId = searchParams.get('lead_id') ? parseInt(searchParams.get('lead_id')!) : null;
 
   const [loading, setLoading] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);
@@ -410,6 +411,7 @@ function CreateQuoteContent() {
     try {
       const quoteData: any = {
         customer_id: customer.id,
+        ...(leadId && { lead_id: leadId }),
         items: validItems.map((item, index) => {
           const parentInItems = item.parent_index;
           const parentIndexInPayload =

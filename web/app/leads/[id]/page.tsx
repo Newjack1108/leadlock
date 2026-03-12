@@ -486,13 +486,23 @@ export default function LeadDetailPage() {
                       Customer since: {new Date(lead.customer.customer_since).toLocaleDateString()}
                     </div>
                   </div>
-                  <Button
-                    variant="outline"
-                    onClick={() => router.push(`/customers/${lead.customer!.id}`)}
-                    className="w-full"
-                  >
-                    View Customer Profile →
-                  </Button>
+                  <div className="flex flex-col gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => router.push(`/customers/${lead.customer!.id}`)}
+                      className="w-full"
+                    >
+                      View Customer Profile →
+                    </Button>
+                    {lead.status === LeadStatus.QUALIFIED && !lead.quote_locked && (
+                      <Button
+                        onClick={() => router.push(`/quotes/create?customer_id=${lead.customer!.id}&lead_id=${lead.id}`)}
+                        className="w-full"
+                      >
+                        Create Quote
+                      </Button>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
             )}

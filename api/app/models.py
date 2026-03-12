@@ -174,6 +174,7 @@ class Lead(SQLModel, table=True):
     # Relationships
     assigned_to_user: Optional[User] = Relationship(back_populates="assigned_leads")
     customer: Optional["Customer"] = Relationship(back_populates="leads")
+    quotes: List["Quote"] = Relationship(back_populates="lead")
     status_history: List["StatusHistory"] = Relationship(back_populates="lead")
 
 
@@ -457,6 +458,7 @@ class DiscountRequestStatus(str, Enum):
 class Quote(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     customer_id: Optional[int] = Field(default=None, foreign_key="customer.id")  # Temporarily nullable for migration
+    lead_id: Optional[int] = Field(default=None, foreign_key="lead.id")  # Lead this quote was generated from
     quote_number: str = Field(unique=True, index=True)  # e.g., "QT-2024-001"
     version: int = Field(default=1)  # For quote revisions
     status: QuoteStatus = Field(default=QuoteStatus.DRAFT)
@@ -492,6 +494,7 @@ class Quote(SQLModel, table=True):
     
     # Relationships
     customer: Optional["Customer"] = Relationship(back_populates="quotes")
+    lead: Optional["Lead"] = Relationship(back_populates="quotes")
     items: List["QuoteItem"] = Relationship(back_populates="quote")
     discounts: List["QuoteDiscount"] = Relationship(back_populates="quote")
     discount_requests: List["DiscountRequest"] = Relationship(back_populates="quote")

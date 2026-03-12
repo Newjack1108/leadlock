@@ -497,6 +497,19 @@ def create_db_and_tables():
                     error_str = str(col_error).lower()
                     if "already exists" not in error_str and "duplicate" not in error_str:
                         print(f"Warning: Could not add include_spec_sheets column: {col_error}", file=sys.stderr, flush=True)
+
+            # Add lead_id to quote table (quote generated from lead)
+            quote_columns = [col['name'] for col in inspector.get_columns("quote")]
+            if "lead_id" not in quote_columns:
+                print("Adding lead_id column to quote table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE quote ADD COLUMN lead_id INTEGER REFERENCES lead(id)"))
+                    print("Added lead_id column to quote table", file=sys.stderr, flush=True)
+                except Exception as col_error:
+                    error_str = str(col_error).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Warning: Could not add lead_id column: {col_error}", file=sys.stderr, flush=True)
         
         # Step 6: Add trading_name and default_terms_and_conditions to CompanySettings table
         has_company_settings = inspector.has_table("companysettings")

@@ -179,6 +179,14 @@ export default function QuoteDetailPage() {
               {customer && (
                 <p className="text-muted-foreground mt-1">
                   For {customer.name}
+                  {quote.lead_id && quote.lead_name && (
+                    <>
+                      {' · '}
+                      <Link href={`/leads/${quote.lead_id}`} className="text-primary hover:underline">
+                        From lead: {quote.lead_name}
+                      </Link>
+                    </>
+                  )}
                 </p>
               )}
             </div>

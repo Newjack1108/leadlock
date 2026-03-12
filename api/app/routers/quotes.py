@@ -50,10 +50,14 @@ def build_quote_response(quote: Quote, quote_items: List[QuoteItem], session: Se
     quote_discounts = session.exec(discount_statement).all()
     customer_name = None
     customer_last_interacted_at = None
+    lead_name = None
     if quote.customer_id:
         customer = session.exec(select(Customer).where(Customer.id == quote.customer_id)).first()
         customer_name = customer.name if customer else None
         customer_last_interacted_at = get_last_activity_date(quote.customer_id, session)
+    if quote.lead_id:
+        lead = session.exec(select(Lead).where(Lead.id == quote.lead_id)).first()
+        lead_name = lead.name if lead else None
 
     # Computed VAT (total_amount is Ex VAT @ 20%; deposit/balance stored as inc VAT)
     vat_amount = quote.total_amount * VAT_RATE_DECIMAL
@@ -77,6 +81,8 @@ def build_quote_response(quote: Quote, quote_items: List[QuoteItem], session: Se
         id=quote.id,
         customer_id=quote.customer_id,
         customer_name=customer_name,
+        lead_id=quote.lead_id,
+        lead_name=lead_name,
         quote_number=quote.quote_number,
         version=quote.version,
         status=quote.status,
@@ -397,7 +403,16 @@ async def create_quote(
         
         if not customer:
             raise HTTPException(status_code=404, detail="Customer not found")
-        
+
+        lead_id = None
+        if quote_data.lead_id:
+            lead = session.exec(select(Lead).where(Lead.id == quote_data.lead_id)).first()
+            if not lead:
+                raise HTTPException(status_code=404, detail="Lead not found")
+            if lead.customer_id != quote_data.customer_id:
+                raise HTTPException(status_code=400, detail="Lead must belong to the same customer")
+            lead_id = lead.id
+
         # Generate quote number if not provided
         quote_number = quote_data.quote_number or generate_quote_number(session)
         
@@ -444,6 +459,7 @@ async def create_quote(
         # Create quote
         quote = Quote(
             customer_id=quote_data.customer_id,
+            lead_id=lead_id,
             quote_number=quote_number,
             version=quote_data.version or 1,
             subtotal=subtotal,

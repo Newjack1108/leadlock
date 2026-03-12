@@ -1,13 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from sqlmodel import Session, select, or_
 from typing import Optional, List
 from app.database import get_session
 from app.models import Customer, User, Activity, Quote, Lead, LeadStatus, QuoteItem, StatusHistory, Email, QuoteEmail, EmailDirection, QuoteStatus, WebsiteVisit, Order, OrderItem
+from app.models import LeadType, LeadSource
 from app.auth import get_current_user
 from app.schemas import (
     CustomerResponse, CustomerUpdate, ActivityCreate, ActivityResponse, QuoteResponse, QuoteItemResponse,
     CustomerHistoryResponse, CustomerHistoryEvent, CustomerHistoryEventType,
-    WebsiteVisitResponse, WebsiteVisitsListResponse,
+    WebsiteVisitResponse, WebsiteVisitsListResponse, CustomerLeadCreate, LeadResponse,
 )
 from app.workflow import check_quote_prerequisites
 from datetime import datetime
@@ -433,6 +434,51 @@ async def get_customer_leads(
     leads = session.exec(statement).all()
     
     return [enrich_lead_response(lead, session, current_user) for lead in leads]
+
+
+@router.post("/{customer_id}/leads", response_model=LeadResponse)
+async def create_lead_from_customer(
+    customer_id: int,
+    body: Optional[CustomerLeadCreate] = Body(default=None),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    """Create a pre-qualified lead for an existing customer (e.g. for additional quoting)."""
+    from app.routers.leads import enrich_lead_response
+
+    customer = session.exec(select(Customer).where(Customer.id == customer_id)).first()
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+
+    data = body or CustomerLeadCreate()
+    lead = Lead(
+        name=customer.name,
+        email=customer.email,
+        phone=customer.phone,
+        postcode=customer.postcode,
+        status=LeadStatus.QUALIFIED,
+        customer_id=customer_id,
+        description=data.description,
+        product_interest=data.product_interest,
+        lead_type=data.lead_type or LeadType.UNKNOWN,
+        lead_source=data.lead_source or LeadSource.MANUAL_ENTRY,
+        scope_notes=data.scope_notes,
+        assigned_to_id=current_user.id,
+    )
+    session.add(lead)
+    session.commit()
+    session.refresh(lead)
+
+    from app.models import StatusHistory
+    status_history = StatusHistory(
+        lead_id=lead.id,
+        new_status=LeadStatus.QUALIFIED,
+        changed_by_id=current_user.id
+    )
+    session.add(status_history)
+    session.commit()
+
+    return enrich_lead_response(lead, session, current_user)
 
 
 @router.get("/{customer_id}/history", response_model=CustomerHistoryResponse)

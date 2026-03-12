@@ -417,6 +417,15 @@ class LeadCreate(BaseModel):
         return self
 
 
+class CustomerLeadCreate(BaseModel):
+    """Create a pre-qualified lead from an existing customer. Populates from customer data."""
+    description: Optional[str] = None
+    product_interest: Optional[str] = None
+    lead_type: Optional[LeadType] = None
+    lead_source: Optional[LeadSource] = None
+    scope_notes: Optional[str] = None
+
+
 class LeadUpdate(BaseModel):
     name: Optional[str] = None
     email: Optional[str] = None
@@ -939,6 +948,7 @@ class QuoteItemResponse(BaseModel):
 
 class QuoteCreate(BaseModel):
     customer_id: Optional[int] = None  # Can be None during migration
+    lead_id: Optional[int] = None  # Lead this quote was generated from (must belong to customer_id)
     quote_number: Optional[str] = None  # Auto-generated if not provided
     version: int = 1
     valid_until: Optional[datetime] = None
@@ -984,6 +994,8 @@ class QuoteResponse(BaseModel):
     id: int
     customer_id: Optional[int] = None
     customer_name: Optional[str] = None
+    lead_id: Optional[int] = None
+    lead_name: Optional[str] = None
     quote_number: str
     version: int
     status: QuoteStatus

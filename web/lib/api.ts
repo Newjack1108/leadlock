@@ -471,6 +471,7 @@ export const estimateDeliveryInstall = async (
 // Quote API functions
 export const createQuote = async (quoteData: {
   customer_id: number;
+  lead_id?: number;
   quote_number?: string;
   version?: number;
   valid_until?: string;
@@ -517,6 +518,14 @@ export const getOrders = async () => {
 
 export const getCustomerOrders = async (customerId: number) => {
   const response = await api.get(`/api/customers/${customerId}/orders`);
+  return response.data;
+};
+
+export const createLeadFromCustomer = async (
+  customerId: number,
+  data?: { description?: string; product_interest?: string; lead_type?: string; lead_source?: string; scope_notes?: string }
+) => {
+  const response = await api.post(`/api/customers/${customerId}/leads`, data ?? {});
   return response.data;
 };
 

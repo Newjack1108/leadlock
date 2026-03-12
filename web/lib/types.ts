@@ -786,6 +786,8 @@ export interface Quote {
   id: number;
   customer_id: number;
   customer_name?: string;
+  lead_id?: number | null;
+  lead_name?: string | null;
   quote_number: string;
   version: number;
   status: QuoteStatus;

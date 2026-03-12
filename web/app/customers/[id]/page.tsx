@@ -32,7 +32,13 @@ import {
   ChevronUp,
   Pencil,
 } from 'lucide-react';
-import api, { getCustomerHistory } from '@/lib/api';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import api, { getCustomerHistory, createLeadFromCustomer } from '@/lib/api';
 import { formatDateTime } from '@/lib/utils';
 import { Customer, Activity, ActivityType, Lead, CustomerHistoryEvent, CustomerHistoryEventType, WebsiteVisit, Order } from '@/lib/types';
 import SendQuoteEmailDialog from '@/components/SendQuoteEmailDialog';
@@ -126,6 +132,7 @@ export default function CustomerDetailPage() {
   const [historyExpanded, setHistoryExpanded] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [nameBeforeEdit, setNameBeforeEdit] = useState('');
+  const [createLeadLoading, setCreateLeadLoading] = useState(false);
 
   useEffect(() => {
     if (customerId) {
@@ -502,13 +509,48 @@ export default function CustomerDetailPage() {
                 <div className="flex items-center justify-between">
                   <CardTitle>Quotes</CardTitle>
                   {!quoteLocked && (
-                    <Button
-                      size="sm"
-                      onClick={() => router.push(`/quotes/create?customer_id=${customerId}`)}
-                    >
-                      <Plus className="h-4 w-4 mr-2" />
-                      Create Quote
-                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button size="sm">
+                          <Plus className="h-4 w-4 mr-2" />
+                          Create Quote
+                          <ChevronDown className="h-4 w-4 ml-1" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          onClick={() => router.push(`/quotes/create?customer_id=${customerId}`)}
+                        >
+                          New quote (no lead)
+                        </DropdownMenuItem>
+                        {leads.length > 0 && leads.map((lead) => (
+                          <DropdownMenuItem
+                            key={lead.id}
+                            onClick={() => router.push(`/quotes/create?customer_id=${customerId}&lead_id=${lead.id}`)}
+                          >
+                            From lead: {lead.name}
+                          </DropdownMenuItem>
+                        ))}
+                        <DropdownMenuItem
+                          disabled={createLeadLoading}
+                          onClick={async () => {
+                            setCreateLeadLoading(true);
+                            try {
+                              const newLead = await createLeadFromCustomer(customerId);
+                              toast.success('Pre-qualified lead created');
+                              fetchLeads();
+                              router.push(`/quotes/create?customer_id=${customerId}&lead_id=${newLead.id}`);
+                            } catch (err: any) {
+                              toast.error(err.response?.data?.detail || 'Failed to create lead');
+                            } finally {
+                              setCreateLeadLoading(false);
+                            }
+                          }}
+                        >
+                          {createLeadLoading ? 'Creating...' : 'Create new lead (pre-qualified) and quote'}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   )}
                 </div>
               </CardHeader>
@@ -517,14 +559,48 @@ export default function CustomerDetailPage() {
                   <div className="space-y-3">
                     <p className="text-sm text-muted-foreground">No quotes yet</p>
                     {!quoteLocked && (
-                      <Button
-                        variant="outline"
-                        className="w-full"
-                        onClick={() => router.push(`/quotes/create?customer_id=${customerId}`)}
-                      >
-                        <Plus className="h-4 w-4 mr-2" />
-                        Create First Quote
-                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="outline" className="w-full">
+                            <Plus className="h-4 w-4 mr-2" />
+                            Create First Quote
+                            <ChevronDown className="h-4 w-4 ml-1" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="w-56">
+                          <DropdownMenuItem
+                            onClick={() => router.push(`/quotes/create?customer_id=${customerId}`)}
+                          >
+                            New quote (no lead)
+                          </DropdownMenuItem>
+                          {leads.length > 0 && leads.map((lead) => (
+                            <DropdownMenuItem
+                              key={lead.id}
+                              onClick={() => router.push(`/quotes/create?customer_id=${customerId}&lead_id=${lead.id}`)}
+                            >
+                              From lead: {lead.name}
+                            </DropdownMenuItem>
+                          ))}
+                          <DropdownMenuItem
+                            disabled={createLeadLoading}
+                            onClick={async () => {
+                              setCreateLeadLoading(true);
+                              try {
+                                const newLead = await createLeadFromCustomer(customerId);
+                                toast.success('Pre-qualified lead created');
+                                fetchLeads();
+                                router.push(`/quotes/create?customer_id=${customerId}&lead_id=${newLead.id}`);
+                              } catch (err: any) {
+                                toast.error(err.response?.data?.detail || 'Failed to create lead');
+                              } finally {
+                                setCreateLeadLoading(false);
+                              }
+                            }}
+                          >
+                            {createLeadLoading ? 'Creating...' : 'Create new lead (pre-qualified) and quote'}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     )}
                   </div>
                 ) : (
@@ -540,6 +616,11 @@ export default function CustomerDetailPage() {
                             onClick={() => router.push(`/quotes/${quote.id}`)}
                           >
                             <span className="font-medium">{quote.quote_number}</span>
+                            {quote.lead_name && (
+                              <span className="text-muted-foreground text-xs ml-2">
+                                (from lead: {quote.lead_name})
+                              </span>
+                            )}
                           </div>
                           <div className="flex items-center gap-2">
                             <Badge>{quote.status}</Badge>

@@ -160,6 +160,12 @@ export default function OpportunitiesPage() {
                             </div>
                           )}
                           <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
+                            {opp.customer_name && (
+                              <span>{opp.customer_name}</span>
+                            )}
+                            {opp.lead_name && (
+                              <span>From lead: {opp.lead_name}</span>
+                            )}
                             {opp.expected_close_date && (
                               <span className="flex items-center gap-1">
                                 <TrendingUp className="h-3 w-3" />
