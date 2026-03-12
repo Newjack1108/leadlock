@@ -203,6 +203,87 @@ export default function CloserDashboardPage() {
           ))}
         </div>
 
+        {/* Qualified for Quoting, Reminders, Quick Documents - three equal-size cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 shrink-0">
+          <Card className="shrink-0 min-h-[200px] border-primary/30 bg-primary/5">
+            <CardHeader className="py-3 px-4 flex flex-row items-center justify-between">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <FileText className="h-4 w-4" />
+                Qualified for Quoting
+              </CardTitle>
+              <span className="text-xs text-muted-foreground">
+                {qualified?.count ?? 0} ready
+              </span>
+            </CardHeader>
+            <CardContent className="px-4 pb-4 pt-0">
+              {qualified && qualified.leads.length > 0 ? (
+                <div className="max-h-[280px] overflow-y-auto space-y-1.5">
+                  {qualified.leads.map((lead) => (
+                    <Link
+                      key={lead.id}
+                      href={`/leads/${lead.id}`}
+                      className="flex items-center justify-between p-2 rounded-md bg-card border border-border cursor-pointer hover:border-primary/50 transition-colors block"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium truncate">{lead.name}</p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {lead.customer_name || 'No customer'} · {formatTimeAgo(lead.updated_at)}
+                        </p>
+                      </div>
+                      <ArrowRight className="h-3.5 w-3.5 text-primary shrink-0 ml-2" />
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground py-2">No qualified leads.</p>
+              )}
+            </CardContent>
+          </Card>
+          <div className="shrink-0">
+            <ReminderList limit={5} showActions={true} compact={true} />
+          </div>
+          <Card className="shrink-0 min-h-[200px]">
+            <CardHeader className="py-3 px-4 flex flex-row items-center justify-between">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <FolderOpen className="h-4 w-4" />
+                Quick Documents
+              </CardTitle>
+              <Button variant="outline" size="sm" className="h-7 text-xs" asChild>
+                <Link href="/sales-documents">View all</Link>
+              </Button>
+            </CardHeader>
+            <CardContent className="px-4 pb-4 pt-0">
+              {documents.length > 0 ? (
+                <div className="max-h-[280px] overflow-y-auto space-y-1.5">
+                  {documents.slice(0, 6).map((doc) => (
+                    <div
+                      key={doc.id}
+                      className="flex items-center justify-between p-2 rounded-md border border-border hover:border-primary/30 transition-colors"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium truncate">{doc.name}</p>
+                        {doc.category && (
+                          <p className="text-xs text-muted-foreground">{doc.category}</p>
+                        )}
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 shrink-0 p-0"
+                        onClick={() => handleDownloadDoc(doc)}
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground py-2">No documents available.</p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
         {/* Pipeline overview: Status, Leads by source, Map */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 shrink-0">
           <Card>
@@ -237,144 +318,53 @@ export default function CloserDashboardPage() {
           </Card>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* Left column */}
-          <div className="flex flex-col gap-4 lg:pr-1">
-            {/* Qualified for Quoting */}
-            <Card className="shrink-0 border-primary/30 bg-primary/5">
-              <CardHeader className="py-3 px-4 flex flex-row items-center justify-between">
-                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <FileText className="h-4 w-4" />
-                  Qualified for Quoting
-                </CardTitle>
-                <span className="text-xs text-muted-foreground">
-                  {qualified?.count ?? 0} ready
-                </span>
-              </CardHeader>
-              <CardContent className="px-4 pb-4 pt-0">
-            {qualified && qualified.leads.length > 0 ? (
-              <div className="max-h-[280px] overflow-y-auto space-y-1.5">
-                {qualified.leads.map((lead) => (
-                  <Link
-                    key={lead.id}
-                    href={`/leads/${lead.id}`}
-                    className="flex items-center justify-between p-2 rounded-md bg-card border border-border cursor-pointer hover:border-primary/50 transition-colors block"
+        {/* New Messages - full width when there are unread */}
+        {totalUnread > 0 && (
+          <Card className="shrink-0 mb-4">
+            <CardHeader className="py-3 px-4 flex flex-row items-center justify-between">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <MessageSquare className="h-4 w-4" />
+                New Messages
+              </CardTitle>
+              <span className="text-xs text-muted-foreground">{totalUnread} unread</span>
+            </CardHeader>
+            <CardContent className="px-4 pb-4 pt-0">
+              <div className="space-y-1.5">
+                {unreadSms?.messages?.slice(0, 4).map((msg) => (
+                  <div
+                    key={`sms-${msg.id}`}
+                    className="flex items-center justify-between p-2 rounded-md bg-card border border-border"
                   >
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium truncate">{lead.name}</p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {lead.customer_name || 'No customer'} · {formatTimeAgo(lead.updated_at)}
-                      </p>
+                      <p className="text-sm font-medium truncate">{msg.customer_name}</p>
+                      <p className="text-xs text-muted-foreground truncate">{msg.body}</p>
                     </div>
-                    <ArrowRight className="h-3.5 w-3.5 text-primary shrink-0 ml-2" />
-                  </Link>
+                    <Button variant="outline" size="sm" className="h-7 text-xs" asChild>
+                      <Link href={`/customers/${msg.customer_id}/sms`}>View</Link>
+                    </Button>
+                  </div>
+                ))}
+                {unreadMessenger?.messages?.slice(0, 4).map((msg) => (
+                  <div
+                    key={`msg-${msg.id}`}
+                    className="flex items-center justify-between p-2 rounded-md bg-card border border-border"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{msg.customer_name}</p>
+                      <p className="text-xs text-muted-foreground truncate">{msg.body}</p>
+                    </div>
+                    <Button variant="outline" size="sm" className="h-7 text-xs" asChild>
+                      <Link href={`/customers/${msg.customer_id}/messenger`}>View</Link>
+                    </Button>
+                  </div>
                 ))}
               </div>
-            ) : (
-              <p className="text-sm text-muted-foreground py-2">No qualified leads.</p>
-            )}
-              </CardContent>
-            </Card>
-
-            {/* New Messages */}
-            {totalUnread > 0 && (
-              <Card className="shrink-0">
-                <CardHeader className="py-3 px-4 flex flex-row items-center justify-between">
-                  <CardTitle className="text-sm font-medium flex items-center gap-2">
-                    <MessageSquare className="h-4 w-4" />
-                    New Messages
-                  </CardTitle>
-                  <span className="text-xs text-muted-foreground">{totalUnread} unread</span>
-                </CardHeader>
-                <CardContent className="px-4 pb-4 pt-0">
-                  <div className="space-y-1.5">
-                    {unreadSms?.messages?.slice(0, 4).map((msg) => (
-                      <div
-                        key={`sms-${msg.id}`}
-                        className="flex items-center justify-between p-2 rounded-md bg-card border border-border"
-                      >
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium truncate">{msg.customer_name}</p>
-                          <p className="text-xs text-muted-foreground truncate">{msg.body}</p>
-                        </div>
-                        <Button variant="outline" size="sm" className="h-7 text-xs" asChild>
-                          <Link href={`/customers/${msg.customer_id}/sms`}>View</Link>
-                        </Button>
-                      </div>
-                    ))}
-                    {unreadMessenger?.messages?.slice(0, 4).map((msg) => (
-                      <div
-                        key={`msg-${msg.id}`}
-                        className="flex items-center justify-between p-2 rounded-md bg-card border border-border"
-                      >
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium truncate">{msg.customer_name}</p>
-                          <p className="text-xs text-muted-foreground truncate">{msg.body}</p>
-                        </div>
-                        <Button variant="outline" size="sm" className="h-7 text-xs" asChild>
-                          <Link href={`/customers/${msg.customer_id}/messenger`}>View</Link>
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                  <Button variant="ghost" size="sm" className="h-7 text-xs mt-2" asChild>
-                    <Link href="/customers?has_unread=1">View all</Link>
-                  </Button>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-
-          {/* Right column */}
-          <div className="flex flex-col gap-4 lg:pl-1">
-            {/* Reminders */}
-            <div className="shrink-0">
-              <ReminderList limit={5} showActions={true} compact={true} />
-            </div>
-
-            {/* Quick Documents */}
-            <Card className="shrink-0">
-              <CardHeader className="py-3 px-4 flex flex-row items-center justify-between">
-                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <FolderOpen className="h-4 w-4" />
-                  Quick Documents
-                </CardTitle>
-                <Button variant="outline" size="sm" className="h-7 text-xs" asChild>
-                  <Link href="/sales-documents">View all</Link>
-                </Button>
-              </CardHeader>
-              <CardContent className="px-4 pb-4 pt-0">
-                {documents.length > 0 ? (
-                  <div className="space-y-1.5">
-                    {documents.slice(0, 6).map((doc) => (
-                      <div
-                        key={doc.id}
-                        className="flex items-center justify-between p-2 rounded-md border border-border hover:border-primary/30 transition-colors"
-                      >
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium truncate">{doc.name}</p>
-                          {doc.category && (
-                            <p className="text-xs text-muted-foreground">{doc.category}</p>
-                          )}
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 w-7 shrink-0 p-0"
-                          onClick={() => handleDownloadDoc(doc)}
-                        >
-                          <Download className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground py-2">No documents available.</p>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-        </div>
+              <Button variant="ghost" size="sm" className="h-7 text-xs mt-2" asChild>
+                <Link href="/customers?has_unread=1">View all</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        )}
       </main>
     </div>
   );

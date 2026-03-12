@@ -110,7 +110,7 @@ export default function Header() {
         <nav className="flex items-center gap-4">
           {/* Closer: Dashboard first; Director/Sales Manager: Leads first */}
           {isCloser ? (
-            <Link href="/closer-dashboard">
+            <Link href="/closer-dashboard" className="relative">
               <Button
                 variant={pathname?.startsWith('/closer-dashboard') ? 'default' : 'ghost'}
                 size="sm"
@@ -119,6 +119,11 @@ export default function Header() {
                 <LayoutDashboard className="h-4 w-4 mr-2" />
                 Dashboard
               </Button>
+              {newLeadsCount > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-red-500 text-white text-xs font-semibold flex items-center justify-center">
+                  {newLeadsCount > 99 ? '99+' : newLeadsCount}
+                </span>
+              )}
             </Link>
           ) : (
             <Link href="/leads" className="relative">
