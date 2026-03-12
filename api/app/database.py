@@ -802,6 +802,27 @@ def create_db_and_tables():
                 print(f"Error in deposit/balance inc VAT migration: {e}", file=sys.stderr, flush=True)
                 import traceback
                 print(traceback.format_exc(), file=sys.stderr, flush=True)
+
+        # Step 8e: Migrate WEBSITE lead source to CS WEBSITE (WEBSITE removed, replaced by CSGB/CS/BLC WEBSITE)
+        try:
+            with engine.connect() as conn:
+                result = conn.execute(text(
+                    "SELECT 1 FROM applied_data_migrations WHERE migration_name = 'lead_source_website_to_cs'"
+                ))
+                if result.fetchone() is None:
+                    print("Migrating WEBSITE lead source to CS WEBSITE...", file=sys.stderr, flush=True)
+                    with engine.begin() as mig_conn:
+                        mig_conn.execute(text(
+                            "UPDATE lead SET lead_source = 'CS WEBSITE' WHERE lead_source = 'WEBSITE'"
+                        ))
+                        mig_conn.execute(text(
+                            "INSERT INTO applied_data_migrations (migration_name) VALUES ('lead_source_website_to_cs')"
+                        ))
+                    print("Lead source migration completed", file=sys.stderr, flush=True)
+        except Exception as e:
+            error_str = str(e).lower()
+            if "already exists" not in error_str and "duplicate" not in error_str:
+                print(f"Error in lead source migration: {e}", file=sys.stderr, flush=True)
         
         # Step 9: Create Reminder and ReminderRule tables
         has_reminder_table = inspector.has_table("reminder")
