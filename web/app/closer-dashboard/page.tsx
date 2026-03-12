@@ -156,9 +156,9 @@ export default function CloserDashboardPage() {
   }
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden">
+    <div className="min-h-screen flex flex-col">
       <Header />
-      <main className="flex-1 container mx-auto px-6 py-4 overflow-hidden flex flex-col min-h-0">
+      <main className="flex-1 container mx-auto px-6 py-4 overflow-y-auto">
         <div className="shrink-0 mb-4">
           <p className="text-2xl font-bold">
             {getGreeting()}{user?.full_name ? `, ${getFirstName(user.full_name)}` : ''}
@@ -237,9 +237,9 @@ export default function CloserDashboardPage() {
           </Card>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 flex-1 min-h-0 overflow-y-auto lg:overflow-hidden">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Left column */}
-          <div className="flex flex-col gap-4 overflow-y-auto min-h-0 lg:pr-1">
+          <div className="flex flex-col gap-4 lg:pr-1">
             {/* Qualified for Quoting */}
             <Card className="shrink-0 border-primary/30 bg-primary/5">
               <CardHeader className="py-3 px-4 flex flex-row items-center justify-between">
@@ -253,8 +253,8 @@ export default function CloserDashboardPage() {
               </CardHeader>
               <CardContent className="px-4 pb-4 pt-0">
             {qualified && qualified.leads.length > 0 ? (
-              <div className="space-y-1.5">
-                {qualified.leads.slice(0, 8).map((lead) => (
+              <div className="max-h-[280px] overflow-y-auto space-y-1.5">
+                {qualified.leads.map((lead) => (
                   <Link
                     key={lead.id}
                     href={`/leads/${lead.id}`}
@@ -269,9 +269,6 @@ export default function CloserDashboardPage() {
                     <ArrowRight className="h-3.5 w-3.5 text-primary shrink-0 ml-2" />
                   </Link>
                 ))}
-                {qualified.leads.length > 8 && (
-                  <p className="text-xs text-muted-foreground pt-1">+{qualified.leads.length - 8} more</p>
-                )}
               </div>
             ) : (
               <p className="text-sm text-muted-foreground py-2">No qualified leads.</p>
@@ -329,10 +326,10 @@ export default function CloserDashboardPage() {
           </div>
 
           {/* Right column */}
-          <div className="flex flex-col gap-4 overflow-y-auto min-h-0 lg:pl-1">
+          <div className="flex flex-col gap-4 lg:pl-1">
             {/* Reminders */}
             <div className="shrink-0">
-              <ReminderList limit={5} showActions={true} />
+              <ReminderList limit={5} showActions={true} compact={true} />
             </div>
 
             {/* Quick Documents */}

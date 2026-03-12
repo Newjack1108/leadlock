@@ -303,7 +303,7 @@ async def get_qualified_for_quoting(
     statement = (
         select(Lead)
         .where(Lead.status == LeadStatus.QUALIFIED)
-        .order_by(Lead.updated_at.desc())
+        .order_by(Lead.updated_at.asc())
     )
     if assigned_to == "me":
         statement = statement.where(Lead.assigned_to_id == current_user.id)

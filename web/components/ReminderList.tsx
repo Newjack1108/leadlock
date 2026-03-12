@@ -22,6 +22,7 @@ interface ReminderListProps {
   onReminderAction?: () => void;
   priorityFilter?: ReminderPriority;
   typeFilter?: ReminderType;
+  compact?: boolean;
 }
 
 export default function ReminderList({ 
@@ -29,7 +30,8 @@ export default function ReminderList({
   showActions = true,
   onReminderAction,
   priorityFilter,
-  typeFilter
+  typeFilter,
+  compact = false,
 }: ReminderListProps) {
   const router = useRouter();
   const [reminders, setReminders] = useState<Reminder[]>([]);
@@ -214,13 +216,14 @@ export default function ReminderList({
   }
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle>Reminders ({reminders.length})</CardTitle>
+    <Card className={compact ? 'min-h-[200px]' : ''}>
+      <CardHeader className={`flex flex-row items-center justify-between ${compact ? 'py-2 px-4' : ''}`}>
+        <CardTitle className={compact ? 'text-sm font-medium' : ''}>Reminders ({reminders.length})</CardTitle>
         <div className="flex gap-2">
           <Button
             variant="outline"
             size="sm"
+            className={compact ? 'h-7 text-xs' : ''}
             onClick={fetchReminders}
           >
             <RefreshCw className="h-4 w-4 mr-2" />
@@ -229,6 +232,7 @@ export default function ReminderList({
           <Button
             variant="outline"
             size="sm"
+            className={compact ? 'h-7 text-xs' : ''}
             onClick={handleGenerate}
             disabled={generating}
           >
@@ -237,12 +241,12 @@ export default function ReminderList({
           </Button>
         </div>
       </CardHeader>
-      <CardContent>
-        <div className="space-y-3">
+      <CardContent className={compact ? 'px-4 pb-4 pt-0' : ''}>
+        <div className={compact ? 'max-h-[280px] overflow-y-auto space-y-2' : 'space-y-3'}>
           {reminders.map((reminder) => (
             <div
               key={reminder.id}
-              className={`p-4 border rounded-lg ${getPriorityColor(reminder.priority)}`}
+              className={`border rounded-lg ${getPriorityColor(reminder.priority)} ${compact ? 'p-3' : 'p-4'}`}
             >
               <div className="flex items-start justify-between mb-2">
                 <div className="flex-1">
@@ -268,10 +272,11 @@ export default function ReminderList({
                 </div>
               </div>
               {showActions && (
-                <div className="flex items-center gap-2 mt-3 pt-3 border-t">
+                <div className={`flex items-center gap-2 border-t ${compact ? 'mt-2 pt-2' : 'mt-3 pt-3'}`}>
                   <Button
                     size="sm"
                     variant="default"
+                    className={compact ? 'h-7 text-xs' : ''}
                     onClick={() => {
                       handleQuickAction(reminder, reminder.suggested_action);
                       handleAct(reminder.id, reminder.suggested_action);
@@ -283,6 +288,7 @@ export default function ReminderList({
                   <Button
                     size="sm"
                     variant="outline"
+                    className={compact ? 'h-7 text-xs' : ''}
                     onClick={() => handleDismiss(reminder.id)}
                   >
                     <X className="h-4 w-4 mr-2" />
@@ -291,6 +297,7 @@ export default function ReminderList({
                   <Button
                     size="sm"
                     variant="ghost"
+                    className={compact ? 'h-7 text-xs' : ''}
                     onClick={() => handleAct(reminder.id, reminder.suggested_action)}
                   >
                     <CheckCircle2 className="h-4 w-4 mr-2" />
