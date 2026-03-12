@@ -109,7 +109,11 @@ export default function LeadMap({ locations, loading = false, period = 'all' }: 
 
   return (
     <>
-      <div className="relative h-[300px] w-full overflow-hidden rounded-lg">
+      <div
+        className={`relative h-[300px] w-full overflow-hidden rounded-lg transition-opacity duration-200 ${
+          expanded ? 'opacity-50 pointer-events-none' : ''
+        }`}
+      >
         <MapContainer
           center={[54.5, -2.5]}
           zoom={6}
