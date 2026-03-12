@@ -16,9 +16,10 @@ const BAR_COLORS = ['#2563eb', '#7c3aed', '#16a34a', '#ea580c', '#0891b2', '#be1
 
 interface LeadsBySourceBarChartProps {
   data: LeadSourceCount[];
+  height?: number;
 }
 
-export default function LeadsBySourceBarChart({ data }: LeadsBySourceBarChartProps) {
+export default function LeadsBySourceBarChart({ data, height = 280 }: LeadsBySourceBarChartProps) {
   const chartData = (data ?? []).map((item) => ({
     name: (item?.source ?? 'Unknown').replace(/_/g, ' '),
     count: Number(item?.count ?? 0),
@@ -26,15 +27,15 @@ export default function LeadsBySourceBarChart({ data }: LeadsBySourceBarChartPro
 
   if (chartData.length === 0) {
     return (
-      <div className="flex h-[280px] items-center justify-center text-muted-foreground">
+      <div className="flex items-center justify-center text-muted-foreground" style={{ height }}>
         No leads by source for this period
       </div>
     );
   }
 
   return (
-    <div className="h-[280px] w-full min-h-[280px]">
-    <ResponsiveContainer width="100%" height={280}>
+    <div className="w-full" style={{ height, minHeight: height }}>
+    <ResponsiveContainer width="100%" height={height}>
       <BarChart
         data={chartData}
         layout="vertical"

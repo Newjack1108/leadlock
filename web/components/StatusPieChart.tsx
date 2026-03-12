@@ -14,9 +14,10 @@ interface StatusPieChartProps {
   quotedCount: number;
   wonCount: number;
   lostCount: number;
+  height?: number;
 }
 
-export default function StatusPieChart({ newCount, quotedCount, wonCount, lostCount }: StatusPieChartProps) {
+export default function StatusPieChart({ newCount, quotedCount, wonCount, lostCount, height = 280 }: StatusPieChartProps) {
   const data = [
     { name: 'New', value: Number(newCount ?? 0), color: STATUS_COLORS.New },
     { name: 'Quoted', value: Number(quotedCount ?? 0), color: STATUS_COLORS.Quoted },
@@ -28,22 +29,26 @@ export default function StatusPieChart({ newCount, quotedCount, wonCount, lostCo
 
   if (total === 0) {
     return (
-      <div className="flex h-[280px] items-center justify-center text-muted-foreground">
+      <div className="flex items-center justify-center text-muted-foreground" style={{ height }}>
         No data for this period
       </div>
     );
   }
 
+  const scale = height / 280;
+  const innerRadius = Math.round(60 * scale);
+  const outerRadius = Math.round(100 * scale);
+
   return (
-    <div className="h-[280px] w-full min-h-[280px]">
-    <ResponsiveContainer width="100%" height={280}>
+    <div className="w-full" style={{ height, minHeight: height }}>
+    <ResponsiveContainer width="100%" height={height}>
       <PieChart>
         <Pie
           data={data}
           cx="50%"
           cy="50%"
-          innerRadius={60}
-          outerRadius={100}
+          innerRadius={innerRadius}
+          outerRadius={outerRadius}
           paddingAngle={2}
           dataKey="value"
           animationDuration={500}

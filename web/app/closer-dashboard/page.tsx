@@ -1,24 +1,32 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Header from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import ReminderList from '@/components/ReminderList';
+import StatusPieChart from '@/components/StatusPieChart';
+import LeadsBySourceBarChart from '@/components/LeadsBySourceBarChart';
 import api, {
   getQualifiedForQuoting,
   getUnreadSms,
   getUnreadMessenger,
   getSalesDocuments,
   downloadSalesDocument,
+  getCompanySettings,
+  getLeadLocations,
 } from '@/lib/api';
 import type {
   QualifiedForQuotingSummary,
   UnreadSmsSummary,
   UnreadMessengerSummary,
   SalesDocument,
+  DashboardStats,
+  CompanySettings,
+  LeadLocationItem,
 } from '@/lib/types';
 import { toast } from 'sonner';
 import {
@@ -28,7 +36,12 @@ import {
   FolderOpen,
   Download,
   LayoutDashboard,
+  Clock,
 } from 'lucide-react';
+
+const LeadMap = dynamic(() => import('@/components/LeadMap'), { ssr: false });
+
+type DatePeriod = 'all' | 'week' | 'month' | 'quarter' | 'year';
 
 function formatTimeAgo(iso: string): string {
   const date = new Date(iso);
@@ -64,26 +77,45 @@ export default function CloserDashboardPage() {
   const [unreadMessenger, setUnreadMessenger] = useState<UnreadMessengerSummary | null>(null);
   const [documents, setDocuments] = useState<SalesDocument[]>([]);
   const [user, setUser] = useState<{ full_name: string } | null>(null);
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [companySettings, setCompanySettings] = useState<CompanySettings | null>(null);
+  const [leadLocations, setLeadLocations] = useState<LeadLocationItem[]>([]);
+  const [datePeriod, setDatePeriod] = useState<DatePeriod>('all');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchDashboard();
-  }, []);
+  }, [datePeriod]);
 
   const fetchDashboard = async () => {
     try {
-      const [meRes, qualifiedRes, smsRes, messengerRes, docsRes] = await Promise.all([
+      const [
+        meRes,
+        qualifiedRes,
+        smsRes,
+        messengerRes,
+        docsRes,
+        statsRes,
+        companyRes,
+        locationsRes,
+      ] = await Promise.all([
         api.get('/api/auth/me').then((r) => r.data).catch(() => null),
         getQualifiedForQuoting().catch(() => ({ count: 0, leads: [] })),
         getUnreadSms().catch(() => ({ count: 0, messages: [] })),
         getUnreadMessenger().catch(() => ({ count: 0, messages: [] })),
         getSalesDocuments().catch(() => []),
+        api.get('/api/dashboard/stats', { params: datePeriod === 'all' ? {} : { period: datePeriod } }).then((r) => r.data).catch(() => null),
+        getCompanySettings().catch(() => null),
+        getLeadLocations(datePeriod === 'all' ? undefined : datePeriod).catch(() => []),
       ]);
       setUser(meRes ? { full_name: meRes.full_name || '' } : null);
       setQualified(qualifiedRes);
       setUnreadSms(smsRes ?? { count: 0, messages: [] });
       setUnreadMessenger(messengerRes ?? { count: 0, messages: [] });
       setDocuments(Array.isArray(docsRes) ? docsRes : []);
+      setStats(statsRes);
+      setCompanySettings(companyRes ?? null);
+      setLeadLocations(Array.isArray(locationsRes) ? locationsRes : []);
     } catch (error: unknown) {
       const err = error as { response?: { status?: number } };
       if (err.response?.status === 401) {
@@ -135,6 +167,74 @@ export default function CloserDashboardPage() {
             <LayoutDashboard className="h-6 w-6 text-primary" />
             <h1 className="text-xl font-semibold">Closer Dashboard</h1>
           </div>
+        </div>
+
+        {/* Installation lead time */}
+        {companySettings?.installation_lead_time && (
+          <Card className="shrink-0 mb-4 border-primary/30 bg-primary/5">
+            <CardContent className="py-3 px-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                  <Clock className="h-4 w-4 text-primary" />
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Current installation lead time
+                  </p>
+                  <p className="text-lg font-bold">{companySettings.installation_lead_time}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Period filter */}
+        <div className="flex gap-2 mb-4 shrink-0">
+          {(['all', 'week', 'month', 'quarter', 'year'] as const).map((period) => (
+            <Button
+              key={period}
+              variant={datePeriod === period ? 'default' : 'outline'}
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => setDatePeriod(period)}
+            >
+              {period === 'all' ? 'All' : period.charAt(0).toUpperCase() + period.slice(1)}
+            </Button>
+          ))}
+        </div>
+
+        {/* Pipeline overview: Status, Leads by source, Map */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 shrink-0">
+          <Card>
+            <CardHeader className="py-2 px-4">
+              <CardTitle className="text-sm font-medium">Lead Status</CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 pb-4 pt-0">
+              <StatusPieChart
+                height={180}
+                newCount={stats?.new_count ?? 0}
+                quotedCount={stats?.leads_with_sent_quotes_count ?? 0}
+                wonCount={stats?.won_count ?? 0}
+                lostCount={stats?.lost_count ?? 0}
+              />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="py-2 px-4">
+              <CardTitle className="text-sm font-medium">Leads by Source</CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 pb-4 pt-0">
+              <LeadsBySourceBarChart data={stats?.leads_by_source ?? []} height={180} />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="py-2 px-4">
+              <CardTitle className="text-sm font-medium">Lead Locations</CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 pb-4 pt-0">
+              <LeadMap locations={leadLocations} period={datePeriod} height={200} />
+            </CardContent>
+          </Card>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 flex-1 min-h-0 overflow-y-auto lg:overflow-hidden">

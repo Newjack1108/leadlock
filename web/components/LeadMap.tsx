@@ -57,9 +57,10 @@ interface LeadMapProps {
   locations: LeadLocationItem[];
   loading?: boolean;
   period?: DatePeriod;
+  height?: number;
 }
 
-export default function LeadMap({ locations, loading = false, period = 'all' }: LeadMapProps) {
+export default function LeadMap({ locations, loading = false, period = 'all', height = 300 }: LeadMapProps) {
   const [expanded, setExpanded] = useState(false);
   const [modalPeriod, setModalPeriod] = useState<DatePeriod>(period);
   const [modalLocations, setModalLocations] = useState<LeadLocationItem[]>(locations);
@@ -88,7 +89,7 @@ export default function LeadMap({ locations, loading = false, period = 'all' }: 
 
   if (loading) {
     return (
-      <div className="flex h-[300px] items-center justify-center rounded-lg border border-border bg-muted/30">
+      <div className="flex items-center justify-center rounded-lg border border-border bg-muted/30" style={{ height }}>
         <p className="text-sm text-muted-foreground">Loading map...</p>
       </div>
     );
@@ -96,7 +97,7 @@ export default function LeadMap({ locations, loading = false, period = 'all' }: 
 
   if (!locations || locations.length === 0) {
     return (
-      <div className="flex h-[300px] flex-col items-center justify-center gap-1 rounded-lg border border-border bg-muted/30 px-4 text-center">
+      <div className="flex flex-col items-center justify-center gap-1 rounded-lg border border-border bg-muted/30 px-4 text-center" style={{ height }}>
         <p className="text-sm text-muted-foreground">
           No leads with postcodes in this period
         </p>
@@ -110,9 +111,10 @@ export default function LeadMap({ locations, loading = false, period = 'all' }: 
   return (
     <>
       <div
-        className={`relative h-[300px] w-full overflow-hidden rounded-lg transition-opacity duration-200 ${
+        className={`relative w-full overflow-hidden rounded-lg transition-opacity duration-200 ${
           expanded ? 'opacity-50 pointer-events-none' : ''
         }`}
+        style={{ height }}
       >
         <MapContainer
           center={[54.5, -2.5]}
