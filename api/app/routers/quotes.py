@@ -1099,7 +1099,7 @@ async def send_quote_email_endpoint(
         if not smtp_config.get("user") or not smtp_config.get("password"):
             raise HTTPException(
                 status_code=400,
-                detail="SMTP credentials not configured. Go to My Settings → Email Settings and add your SMTP host, username, and password (or set SMTP_USER and SMTP_PASSWORD environment variables)."
+                detail="SMTP credentials not configured. Go to My Settings → Email Settings and add your SMTP host, username, and password."
             )
         # Get quote
         statement = select(Quote).where(Quote.id == quote_id)
