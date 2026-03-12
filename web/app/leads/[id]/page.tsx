@@ -176,8 +176,7 @@ export default function LeadDetailPage() {
     try {
       await api.post(`/api/leads/${leadId}/transition`, { new_status: 'LOST' });
       toast.success('Lead rejected');
-      fetchLead();
-      fetchActivities();
+      router.push('/leads');
     } catch (error: any) {
       toast.error(error.response?.data?.detail?.message || error.response?.data?.detail || 'Failed to reject lead');
     } finally {

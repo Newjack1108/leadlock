@@ -129,6 +129,7 @@ def main() -> None:
             # Don't exit 1 - backup succeeded locally
 
     print(f"Backup completed: {out_path}", file=sys.stderr)
+    print("BACKUP SUCCESS", file=sys.stderr)
     sys.exit(0)
 
 

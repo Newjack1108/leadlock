@@ -117,7 +117,8 @@ async def send_email_to_customer(
             cc=email_data_parsed.cc,
             bcc=email_data_parsed.bcc,
             attachments=attachment_list if attachment_list else None,
-            user_id=current_user.id
+            user_id=current_user.id,
+            customer_number=customer.customer_number
         )
 
         if not success:
@@ -336,6 +337,10 @@ async def reply_to_email(
         attachment_list.append({"filename": safe_name, "content": content})
         attachment_metadata.append({"filename": safe_name})
 
+    # Fetch customer for website tracking link
+    statement = select(Customer).where(Customer.id == original_email.customer_id)
+    reply_customer = session.exec(statement).first()
+
     # Send reply email
     success, message_id, error = send_email(
         to_email=to_email,
@@ -347,7 +352,8 @@ async def reply_to_email(
         attachments=attachment_list if attachment_list else None,
         in_reply_to=original_email.message_id,
         references=original_email.message_id,
-        user_id=current_user.id
+        user_id=current_user.id,
+        customer_number=reply_customer.customer_number if reply_customer else None
     )
 
     if not success:

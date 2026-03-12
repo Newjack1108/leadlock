@@ -53,7 +53,7 @@ export default function OrdersPage() {
   const router = useRouter();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState<OrderStatusFilter>('new');
+  const [statusFilter, setStatusFilter] = useState<OrderStatusFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {

@@ -307,7 +307,7 @@ async def root():
 @app.get("/health")
 async def health():
     """Lightweight health check (no DB). Use this to verify the container is serving."""
-    return {"status": "ok"}
+    return {"status": "ok", "version": "1.0.1", "features": ["engagement_proof_toggle"]}
 
 
 @app.post("/api/seed")

@@ -214,9 +214,13 @@ Content-Type: application/json
   "email": "john@example.com",
   "phone": "+44 1234 567890",
   "postcode": "CW1 2AB",
-  "description": "Interested in custom stable design for 4 horses"
+  "description": "Interested in custom stable design for 4 horses",
+  "lead_source": "FACEBOOK",
+  "product_interest": "stables"
 }
 ```
+
+**Optional field aliases** (useful for Make.com mapping): `first_name`, `last_name`, `full_name` (for name), `phone_number` (for phone). See `MAKECOM_INTEGRATION_GUIDE.md` for full schema and Make.com setup.
 
 **Setup:**
 1. Set `WEBHOOK_API_KEY` environment variable in your backend (generate a strong random string)
@@ -224,9 +228,9 @@ Content-Type: application/json
 3. Configure Make.com to send POST requests to `https://your-api-url/api/webhooks/leads` with the `X-API-Key` header
 
 **Response:**
-The endpoint returns the created lead with status `NEW`. If `WEBHOOK_DEFAULT_USER_ID` is set, the lead will be assigned to that user; otherwise, it will be unassigned.
+The endpoint returns the created lead with status `NEW`. If `WEBHOOK_DEFAULT_USER_ID` is set, the lead will be assigned to that user; otherwise, it will be unassigned. If the lead's email or phone matches an existing Customer, the new lead is linked to that Customer (returning submitters).
 
-**Note:** All fields except `name` are optional. The `description` field can be used to store additional information about the lead.
+**Note:** `name` is required unless `first_name`/`last_name` or `full_name` are provided. All other fields are optional. Use `lead_source` (e.g. `"FACEBOOK"`, `"EMAIL"`) to track where leads came from.
 
 ## Replacing the Logo
 

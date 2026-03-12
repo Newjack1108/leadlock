@@ -43,7 +43,7 @@ function QuotesPageContent() {
   const statusFromUrl = searchParams.get('status');
   const initialStatus = statusFromUrl && VALID_QUOTE_STATUSES.includes(statusFromUrl as QuoteStatus)
     ? (statusFromUrl as QuoteStatus)
-    : QuoteStatus.SENT;
+    : 'ALL';
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'list' | 'tile'>('list');

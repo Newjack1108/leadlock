@@ -49,13 +49,28 @@ async def create_lead_webhook(
     """
     Create a lead via webhook (e.g., from Make.com).
     Requires X-API-Key header for authentication.
+    Links to existing Customer if email or phone matches (no Customer creation).
     """
-    # Get default user ID from environment variable (optional)
-    default_user_id = os.getenv("WEBHOOK_DEFAULT_USER_ID")
-    
-    # Create lead
-    lead = Lead(**lead_data.dict())
-    
+    # Build lead dict (exclude alias fields not on Lead model)
+    lead_dict = lead_data.model_dump(exclude={"first_name", "last_name", "full_name", "phone_number"})
+    lead = Lead(**lead_dict)
+
+    # Link to existing Customer if email or phone matches (returning submitter)
+    if lead.email or lead.phone:
+        customer = None
+        if lead.email:
+            stmt = select(Customer).where(Customer.email == lead.email)
+            customer = session.exec(stmt).first()
+        if not customer and lead.phone:
+            norm_phone = normalize_phone(lead.phone)
+            if norm_phone:
+                for c in session.exec(select(Customer).where(Customer.phone.isnot(None))).all():
+                    if c.phone and normalize_phone(c.phone) == norm_phone:
+                        customer = c
+                        break
+        if customer:
+            lead.customer_id = customer.id
+
     # Assign to default user if configured, otherwise leave unassigned
     if default_user_id:
         try:

@@ -123,21 +123,31 @@ export default function Header() {
               </span>
             )}
           </Link>
-          <Link href="/customers" className="relative">
-            <Button
-              variant={pathname?.startsWith('/customers') ? 'default' : 'ghost'}
-              size="sm"
-              className={pathname?.startsWith('/customers') ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}
-            >
-              <Users className="h-4 w-4 mr-2" />
-              Customers
-            </Button>
+          <div className="relative">
+            <Link href="/customers">
+              <Button
+                variant={pathname?.startsWith('/customers') ? 'default' : 'ghost'}
+                size="sm"
+                className={pathname?.startsWith('/customers') ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}
+              >
+                <Users className="h-4 w-4 mr-2" />
+                Customers
+              </Button>
+            </Link>
             {unreadMessagesCount > 0 && (
-              <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-red-500 text-white text-xs font-semibold flex items-center justify-center">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  router.push('/customers?has_unread=1');
+                }}
+                className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-red-500 text-white text-xs font-semibold flex items-center justify-center cursor-pointer hover:opacity-90"
+              >
                 {unreadMessagesCount > 99 ? '99+' : unreadMessagesCount}
-              </span>
+              </button>
             )}
-          </Link>
+          </div>
           <Link href="/quotes">
             <Button
               variant={pathname?.startsWith('/quotes') ? 'default' : 'ghost'}
