@@ -160,8 +160,7 @@ export default function LeadDetailPage() {
     try {
       await api.post(`/api/leads/${leadId}/transition`, { new_status: 'QUALIFIED' });
       toast.success('Lead qualified');
-      fetchLead();
-      fetchActivities();
+      router.push('/leads?status=QUALIFIED');
     } catch (error: any) {
       toast.error(error.response?.data?.detail?.message || error.response?.data?.detail || 'Failed to qualify lead');
     } finally {
