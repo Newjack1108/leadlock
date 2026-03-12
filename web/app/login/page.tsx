@@ -29,7 +29,7 @@ export default function LoginPage() {
       localStorage.setItem('token', response.data.access_token);
       // Also set cookie for middleware
       document.cookie = `token=${response.data.access_token}; path=/; max-age=86400`;
-      router.push('/leads');
+      router.push('/');
     } catch (error: any) {
       toast.error(error.response?.data?.detail || 'Login failed');
     } finally {

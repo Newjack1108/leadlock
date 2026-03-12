@@ -210,6 +210,19 @@ export interface DashboardStats {
   leads_by_source: LeadSourceCount[];
 }
 
+export interface QualifiedForQuotingItem {
+  id: number;
+  name: string;
+  customer_name: string | null;
+  updated_at: string;
+  assigned_to_id: number | null;
+}
+
+export interface QualifiedForQuotingSummary {
+  count: number;
+  leads: QualifiedForQuotingItem[];
+}
+
 // Sales Report types
 export interface PipelineValueStageItem {
   stage: string;

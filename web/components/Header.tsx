@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Logo from './Logo';
 import { Button } from '@/components/ui/button';
-import { LogOut, Users, Settings, Package, User, Mail, Bell, FileText, ShoppingCart, ChevronDown, Gift, Send, MessageSquare, FolderOpen } from 'lucide-react';
+import { LogOut, Users, Settings, Package, User, Mail, Bell, FileText, ShoppingCart, ChevronDown, Gift, Send, MessageSquare, FolderOpen, LayoutDashboard } from 'lucide-react';
 import api from '@/lib/api';
 import { getStaleSummary, getDiscountRequests, getUnreadSms, getUnreadMessenger } from '@/lib/api';
 import {
@@ -100,6 +100,7 @@ export default function Header() {
   };
 
   const isDirector = userRole === 'DIRECTOR';
+  const isCloser = userRole === 'CLOSER';
   const canApproveDiscounts = userRole === 'DIRECTOR' || userRole === 'SALES_MANAGER';
 
   return (
@@ -107,22 +108,35 @@ export default function Header() {
       <div className="container mx-auto px-6 py-0 flex items-center justify-between">
         <Logo />
         <nav className="flex items-center gap-4">
-          {/* Main Navigation */}
-          <Link href="/leads" className="relative">
-            <Button
-              variant={pathname?.startsWith('/leads') ? 'default' : 'ghost'}
-              size="sm"
-              className={pathname?.startsWith('/leads') ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}
-            >
-              <Users className="h-4 w-4 mr-2" />
-              Leads
-            </Button>
-            {newLeadsCount > 0 && (
-              <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-red-500 text-white text-xs font-semibold flex items-center justify-center">
-                {newLeadsCount > 99 ? '99+' : newLeadsCount}
-              </span>
-            )}
-          </Link>
+          {/* Closer: Dashboard first; Director/Sales Manager: Leads first */}
+          {isCloser ? (
+            <Link href="/closer-dashboard">
+              <Button
+                variant={pathname?.startsWith('/closer-dashboard') ? 'default' : 'ghost'}
+                size="sm"
+                className={pathname?.startsWith('/closer-dashboard') ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}
+              >
+                <LayoutDashboard className="h-4 w-4 mr-2" />
+                Dashboard
+              </Button>
+            </Link>
+          ) : (
+            <Link href="/leads" className="relative">
+              <Button
+                variant={pathname?.startsWith('/leads') ? 'default' : 'ghost'}
+                size="sm"
+                className={pathname?.startsWith('/leads') ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}
+              >
+                <Users className="h-4 w-4 mr-2" />
+                Leads
+              </Button>
+              {newLeadsCount > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-red-500 text-white text-xs font-semibold flex items-center justify-center">
+                  {newLeadsCount > 99 ? '99+' : newLeadsCount}
+                </span>
+              )}
+            </Link>
+          )}
           <div className="relative">
             <Link href="/customers">
               <Button
@@ -205,21 +219,23 @@ export default function Header() {
               Documents
             </Button>
           </Link>
-          <Link href="/discount-requests" className="relative">
-            <Button
-              variant={pathname?.startsWith('/discount-requests') ? 'default' : 'ghost'}
-              size="sm"
-              className={pathname?.startsWith('/discount-requests') ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}
-            >
-              <Send className="h-4 w-4 mr-2" />
-              Discount requests
-            </Button>
-            {canApproveDiscounts && pendingDiscountCount > 0 && (
-              <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-red-500 text-white text-xs font-semibold flex items-center justify-center">
-                {pendingDiscountCount > 99 ? '99+' : pendingDiscountCount}
-              </span>
-            )}
-          </Link>
+          {!isCloser && (
+            <Link href="/discount-requests" className="relative">
+              <Button
+                variant={pathname?.startsWith('/discount-requests') ? 'default' : 'ghost'}
+                size="sm"
+                className={pathname?.startsWith('/discount-requests') ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}
+              >
+                <Send className="h-4 w-4 mr-2" />
+                Discount requests
+              </Button>
+              {canApproveDiscounts && pendingDiscountCount > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-red-500 text-white text-xs font-semibold flex items-center justify-center">
+                  {pendingDiscountCount > 99 ? '99+' : pendingDiscountCount}
+                </span>
+              )}
+            </Link>
+          )}
 
           {/* Profile Dropdown */}
           <DropdownMenu>

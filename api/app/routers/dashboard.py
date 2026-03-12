@@ -4,7 +4,7 @@ from app.database import get_session
 from app.models import Lead, LeadStatus, LeadSource, Quote, QuoteStatus, Activity, SmsMessage, SmsDirection, Customer, MessengerMessage, MessengerDirection
 from app.distance_service import bulk_geocode_postcodes
 from app.auth import get_current_user
-from app.schemas import DashboardStats, LeadSourceCount, LeadLocationItem, UnreadSmsSummary, UnreadSmsMessageItem, UnreadMessengerSummary, UnreadMessengerMessageItem, UnreadByCustomerItem
+from app.schemas import DashboardStats, LeadSourceCount, LeadLocationItem, UnreadSmsSummary, UnreadSmsMessageItem, UnreadMessengerSummary, UnreadMessengerMessageItem, UnreadByCustomerItem, QualifiedForQuotingSummary, QualifiedForQuotingItem
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -291,6 +291,39 @@ async def get_unread_messenger(
             )
         )
     return UnreadMessengerSummary(count=count, messages=items)
+
+
+@router.get("/qualified-for-quoting", response_model=QualifiedForQuotingSummary)
+async def get_qualified_for_quoting(
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_user),
+    assigned_to: Optional[str] = Query(None, description="Filter: 'me' for leads assigned to current user. Omit for all QUALIFIED leads."),
+):
+    """Get leads with status QUALIFIED that need quoting. For closer dashboard."""
+    statement = (
+        select(Lead)
+        .where(Lead.status == LeadStatus.QUALIFIED)
+        .order_by(Lead.updated_at.desc())
+    )
+    if assigned_to == "me":
+        statement = statement.where(Lead.assigned_to_id == current_user.id)
+    leads = list(session.exec(statement).all())
+    items = []
+    for lead in leads:
+        customer_name = None
+        if lead.customer_id:
+            customer = session.get(Customer, lead.customer_id)
+            customer_name = customer.name if customer else None
+        items.append(
+            QualifiedForQuotingItem(
+                id=lead.id,
+                name=lead.name,
+                customer_name=customer_name,
+                updated_at=lead.updated_at,
+                assigned_to_id=lead.assigned_to_id,
+            )
+        )
+    return QualifiedForQuotingSummary(count=len(items), leads=items)
 
 
 @router.get("/unread-by-customer", response_model=list[UnreadByCustomerItem])

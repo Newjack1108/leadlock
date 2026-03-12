@@ -17,9 +17,9 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // If has token and on login page, redirect to leads
+  // If has token and on login page, redirect to home (role-based redirect handled there)
   if (isLoginPage && token) {
-    return NextResponse.redirect(new URL('/leads', request.url));
+    return NextResponse.redirect(new URL('/', request.url));
   }
 
   return NextResponse.next();

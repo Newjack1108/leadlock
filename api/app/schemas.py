@@ -513,6 +513,20 @@ class DashboardStats(BaseModel):
     leads_by_source: List[LeadSourceCount] = []
 
 
+class QualifiedForQuotingItem(BaseModel):
+    """Lead ready for closer to quote."""
+    id: int
+    name: str
+    customer_name: Optional[str] = None
+    updated_at: datetime
+    assigned_to_id: Optional[int] = None
+
+
+class QualifiedForQuotingSummary(BaseModel):
+    count: int
+    leads: List[QualifiedForQuotingItem] = []
+
+
 # Sales Report schemas
 class PipelineValueStageItem(BaseModel):
     stage: str

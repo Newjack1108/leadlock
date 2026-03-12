@@ -197,6 +197,12 @@ export const getUnreadCountsByCustomer = async (): Promise<{ customer_id: number
   return response.data;
 };
 
+export const getQualifiedForQuoting = async (assignedTo?: 'me') => {
+  const params = assignedTo ? { assigned_to: assignedTo } : {};
+  const response = await api.get('/api/dashboard/qualified-for-quoting', { params });
+  return response.data;
+};
+
 // SMS Template API functions
 export const getSmsTemplates = async () => {
   const response = await api.get('/api/sms-templates');
