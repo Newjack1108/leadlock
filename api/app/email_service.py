@@ -335,11 +335,13 @@ def send_email(
                 )
                 msg.attach(part)
         
-        # Connect and send with timeout (10 seconds)
-        timeout = 10
+        # Connect and send (timeout configurable; 30s default for slow/cloud networks)
+        timeout = int(os.getenv("SMTP_TIMEOUT", "30"))
         if config["use_tls"]:
             server = smtplib.SMTP(config["host"], config["port"], timeout=timeout)
+            server.ehlo()
             server.starttls()
+            server.ehlo()
         else:
             server = smtplib.SMTP_SSL(config["host"], config["port"], timeout=timeout)
         
@@ -356,7 +358,10 @@ def send_email(
         return True, message_id, None
     
     except Exception as e:
-        return False, None, str(e)
+        err = str(e)
+        if "timed out" in err.lower() or "connection" in err.lower():
+            err += " Try: Gmail App Password (myaccount.google.com/apppasswords); port 465 with Use TLS off."
+        return False, None, err
 
 
 def receive_emails() -> List[Dict]:
