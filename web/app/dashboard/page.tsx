@@ -218,7 +218,7 @@ export default function DashboardPage() {
               <CardTitle className="text-lg">Lead Locations</CardTitle>
             </CardHeader>
             <CardContent>
-              <LeadMap locations={leadLocations} loading={loading} />
+              <LeadMap locations={leadLocations} loading={loading} period={datePeriod} />
             </CardContent>
           </Card>
         </div>
