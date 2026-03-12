@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Header from '@/components/Header';
 import { Card } from '@/components/ui/card';
@@ -13,7 +13,7 @@ import { toast } from 'sonner';
 import { Search, ChevronRight, X } from 'lucide-react';
 import CallNotesDialog from '@/components/CallNotesDialog';
 
-export default function CustomersPage() {
+function CustomersPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const hasUnreadFilter = searchParams.get('has_unread') === '1';
@@ -219,5 +219,22 @@ export default function CustomersPage() {
         />
       )}
     </div>
+  );
+}
+
+export default function CustomersPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen">
+          <Header />
+          <main className="container mx-auto px-6 py-8">
+            <div className="text-center py-12 text-muted-foreground">Loading...</div>
+          </main>
+        </div>
+      }
+    >
+      <CustomersPageContent />
+    </Suspense>
   );
 }
