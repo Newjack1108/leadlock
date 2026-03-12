@@ -13,6 +13,7 @@ from app.schemas import (
     QuoteDiscountResponse
 )
 from app.quote_email_service import send_quote_email
+from app.email_service import get_smtp_config
 from app.quote_pdf_service import generate_quote_pdf
 from app.reminder_service import get_last_activity_date
 from app.constants import VAT_RATE_DECIMAL
@@ -1093,6 +1094,13 @@ async def send_quote_email_endpoint(
 ):
     """Send a quote as an email with PDF attachment."""
     try:
+        # Check SMTP is configured before attempting (clearer error than generic 500)
+        smtp_config = get_smtp_config(current_user.id)
+        if not smtp_config.get("user") or not smtp_config.get("password"):
+            raise HTTPException(
+                status_code=400,
+                detail="SMTP credentials not configured. Go to My Settings → Email Settings and add your SMTP host, username, and password (or set SMTP_USER and SMTP_PASSWORD environment variables)."
+            )
         # Get quote
         statement = select(Quote).where(Quote.id == quote_id)
         quote = session.exec(statement).first()

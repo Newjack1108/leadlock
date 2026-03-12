@@ -85,22 +85,42 @@ export default function UserSettingsPage() {
     }
   };
 
+  const parsePort = (val: string): number | undefined => {
+    if (!val || !val.trim()) return undefined;
+    const n = parseInt(val, 10);
+    return Number.isNaN(n) ? undefined : n;
+  };
+
+  const getErrorMessage = (error: any, fallback: string): string => {
+    const detail = error?.response?.data?.detail;
+    if (typeof detail === 'string') return detail;
+    if (Array.isArray(detail) && detail.length > 0) {
+      const first = detail[0];
+      const msg = typeof first === 'object' && first?.msg ? first.msg : String(first);
+      return msg;
+    }
+    return error?.message || fallback;
+  };
+
   const handleSaveEmailSettings = async () => {
     try {
       setSaving(true);
-      const updateData: any = {
+      const updateData: Record<string, unknown> = {
         smtp_host: emailFormData.smtp_host || undefined,
-        smtp_port: emailFormData.smtp_port ? parseInt(emailFormData.smtp_port) : undefined,
+        smtp_port: parsePort(emailFormData.smtp_port),
         smtp_user: emailFormData.smtp_user || undefined,
         smtp_use_tls: emailFormData.smtp_use_tls,
         smtp_from_email: emailFormData.smtp_from_email || undefined,
         smtp_from_name: emailFormData.smtp_from_name || undefined,
         imap_host: emailFormData.imap_host || undefined,
-        imap_port: emailFormData.imap_port ? parseInt(emailFormData.imap_port) : undefined,
+        imap_port: parsePort(emailFormData.imap_port),
         imap_user: emailFormData.imap_user || undefined,
         imap_use_ssl: emailFormData.imap_use_ssl,
         email_test_mode: emailFormData.email_test_mode,
       };
+
+      // Remove undefined values so they're not sent
+      Object.keys(updateData).forEach((k) => updateData[k] === undefined && delete updateData[k]);
 
       // Only include password if it was changed (not empty)
       if (emailFormData.smtp_password) {
@@ -110,11 +130,11 @@ export default function UserSettingsPage() {
         updateData.imap_password = emailFormData.imap_password;
       }
 
-      await updateUserEmailSettings(updateData);
+      await updateUserEmailSettings(updateData as any);
       toast.success('Email settings updated successfully');
       fetchSettings();
     } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Failed to save email settings');
+      toast.error(getErrorMessage(error, 'Failed to save email settings'));
     } finally {
       setSaving(false);
     }
@@ -127,7 +147,7 @@ export default function UserSettingsPage() {
       toast.success('Signature updated successfully');
       fetchSettings();
     } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Failed to save signature');
+      toast.error(getErrorMessage(error, 'Failed to save signature'));
     } finally {
       setSaving(false);
     }

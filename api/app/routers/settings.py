@@ -122,17 +122,27 @@ async def update_user_email_settings(
     current_user: User = Depends(get_current_user)
 ):
     """Update current user's email settings. Users can only update their own."""
-    update_data = settings_data.dict(exclude_unset=True)
-    
-    # Update only provided fields
-    for field, value in update_data.items():
-        if hasattr(current_user, field):
-            setattr(current_user, field, value)
-    
-    current_user.updated_at = datetime.utcnow()
-    session.add(current_user)
-    session.commit()
-    session.refresh(current_user)
+    try:
+        update_data = settings_data.dict(exclude_unset=True)
+        
+        # Update only provided fields
+        for field, value in update_data.items():
+            if hasattr(current_user, field):
+                setattr(current_user, field, value)
+        
+        current_user.updated_at = datetime.utcnow()
+        session.add(current_user)
+        session.commit()
+        session.refresh(current_user)
+    except Exception as e:
+        session.rollback()
+        err_msg = str(e)
+        if "email_test_mode" in err_msg.lower() or "column" in err_msg.lower():
+            raise HTTPException(
+                status_code=500,
+                detail="Email settings column may be missing. Try restarting the API to run migrations."
+            )
+        raise HTTPException(status_code=500, detail=f"Failed to save email settings: {err_msg}")
     
     return UserEmailSettingsResponse(
         smtp_host=current_user.smtp_host,

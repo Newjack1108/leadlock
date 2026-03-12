@@ -132,7 +132,7 @@ export default function SendQuoteEmailDialog({
         errorMessage = error.message;
       }
       toast.error(errorMessage);
-      console.error('Quote email send error:', error);
+      console.error('Quote email send error:', error.response?.data ?? error);
     } finally {
       setLoading(false);
     }
