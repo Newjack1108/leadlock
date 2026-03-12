@@ -55,6 +55,9 @@ function formatTimeAgo(dateString: string): string {
 
 const TERMINAL_STATUSES: LeadStatus[] = [LeadStatus.QUOTED, LeadStatus.WON, LeadStatus.LOST];
 
+// Exclude legacy WEBSITE from new-lead dropdown; prefer CSGB/CS/BLC WEBSITE
+const LEAD_SOURCE_OPTIONS_FOR_NEW = Object.values(LeadSource).filter((s) => s !== LeadSource.WEBSITE);
+
 function LeadsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -404,7 +407,7 @@ function LeadsPageContent() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {Object.values(LeadSource).map((source) => (
+                    {LEAD_SOURCE_OPTIONS_FOR_NEW.map((source) => (
                       <SelectItem key={source} value={source}>{source.replace('_', ' ')}</SelectItem>
                     ))}
                   </SelectContent>

@@ -803,26 +803,27 @@ def create_db_and_tables():
                 import traceback
                 print(traceback.format_exc(), file=sys.stderr, flush=True)
 
-        # Step 8e: Migrate WEBSITE lead source to CS WEBSITE (WEBSITE removed, replaced by CSGB/CS/BLC WEBSITE)
+        # Step 8e: (Rolled back) Had migrated WEBSITE -> CS WEBSITE; reverted in 8f for backward compat.
+        # Step 8f: Revert CS WEBSITE back to WEBSITE (keep WEBSITE in enum for backward compat with existing data)
         try:
             with engine.connect() as conn:
                 result = conn.execute(text(
-                    "SELECT 1 FROM applied_data_migrations WHERE migration_name = 'lead_source_website_to_cs'"
+                    "SELECT 1 FROM applied_data_migrations WHERE migration_name = 'lead_source_revert_cs_to_website'"
                 ))
                 if result.fetchone() is None:
-                    print("Migrating WEBSITE lead source to CS WEBSITE...", file=sys.stderr, flush=True)
+                    print("Reverting CS WEBSITE lead source to WEBSITE...", file=sys.stderr, flush=True)
                     with engine.begin() as mig_conn:
                         mig_conn.execute(text(
-                            "UPDATE lead SET lead_source = 'CS WEBSITE' WHERE lead_source = 'WEBSITE'"
+                            "UPDATE lead SET lead_source = 'WEBSITE' WHERE lead_source = 'CS WEBSITE'"
                         ))
                         mig_conn.execute(text(
-                            "INSERT INTO applied_data_migrations (migration_name) VALUES ('lead_source_website_to_cs')"
+                            "INSERT INTO applied_data_migrations (migration_name) VALUES ('lead_source_revert_cs_to_website')"
                         ))
-                    print("Lead source migration completed", file=sys.stderr, flush=True)
+                    print("Lead source revert completed", file=sys.stderr, flush=True)
         except Exception as e:
             error_str = str(e).lower()
             if "already exists" not in error_str and "duplicate" not in error_str:
-                print(f"Error in lead source migration: {e}", file=sys.stderr, flush=True)
+                print(f"Error in lead source revert migration: {e}", file=sys.stderr, flush=True)
         
         # Step 9: Create Reminder and ReminderRule tables
         has_reminder_table = inspector.has_table("reminder")

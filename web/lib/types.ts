@@ -48,6 +48,7 @@ export enum LeadSource {
   UNKNOWN = "UNKNOWN",
   FACEBOOK = "FACEBOOK",
   INSTAGRAM = "INSTAGRAM",
+  WEBSITE = "WEBSITE",  // Legacy - prefer CSGB/CS/BLC WEBSITE for new leads
   CSGB_WEBSITE = "CSGB WEBSITE",
   CS_WEBSITE = "CS WEBSITE",
   BLC_WEBSITE = "BLC WEBSITE",
