@@ -72,6 +72,7 @@ async def create_lead_webhook(
             lead.customer_id = customer.id
 
     # Assign to default user if configured, otherwise leave unassigned
+    default_user_id = os.getenv("WEBHOOK_DEFAULT_USER_ID")
     if default_user_id:
         try:
             user_id = int(default_user_id)
