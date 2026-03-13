@@ -46,6 +46,7 @@ export default function RemindersPage() {
       const result = await generateReminders();
       toast.success(`Generated ${result.count} reminders`);
       fetchData();
+      setRefreshTrigger((t) => t + 1);
     } catch (error: any) {
       toast.error('Failed to generate reminders');
       console.error('Error generating reminders:', error);
@@ -165,6 +166,7 @@ export default function RemindersPage() {
         {/* Active Reminders List */}
         <ReminderList
           showActions={true}
+          showHeaderActions={false}
           onReminderAction={() => {
             fetchData();
             setRefreshTrigger((t) => t + 1);
@@ -193,6 +195,7 @@ export default function RemindersPage() {
               <ReminderList
                 mode="done"
                 showActions={false}
+                showHeaderActions={false}
                 priorityFilter={filterPriority !== 'all' ? filterPriority as ReminderPriority : undefined}
                 typeFilter={filterType !== 'all' ? filterType as ReminderType : undefined}
                 refreshTrigger={refreshTrigger}

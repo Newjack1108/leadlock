@@ -25,6 +25,7 @@ interface ReminderListProps {
   compact?: boolean;
   mode?: 'active' | 'done';
   refreshTrigger?: number;
+  showHeaderActions?: boolean;
 }
 
 export default function ReminderList({ 
@@ -36,6 +37,7 @@ export default function ReminderList({
   compact = false,
   mode = 'active',
   refreshTrigger,
+  showHeaderActions = true,
 }: ReminderListProps) {
   const router = useRouter();
   const [reminders, setReminders] = useState<Reminder[]>([]);
@@ -205,7 +207,7 @@ export default function ReminderList({
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>{isDoneMode ? 'Completed Reminders' : 'Reminders'}</CardTitle>
-          {!isDoneMode && (
+          {!isDoneMode && showHeaderActions && (
             <Button
               variant="outline"
               size="sm"
@@ -235,29 +237,31 @@ export default function ReminderList({
         <CardTitle className={compact ? 'text-sm font-medium' : ''}>
           {isDoneMode ? 'Completed Reminders' : 'Reminders'} ({reminders.length})
         </CardTitle>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className={compact ? 'h-7 text-xs' : ''}
-            onClick={fetchReminders}
-          >
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Refresh
-          </Button>
-          {!isDoneMode && (
+        {showHeaderActions && (
+          <div className="flex gap-2">
             <Button
               variant="outline"
               size="sm"
               className={compact ? 'h-7 text-xs' : ''}
-              onClick={handleGenerate}
-              disabled={generating}
+              onClick={fetchReminders}
             >
-              <RefreshCw className={`h-4 w-4 mr-2 ${generating ? 'animate-spin' : ''}`} />
-              Generate
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Refresh
             </Button>
-          )}
-        </div>
+            {!isDoneMode && (
+              <Button
+                variant="outline"
+                size="sm"
+                className={compact ? 'h-7 text-xs' : ''}
+                onClick={handleGenerate}
+                disabled={generating}
+              >
+                <RefreshCw className={`h-4 w-4 mr-2 ${generating ? 'animate-spin' : ''}`} />
+                Generate
+              </Button>
+            )}
+          </div>
+        )}
       </CardHeader>
       <CardContent className={compact ? 'px-4 pb-4 pt-0' : ''}>
         <div className={compact ? 'max-h-[280px] overflow-y-auto space-y-2' : 'space-y-3'}>

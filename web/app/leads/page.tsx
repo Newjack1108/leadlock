@@ -69,6 +69,7 @@ function LeadsPageContent() {
   const initialLeadSource = leadSourceFromUrl && Object.values(LeadSource).includes(leadSourceFromUrl as LeadSource)
     ? (leadSourceFromUrl as LeadSource)
     : 'ALL';
+  const [userRole, setUserRole] = useState<string | null>(null);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<LeadStatus | 'ALL'>(initialStatus);
@@ -89,6 +90,18 @@ function LeadsPageContent() {
     lead_source: LeadSource.MANUAL_ENTRY,
   });
 
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const response = await api.get('/api/auth/me');
+        setUserRole(response.data?.role ?? null);
+      } catch {
+        setUserRole(null);
+      }
+    };
+    fetchUser();
+  }, []);
+
   // Sync status and lead_source filters from URL when search params change (e.g. navigation from dashboard)
   useEffect(() => {
     const status = searchParams.get('status');
@@ -100,6 +113,16 @@ function LeadsPageContent() {
       setLeadSourceFilter(leadSource as LeadSource);
     }
   }, [searchParams]);
+
+  // Closers: redirect away from NEW status and clear URL param
+  useEffect(() => {
+    if (userRole === 'CLOSER' && statusFilter === LeadStatus.NEW) {
+      setStatusFilter('ALL');
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete('status');
+      router.replace(params.toString() ? `/leads?${params}` : '/leads');
+    }
+  }, [userRole, statusFilter, searchParams, router]);
 
   // Debounce search input
   useEffect(() => {
@@ -185,7 +208,10 @@ function LeadsPageContent() {
     }
   };
 
-  const statusTabs: (LeadStatus | 'ALL')[] = ['ALL', ...Object.values(LeadStatus)];
+  const isCloser = userRole === 'CLOSER';
+  const statusTabs: (LeadStatus | 'ALL')[] = isCloser
+    ? ['ALL', ...Object.values(LeadStatus).filter((s) => s !== LeadStatus.NEW)]
+    : ['ALL', ...Object.values(LeadStatus)];
 
   return (
     <div className="min-h-screen">
@@ -233,13 +259,15 @@ function LeadsPageContent() {
             >
               My Leads
             </Button>
-            <Button
-              onClick={() => setCreateDialogOpen(true)}
-              className="bg-primary hover:bg-primary/90"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Create Lead
-            </Button>
+            {!isCloser && (
+              <Button
+                onClick={() => setCreateDialogOpen(true)}
+                className="bg-primary hover:bg-primary/90"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Create Lead
+              </Button>
+            )}
           </div>
 
           {/* Status Tabs */}

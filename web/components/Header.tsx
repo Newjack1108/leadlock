@@ -106,25 +106,32 @@ export default function Header() {
   return (
     <header className="border-b border-border bg-card shadow-sm">
       <div className="container mx-auto px-6 py-0 flex items-center justify-between">
-        <Logo />
+        <Logo disableLink={isCloser} />
         <nav className="flex items-center gap-4">
-          {/* Closer: Dashboard first; Director/Sales Manager: Leads first */}
+          {/* Closer: Dashboard first, then Leads (no new-leads badge); Director/Sales Manager: Leads first */}
           {isCloser ? (
-            <Link href="/closer-dashboard" className="relative">
-              <Button
-                variant={pathname?.startsWith('/closer-dashboard') ? 'default' : 'ghost'}
-                size="sm"
-                className={pathname?.startsWith('/closer-dashboard') ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}
-              >
-                <LayoutDashboard className="h-4 w-4 mr-2" />
-                Dashboard
-              </Button>
-              {newLeadsCount > 0 && (
-                <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-red-500 text-white text-xs font-semibold flex items-center justify-center">
-                  {newLeadsCount > 99 ? '99+' : newLeadsCount}
-                </span>
-              )}
-            </Link>
+            <>
+              <Link href="/closer-dashboard" className="relative">
+                <Button
+                  variant={pathname?.startsWith('/closer-dashboard') ? 'default' : 'ghost'}
+                  size="sm"
+                  className={pathname?.startsWith('/closer-dashboard') ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}
+                >
+                  <LayoutDashboard className="h-4 w-4 mr-2" />
+                  Dashboard
+                </Button>
+              </Link>
+              <Link href="/leads" className="relative">
+                <Button
+                  variant={pathname?.startsWith('/leads') ? 'default' : 'ghost'}
+                  size="sm"
+                  className={pathname?.startsWith('/leads') ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}
+                >
+                  <Users className="h-4 w-4 mr-2" />
+                  Leads
+                </Button>
+              </Link>
+            </>
           ) : (
             <Link href="/leads" className="relative">
               <Button

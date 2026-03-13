@@ -294,13 +294,13 @@ def generate_reminders(session: Session, user_id: Optional[int] = None) -> int:
                 and_(
                     Reminder.lead_id == lead.id,
                     Reminder.reminder_type == ReminderType.LEAD_STALE,
-                    Reminder.dismissed_at.is_(None),
-                    Reminder.acted_upon_at.is_(None)
                 )
             )
         ).first()
         
         if existing:
+            if existing.acted_upon_at or existing.dismissed_at:
+                continue  # Don't create or update; reminder was completed or dismissed
             # Update existing reminder if days_stale increased
             if days_stale > existing.days_stale:
                 existing.days_stale = days_stale
@@ -357,13 +357,13 @@ def generate_reminders(session: Session, user_id: Optional[int] = None) -> int:
                 and_(
                     Reminder.quote_id == quote.id,
                     Reminder.reminder_type == reminder_type,
-                    Reminder.dismissed_at.is_(None),
-                    Reminder.acted_upon_at.is_(None)
                 )
             )
         ).first()
 
         if existing:
+            if existing.acted_upon_at or existing.dismissed_at:
+                continue  # Don't create or update; reminder was completed or dismissed
             # Update existing reminder if days_stale increased
             if days_stale > existing.days_stale:
                 existing.days_stale = days_stale

@@ -6,7 +6,9 @@ import { getPublicCompanyLogo } from '@/lib/api';
 
 const STATIC_FALLBACKS = ['/logo.png', '/logo1.jpg', '/logo1.png'];
 
-export default function Logo() {
+const logoWrapperClass = 'flex items-center py-2';
+
+export default function Logo({ disableLink = false }: { disableLink?: boolean }) {
   const [imgSrc, setImgSrc] = useState<string | null>(null);
   const [imgError, setImgError] = useState(false);
 
@@ -42,32 +44,33 @@ export default function Logo() {
     }
   };
 
-  if (imgSrc === null) {
-    return (
-      <Link href="/dashboard" className="flex items-center cursor-pointer hover:opacity-80 transition-opacity py-2">
-        <div className="relative h-20 w-auto flex-shrink-0 animate-pulse bg-muted rounded" style={{ minWidth: '80px' }} />
-      </Link>
-    );
+  const content = imgSrc === null ? (
+    <div className="relative h-20 w-auto flex-shrink-0 animate-pulse bg-muted rounded" style={{ minWidth: '80px' }} />
+  ) : (
+    <div className="relative h-20 w-auto flex-shrink-0">
+      <img
+        src={imgSrc}
+        alt="LeadLock Logo"
+        className="h-20 w-auto object-contain"
+        style={{ maxWidth: '380px' }}
+        onLoad={handleImageLoad}
+        onError={handleImageError}
+      />
+      {imgError && (
+        <div className="text-xs text-red-500">
+          Failed to load: {imgSrc}
+        </div>
+      )}
+    </div>
+  );
+
+  if (disableLink) {
+    return <div className={logoWrapperClass}>{content}</div>;
   }
 
   return (
-    <Link href="/dashboard" className="flex items-center cursor-pointer hover:opacity-80 transition-opacity py-2">
-      {/* Logo Image - using regular img tag for reliability */}
-      <div className="relative h-20 w-auto flex-shrink-0">
-        <img
-          src={imgSrc}
-          alt="LeadLock Logo"
-          className="h-20 w-auto object-contain"
-          style={{ maxWidth: '380px' }}
-          onLoad={handleImageLoad}
-          onError={handleImageError}
-        />
-        {imgError && (
-          <div className="text-xs text-red-500">
-            Failed to load: {imgSrc}
-          </div>
-        )}
-      </div>
+    <Link href="/dashboard" className={`${logoWrapperClass} cursor-pointer hover:opacity-80 transition-opacity`}>
+      {content}
     </Link>
   );
 }
