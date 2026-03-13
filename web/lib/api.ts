@@ -789,6 +789,7 @@ export const removeOptionalExtraFromProduct = async (productId: number, extraId:
 // Reminder API functions
 export const getReminders = async (params?: {
   dismissed?: boolean;
+  done?: boolean;
   priority?: string;
   reminder_type?: string;
 }) => {

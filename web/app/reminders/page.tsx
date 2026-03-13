@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { getStaleSummary, generateReminders } from '@/lib/api';
 import { ReminderPriority, ReminderType, StaleSummary } from '@/lib/types';
 import { toast } from 'sonner';
-import { RefreshCw, Filter } from 'lucide-react';
+import { RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
 
 export default function RemindersPage() {
   const router = useRouter();
@@ -19,6 +19,8 @@ export default function RemindersPage() {
   const [generating, setGenerating] = useState(false);
   const [filterPriority, setFilterPriority] = useState<string>('all');
   const [filterType, setFilterType] = useState<string>('all');
+  const [doneExpanded, setDoneExpanded] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const fetchData = async () => {
     try {
@@ -160,13 +162,44 @@ export default function RemindersPage() {
           </div>
         </div>
 
-        {/* Reminders List */}
+        {/* Active Reminders List */}
         <ReminderList
           showActions={true}
-          onReminderAction={fetchData}
+          onReminderAction={() => {
+            fetchData();
+            setRefreshTrigger((t) => t + 1);
+          }}
           priorityFilter={filterPriority !== 'all' ? filterPriority as ReminderPriority : undefined}
           typeFilter={filterType !== 'all' ? filterType as ReminderType : undefined}
+          refreshTrigger={refreshTrigger}
         />
+
+        {/* Collapsible Done Section */}
+        <div className="mt-6">
+          <Button
+            variant="ghost"
+            className="w-full justify-between px-4 py-3 h-auto font-medium"
+            onClick={() => setDoneExpanded(!doneExpanded)}
+          >
+            <span>Done</span>
+            {doneExpanded ? (
+              <ChevronUp className="h-4 w-4" />
+            ) : (
+              <ChevronDown className="h-4 w-4" />
+            )}
+          </Button>
+          {doneExpanded && (
+            <div className="mt-2">
+              <ReminderList
+                mode="done"
+                showActions={false}
+                priorityFilter={filterPriority !== 'all' ? filterPriority as ReminderPriority : undefined}
+                typeFilter={filterType !== 'all' ? filterType as ReminderType : undefined}
+                refreshTrigger={refreshTrigger}
+              />
+            </div>
+          )}
+        </div>
       </main>
     </div>
   );

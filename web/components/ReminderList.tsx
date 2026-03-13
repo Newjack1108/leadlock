@@ -23,6 +23,8 @@ interface ReminderListProps {
   priorityFilter?: ReminderPriority;
   typeFilter?: ReminderType;
   compact?: boolean;
+  mode?: 'active' | 'done';
+  refreshTrigger?: number;
 }
 
 export default function ReminderList({ 
@@ -32,6 +34,8 @@ export default function ReminderList({
   priorityFilter,
   typeFilter,
   compact = false,
+  mode = 'active',
+  refreshTrigger,
 }: ReminderListProps) {
   const router = useRouter();
   const [reminders, setReminders] = useState<Reminder[]>([]);
@@ -41,21 +45,27 @@ export default function ReminderList({
   const fetchReminders = async () => {
     try {
       setLoading(true);
-      const params: any = { dismissed: false };
+      const params: any = mode === 'done' ? { done: true } : { dismissed: false };
       if (priorityFilter) params.priority = priorityFilter;
       if (typeFilter) params.reminder_type = typeFilter;
       const data = await getReminders(params);
-      const sorted = data.sort((a: Reminder, b: Reminder) => {
-        const priorityOrder = {
-          [ReminderPriority.URGENT]: 0,
-          [ReminderPriority.HIGH]: 1,
-          [ReminderPriority.MEDIUM]: 2,
-          [ReminderPriority.LOW]: 3,
-        };
-        const priorityDiff = priorityOrder[a.priority] - priorityOrder[b.priority];
-        if (priorityDiff !== 0) return priorityDiff;
-        return b.days_stale - a.days_stale;
-      });
+      const sorted = mode === 'done'
+        ? data.sort((a: Reminder, b: Reminder) => {
+            const aDate = a.acted_upon_at ? new Date(a.acted_upon_at).getTime() : 0;
+            const bDate = b.acted_upon_at ? new Date(b.acted_upon_at).getTime() : 0;
+            return bDate - aDate;
+          })
+        : data.sort((a: Reminder, b: Reminder) => {
+            const priorityOrder = {
+              [ReminderPriority.URGENT]: 0,
+              [ReminderPriority.HIGH]: 1,
+              [ReminderPriority.MEDIUM]: 2,
+              [ReminderPriority.LOW]: 3,
+            };
+            const priorityDiff = priorityOrder[a.priority] - priorityOrder[b.priority];
+            if (priorityDiff !== 0) return priorityDiff;
+            return b.days_stale - a.days_stale;
+          });
       setReminders(limit ? sorted.slice(0, limit) : sorted);
     } catch (error: any) {
       toast.error('Failed to load reminders');
@@ -67,7 +77,7 @@ export default function ReminderList({
 
   useEffect(() => {
     fetchReminders();
-  }, []);
+  }, [mode, priorityFilter, typeFilter, limit, refreshTrigger]);
 
   const handleDismiss = async (reminderId: number) => {
     try {
@@ -190,35 +200,41 @@ export default function ReminderList({
   }
 
   if (reminders.length === 0) {
+    const isDoneMode = mode === 'done';
     return (
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Reminders</CardTitle>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleGenerate}
-            disabled={generating}
-          >
-            <RefreshCw className={`h-4 w-4 mr-2 ${generating ? 'animate-spin' : ''}`} />
-            Generate
-          </Button>
+          <CardTitle>{isDoneMode ? 'Completed Reminders' : 'Reminders'}</CardTitle>
+          {!isDoneMode && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleGenerate}
+              disabled={generating}
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${generating ? 'animate-spin' : ''}`} />
+              Generate
+            </Button>
+          )}
         </CardHeader>
         <CardContent>
           <div className="text-center text-muted-foreground py-8">
             <AlertCircle className="h-12 w-12 mx-auto mb-4 opacity-50" />
-            <p>No active reminders</p>
-            <p className="text-sm mt-2">Click "Generate" to scan for stale items</p>
+            <p>{isDoneMode ? 'No completed reminders' : 'No active reminders'}</p>
+            {!isDoneMode && <p className="text-sm mt-2">Click "Generate" to scan for stale items</p>}
           </div>
         </CardContent>
       </Card>
     );
   }
 
+  const isDoneMode = mode === 'done';
   return (
     <Card className={compact ? 'min-h-[200px]' : ''}>
       <CardHeader className={`flex flex-row items-center justify-between ${compact ? 'py-2 px-4' : ''}`}>
-        <CardTitle className={compact ? 'text-sm font-medium' : ''}>Reminders ({reminders.length})</CardTitle>
+        <CardTitle className={compact ? 'text-sm font-medium' : ''}>
+          {isDoneMode ? 'Completed Reminders' : 'Reminders'} ({reminders.length})
+        </CardTitle>
         <div className="flex gap-2">
           <Button
             variant="outline"
@@ -229,16 +245,18 @@ export default function ReminderList({
             <RefreshCw className="h-4 w-4 mr-2" />
             Refresh
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className={compact ? 'h-7 text-xs' : ''}
-            onClick={handleGenerate}
-            disabled={generating}
-          >
-            <RefreshCw className={`h-4 w-4 mr-2 ${generating ? 'animate-spin' : ''}`} />
-            Generate
-          </Button>
+          {!isDoneMode && (
+            <Button
+              variant="outline"
+              size="sm"
+              className={compact ? 'h-7 text-xs' : ''}
+              onClick={handleGenerate}
+              disabled={generating}
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${generating ? 'animate-spin' : ''}`} />
+              Generate
+            </Button>
+          )}
         </div>
       </CardHeader>
       <CardContent className={compact ? 'px-4 pb-4 pt-0' : ''}>
@@ -246,7 +264,7 @@ export default function ReminderList({
           {reminders.map((reminder) => (
             <div
               key={reminder.id}
-              className={`border rounded-lg ${getPriorityColor(reminder.priority)} ${compact ? 'p-3' : 'p-4'}`}
+              className={`border rounded-lg ${isDoneMode ? 'bg-muted/50 border-muted-foreground/20 text-muted-foreground' : getPriorityColor(reminder.priority)} ${compact ? 'p-3' : 'p-4'}`}
             >
               <div className="flex items-start justify-between mb-2">
                 <div className="flex-1">
@@ -268,10 +286,15 @@ export default function ReminderList({
                       <span>Customer: {reminder.customer_name}</span>
                     )}
                     <span>{reminder.days_stale} days stale</span>
+                    {isDoneMode && reminder.acted_upon_at && (
+                      <span>
+                        Completed on {new Date(reminder.acted_upon_at).toLocaleDateString()}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
-              {showActions && (
+              {showActions && !isDoneMode && (
                 <div className={`flex items-center gap-2 border-t ${compact ? 'mt-2 pt-2' : 'mt-3 pt-3'}`}>
                   <Button
                     size="sm"

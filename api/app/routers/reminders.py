@@ -22,8 +22,8 @@ router = APIRouter(prefix="/api/reminders", tags=["reminders"])
 
 
 def _reminder_visibility_filter(current_user: User):
-    """Reminder visibility: Directors see all; others see reminders for their role."""
-    if current_user.role == UserRole.DIRECTOR:
+    """Reminder visibility: Directors and Closers see all; others see reminders for their role."""
+    if current_user.role in (UserRole.DIRECTOR, UserRole.CLOSER):
         return None  # No extra filter - show all
     same_role_ids = select(User.id).where(User.role == current_user.role)
     return Reminder.assigned_to_id.in_(same_role_ids)
@@ -79,6 +79,7 @@ async def create_manual_reminder(
 @router.get("", response_model=List[ReminderResponse])
 async def get_reminders(
     dismissed: Optional[bool] = False,
+    done: Optional[bool] = None,
     priority: Optional[ReminderPriority] = None,
     reminder_type: Optional[ReminderType] = None,
     session: Session = Depends(get_session),
@@ -90,7 +91,10 @@ async def get_reminders(
     if visibility is not None:
         statement = statement.where(visibility)
 
-    if dismissed is False:
+    if done is True:
+        statement = statement.where(Reminder.acted_upon_at.isnot(None))
+        statement = statement.where(Reminder.dismissed_at.is_(None))
+    elif dismissed is False:
         statement = statement.where(Reminder.dismissed_at.is_(None))
         statement = statement.where(Reminder.acted_upon_at.is_(None))
     elif dismissed is True:
