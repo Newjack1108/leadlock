@@ -265,6 +265,7 @@ def auto_create_opportunity(
     
     opportunity = Quote(
         customer_id=customer_id,
+        lead_id=lead_id,
         quote_number=quote_number,
         version=1,
         subtotal=Decimal(0),

@@ -404,14 +404,15 @@ async def create_quote(
         if not customer:
             raise HTTPException(status_code=404, detail="Customer not found")
 
-        lead_id = None
-        if quote_data.lead_id:
-            lead = session.exec(select(Lead).where(Lead.id == quote_data.lead_id)).first()
-            if not lead:
-                raise HTTPException(status_code=404, detail="Lead not found")
-            if lead.customer_id != quote_data.customer_id:
-                raise HTTPException(status_code=400, detail="Lead must belong to the same customer")
-            lead_id = lead.id
+        if not quote_data.lead_id:
+            raise HTTPException(status_code=400, detail="lead_id is required - quotes must be linked to an enquiry (lead)")
+
+        lead = session.exec(select(Lead).where(Lead.id == quote_data.lead_id)).first()
+        if not lead:
+            raise HTTPException(status_code=404, detail="Lead not found")
+        if lead.customer_id != quote_data.customer_id:
+            raise HTTPException(status_code=400, detail="Lead must belong to the same customer")
+        lead_id = lead.id
 
         # Generate quote number if not provided
         quote_number = quote_data.quote_number or generate_quote_number(session)

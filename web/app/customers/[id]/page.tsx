@@ -518,17 +518,12 @@ export default function CustomerDetailPage() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                          onClick={() => router.push(`/quotes/create?customer_id=${customerId}`)}
-                        >
-                          New quote (no lead)
-                        </DropdownMenuItem>
                         {leads.length > 0 && leads.map((lead) => (
                           <DropdownMenuItem
                             key={lead.id}
                             onClick={() => router.push(`/quotes/create?customer_id=${customerId}&lead_id=${lead.id}`)}
                           >
-                            From lead: {lead.name}
+                            From lead: {lead.name} ({new Date(lead.created_at).toLocaleDateString()})
                           </DropdownMenuItem>
                         ))}
                         <DropdownMenuItem
@@ -568,17 +563,12 @@ export default function CustomerDetailPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="start" className="w-56">
-                          <DropdownMenuItem
-                            onClick={() => router.push(`/quotes/create?customer_id=${customerId}`)}
-                          >
-                            New quote (no lead)
-                          </DropdownMenuItem>
                           {leads.length > 0 && leads.map((lead) => (
                             <DropdownMenuItem
                               key={lead.id}
                               onClick={() => router.push(`/quotes/create?customer_id=${customerId}&lead_id=${lead.id}`)}
                             >
-                              From lead: {lead.name}
+                              From lead: {lead.name} ({new Date(lead.created_at).toLocaleDateString()})
                             </DropdownMenuItem>
                           ))}
                           <DropdownMenuItem

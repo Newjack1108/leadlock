@@ -300,6 +300,12 @@ export default function Header() {
                       SMS Templates
                     </DropdownMenuItem>
                   </Link>
+                  <Link href="/settings/reminder-triggers">
+                    <DropdownMenuItem className="cursor-pointer">
+                      <Bell className="h-4 w-4 mr-2" />
+                      Reminder Triggers
+                    </DropdownMenuItem>
+                  </Link>
                   <Link href="/discounts">
                     <DropdownMenuItem className="cursor-pointer">
                       <Gift className="h-4 w-4 mr-2" />

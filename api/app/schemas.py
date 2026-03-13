@@ -948,7 +948,7 @@ class QuoteItemResponse(BaseModel):
 
 class QuoteCreate(BaseModel):
     customer_id: Optional[int] = None  # Can be None during migration
-    lead_id: Optional[int] = None  # Lead this quote was generated from (must belong to customer_id)
+    lead_id: int  # Required: Lead (enquiry) this quote was generated from (must belong to customer_id)
     quote_number: Optional[str] = None  # Auto-generated if not provided
     version: int = 1
     valid_until: Optional[datetime] = None

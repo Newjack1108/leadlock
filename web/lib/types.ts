@@ -1030,6 +1030,27 @@ export interface StaleSummary {
   stale_quotes_count: number;
 }
 
+export interface ReminderRule {
+  id: number;
+  rule_name: string;
+  entity_type: string;
+  status: string | null;
+  threshold_days: number;
+  check_type: string;
+  is_active: boolean;
+  priority: ReminderPriority;
+  suggested_action: SuggestedAction;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ReminderRuleUpdate {
+  threshold_days?: number;
+  is_active?: boolean;
+  priority?: ReminderPriority;
+  suggested_action?: SuggestedAction;
+}
+
 export enum CustomerHistoryEventType {
   ACTIVITY = "ACTIVITY",
   LEAD_STATUS_CHANGE = "LEAD_STATUS_CHANGE",

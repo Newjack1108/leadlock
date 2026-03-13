@@ -471,7 +471,7 @@ export const estimateDeliveryInstall = async (
 // Quote API functions
 export const createQuote = async (quoteData: {
   customer_id: number;
-  lead_id?: number;
+  lead_id: number;  // Required: quotes must be linked to an enquiry (lead)
   quote_number?: string;
   version?: number;
   valid_until?: string;
@@ -863,6 +863,19 @@ export const createManualReminder = async (data: {
   reminder_date: string; // YYYY-MM-DD
 }) => {
   const response = await api.post('/api/reminders', data);
+  return response.data;
+};
+
+export const getReminderRules = async () => {
+  const response = await api.get('/api/reminders/rules');
+  return response.data;
+};
+
+export const updateReminderRule = async (
+  ruleId: number,
+  data: { threshold_days?: number; is_active?: boolean; priority?: string; suggested_action?: string }
+) => {
+  const response = await api.put(`/api/reminders/rules/${ruleId}`, data);
   return response.data;
 };
 

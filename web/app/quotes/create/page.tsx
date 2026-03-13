@@ -107,6 +107,12 @@ function CreateQuoteContent() {
 
   useEffect(() => {
     if (customerId) {
+      if (!leadId) {
+        toast.error('Please select an enquiry (lead) to create a quote from');
+        router.push(`/customers/${customerId}`);
+        setPageLoading(false);
+        return;
+      }
       fetchCustomer();
       fetchProducts();
       fetchDefaultTerms();
@@ -121,7 +127,7 @@ function CreateQuoteContent() {
       toast.error('Customer ID is required');
       router.push('/customers');
     }
-  }, [customerId]);
+  }, [customerId, leadId]);
 
   const fetchCustomer = async () => {
     if (!customerId) return;
@@ -411,7 +417,7 @@ function CreateQuoteContent() {
     try {
       const quoteData: any = {
         customer_id: customer.id,
-        ...(leadId && { lead_id: leadId }),
+        lead_id: leadId!,
         items: validItems.map((item, index) => {
           const parentInItems = item.parent_index;
           const parentIndexInPayload =
