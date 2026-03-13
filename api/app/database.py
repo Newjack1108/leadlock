@@ -838,22 +838,18 @@ def create_db_and_tables():
             if "already exists" not in error_str and "duplicate" not in error_str:
                 print(f"Error in lead source revert migration: {e}", file=sys.stderr, flush=True)
         
-        # Step 9: Create Reminder and ReminderRule tables
+        # Step 9: Create Reminder and ReminderRule tables + seed default rules
         has_reminder_table = inspector.has_table("reminder")
         has_reminder_rule_table = inspector.has_table("reminderrule")
         
-        if not has_reminder_table or not has_reminder_rule_table:
-            print("Creating reminder tables...", file=sys.stderr, flush=True)
-            # Tables will be created by SQLModel.metadata.create_all() if they don't exist
-            # But we'll also seed default reminder rules
-            try:
-                with Session(engine) as session:
-                    from app.models import ReminderRule, ReminderPriority, SuggestedAction
-                    
-                    # Check if rules already exist
-                    if not has_reminder_rule_table:
-                        # Create default reminder rules
-                        default_rules = [
+        # Seed default rules when table doesn't exist OR when it's empty (create_all runs first, so table may exist but be empty)
+        def _seed_default_reminder_rules(session):
+            from app.models import ReminderRule, ReminderPriority, SuggestedAction
+            from sqlmodel import select
+            existing = session.exec(select(ReminderRule.id)).first()
+            if existing is not None:
+                return  # Already has rules
+            default_rules = [
                             ReminderRule(
                                 rule_name="NEW_LEAD_STALE",
                                 entity_type="LEAD",
@@ -945,13 +941,18 @@ def create_db_and_tables():
                                 suggested_action=SuggestedAction.PHONE_CALL
                             ),
                         ]
-                        
-                        for rule in default_rules:
-                            session.add(rule)
-                        session.commit()
-                        print(f"Created {len(default_rules)} default reminder rules", file=sys.stderr, flush=True)
+            for rule in default_rules:
+                session.add(rule)
+            session.commit()
+            print(f"Created {len(default_rules)} default reminder rules", file=sys.stderr, flush=True)
+        
+        # Run seeding when reminder_rule table exists (create_all runs first, so table may exist but be empty)
+        if has_reminder_rule_table or inspector.has_table("reminderrule"):
+            try:
+                with Session(engine) as session:
+                    _seed_default_reminder_rules(session)
             except Exception as e:
-                print(f"Error creating reminder rules: {e}", file=sys.stderr, flush=True)
+                print(f"Error seeding default reminder rules: {e}", file=sys.stderr, flush=True)
                 import traceback
                 print(traceback.format_exc(), file=sys.stderr, flush=True)
         
