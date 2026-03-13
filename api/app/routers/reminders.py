@@ -8,7 +8,7 @@ from app.database import get_session
 from app.auth import get_current_user
 from datetime import date as date_type
 from app.models import (
-    Reminder, ReminderRule, User, Lead, Quote, Customer,
+    Reminder, ReminderRule, User, UserRole, Lead, Quote, Customer,
     ReminderType, ReminderPriority, SuggestedAction
 )
 from app.schemas import (
@@ -19,6 +19,14 @@ from app.schemas import (
 from app.reminder_service import generate_reminders
 
 router = APIRouter(prefix="/api/reminders", tags=["reminders"])
+
+
+def _reminder_visibility_filter(current_user: User):
+    """Reminder visibility: Directors see all; others see reminders for their role."""
+    if current_user.role == UserRole.DIRECTOR:
+        return None  # No extra filter - show all
+    same_role_ids = select(User.id).where(User.role == current_user.role)
+    return Reminder.assigned_to_id.in_(same_role_ids)
 
 
 @router.post("", response_model=ReminderResponse)
@@ -76,9 +84,12 @@ async def get_reminders(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
-    """Get active reminders for the current user."""
-    statement = select(Reminder).where(Reminder.assigned_to_id == current_user.id)
-    
+    """Get active reminders for the current user (per role; Directors see all)."""
+    statement = select(Reminder)
+    visibility = _reminder_visibility_filter(current_user)
+    if visibility is not None:
+        statement = statement.where(visibility)
+
     if dismissed is False:
         statement = statement.where(Reminder.dismissed_at.is_(None))
     elif dismissed is True:
@@ -147,70 +158,41 @@ async def get_stale_summary(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
-    """Get summary of stale items and reminders."""
-    # Count reminders by priority
-    urgent_count = session.exec(
-        select(func.count(Reminder.id)).where(
-            and_(
-                Reminder.assigned_to_id == current_user.id,
-                Reminder.priority == ReminderPriority.URGENT,
-                Reminder.dismissed_at.is_(None)
-            )
-        )
-    ).one()
-    
-    high_count = session.exec(
-        select(func.count(Reminder.id)).where(
-            and_(
-                Reminder.assigned_to_id == current_user.id,
-                Reminder.priority == ReminderPriority.HIGH,
-                Reminder.dismissed_at.is_(None)
-            )
-        )
-    ).one()
-    
-    medium_count = session.exec(
-        select(func.count(Reminder.id)).where(
-            and_(
-                Reminder.assigned_to_id == current_user.id,
-                Reminder.priority == ReminderPriority.MEDIUM,
-                Reminder.dismissed_at.is_(None)
-            )
-        )
-    ).one()
-    
-    low_count = session.exec(
-        select(func.count(Reminder.id)).where(
-            and_(
-                Reminder.assigned_to_id == current_user.id,
-                Reminder.priority == ReminderPriority.LOW,
-                Reminder.dismissed_at.is_(None)
-            )
-        )
-    ).one()
-    
+    """Get summary of stale items and reminders (per role; Directors see all)."""
+    visibility = _reminder_visibility_filter(current_user)
+
+    def _count_where(*conds):
+        all_conds = list(conds)
+        if visibility is not None:
+            all_conds.append(visibility)
+        return session.exec(select(func.count(Reminder.id)).where(and_(*all_conds))).one()
+
+    urgent_count = _count_where(
+        Reminder.priority == ReminderPriority.URGENT,
+        Reminder.dismissed_at.is_(None)
+    )
+    high_count = _count_where(
+        Reminder.priority == ReminderPriority.HIGH,
+        Reminder.dismissed_at.is_(None)
+    )
+    medium_count = _count_where(
+        Reminder.priority == ReminderPriority.MEDIUM,
+        Reminder.dismissed_at.is_(None)
+    )
+    low_count = _count_where(
+        Reminder.priority == ReminderPriority.LOW,
+        Reminder.dismissed_at.is_(None)
+    )
     total_reminders = urgent_count + high_count + medium_count + low_count
-    
-    # Count stale leads and quotes
-    stale_leads_count = session.exec(
-        select(func.count(Reminder.id)).where(
-            and_(
-                Reminder.assigned_to_id == current_user.id,
-                Reminder.reminder_type == ReminderType.LEAD_STALE,
-                Reminder.dismissed_at.is_(None)
-            )
-        )
-    ).one()
-    
-    stale_quotes_count = session.exec(
-        select(func.count(Reminder.id)).where(
-            and_(
-                Reminder.assigned_to_id == current_user.id,
-                Reminder.reminder_type.in_([ReminderType.QUOTE_STALE, ReminderType.QUOTE_EXPIRED, ReminderType.QUOTE_EXPIRING, ReminderType.QUOTE_NOT_OPENED, ReminderType.QUOTE_OPENED_NO_REPLY]),
-                Reminder.dismissed_at.is_(None)
-            )
-        )
-    ).one()
+
+    stale_leads_count = _count_where(
+        Reminder.reminder_type == ReminderType.LEAD_STALE,
+        Reminder.dismissed_at.is_(None)
+    )
+    stale_quotes_count = _count_where(
+        Reminder.reminder_type.in_([ReminderType.QUOTE_STALE, ReminderType.QUOTE_EXPIRED, ReminderType.QUOTE_EXPIRING, ReminderType.QUOTE_NOT_OPENED, ReminderType.QUOTE_OPENED_NO_REPLY]),
+        Reminder.dismissed_at.is_(None)
+    )
     
     return StaleSummaryResponse(
         total_reminders=total_reminders,
@@ -235,10 +217,12 @@ async def dismiss_reminder(
     
     if not reminder:
         raise HTTPException(status_code=404, detail="Reminder not found")
-    
-    if reminder.assigned_to_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized to dismiss this reminder")
-    
+
+    if current_user.role != UserRole.DIRECTOR:
+        assigned_user = session.exec(select(User).where(User.id == reminder.assigned_to_id)).first()
+        if not assigned_user or assigned_user.role != current_user.role:
+            raise HTTPException(status_code=403, detail="Not authorized to dismiss this reminder")
+
     from datetime import datetime
     reminder.dismissed_at = datetime.utcnow()
     session.add(reminder)
@@ -259,10 +243,12 @@ async def act_on_reminder(
     
     if not reminder:
         raise HTTPException(status_code=404, detail="Reminder not found")
-    
-    if reminder.assigned_to_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized to act on this reminder")
-    
+
+    if current_user.role != UserRole.DIRECTOR:
+        assigned_user = session.exec(select(User).where(User.id == reminder.assigned_to_id)).first()
+        if not assigned_user or assigned_user.role != current_user.role:
+            raise HTTPException(status_code=403, detail="Not authorized to act on this reminder")
+
     from datetime import datetime
     reminder.acted_upon_at = datetime.utcnow()
     session.add(reminder)
@@ -315,7 +301,6 @@ async def update_reminder_rule(
     current_user: User = Depends(get_current_user)
 ):
     """Update a reminder rule (Director only)."""
-    from app.models import UserRole
     if current_user.role != UserRole.DIRECTOR:
         raise HTTPException(status_code=403, detail="Only directors can update reminder rules")
     
