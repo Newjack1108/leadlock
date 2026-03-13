@@ -108,19 +108,9 @@ export default function Header() {
       <div className="container mx-auto px-6 py-0 flex items-center justify-between">
         <Logo disableLink={isCloser} />
         <nav className="flex items-center gap-4">
-          {/* Closer: Dashboard first, then Leads (no new-leads badge); Director/Sales Manager: Leads first */}
+          {/* Closer: Leads first, then Dashboard (no new-leads badge); Director/Sales Manager: Leads first */}
           {isCloser ? (
             <>
-              <Link href="/closer-dashboard" className="relative">
-                <Button
-                  variant={pathname?.startsWith('/closer-dashboard') ? 'default' : 'ghost'}
-                  size="sm"
-                  className={pathname?.startsWith('/closer-dashboard') ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}
-                >
-                  <LayoutDashboard className="h-4 w-4 mr-2" />
-                  Dashboard
-                </Button>
-              </Link>
               <Link href="/leads" className="relative">
                 <Button
                   variant={pathname?.startsWith('/leads') ? 'default' : 'ghost'}
@@ -129,6 +119,16 @@ export default function Header() {
                 >
                   <Users className="h-4 w-4 mr-2" />
                   Leads
+                </Button>
+              </Link>
+              <Link href="/closer-dashboard" className="relative">
+                <Button
+                  variant={pathname?.startsWith('/closer-dashboard') ? 'default' : 'ghost'}
+                  size="sm"
+                  className={pathname?.startsWith('/closer-dashboard') ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}
+                >
+                  <LayoutDashboard className="h-4 w-4 mr-2" />
+                  Dashboard
                 </Button>
               </Link>
             </>
