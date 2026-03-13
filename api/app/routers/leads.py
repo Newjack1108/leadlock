@@ -226,10 +226,26 @@ async def create_lead(
     try:
         lead = Lead(**lead_data.dict())
         lead.assigned_to_id = current_user.id
+
+        # Manual entry leads auto-qualify
+        if lead.lead_source == LeadSource.MANUAL_ENTRY:
+            lead.status = LeadStatus.QUALIFIED
+
         session.add(lead)
         session.commit()
         session.refresh(lead)
-        
+
+        # Create or link customer when manual lead is auto-qualified
+        if lead.status == LeadStatus.QUALIFIED and not lead.customer_id:
+            customer = find_or_create_customer(lead, session)
+            lead.customer_id = customer.id
+            session.add(lead)
+            session.commit()
+            session.refresh(lead)
+            # Auto-create opportunity for quotable qualified lead
+            from app.workflow import auto_create_opportunity
+            auto_create_opportunity(customer.id, lead.id, session, current_user.id)
+
         # Create initial status history
         status_history = StatusHistory(
             lead_id=lead.id,
@@ -238,7 +254,7 @@ async def create_lead(
         )
         session.add(status_history)
         session.commit()
-        
+
         return enrich_lead_response(lead, session, current_user)
     except Exception as e:
         import traceback

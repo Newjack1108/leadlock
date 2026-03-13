@@ -58,6 +58,10 @@ const TERMINAL_STATUSES: LeadStatus[] = [LeadStatus.QUOTED, LeadStatus.WON, Lead
 // Exclude legacy WEBSITE from new-lead dropdown; prefer CSGB/CS/BLC WEBSITE
 const LEAD_SOURCE_OPTIONS_FOR_NEW = Object.values(LeadSource).filter((s) => s !== LeadSource.WEBSITE);
 
+// Closers only see these statuses; default to QUALIFIED
+const CLOSER_STATUS_TABS: LeadStatus[] = [LeadStatus.QUALIFIED, LeadStatus.QUOTED, LeadStatus.WON, LeadStatus.LOST];
+const CLOSER_DISALLOWED_STATUSES: (LeadStatus | 'ALL')[] = ['ALL', LeadStatus.NEW, LeadStatus.CONTACT_ATTEMPTED, LeadStatus.ENGAGED];
+
 function LeadsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -114,13 +118,13 @@ function LeadsPageContent() {
     }
   }, [searchParams]);
 
-  // Closers: redirect away from NEW status and clear URL param
+  // Closers: only see Qualified, Quoted, Won, Lost; default to Qualified
   useEffect(() => {
-    if (userRole === 'CLOSER' && statusFilter === LeadStatus.NEW) {
-      setStatusFilter('ALL');
+    if (userRole === 'CLOSER' && CLOSER_DISALLOWED_STATUSES.includes(statusFilter)) {
+      setStatusFilter(LeadStatus.QUALIFIED);
       const params = new URLSearchParams(searchParams.toString());
-      params.delete('status');
-      router.replace(params.toString() ? `/leads?${params}` : '/leads');
+      params.set('status', LeadStatus.QUALIFIED);
+      router.replace(`/leads?${params}`);
     }
   }, [userRole, statusFilter, searchParams, router]);
 
@@ -209,9 +213,7 @@ function LeadsPageContent() {
   };
 
   const isCloser = userRole === 'CLOSER';
-  const statusTabs: (LeadStatus | 'ALL')[] = isCloser
-    ? ['ALL', ...Object.values(LeadStatus).filter((s) => s !== LeadStatus.NEW)]
-    : ['ALL', ...Object.values(LeadStatus)];
+  const statusTabs: (LeadStatus | 'ALL')[] = isCloser ? CLOSER_STATUS_TABS : ['ALL', ...Object.values(LeadStatus)];
 
   return (
     <div className="min-h-screen">
@@ -259,15 +261,13 @@ function LeadsPageContent() {
             >
               My Leads
             </Button>
-            {!isCloser && (
-              <Button
-                onClick={() => setCreateDialogOpen(true)}
-                className="bg-primary hover:bg-primary/90"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Create Lead
-              </Button>
-            )}
+            <Button
+              onClick={() => setCreateDialogOpen(true)}
+              className="bg-primary hover:bg-primary/90"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Create Lead
+            </Button>
           </div>
 
           {/* Status Tabs */}
