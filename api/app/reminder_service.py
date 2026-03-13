@@ -294,7 +294,8 @@ def generate_reminders(session: Session, user_id: Optional[int] = None) -> int:
                 and_(
                     Reminder.lead_id == lead.id,
                     Reminder.reminder_type == ReminderType.LEAD_STALE,
-                    Reminder.dismissed_at.is_(None)
+                    Reminder.dismissed_at.is_(None),
+                    Reminder.acted_upon_at.is_(None)
                 )
             )
         ).first()
@@ -356,7 +357,8 @@ def generate_reminders(session: Session, user_id: Optional[int] = None) -> int:
                 and_(
                     Reminder.quote_id == quote.id,
                     Reminder.reminder_type == reminder_type,
-                    Reminder.dismissed_at.is_(None)
+                    Reminder.dismissed_at.is_(None),
+                    Reminder.acted_upon_at.is_(None)
                 )
             )
         ).first()

@@ -92,6 +92,7 @@ async def get_reminders(
 
     if dismissed is False:
         statement = statement.where(Reminder.dismissed_at.is_(None))
+        statement = statement.where(Reminder.acted_upon_at.is_(None))
     elif dismissed is True:
         statement = statement.where(Reminder.dismissed_at.isnot(None))
     
@@ -169,29 +170,35 @@ async def get_stale_summary(
 
     urgent_count = _count_where(
         Reminder.priority == ReminderPriority.URGENT,
-        Reminder.dismissed_at.is_(None)
+        Reminder.dismissed_at.is_(None),
+        Reminder.acted_upon_at.is_(None)
     )
     high_count = _count_where(
         Reminder.priority == ReminderPriority.HIGH,
-        Reminder.dismissed_at.is_(None)
+        Reminder.dismissed_at.is_(None),
+        Reminder.acted_upon_at.is_(None)
     )
     medium_count = _count_where(
         Reminder.priority == ReminderPriority.MEDIUM,
-        Reminder.dismissed_at.is_(None)
+        Reminder.dismissed_at.is_(None),
+        Reminder.acted_upon_at.is_(None)
     )
     low_count = _count_where(
         Reminder.priority == ReminderPriority.LOW,
-        Reminder.dismissed_at.is_(None)
+        Reminder.dismissed_at.is_(None),
+        Reminder.acted_upon_at.is_(None)
     )
     total_reminders = urgent_count + high_count + medium_count + low_count
 
     stale_leads_count = _count_where(
         Reminder.reminder_type == ReminderType.LEAD_STALE,
-        Reminder.dismissed_at.is_(None)
+        Reminder.dismissed_at.is_(None),
+        Reminder.acted_upon_at.is_(None)
     )
     stale_quotes_count = _count_where(
         Reminder.reminder_type.in_([ReminderType.QUOTE_STALE, ReminderType.QUOTE_EXPIRED, ReminderType.QUOTE_EXPIRING, ReminderType.QUOTE_NOT_OPENED, ReminderType.QUOTE_OPENED_NO_REPLY]),
-        Reminder.dismissed_at.is_(None)
+        Reminder.dismissed_at.is_(None),
+        Reminder.acted_upon_at.is_(None)
     )
     
     return StaleSummaryResponse(

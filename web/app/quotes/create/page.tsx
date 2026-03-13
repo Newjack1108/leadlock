@@ -15,7 +15,7 @@ import { Customer, Product, QuoteItemCreate, DiscountTemplate, QuoteTemperature,
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { formatHoursMinutes } from '@/lib/utils';
-import { Plus, Trash2, ArrowLeft, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, Trash2, ArrowLeft, X, ChevronDown, ChevronUp, FileSearch } from 'lucide-react';
 
 const DELIVERY_LINE_DESCRIPTION = 'Delivery';
 const INSTALLATION_LINE_DESCRIPTION = 'Installation';
@@ -501,8 +501,16 @@ function CreateQuoteContent() {
           </Button>
           <div>
             <h1 className="text-3xl font-semibold">Create New Quote</h1>
-            <p className="text-muted-foreground mt-1">
+            <p className="text-muted-foreground mt-1 flex items-center gap-2 flex-wrap">
               For {customer.name}
+              {leadId && (
+                <Button variant="outline" size="sm" asChild className="ml-2">
+                  <Link href={`/leads/${leadId}`} target="_blank" rel="noopener noreferrer">
+                    <FileSearch className="h-4 w-4 mr-2" />
+                    View Enquiry
+                  </Link>
+                </Button>
+              )}
             </p>
           </div>
         </div>
