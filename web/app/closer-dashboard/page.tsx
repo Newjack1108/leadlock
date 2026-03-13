@@ -81,52 +81,55 @@ export default function CloserDashboardPage() {
   const [companySettings, setCompanySettings] = useState<CompanySettings | null>(null);
   const [leadLocations, setLeadLocations] = useState<LeadLocationItem[]>([]);
   const [datePeriod, setDatePeriod] = useState<DatePeriod>('all');
-  const [loading, setLoading] = useState(true);
+  const [loadingPhase1, setLoadingPhase1] = useState(true);
+  const [loadingPhase2, setLoadingPhase2] = useState(true);
+  const [loadingPhase3, setLoadingPhase3] = useState(true);
 
+  // Phase 1: Critical - auth, qualified, documents (main features; not period-dependent)
   useEffect(() => {
-    fetchDashboard();
-  }, [datePeriod]);
-
-  const fetchDashboard = async () => {
-    try {
-      const [
-        meRes,
-        qualifiedRes,
-        smsRes,
-        messengerRes,
-        docsRes,
-        statsRes,
-        companyRes,
-        locationsRes,
-      ] = await Promise.all([
-        api.get('/api/auth/me').then((r) => r.data).catch(() => null),
-        getQualifiedForQuoting().catch(() => ({ count: 0, leads: [] })),
-        getUnreadSms().catch(() => ({ count: 0, messages: [] })),
-        getUnreadMessenger().catch(() => ({ count: 0, messages: [] })),
-        getSalesDocuments().catch(() => []),
-        api.get('/api/dashboard/stats', { params: datePeriod === 'all' ? {} : { period: datePeriod } }).then((r) => r.data).catch(() => null),
-        getCompanySettings().catch(() => null),
-        getLeadLocations(datePeriod === 'all' ? undefined : datePeriod).catch(() => []),
-      ]);
+    const phase1Promises = [
+      api.get('/api/auth/me').then((r) => r.data).catch((err: { response?: { status?: number } }) => {
+        if (err?.response?.status === 401) router.push('/login');
+        return null;
+      }),
+      getQualifiedForQuoting().catch(() => ({ count: 0, leads: [] })),
+      getSalesDocuments().catch(() => []),
+    ];
+    Promise.all(phase1Promises).then(([meRes, qualifiedRes, docsRes]) => {
       setUser(meRes ? { full_name: meRes.full_name || '' } : null);
       setQualified(qualifiedRes);
+      setDocuments(Array.isArray(docsRes) ? docsRes : []);
+    }).catch(() => toast.error('Failed to load dashboard')).finally(() => setLoadingPhase1(false));
+  }, [router]);
+
+  // Phase 2 & 3: Period-dependent data
+  useEffect(() => {
+    const params = datePeriod === 'all' ? {} : { period: datePeriod };
+    const locationsParam = datePeriod === 'all' ? undefined : datePeriod;
+
+    setLoadingPhase2(true);
+    setLoadingPhase3(true);
+
+    // Phase 2: Company settings, stats (installation lead time, charts)
+    Promise.all([
+      getCompanySettings().catch(() => null),
+      api.get('/api/dashboard/stats', { params }).then((r) => r.data).catch(() => null),
+    ]).then(([companyRes, statsRes]) => {
+      setCompanySettings(companyRes ?? null);
+      setStats(statsRes);
+    }).catch(() => toast.error('Failed to load dashboard stats')).finally(() => setLoadingPhase2(false));
+
+    // Phase 3: Lead locations, unread messages
+    Promise.all([
+      getLeadLocations(locationsParam).catch(() => []),
+      getUnreadSms().catch(() => ({ count: 0, messages: [] })),
+      getUnreadMessenger().catch(() => ({ count: 0, messages: [] })),
+    ]).then(([locationsRes, smsRes, messengerRes]) => {
+      setLeadLocations(Array.isArray(locationsRes) ? locationsRes : []);
       setUnreadSms(smsRes ?? { count: 0, messages: [] });
       setUnreadMessenger(messengerRes ?? { count: 0, messages: [] });
-      setDocuments(Array.isArray(docsRes) ? docsRes : []);
-      setStats(statsRes);
-      setCompanySettings(companyRes ?? null);
-      setLeadLocations(Array.isArray(locationsRes) ? locationsRes : []);
-    } catch (error: unknown) {
-      const err = error as { response?: { status?: number } };
-      if (err.response?.status === 401) {
-        router.push('/login');
-      } else {
-        toast.error('Failed to load dashboard');
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
+    }).catch(() => toast.error('Failed to load messages')).finally(() => setLoadingPhase3(false));
+  }, [datePeriod]);
 
   const handleDownloadDoc = async (doc: SalesDocument) => {
     try {
@@ -144,24 +147,18 @@ export default function CloserDashboardPage() {
 
   const totalUnread = (unreadSms?.count ?? 0) + (unreadMessenger?.count ?? 0);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen">
-        <Header />
-        <div className="container mx-auto px-6 py-8">
-          <div className="text-center py-12 text-muted-foreground">Loading...</div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
       <main className="flex-1 container mx-auto px-6 py-4 overflow-y-auto">
         <div className="shrink-0 mb-4">
           <p className="text-2xl font-bold">
-            {getGreeting()}{user?.full_name ? `, ${getFirstName(user.full_name)}` : ''}
+            {getGreeting()}
+            {loadingPhase1 && !user ? (
+              <span className="ml-2 inline-block h-7 w-24 animate-pulse rounded bg-muted" />
+            ) : user?.full_name ? (
+              `, ${getFirstName(user.full_name)}`
+            ) : null}
           </p>
           <div className="flex items-center gap-2 mt-1">
             <LayoutDashboard className="h-6 w-6 text-primary" />
@@ -170,7 +167,21 @@ export default function CloserDashboardPage() {
         </div>
 
         {/* Installation lead time */}
-        {companySettings?.installation_lead_time && (
+        {loadingPhase2 && !companySettings ? (
+          <Card className="shrink-0 mb-4 border-primary/30 bg-primary/5">
+            <CardContent className="py-3 px-4">
+              <div className="flex items-center gap-3">
+                <div className="h-8 w-8 animate-pulse rounded-lg bg-muted" />
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Current installation lead time
+                  </p>
+                  <div className="mt-1 h-6 w-24 animate-pulse rounded bg-muted" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ) : companySettings?.installation_lead_time ? (
           <Card className="shrink-0 mb-4 border-primary/30 bg-primary/5">
             <CardContent className="py-3 px-4">
               <div className="flex items-center gap-3">
@@ -186,7 +197,7 @@ export default function CloserDashboardPage() {
               </div>
             </CardContent>
           </Card>
-        )}
+        ) : null}
 
         {/* Period filter */}
         <div className="flex gap-2 mb-4 shrink-0">
@@ -216,7 +227,16 @@ export default function CloserDashboardPage() {
               </span>
             </CardHeader>
             <CardContent className="px-4 pb-4 pt-0">
-              {qualified && qualified.leads.length > 0 ? (
+              {loadingPhase1 ? (
+                <div className="space-y-2">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="flex gap-2 p-2 rounded-md border border-border">
+                      <div className="h-4 flex-1 animate-pulse rounded bg-muted" />
+                      <div className="h-3 w-20 animate-pulse rounded bg-muted" />
+                    </div>
+                  ))}
+                </div>
+              ) : qualified && qualified.leads.length > 0 ? (
                 <div className="max-h-[280px] overflow-y-auto space-y-1.5">
                   {qualified.leads.map((lead) => (
                     <Link
@@ -253,7 +273,16 @@ export default function CloserDashboardPage() {
               </Button>
             </CardHeader>
             <CardContent className="px-4 pb-4 pt-0">
-              {documents.length > 0 ? (
+              {loadingPhase1 ? (
+                <div className="space-y-2">
+                  {[1, 2, 3, 4].map((i) => (
+                    <div key={i} className="flex gap-2 p-2 rounded-md border border-border">
+                      <div className="h-4 flex-1 animate-pulse rounded bg-muted" />
+                      <div className="h-7 w-7 shrink-0 animate-pulse rounded bg-muted" />
+                    </div>
+                  ))}
+                </div>
+              ) : documents.length > 0 ? (
                 <div className="max-h-[280px] overflow-y-auto space-y-1.5">
                   {documents.slice(0, 6).map((doc) => (
                     <div
@@ -291,13 +320,19 @@ export default function CloserDashboardPage() {
               <CardTitle className="text-sm font-medium">Lead Status</CardTitle>
             </CardHeader>
             <CardContent className="px-4 pb-4 pt-0">
-              <StatusPieChart
-                height={180}
-                newCount={stats?.new_count ?? 0}
-                quotedCount={stats?.leads_with_sent_quotes_count ?? 0}
-                wonCount={stats?.won_count ?? 0}
-                lostCount={stats?.lost_count ?? 0}
-              />
+              {loadingPhase2 ? (
+                <div className="h-[180px] flex items-center justify-center">
+                  <div className="h-32 w-32 animate-pulse rounded-full bg-muted" />
+                </div>
+              ) : (
+                <StatusPieChart
+                  height={180}
+                  newCount={stats?.new_count ?? 0}
+                  quotedCount={stats?.leads_with_sent_quotes_count ?? 0}
+                  wonCount={stats?.won_count ?? 0}
+                  lostCount={stats?.lost_count ?? 0}
+                />
+              )}
             </CardContent>
           </Card>
           <Card>
@@ -305,7 +340,15 @@ export default function CloserDashboardPage() {
               <CardTitle className="text-sm font-medium">Leads by Source</CardTitle>
             </CardHeader>
             <CardContent className="px-4 pb-4 pt-0">
-              <LeadsBySourceBarChart data={stats?.leads_by_source ?? []} height={180} />
+              {loadingPhase2 ? (
+                <div className="h-[180px] space-y-2">
+                  {[1, 2, 3, 4].map((i) => (
+                    <div key={i} className="h-6 animate-pulse rounded bg-muted" style={{ width: `${60 + i * 10}%` }} />
+                  ))}
+                </div>
+              ) : (
+                <LeadsBySourceBarChart data={stats?.leads_by_source ?? []} height={180} />
+              )}
             </CardContent>
           </Card>
           <Card>
@@ -313,7 +356,11 @@ export default function CloserDashboardPage() {
               <CardTitle className="text-sm font-medium">Lead Locations</CardTitle>
             </CardHeader>
             <CardContent className="px-4 pb-4 pt-0">
-              <LeadMap locations={leadLocations} period={datePeriod} height={200} />
+              {loadingPhase3 ? (
+                <div className="h-[200px] animate-pulse rounded bg-muted" />
+              ) : (
+                <LeadMap locations={leadLocations} period={datePeriod} height={200} />
+              )}
             </CardContent>
           </Card>
         </div>
