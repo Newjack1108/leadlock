@@ -28,8 +28,9 @@ import {
   Clock,
   CheckCircle,
   XCircle,
+  FileText,
 } from 'lucide-react';
-import api from '@/lib/api';
+import api, { getLeadQuotes } from '@/lib/api';
 import { formatDateTime } from '@/lib/utils';
 import { Lead, Activity, ActivityType, LeadStatus, Timeframe, LeadType, LeadSource } from '@/lib/types';
 import { toast } from 'sonner';
@@ -76,11 +77,14 @@ export default function LeadDetailPage() {
   const [composeEmailOpen, setComposeEmailOpen] = useState(false);
   const [callNotesDialogOpen, setCallNotesDialogOpen] = useState(false);
   const [ensureCustomerLoading, setEnsureCustomerLoading] = useState(false);
+  const [quotesFromLead, setQuotesFromLead] = useState<any[]>([]);
+  const [quotesLoading, setQuotesLoading] = useState(false);
 
   useEffect(() => {
     if (leadId) {
       fetchLead();
       fetchActivities();
+      fetchQuotesFromLead();
     }
   }, [leadId]);
 
@@ -110,6 +114,18 @@ export default function LeadDetailPage() {
       setActivities(response.data);
     } catch (error: any) {
       console.error('Failed to load activities');
+    }
+  };
+
+  const fetchQuotesFromLead = async () => {
+    setQuotesLoading(true);
+    try {
+      const data = await getLeadQuotes(leadId);
+      setQuotesFromLead(data || []);
+    } catch {
+      setQuotesFromLead([]);
+    } finally {
+      setQuotesLoading(false);
     }
   };
 
@@ -503,6 +519,48 @@ export default function LeadDetailPage() {
                       </Button>
                     )}
                   </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Quotes from this Lead */}
+            {lead.customer && (
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center gap-2">
+                    <FileText className="h-5 w-5" />
+                    <CardTitle>Quotes from this Lead</CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {quotesLoading ? (
+                    <p className="text-sm text-muted-foreground">Loading...</p>
+                  ) : quotesFromLead.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No quotes yet</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {quotesFromLead.map((quote) => (
+                        <div key={quote.id} className="flex items-center justify-between p-3 border rounded-md">
+                          <div>
+                            <span className="font-medium">{quote.quote_number}</span>
+                            <span className="text-muted-foreground text-sm ml-2">
+                              £{Number(quote.total_amount).toFixed(2)}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge>{quote.status}</Badge>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => router.push(`/quotes/${quote.id}`)}
+                            >
+                              View Quote
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             )}

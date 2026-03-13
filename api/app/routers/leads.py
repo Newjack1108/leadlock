@@ -2,11 +2,11 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlmodel import Session, select, or_
 from typing import Optional, List
 from app.database import get_session
-from app.models import Lead, User, Activity, StatusHistory, LeadStatus, LeadType, LeadSource, ActivityType, Customer
+from app.models import Lead, User, Activity, StatusHistory, LeadStatus, LeadType, LeadSource, ActivityType, Customer, Quote, QuoteItem
 from app.auth import get_current_user
 from app.schemas import (
     LeadCreate, LeadUpdate, LeadResponse, StatusTransitionRequest,
-    ActivityCreate, ActivityResponse, StatusHistoryResponse, CustomerResponse
+    ActivityCreate, ActivityResponse, StatusHistoryResponse, CustomerResponse, QuoteResponse
 )
 from app.workflow import can_transition, check_sla_overdue, check_quote_prerequisites
 from datetime import datetime
@@ -552,3 +552,28 @@ async def get_lead_customer(
         messenger_psid=customer.messenger_psid,
         source_system=customer.source_system,
     )
+
+
+@router.get("/{lead_id}/quotes", response_model=List[QuoteResponse])
+async def get_lead_quotes(
+    lead_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    """Get all quotes generated from this lead."""
+    from app.routers.quotes import build_quote_response
+
+    lead = session.exec(select(Lead).where(Lead.id == lead_id)).first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    statement = select(Quote).where(Quote.lead_id == lead_id).order_by(Quote.created_at.desc())
+    quotes = session.exec(statement).all()
+
+    result = []
+    for quote in quotes:
+        item_statement = select(QuoteItem).where(QuoteItem.quote_id == quote.id).order_by(QuoteItem.sort_order)
+        quote_items = session.exec(item_statement).all()
+        result.append(build_quote_response(quote, list(quote_items), session))
+
+    return result

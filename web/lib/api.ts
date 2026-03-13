@@ -661,6 +661,11 @@ export const getCustomerQuotes = async (customerId: number) => {
   return response.data;
 };
 
+export const getLeadQuotes = async (leadId: number) => {
+  const response = await api.get(`/api/leads/${leadId}/quotes`);
+  return response.data;
+};
+
 export const previewQuotePdf = async (
   quoteId: number,
   options?: { includeSpecSheets?: boolean }

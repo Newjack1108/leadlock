@@ -13,7 +13,7 @@ import CallNotesDialog from '@/components/CallNotesDialog';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { formatDateTime } from '@/lib/utils';
-import { ArrowLeft, Mail, Eye, Tag, Pencil, ChevronDown, ChevronUp, Send, ExternalLink, CheckCircle, ShoppingBag, XCircle, MinusCircle } from 'lucide-react';
+import { ArrowLeft, Mail, Eye, Tag, Pencil, ChevronDown, ChevronUp, Send, ExternalLink, CheckCircle, ShoppingBag, XCircle, MinusCircle, FileSearch } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -196,6 +196,14 @@ export default function QuoteDetailPage() {
                 <Badge className={`text-sm ${temperatureColors[quote.temperature]}`}>
                   {quote.temperature}
                 </Badge>
+              )}
+              {quote.lead_id && (
+                <Button variant="outline" asChild>
+                  <Link href={`/leads/${quote.lead_id}`}>
+                    <FileSearch className="h-4 w-4 mr-2" />
+                    View Enquiry
+                  </Link>
+                </Button>
               )}
               {quote.status === 'DRAFT' && (
                 <Button variant="outline" asChild>
