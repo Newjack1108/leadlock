@@ -1,6 +1,6 @@
 # Resend Email Setup (Railway)
 
-Railway blocks outbound SMTP (ports 25, 465, 587) on most plans. Use **Resend** instead—it sends via HTTPS and works on Railway.
+Railway blocks outbound SMTP (ports 25, 465, 587) on most plans. Use **Microsoft Graph** (recommended) or **Resend**—both send via HTTPS and work on Railway. See [MSGRAPH_EMAIL_SETUP.md](MSGRAPH_EMAIL_SETUP.md) for Microsoft Graph setup.
 
 ## Quick Setup
 

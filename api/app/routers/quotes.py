@@ -13,7 +13,7 @@ from app.schemas import (
     QuoteDiscountResponse
 )
 from app.quote_email_service import send_quote_email
-from app.email_service import get_smtp_config
+from app.email_service import is_email_configured
 from app.quote_pdf_service import generate_quote_pdf
 from app.reminder_service import get_last_activity_date
 from app.constants import VAT_RATE_DECIMAL
@@ -1111,14 +1111,11 @@ async def send_quote_email_endpoint(
 ):
     """Send a quote as an email with PDF attachment."""
     try:
-        # Check email configured: Resend or SMTP
-        resend_key = os.getenv("RESEND_API_KEY", "").strip()
-        smtp_config = get_smtp_config(current_user.id)
-        has_smtp = smtp_config.get("user") and smtp_config.get("password")
-        if not resend_key and not has_smtp:
+        # Check email configured: Microsoft Graph, Resend, or SMTP
+        if not is_email_configured(current_user.id):
             raise HTTPException(
                 status_code=400,
-                detail="Email not configured. Add RESEND_API_KEY in Railway (recommended) or configure SMTP in My Settings → Email Settings."
+                detail="Email not configured. Add Microsoft Graph vars (CLIENT_ID, CLIENT_SECRET, TENANT_ID, MSGRAPH_FROM_EMAIL), RESEND_API_KEY in Railway, or configure SMTP in My Settings → Email Settings."
             )
         # Get quote
         statement = select(Quote).where(Quote.id == quote_id)

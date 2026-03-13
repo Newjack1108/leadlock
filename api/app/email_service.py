@@ -1,6 +1,7 @@
 """
-Email service for sending and receiving emails via SMTP, IMAP, or Resend API.
-When RESEND_API_KEY is set, outbound email uses Resend (HTTPS - works on Railway).
+Email service for sending and receiving emails via Microsoft Graph, Resend, or SMTP.
+When CLIENT_ID, CLIENT_SECRET, TENANT_ID, and MSGRAPH_FROM_EMAIL are set, uses Microsoft Graph.
+When RESEND_API_KEY is set, uses Resend (HTTPS - works on Railway).
 Otherwise SMTP is used.
 """
 import base64
@@ -222,7 +223,12 @@ def get_imap_config(user_id: Optional[int] = None) -> Dict:
 
 def generate_message_id() -> str:
     """Generate a unique message ID for emails."""
-    domain = os.getenv("SMTP_FROM_EMAIL", "leadlock.local").split("@")[-1]
+    domain = (
+        os.getenv("MSGRAPH_FROM_EMAIL")
+        or os.getenv("SMTP_FROM_EMAIL")
+        or "leadlock.local"
+    )
+    domain = (domain or "leadlock.local").split("@")[-1]
     return f"<{uuid.uuid4()}@{domain}>"
 
 
@@ -281,6 +287,116 @@ def _send_via_resend(
         return False, None, str(e)
 
 
+def _is_graph_configured() -> bool:
+    """Check if Microsoft Graph credentials are fully configured."""
+    return bool(
+        os.getenv("CLIENT_ID", "").strip()
+        and os.getenv("CLIENT_SECRET", "").strip()
+        and os.getenv("TENANT_ID", "").strip()
+        and os.getenv("MSGRAPH_FROM_EMAIL", "").strip()
+    )
+
+
+def is_email_configured(user_id: Optional[int] = None) -> bool:
+    """Check if any email backend is configured (Graph, Resend, or SMTP)."""
+    if _is_graph_configured():
+        return True
+    if os.getenv("RESEND_API_KEY", "").strip():
+        return True
+    config = get_smtp_config(user_id)
+    return bool(config.get("user") and config.get("password"))
+
+
+def _send_via_graph(
+    to_email: str,
+    subject: str,
+    body_html: Optional[str],
+    body_text: Optional[str],
+    from_email: str,
+    from_name: str,
+    cc: Optional[str],
+    bcc: Optional[str],
+    attachments: Optional[List[Dict]],
+    message_id: str,
+    in_reply_to: Optional[str],
+    references: Optional[str],
+) -> Tuple[bool, Optional[str], Optional[str]]:
+    """Send email via Microsoft Graph API (client credentials flow)."""
+    try:
+        import msal
+        import httpx
+
+        client_id = os.getenv("CLIENT_ID", "").strip()
+        client_secret = os.getenv("CLIENT_SECRET", "").strip()
+        tenant_id = os.getenv("TENANT_ID", "").strip()
+        from_address = os.getenv("MSGRAPH_FROM_EMAIL", "").strip()
+
+        if not all([client_id, client_secret, tenant_id, from_address]):
+            return False, None, "Microsoft Graph not configured: set CLIENT_ID, CLIENT_SECRET, TENANT_ID, MSGRAPH_FROM_EMAIL"
+
+        app = msal.ConfidentialClientApplication(
+            client_id=client_id,
+            authority=f"https://login.microsoftonline.com/{tenant_id}",
+            client_credential=client_secret,
+        )
+        result = app.acquire_token_for_client(scopes=["https://graph.microsoft.com/.default"])
+        access_token = result.get("access_token")
+        if not access_token:
+            err = result.get("error_description") or result.get("error") or "Failed to acquire token"
+            return False, None, str(err)
+
+        body_content = body_html or body_text or ""
+        body_content_type = "HTML" if body_html else "Text"
+
+        message = {
+            "subject": subject,
+            "body": {"contentType": body_content_type, "content": body_content},
+            "toRecipients": [{"emailAddress": {"address": e.strip()}} for e in to_email.split(",") if e.strip()],
+        }
+        if cc:
+            message["ccRecipients"] = [{"emailAddress": {"address": e.strip()}} for e in cc.split(",") if e.strip()]
+        if bcc:
+            message["bccRecipients"] = [{"emailAddress": {"address": e.strip()}} for e in bcc.split(",") if e.strip()]
+
+        headers_list = [{"name": "Message-ID", "value": message_id}]
+        if in_reply_to:
+            headers_list.append({"name": "In-Reply-To", "value": in_reply_to})
+        if references:
+            headers_list.append({"name": "References", "value": references})
+        message["internetMessageHeaders"] = headers_list
+
+        if attachments:
+            message["attachments"] = [
+                {
+                    "@odata.type": "#microsoft.graph.fileAttachment",
+                    "name": a.get("filename", "attachment"),
+                    "contentType": "application/octet-stream",
+                    "contentBytes": base64.b64encode(a["content"]).decode("ascii"),
+                }
+                for a in attachments
+            ]
+
+        url = f"https://graph.microsoft.com/v1.0/users/{from_address}/sendMail"
+        resp = httpx.post(
+            url,
+            json={"message": message},
+            headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"},
+            timeout=30,
+        )
+
+        if resp.status_code == 202:
+            return True, message_id, None
+        err_body = resp.text
+        try:
+            err_json = resp.json()
+            err_body = err_json.get("error", {}).get("message", err_body)
+        except Exception:
+            pass
+        return False, None, f"Graph API error {resp.status_code}: {err_body}"
+    except Exception as e:
+        return False, None, str(e)
+
+
 def send_email(
     to_email: str,
     subject: str,
@@ -314,8 +430,15 @@ def send_email(
         Tuple of (success, message_id, error_message)
     """
     config = get_smtp_config(user_id)
-    from_email = config.get("from_email") or config.get("user") or os.getenv("RESEND_FROM_EMAIL", "onboarding@resend.dev")
-    from_name = config.get("from_name") or os.getenv("RESEND_FROM_NAME", "LeadLock CRM")
+    if _is_graph_configured():
+        from_email = os.getenv("MSGRAPH_FROM_EMAIL", "").strip()
+        from_name = os.getenv("MSGRAPH_FROM_NAME", "").strip() or config.get("from_name") or "LeadLock CRM"
+    elif os.getenv("RESEND_API_KEY", "").strip():
+        from_email = config.get("from_email") or config.get("user") or os.getenv("RESEND_FROM_EMAIL", "onboarding@resend.dev")
+        from_name = config.get("from_name") or os.getenv("RESEND_FROM_NAME", "LeadLock CRM")
+    else:
+        from_email = config.get("from_email") or config.get("user") or os.getenv("SMTP_FROM_EMAIL")
+        from_name = config.get("from_name") or os.getenv("SMTP_FROM_NAME", "LeadLock CRM")
 
     # Generate message ID (needed for both test mode and real sending)
     message_id = generate_message_id()
@@ -353,7 +476,15 @@ def send_email(
     # Append user signature and company disclaimer to all outgoing emails
     body_html, body_text = _append_signature_and_disclaimer(body_html, body_text, user_id)
 
-    # Use Resend when configured (works when SMTP is blocked e.g. on Railway)
+    # Use Microsoft Graph when configured (priority 1)
+    if _is_graph_configured():
+        return _send_via_graph(
+            to_email=to_email, subject=subject, body_html=body_html, body_text=body_text,
+            from_email=from_email, from_name=from_name, cc=cc, bcc=bcc,
+            attachments=attachments, message_id=message_id, in_reply_to=in_reply_to, references=references,
+        )
+
+    # Use Resend when configured (priority 2 - works when SMTP is blocked e.g. on Railway)
     if os.getenv("RESEND_API_KEY", "").strip():
         return _send_via_resend(
             to_email=to_email, subject=subject, body_html=body_html, body_text=body_text,
@@ -361,9 +492,9 @@ def send_email(
             attachments=attachments, message_id=message_id, in_reply_to=in_reply_to, references=references,
         )
 
-    # SMTP path
+    # SMTP path (priority 3)
     if not config["user"] or not config["password"]:
-        return False, None, "SMTP not configured. Set RESEND_API_KEY in Railway variables, or configure SMTP in My Settings."
+        return False, None, "Email not configured. Set Microsoft Graph vars (CLIENT_ID, CLIENT_SECRET, TENANT_ID, MSGRAPH_FROM_EMAIL), RESEND_API_KEY, or configure SMTP in My Settings."
 
     try:
         # Create message
