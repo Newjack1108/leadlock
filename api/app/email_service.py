@@ -14,14 +14,31 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
 from email import encoders
+from email.header import decode_header
 from typing import Optional, List, Dict, Tuple
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
 import json
 import uuid
 from dotenv import load_dotenv
 
 load_dotenv()
+
+_imap_missing_logged = False
+
+
+def _decode_mime_header(value: Optional[str]) -> str:
+    """Decode RFC 2047 encoded Subject and similar headers."""
+    if not value:
+        return ""
+    parts = decode_header(value)
+    out: List[str] = []
+    for text, charset in parts:
+        if isinstance(text, bytes):
+            out.append(text.decode(charset or "utf-8", errors="replace"))
+        else:
+            out.append(text or "")
+    return "".join(out)
 
 
 def _html_to_plain(html: str) -> str:
@@ -219,6 +236,47 @@ def get_imap_config(user_id: Optional[int] = None) -> Dict:
         "password": os.getenv("IMAP_PASSWORD"),
         "use_ssl": os.getenv("IMAP_USE_SSL", "true").lower() == "true"
     }
+
+
+def get_imap_config_for_poll() -> Dict:
+    """
+    IMAP for the API background poller: Railway IMAP_* env vars first,
+    else the first user with full IMAP saved in My Settings.
+    """
+    host = (os.getenv("IMAP_HOST") or "").strip()
+    user = (os.getenv("IMAP_USER") or "").strip()
+    password = (os.getenv("IMAP_PASSWORD") or "").strip()
+    if host and user and password:
+        return {
+            "host": host,
+            "port": int(os.getenv("IMAP_PORT", "993")),
+            "user": user,
+            "password": password,
+            "use_ssl": os.getenv("IMAP_USE_SSL", "true").lower() == "true",
+        }
+    try:
+        from sqlmodel import Session, select
+        from app.database import engine
+        from app.models import User
+
+        with Session(engine) as session:
+            users = session.exec(select(User)).all()
+            for u in users:
+                h = getattr(u, "imap_host", None)
+                usr = getattr(u, "imap_user", None)
+                pwd = getattr(u, "imap_password", None)
+                if h and usr and pwd:
+                    return {
+                        "host": h,
+                        "port": getattr(u, "imap_port", None) or 993,
+                        "user": usr,
+                        "password": pwd,
+                        "use_ssl": getattr(u, "imap_use_ssl", True),
+                    }
+    except Exception as e:
+        import sys
+        print(f"IMAP poll: could not load user IMAP from database: {e}", file=sys.stderr, flush=True)
+    return get_imap_config()
 
 
 def generate_message_id() -> str:
@@ -566,9 +624,19 @@ def receive_emails() -> List[Dict]:
     Returns:
         List of email dictionaries with parsed email data
     """
-    config = get_imap_config()
+    global _imap_missing_logged
+    config = get_imap_config_for_poll()
     
     if not config["user"] or not config["password"]:
+        if not _imap_missing_logged:
+            import sys
+            print(
+                "IMAP: no credentials — set Railway IMAP_USER and IMAP_PASSWORD (and IMAP_HOST), "
+                "or save IMAP under My Settings → Email. Inbound replies will not be imported.",
+                file=sys.stderr,
+                flush=True,
+            )
+            _imap_missing_logged = True
         return []
     
     emails = []
@@ -582,9 +650,17 @@ def receive_emails() -> List[Dict]:
         
         mail.login(config["user"], config["password"])
         mail.select("inbox")
-        
-        # Search for unread emails
-        status, messages = mail.search(None, "UNSEEN")
+
+        # UNSEEN: only not-yet-read (opening the reply in Outlook marks it read — LeadLock will skip it).
+        # Optional: IMAP_SEARCH_MODE=since_days + IMAP_SINCE_DAYS=3 re-fetches recent mail; duplicates skipped in API by message_id.
+        search_mode = (os.getenv("IMAP_SEARCH_MODE") or "unseen").strip().lower()
+        if search_mode == "since_days":
+            days = max(1, int(os.getenv("IMAP_SINCE_DAYS", "3")))
+            since_dt = datetime.utcnow() - timedelta(days=days)
+            since_str = since_dt.strftime("%d-%b-%Y")
+            status, messages = mail.search(None, f'SINCE {since_str}')
+        else:
+            status, messages = mail.search(None, "UNSEEN")
         
         if status != "OK":
             mail.close()
@@ -608,7 +684,7 @@ def receive_emails() -> List[Dict]:
                 # Extract headers
                 from_email = msg["From"]
                 to_email = msg["To"]
-                subject = msg["Subject"] or ""
+                subject = _decode_mime_header(msg["Subject"])
                 message_id = msg["Message-ID"]
                 in_reply_to = msg["In-Reply-To"]
                 references = msg["References"]
@@ -684,6 +760,7 @@ def receive_emails() -> List[Dict]:
         mail.logout()
         
     except Exception as e:
-        print(f"Error receiving emails: {e}")
+        import sys
+        print(f"Error receiving emails: {e}", file=sys.stderr, flush=True)
     
     return emails

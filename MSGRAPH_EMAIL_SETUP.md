@@ -54,8 +54,12 @@ Add these **API service** variables (same mailbox as `MSGRAPH_FROM_EMAIL`):
 | `IMAP_PASSWORD` | *(secret)* | Password or [app password](https://support.microsoft.com/account-billing/using-app-passwords-with-apps-that-don-t-support-two-step-verification-5896ed9b-4263-e681-128a-a6f2979a7944) if MFA is on |
 | `IMAP_USE_SSL` | `true` | Use SSL (default) |
 | `IMAP_POLL_INTERVAL` | `120` | Seconds between inbox checks (default `300`) |
+| `IMAP_SEARCH_MODE` | `unseen` | Use `unseen` (default) for unread only, or `since_days` to also catch mail already opened in Outlook (see below) |
+| `IMAP_SINCE_DAYS` | `3` | With `IMAP_SEARCH_MODE=since_days`, how far back to scan (duplicates are skipped by Message-ID) |
 
-**Note:** Per-user IMAP fields under **My Settings → Email** are not used by the server poller; set the variables above on Railway so the API process can log in.
+**Note:** If **Railway IMAP variables are not set**, the poller uses the **first user’s IMAP** saved under **My Settings → Email** (host, user, password).
+
+**Unread vs opened:** The default mode only imports **unread** messages. If you open the customer’s reply in Outlook first, it may no longer be unread and LeadLock will skip it until you either mark it unread again or temporarily set `IMAP_SEARCH_MODE=since_days` and `IMAP_SINCE_DAYS=3` (then set back to `unseen` after mail is imported — `since_days` re-scans recent mail every poll and is heavier on large inboxes).
 
 Ensure **IMAP is enabled** for the mailbox in Exchange Online (admin center → mailbox → email apps).
 

@@ -3,9 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from app.database import create_db_and_tables, engine
-from sqlmodel import Session
-from app.routers import auth, leads, dashboard, reports, webhooks, products, settings, quotes, customers, emails, email_templates, quote_templates, sms_templates, reminders, discounts, discount_requests, sms, messenger, public, delivery_install, orders, users, sales_documents
 from sqlmodel import Session, select
+from sqlalchemy import func
+from app.routers import auth, leads, dashboard, reports, webhooks, products, settings, quotes, customers, emails, email_templates, quote_templates, sms_templates, reminders, discounts, discount_requests, sms, messenger, public, delivery_install, orders, users, sales_documents
 from app.models import User
 import os
 import traceback
@@ -144,10 +144,10 @@ def on_startup():
         
         while True:
             try:
-                time.sleep(poll_interval)
-                
-                # Receive emails
+                # Receive emails (poll first so a deploy does not wait a full interval before the first run)
                 received = receive_emails()
+                if received:
+                    print(f"IMAP poll: processing {len(received)} message(s)", file=__import__("sys").stderr, flush=True)
                 
                 if received:
                     with Session(engine) as session:
@@ -160,10 +160,13 @@ def on_startup():
                                 if not email_match:
                                     continue
                                 
-                                email_address = email_match.group(0)
+                                email_address = email_match.group(0).lower()
                                 
-                                # Find customer by email
-                                statement = select(Customer).where(Customer.email == email_address)
+                                # Find customer by email (case-insensitive)
+                                statement = select(Customer).where(
+                                    Customer.email.isnot(None),
+                                    func.lower(Customer.email) == email_address,
+                                )
                                 customer = session.exec(statement).first()
                                 
                                 if not customer:
@@ -223,6 +226,7 @@ def on_startup():
                                 session.rollback()
                                 continue
                 
+                time.sleep(poll_interval)
             except Exception as e:
                 print(f"Error in IMAP polling: {e}")
                 import traceback
