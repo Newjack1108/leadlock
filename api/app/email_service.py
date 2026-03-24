@@ -355,6 +355,34 @@ def _is_graph_configured() -> bool:
     )
 
 
+def _graph_acquire_app_token() -> Tuple[Optional[str], Optional[str]]:
+    """
+    Client-credentials token for Microsoft Graph (same as send).
+    Returns (access_token, error_message).
+    """
+    try:
+        import msal
+
+        client_id = os.getenv("CLIENT_ID", "").strip()
+        client_secret = os.getenv("CLIENT_SECRET", "").strip()
+        tenant_id = os.getenv("TENANT_ID", "").strip()
+        if not all([client_id, client_secret, tenant_id]):
+            return None, "CLIENT_ID, CLIENT_SECRET, or TENANT_ID missing"
+        app = msal.ConfidentialClientApplication(
+            client_id=client_id,
+            authority=f"https://login.microsoftonline.com/{tenant_id}",
+            client_credential=client_secret,
+        )
+        result = app.acquire_token_for_client(scopes=["https://graph.microsoft.com/.default"])
+        tok = result.get("access_token")
+        if tok:
+            return tok, None
+        err = result.get("error_description") or result.get("error") or "token acquisition failed"
+        return None, str(err)
+    except Exception as e:
+        return None, str(e)
+
+
 def is_email_configured(user_id: Optional[int] = None) -> bool:
     """Check if any email backend is configured (Graph, Resend, or SMTP)."""
     if _is_graph_configured():
@@ -381,27 +409,15 @@ def _send_via_graph(
 ) -> Tuple[bool, Optional[str], Optional[str]]:
     """Send email via Microsoft Graph API (client credentials flow)."""
     try:
-        import msal
         import httpx
 
-        client_id = os.getenv("CLIENT_ID", "").strip()
-        client_secret = os.getenv("CLIENT_SECRET", "").strip()
-        tenant_id = os.getenv("TENANT_ID", "").strip()
         from_address = os.getenv("MSGRAPH_FROM_EMAIL", "").strip()
+        if not from_address:
+            return False, None, "MSGRAPH_FROM_EMAIL not set"
 
-        if not all([client_id, client_secret, tenant_id, from_address]):
-            return False, None, "Microsoft Graph not configured: set CLIENT_ID, CLIENT_SECRET, TENANT_ID, MSGRAPH_FROM_EMAIL"
-
-        app = msal.ConfidentialClientApplication(
-            client_id=client_id,
-            authority=f"https://login.microsoftonline.com/{tenant_id}",
-            client_credential=client_secret,
-        )
-        result = app.acquire_token_for_client(scopes=["https://graph.microsoft.com/.default"])
-        access_token = result.get("access_token")
+        access_token, err = _graph_acquire_app_token()
         if not access_token:
-            err = result.get("error_description") or result.get("error") or "Failed to acquire token"
-            return False, None, str(err)
+            return False, None, err or "Failed to acquire token"
 
         body_content = body_html or body_text or ""
         body_content_type = "HTML" if body_html else "Text"
@@ -449,6 +465,152 @@ def _send_via_graph(
         return False, None, f"Graph API error {resp.status_code}: {err_body}"
     except Exception as e:
         return False, None, str(e)
+
+
+def _graph_format_address(addr_obj: Optional[dict]) -> str:
+    if not addr_obj:
+        return ""
+    em = addr_obj.get("emailAddress") or {}
+    address = em.get("address") or ""
+    name = em.get("name") or ""
+    if name and address:
+        return f"{name} <{address}>"
+    return address or ""
+
+
+def _graph_format_recipient_list(recipients: Optional[List[dict]]) -> str:
+    if not recipients:
+        return ""
+    parts = []
+    for r in recipients:
+        em = r.get("emailAddress") or {}
+        address = em.get("address") or ""
+        name = em.get("name") or ""
+        if name and address:
+            parts.append(f"{name} <{address}>")
+        elif address:
+            parts.append(address)
+    return ", ".join(parts)
+
+
+def _parse_graph_datetime(s: Optional[str]) -> datetime:
+    if not s:
+        return datetime.utcnow()
+    try:
+        s2 = s.replace("Z", "+00:00") if s.endswith("Z") else s
+        return datetime.fromisoformat(s2)
+    except Exception:
+        return datetime.utcnow()
+
+
+def _receive_emails_via_graph() -> List[Dict]:
+    """
+    List unread inbox messages via Microsoft Graph (OAuth) — works when M365 blocks IMAP basic auth.
+    Requires Mail.Read (Application) permission. Marks messages read after listing (same behaviour as IMAP).
+    """
+    import httpx
+    import sys
+
+    mailbox = os.getenv("MSGRAPH_FROM_EMAIL", "").strip()
+    if not mailbox:
+        return []
+
+    access_token, err = _graph_acquire_app_token()
+    if not access_token:
+        print(f"Graph inbound: token error: {err}", file=sys.stderr, flush=True)
+        return []
+
+    user_path = quote(mailbox, safe="")
+    # Optional: GRAPH_INBOUND_TOP (default 50), GRAPH_INBOUND_READ_FILTER (false = list recent + filter client-side)
+    top = int(os.getenv("GRAPH_INBOUND_TOP", "50"))
+    base_url = f"https://graph.microsoft.com/v1.0/users/{user_path}/mailFolders/inbox/messages"
+
+    headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
+
+    def _fetch(params: dict) -> dict:
+        r = httpx.get(base_url, params=params, headers=headers, timeout=30)
+        return r
+
+    params = {
+        "$top": str(top),
+        "$orderby": "receivedDateTime desc",
+        "$filter": "isRead eq false",
+        "$select": "id,internetMessageId,subject,from,toRecipients,body,receivedDateTime,isRead",
+    }
+    resp = _fetch(params)
+    if resp.status_code == 400:
+        # Some tenants/query combinations reject $filter; retry without filter
+        params.pop("$filter", None)
+        resp = _fetch(params)
+
+    if resp.status_code == 403:
+        print(
+            "Graph inbound: 403 Forbidden — add Mail.Read (Application) permission for "
+            "this app registration and grant admin consent. See MSGRAPH_EMAIL_SETUP.md",
+            file=sys.stderr,
+            flush=True,
+        )
+        return []
+    if resp.status_code != 200:
+        print(f"Graph inbound: list messages failed {resp.status_code}: {resp.text[:500]}", file=sys.stderr, flush=True)
+        return []
+
+    try:
+        payload = resp.json()
+    except Exception:
+        return []
+
+    items = payload.get("value") or []
+    out: List[Dict] = []
+    graph_ids_to_mark_read: List[str] = []
+
+    for msg in items:
+        if msg.get("isRead") is True:
+            continue
+        gid = msg.get("id")
+        if not gid:
+            continue
+
+        mid = msg.get("internetMessageId") or f"<graph-{gid}>"
+        fr = _graph_format_address(msg.get("from"))
+        to = _graph_format_recipient_list(msg.get("toRecipients"))
+        subject = msg.get("subject") or ""
+        body = msg.get("body") or {}
+        ct = (body.get("contentType") or "").lower()
+        content = body.get("content") or ""
+        if "html" in ct:
+            body_html, body_text = content, None
+        else:
+            body_html, body_text = None, content
+
+        received_at = _parse_graph_datetime(msg.get("receivedDateTime"))
+
+        out.append({
+            "message_id": mid,
+            "in_reply_to": None,
+            "references": None,
+            "from_email": fr,
+            "to_email": to,
+            "subject": subject,
+            "body_html": body_html,
+            "body_text": body_text,
+            "received_at": received_at,
+            "attachments": None,
+        })
+        graph_ids_to_mark_read.append(gid)
+
+    for gid in graph_ids_to_mark_read:
+        try:
+            mid_enc = quote(str(gid), safe="")
+            patch_url = f"https://graph.microsoft.com/v1.0/users/{user_path}/messages/{mid_enc}"
+            pr = httpx.patch(patch_url, json={"isRead": True}, headers=headers, timeout=30)
+            if pr.status_code not in (200, 204):
+                print(f"Graph inbound: mark read failed {pr.status_code} for {gid}", file=sys.stderr, flush=True)
+        except Exception as e:
+            print(f"Graph inbound: mark read error {e}", file=sys.stderr, flush=True)
+
+    # If we returned None earlier on 403, fix - I used return None which is wrong type
+    return out
 
 
 def send_email(
@@ -619,7 +781,17 @@ def send_email(
 
 def receive_emails() -> List[Dict]:
     """
-    Receive emails from IMAP inbox.
+    Receive inbound mail: Microsoft Graph when configured (OAuth; required when M365 blocks IMAP basic auth),
+    otherwise IMAP.
+    """
+    if _is_graph_configured():
+        return _receive_emails_via_graph()
+    return _receive_emails_imap()
+
+
+def _receive_emails_imap() -> List[Dict]:
+    """
+    Receive emails from IMAP inbox (username/password — often blocked on Microsoft 365).
     
     Returns:
         List of email dictionaries with parsed email data
