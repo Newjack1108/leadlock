@@ -182,6 +182,7 @@ async def send_email_to_customer(
         attachments=email_record.attachments,
         sent_at=email_record.sent_at,
         received_at=email_record.received_at,
+        read_at=email_record.read_at,
         created_by_id=email_record.created_by_id,
         created_at=email_record.created_at,
         created_by_name=current_user.full_name
@@ -228,12 +229,39 @@ async def get_customer_emails(
             attachments=email_record.attachments,
             sent_at=email_record.sent_at,
             received_at=email_record.received_at,
+            read_at=email_record.read_at,
             created_by_id=email_record.created_by_id,
             created_at=email_record.created_at,
             created_by_name=user.full_name if user else None
         ))
     
     return emails
+
+
+@router.post("/customers/{customer_id}/mark-read")
+async def mark_customer_emails_read(
+    customer_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Mark all received emails for this customer as read."""
+    statement = select(Customer).where(Customer.id == customer_id)
+    customer = session.exec(statement).first()
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+
+    statement = select(Email).where(
+        Email.customer_id == customer_id,
+        Email.direction == EmailDirection.RECEIVED,
+        Email.read_at.is_(None),
+    )
+    rows = list(session.exec(statement).all())
+    now = datetime.utcnow()
+    for em in rows:
+        em.read_at = now
+        session.add(em)
+    session.commit()
+    return {"marked_count": len(rows)}
 
 
 @router.get("/{email_id}", response_model=EmailResponse)
@@ -270,6 +298,7 @@ async def get_email(
         attachments=email_record.attachments,
         sent_at=email_record.sent_at,
         received_at=email_record.received_at,
+        read_at=email_record.read_at,
         created_by_id=email_record.created_by_id,
         created_at=email_record.created_at,
         created_by_name=user.full_name if user else None
@@ -408,6 +437,7 @@ async def reply_to_email(
         attachments=reply_email.attachments,
         sent_at=reply_email.sent_at,
         received_at=reply_email.received_at,
+        read_at=reply_email.read_at,
         created_by_id=reply_email.created_by_id,
         created_at=reply_email.created_at,
         created_by_name=current_user.full_name
@@ -459,6 +489,7 @@ async def get_email_thread(
             attachments=email_record.attachments,
             sent_at=email_record.sent_at,
             received_at=email_record.received_at,
+            read_at=email_record.read_at,
             created_by_id=email_record.created_by_id,
             created_at=email_record.created_at,
             created_by_name=user.full_name if user else None

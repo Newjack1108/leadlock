@@ -401,6 +401,7 @@ export interface Email {
   attachments?: string;
   sent_at?: string;
   received_at?: string;
+  read_at?: string | null;
   created_by_id?: number;
   created_at: string;
   created_by_name?: string;

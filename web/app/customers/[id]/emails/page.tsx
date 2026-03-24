@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Mail, ArrowLeft, Reply, Send } from 'lucide-react';
-import { getCustomerEmails, sendEmail } from '@/lib/api';
+import { getCustomerEmails, sendEmail, markCustomerEmailsRead } from '@/lib/api';
 import { formatDateTime } from '@/lib/utils';
 import { Email, EmailDirection, Customer } from '@/lib/types';
 import { toast } from 'sonner';
@@ -45,6 +45,7 @@ export default function CustomerEmailsPage() {
     try {
       const data = await getCustomerEmails(customerId);
       setEmails(data);
+      markCustomerEmailsRead(customerId).catch(() => {});
     } catch (error: any) {
       toast.error('Failed to load emails');
       if (error.response?.status === 401) {

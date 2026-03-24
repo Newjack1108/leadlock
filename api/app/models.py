@@ -213,6 +213,7 @@ class Email(SQLModel, table=True):
     attachments: Optional[str] = None  # JSON array of attachment metadata
     sent_at: Optional[datetime] = None
     received_at: Optional[datetime] = None
+    read_at: Optional[datetime] = None  # When RECEIVED message was read (null = unread)
     created_by_id: Optional[int] = Field(default=None, foreign_key="user.id")  # For sent emails
     created_at: datetime = Field(default_factory=datetime.utcnow)
     

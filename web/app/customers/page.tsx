@@ -99,7 +99,9 @@ function CustomersPageContent() {
           </div>
           {hasUnreadFilter && (
             <div className="flex items-center gap-2 rounded-lg border bg-muted/50 px-4 py-2 text-sm">
-              <span className="text-muted-foreground">Showing customers with unread messages</span>
+              <span className="text-muted-foreground">
+                Showing customers with unread SMS, Messenger, or email
+              </span>
               <Button
                 variant="ghost"
                 size="sm"
@@ -132,7 +134,7 @@ function CustomersPageContent() {
                 {displayedCustomers.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="p-8 text-center text-muted-foreground">
-                      {hasUnreadFilter ? 'No customers with unread messages' : 'No customers found'}
+                      {hasUnreadFilter ? 'No customers with unread SMS, Messenger, or email' : 'No customers found'}
                     </td>
                   </tr>
                 ) : (

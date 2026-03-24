@@ -7,7 +7,7 @@ import Logo from './Logo';
 import { Button } from '@/components/ui/button';
 import { LogOut, Users, Settings, Package, User, Mail, Bell, FileText, ShoppingCart, ChevronDown, Gift, Send, MessageSquare, FolderOpen, LayoutDashboard } from 'lucide-react';
 import api from '@/lib/api';
-import { getStaleSummary, getDiscountRequests, getUnreadSms, getUnreadMessenger } from '@/lib/api';
+import { getStaleSummary, getDiscountRequests, getUnreadSms, getUnreadMessenger, getUnreadEmails } from '@/lib/api';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -69,11 +69,14 @@ export default function Header() {
 
   const fetchUnreadMessagesCount = async () => {
     try {
-      const [smsRes, messengerRes] = await Promise.all([
+      const [smsRes, messengerRes, emailRes] = await Promise.all([
         getUnreadSms().catch(() => ({ count: 0 })),
         getUnreadMessenger().catch(() => ({ count: 0 })),
+        getUnreadEmails().catch(() => ({ count: 0 })),
       ]);
-      setUnreadMessagesCount((smsRes?.count ?? 0) + (messengerRes?.count ?? 0));
+      setUnreadMessagesCount(
+        (smsRes?.count ?? 0) + (messengerRes?.count ?? 0) + (emailRes?.count ?? 0)
+      );
     } catch {
       setUnreadMessagesCount(0);
     }

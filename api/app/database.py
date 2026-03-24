@@ -1134,6 +1134,28 @@ def create_db_and_tables():
                     if "already exists" not in error_str and "duplicate" not in error_str:
                         print(f"Error adding read_at column: {e}", file=sys.stderr, flush=True)
 
+        # Step 13b: Add read_at to Email table (unread tracking for received inbound mail)
+        has_email_table = inspector.has_table("email")
+        if has_email_table:
+            email_columns = [col["name"] for col in inspector.get_columns("email")]
+            if "read_at" not in email_columns:
+                print("Adding read_at column to email table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE email ADD COLUMN read_at TIMESTAMP"))
+                        # Historical RECEIVED rows: treat as already read so deploy does not flood the UI
+                        conn.execute(
+                            text(
+                                "UPDATE email SET read_at = COALESCE(received_at, created_at) "
+                                "WHERE direction = 'RECEIVED'"
+                            )
+                        )
+                    print("Added read_at column to email table and backfilled RECEIVED rows", file=sys.stderr, flush=True)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Error adding read_at to email: {e}", file=sys.stderr, flush=True)
+
         # messenger_message table is created by SQLModel.metadata.create_all() when MessengerMessage model is imported
         
         print("Migration check completed", file=sys.stderr, flush=True)

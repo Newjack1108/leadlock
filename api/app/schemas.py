@@ -171,6 +171,7 @@ class EmailResponse(BaseModel):
     attachments: Optional[str]
     sent_at: Optional[datetime]
     received_at: Optional[datetime]
+    read_at: Optional[datetime] = None
     created_by_id: Optional[int]
     created_at: datetime
     created_by_name: Optional[str] = None
@@ -652,6 +653,10 @@ class UnreadMessengerMessageItem(BaseModel):
 class UnreadMessengerSummary(BaseModel):
     count: int
     messages: List[UnreadMessengerMessageItem] = []
+
+
+class UnreadEmailSummary(BaseModel):
+    count: int
 
 
 class UnreadByCustomerItem(BaseModel):

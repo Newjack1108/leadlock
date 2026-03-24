@@ -1,10 +1,36 @@
 from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session, select, func, or_
 from app.database import get_session
-from app.models import Lead, LeadStatus, LeadSource, Quote, QuoteStatus, Activity, SmsMessage, SmsDirection, Customer, MessengerMessage, MessengerDirection
+from app.models import (
+    Lead,
+    LeadStatus,
+    LeadSource,
+    Quote,
+    QuoteStatus,
+    Activity,
+    SmsMessage,
+    SmsDirection,
+    Customer,
+    MessengerMessage,
+    MessengerDirection,
+    Email,
+    EmailDirection,
+)
 from app.distance_service import bulk_geocode_postcodes
 from app.auth import get_current_user
-from app.schemas import DashboardStats, LeadSourceCount, LeadLocationItem, UnreadSmsSummary, UnreadSmsMessageItem, UnreadMessengerSummary, UnreadMessengerMessageItem, UnreadByCustomerItem, QualifiedForQuotingSummary, QualifiedForQuotingItem
+from app.schemas import (
+    DashboardStats,
+    LeadSourceCount,
+    LeadLocationItem,
+    UnreadSmsSummary,
+    UnreadSmsMessageItem,
+    UnreadMessengerSummary,
+    UnreadMessengerMessageItem,
+    UnreadEmailSummary,
+    UnreadByCustomerItem,
+    QualifiedForQuotingSummary,
+    QualifiedForQuotingItem,
+)
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -293,6 +319,20 @@ async def get_unread_messenger(
     return UnreadMessengerSummary(count=count, messages=items)
 
 
+@router.get("/unread-email", response_model=UnreadEmailSummary)
+async def get_unread_email(
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_user),
+):
+    """Count of unread received inbound emails (read_at IS NULL)."""
+    count_statement = select(func.count(Email.id)).where(
+        Email.direction == EmailDirection.RECEIVED,
+        Email.read_at.is_(None),
+    )
+    count = session.exec(count_statement).one()
+    return UnreadEmailSummary(count=count)
+
+
 @router.get("/qualified-for-quoting", response_model=QualifiedForQuotingSummary)
 async def get_qualified_for_quoting(
     session: Session = Depends(get_session),
@@ -331,7 +371,7 @@ async def get_unread_by_customer(
     session: Session = Depends(get_session),
     current_user=Depends(get_current_user),
 ):
-    """Get unread message count per customer (SMS + Messenger). Only includes customers with at least one unread."""
+    """Get unread message count per customer (SMS + Messenger + email). Only includes customers with at least one unread."""
     # Unread SMS counts per customer_id
     sms_statement = (
         select(SmsMessage.customer_id, func.count(SmsMessage.id).label("cnt"))
@@ -349,6 +389,16 @@ async def get_unread_by_customer(
     )
     messenger_rows = session.exec(messenger_statement).all()
     for customer_id, cnt in messenger_rows:
+        merged[customer_id] = merged.get(customer_id, 0) + cnt
+
+    # Unread inbound email counts per customer_id
+    email_statement = (
+        select(Email.customer_id, func.count(Email.id).label("cnt"))
+        .where(Email.direction == EmailDirection.RECEIVED, Email.read_at.is_(None))
+        .group_by(Email.customer_id)
+    )
+    email_rows = session.exec(email_statement).all()
+    for customer_id, cnt in email_rows:
         merged[customer_id] = merged.get(customer_id, 0) + cnt
 
     return [UnreadByCustomerItem(customer_id=cid, unread_count=total) for cid, total in merged.items()]

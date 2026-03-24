@@ -72,6 +72,11 @@ export const getCustomerEmails = async (customerId: number) => {
   return response.data;
 };
 
+export const markCustomerEmailsRead = async (customerId: number) => {
+  const response = await api.post(`/api/emails/customers/${customerId}/mark-read`);
+  return response.data;
+};
+
 export const getEmail = async (emailId: number) => {
   const response = await api.get(`/api/emails/${emailId}`);
   return response.data;
@@ -183,6 +188,11 @@ export const markCustomerMessengerRead = async (customerId: number) => {
 
 export const getUnreadMessenger = async () => {
   const response = await api.get('/api/dashboard/unread-messenger');
+  return response.data;
+};
+
+export const getUnreadEmails = async () => {
+  const response = await api.get('/api/dashboard/unread-email');
   return response.data;
 };
 
