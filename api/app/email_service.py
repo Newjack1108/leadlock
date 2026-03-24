@@ -358,12 +358,8 @@ def _send_via_graph(
         if bcc:
             message["bccRecipients"] = [{"emailAddress": {"address": e.strip()}} for e in bcc.split(",") if e.strip()]
 
-        headers_list = [{"name": "Message-ID", "value": message_id}]
-        if in_reply_to:
-            headers_list.append({"name": "In-Reply-To", "value": in_reply_to})
-        if references:
-            headers_list.append({"name": "References", "value": references})
-        message["internetMessageHeaders"] = headers_list
+        # Graph only allows custom headers whose names start with x- or X- in internetMessageHeaders;
+        # Message-ID, In-Reply-To, References cannot be set here. Exchange assigns Message-ID on send.
 
         if attachments:
             message["attachments"] = [
