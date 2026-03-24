@@ -136,6 +136,7 @@ def on_startup():
     def poll_imap():
         """Background task to poll IMAP for new emails."""
         from app.email_service import receive_emails
+        from app.email_threading import find_thread_id_for_inbound
         from app.models import Email, Customer, Activity, ActivityType, EmailDirection
         from sqlmodel import select
         import re
@@ -176,16 +177,15 @@ def on_startup():
                                     if existing:
                                         continue
                                 
-                                # Generate thread_id if in_reply_to exists
-                                thread_id = None
-                                if email_data["in_reply_to"]:
-                                    # Try to find existing email with this message_id as thread_id
-                                    statement = select(Email).where(Email.message_id == email_data["in_reply_to"])
-                                    parent_email = session.exec(statement).first()
-                                    if parent_email and parent_email.thread_id:
-                                        thread_id = parent_email.thread_id
-                                    else:
-                                        thread_id = email_data["in_reply_to"]
+                                # Thread with prior sent mail (Graph uses different Message-ID than we store)
+                                thread_id = find_thread_id_for_inbound(
+                                    session,
+                                    customer.id,
+                                    email_address,
+                                    email_data.get("in_reply_to"),
+                                    email_data.get("references"),
+                                    email_data.get("subject") or "",
+                                )
                                 
                                 # Create email record
                                 email_record = Email(

@@ -4,7 +4,7 @@ from sqlmodel import Session, select, or_, and_
 from sqlalchemy import func
 from typing import List, Optional
 from app.database import get_session
-from app.models import Quote, QuoteItem, Customer, User, QuoteEmail, Email, EmailDirection, Activity, ActivityType, CompanySettings, Lead, LeadStatus, QuoteStatus, QuoteTemperature, OpportunityStage, LossCategory, DiscountTemplate, QuoteDiscount, DiscountType, DiscountScope, Order, OrderItem, QuoteItemLineType
+from app.models import Quote, QuoteItem, Customer, User, QuoteEmail, Email, EmailDirection, Activity, ActivityType, CompanySettings, Lead, LeadStatus, QuoteStatus, QuoteTemperature, OpportunityStage, LossCategory, DiscountTemplate, QuoteDiscount, DiscountType, DiscountScope, Order, OrderItem, QuoteItemLineType, DiscountRequest
 from app.auth import get_current_user
 from app.schemas import (
     QuoteCreate, QuoteUpdate, QuoteDraftUpdate, QuoteResponse, QuoteItemCreate, QuoteItemResponse,
@@ -859,6 +859,42 @@ async def get_quote(
     return build_quote_response(quote, list(quote_items), session)
 
 
+@router.delete("/{quote_id}", status_code=204)
+async def delete_draft_quote(
+    quote_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    """Delete a draft quote. Only allowed when status is DRAFT."""
+    statement = select(Quote).where(Quote.id == quote_id)
+    quote = session.exec(statement).first()
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    if quote.status != QuoteStatus.DRAFT:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Only draft quotes can be cancelled. This quote has status: {quote.status}"
+        )
+    # Delete dependent records in order
+    for dr in session.exec(select(DiscountRequest).where(DiscountRequest.quote_id == quote_id)).all():
+        session.delete(dr)
+    session.flush()
+    for discount in session.exec(select(QuoteDiscount).where(QuoteDiscount.quote_id == quote_id)).all():
+        session.delete(discount)
+    session.flush()
+    existing_items = list(session.exec(select(QuoteItem).where(QuoteItem.quote_id == quote_id)).all())
+    for item in existing_items:
+        if item.parent_quote_item_id is not None:
+            item.parent_quote_item_id = None
+            session.add(item)
+    session.flush()
+    for item in existing_items:
+        session.delete(item)
+    session.delete(quote)
+    session.commit()
+    return Response(status_code=204)
+
+
 @router.put("/{quote_id}/draft", response_model=QuoteResponse)
 async def update_draft_quote(
     quote_id: int,
@@ -1170,6 +1206,7 @@ async def send_quote_email_endpoint(
         email_record = Email(
             customer_id=quote.customer_id,
             message_id=message_id,
+            thread_id=message_id,
             direction=EmailDirection.SENT,
             from_email=current_user.email,
             to_email=email_data.to_email,
