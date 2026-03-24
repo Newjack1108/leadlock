@@ -17,7 +17,8 @@ Send emails via Microsoft Graph API. Uses client credentials (app-only auth) wit
    - Choose **Microsoft Graph**
    - Choose **Application permissions**
    - Add **`Mail.Send`** (outbound email)
-   - Add **`Mail.Read`** (inbound email via Graph — required because Microsoft 365 often **blocks IMAP basic auth** with `BasicAuthBlocked`)
+   - Add **`Mail.ReadWrite`** (Application) — **read inbound mail and mark messages as read** after import (`Mail.Read` alone is read-only; updating `isRead` requires write)
+   - *(Optional: you can keep **`Mail.Read`** as well; `Mail.ReadWrite` covers reading and updating mail.)*
    - Click **Grant admin consent for [Your Tenant]**
 
 ## 2. Mailbox Setup
@@ -43,9 +44,9 @@ Add these to your **API service** Variables in Railway:
 
 ## 4. Inbound replies (Microsoft Graph — recommended)
 
-When **`CLIENT_ID`**, **`CLIENT_SECRET`**, **`TENANT_ID`**, and **`MSGRAPH_FROM_EMAIL`** are set, LeadLock reads inbound mail with **Microsoft Graph** (`Mail.Read` application permission). This avoids **IMAP basic authentication**, which Microsoft often blocks (`BasicAuthBlocked`).
+When **`CLIENT_ID`**, **`CLIENT_SECRET`**, **`TENANT_ID`**, and **`MSGRAPH_FROM_EMAIL`** are set, LeadLock reads inbound mail with **Microsoft Graph**. This avoids **IMAP basic authentication**, which Microsoft often blocks (`BasicAuthBlocked`).
 
-Ensure **`Mail.Read`** (Application) is added and **admin consent** is granted (see step 1).
+Ensure **`Mail.ReadWrite`** (Application) is added and **admin consent** is granted (see step 1). **`Mail.Read` alone is not enough** to mark messages as read after import.
 
 Optional variables:
 
@@ -95,5 +96,6 @@ After adding or changing variables, redeploy the API service so it picks them up
 - **401 Unauthorized**: Check CLIENT_ID, CLIENT_SECRET, TENANT_ID. Ensure admin consent was granted for Mail.Send.
 - **403 Forbidden / Mailbox not found**: Ensure MSGRAPH_FROM_EMAIL matches a valid mailbox in your tenant and the app has Mail.Send (Application) permission.
 - **400 Bad Request**: The request payload may be malformed; check logs for the exact error message.
-- **Replies not appearing**: With Graph configured, add **`Mail.Read`** (Application) and admin consent. Ensure the customer’s **email** in LeadLock matches the address they reply from.
+- **Replies not appearing**: With Graph configured, add **`Mail.ReadWrite`** (Application) and admin consent (not just `Mail.Read` if you need messages marked read). Ensure the customer’s **email** in LeadLock matches the address they reply from.
+- **Mark read fails with 403**: Add **`Mail.ReadWrite`** (Application); `Mail.Read` cannot PATCH message properties.
 - **`BasicAuthBlocked` / IMAP `LOGIN failed`**: Use **Graph inbound** (same app as send) — do not rely on IMAP password auth for Microsoft 365.

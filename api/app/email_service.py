@@ -605,7 +605,12 @@ def _receive_emails_via_graph() -> List[Dict]:
             patch_url = f"https://graph.microsoft.com/v1.0/users/{user_path}/messages/{mid_enc}"
             pr = httpx.patch(patch_url, json={"isRead": True}, headers=headers, timeout=30)
             if pr.status_code not in (200, 204):
-                print(f"Graph inbound: mark read failed {pr.status_code} for {gid}", file=sys.stderr, flush=True)
+                print(
+                    f"Graph inbound: mark read failed {pr.status_code} for {gid}. "
+                    "Mail.Read is not enough to update messages — add Mail.ReadWrite (Application) and admin consent.",
+                    file=sys.stderr,
+                    flush=True,
+                )
         except Exception as e:
             print(f"Graph inbound: mark read error {e}", file=sys.stderr, flush=True)
 
