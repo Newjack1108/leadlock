@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { getQuote, updateDraftQuote, getProducts, getProduct, getCompanySettings, getDiscountTemplates, getDiscountRequestsForQuote, estimateDeliveryInstall } from '@/lib/api';
+import { getQuote, updateDraftQuote, cancelDraftQuote, getProducts, getProduct, getCompanySettings, getDiscountTemplates, getDiscountRequestsForQuote, estimateDeliveryInstall } from '@/lib/api';
 import api from '@/lib/api';
 import { Customer, Product, QuoteItemCreate, DiscountTemplate, Quote, QuoteItem, QuoteDiscount, DiscountRequest, DiscountRequestStatus, QuoteTemperature, DeliveryInstallEstimateResponse } from '@/lib/types';
 import Link from 'next/link';
@@ -18,6 +18,14 @@ import { toast } from 'sonner';
 import { formatHoursMinutes } from '@/lib/utils';
 import { Plus, Trash2, ArrowLeft, X, ChevronDown, ChevronUp, Send, FileSearch } from 'lucide-react';
 import RequestDiscountDialog from '@/components/RequestDiscountDialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 const DELIVERY_LINE_DESCRIPTION = 'Delivery';
 const INSTALLATION_LINE_DESCRIPTION = 'Installation';
@@ -117,6 +125,8 @@ function EditQuoteContent() {
   const [deliveryEstimate, setDeliveryEstimate] = useState<DeliveryInstallEstimateResponse | null>(null);
   const [deliveryEstimateLoading, setDeliveryEstimateLoading] = useState(false);
   const [deliveryEstimateError, setDeliveryEstimateError] = useState<string | null>(null);
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
   const fetchDiscountRequests = async () => {
     if (!quoteId) return;
@@ -456,6 +466,21 @@ function EditQuoteContent() {
     }
   };
 
+  const handleCancelDraft = async () => {
+    if (!quoteId) return;
+    try {
+      setCancelling(true);
+      await cancelDraftQuote(quoteId);
+      toast.success('Draft quote cancelled.');
+      setCancelDialogOpen(false);
+      router.push('/quotes');
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || 'Failed to cancel draft quote');
+    } finally {
+      setCancelling(false);
+    }
+  };
+
   if (pageLoading) {
     return (
       <div className="min-h-screen">
@@ -502,14 +527,22 @@ function EditQuoteContent() {
       <Header />
       <main className="container mx-auto px-6 py-8">
         <div className="mb-6">
-          <Button
-            variant="ghost"
-            onClick={() => router.push(`/quotes/${quoteId}`)}
-            className="mb-4"
-          >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Quote
-          </Button>
+          <div className="flex items-center gap-2 mb-4">
+            <Button
+              variant="ghost"
+              onClick={() => router.push(`/quotes/${quoteId}`)}
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Quote
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => setCancelDialogOpen(true)}
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Cancel Draft
+            </Button>
+          </div>
           <div>
             <h1 className="text-3xl font-semibold">Edit Draft: {quote.quote_number}</h1>
             <p className="text-muted-foreground mt-1 flex items-center gap-2 flex-wrap">
@@ -1024,6 +1057,25 @@ function EditQuoteContent() {
             </div>
           </div>
         </form>
+
+        <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Cancel Draft</DialogTitle>
+              <DialogDescription>
+                Are you sure? This cannot be undone. The draft quote will be permanently deleted.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setCancelDialogOpen(false)}>
+                Keep Draft
+              </Button>
+              <Button variant="destructive" onClick={handleCancelDraft} disabled={cancelling}>
+                {cancelling ? 'Cancelling...' : 'Cancel Draft'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </main>
     </div>
   );

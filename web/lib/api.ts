@@ -511,6 +511,10 @@ export const acceptQuote = async (quoteId: number) => {
   return response.data;
 };
 
+export const cancelDraftQuote = async (quoteId: number) => {
+  await api.delete(`/api/quotes/${quoteId}`);
+};
+
 export const getOrders = async () => {
   const response = await api.get('/api/orders');
   return response.data;

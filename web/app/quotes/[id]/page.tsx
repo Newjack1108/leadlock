@@ -6,14 +6,14 @@ import Header from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import api, { getQuote, previewQuotePdf, getDiscountRequestsForQuote, getQuoteViewLink, acceptQuote } from '@/lib/api';
+import api, { getQuote, previewQuotePdf, getDiscountRequestsForQuote, getQuoteViewLink, acceptQuote, cancelDraftQuote } from '@/lib/api';
 import { Quote, QuoteItem, Customer, QuoteDiscount, DiscountRequest, DiscountRequestStatus, QuoteTemperature, LossCategory } from '@/lib/types';
 import SendQuoteEmailDialog from '@/components/SendQuoteEmailDialog';
 import CallNotesDialog from '@/components/CallNotesDialog';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { formatDateTime } from '@/lib/utils';
-import { ArrowLeft, Mail, Eye, Tag, Pencil, ChevronDown, ChevronUp, Send, ExternalLink, CheckCircle, ShoppingBag, XCircle, MinusCircle, FileSearch } from 'lucide-react';
+import { ArrowLeft, Mail, Eye, Tag, Pencil, ChevronDown, ChevronUp, Send, ExternalLink, CheckCircle, ShoppingBag, XCircle, MinusCircle, FileSearch, Trash2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -59,6 +59,8 @@ export default function QuoteDetailPage() {
   const [lossCategory, setLossCategory] = useState<LossCategory | ''>('');
   const [markingLost, setMarkingLost] = useState(false);
   const [markingClose, setMarkingClose] = useState(false);
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {
     if (quoteId) {
@@ -140,6 +142,20 @@ export default function QuoteDetailPage() {
     }
   };
 
+  const handleCancelDraft = async () => {
+    try {
+      setCancelling(true);
+      await cancelDraftQuote(quoteId);
+      toast.success('Draft quote cancelled.');
+      setCancelDialogOpen(false);
+      router.push('/quotes');
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || 'Failed to cancel draft quote');
+    } finally {
+      setCancelling(false);
+    }
+  };
+
   const isClosable = quote && ['SENT', 'VIEWED'].includes(quote.status);
 
   if (loading) {
@@ -206,12 +222,21 @@ export default function QuoteDetailPage() {
                 </Button>
               )}
               {quote.status === 'DRAFT' && (
-                <Button variant="outline" asChild>
-                  <Link href={`/quotes/${quote.id}/edit`}>
-                    <Pencil className="h-4 w-4 mr-2" />
-                    Edit Draft
-                  </Link>
-                </Button>
+                <>
+                  <Button variant="outline" asChild>
+                    <Link href={`/quotes/${quote.id}/edit`}>
+                      <Pencil className="h-4 w-4 mr-2" />
+                      Edit Draft
+                    </Link>
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    onClick={() => setCancelDialogOpen(true)}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Cancel Draft
+                  </Button>
+                </>
               )}
               <Button
                 variant="outline"
@@ -790,6 +815,26 @@ export default function QuoteDetailPage() {
               </Button>
               <Button onClick={handleClose} disabled={markingClose}>
                 {markingClose ? 'Closing...' : 'Close Quote'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Cancel Draft Dialog */}
+        <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Cancel Draft</DialogTitle>
+              <DialogDescription>
+                Are you sure? This cannot be undone. The draft quote will be permanently deleted.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setCancelDialogOpen(false)}>
+                Keep Draft
+              </Button>
+              <Button variant="destructive" onClick={handleCancelDraft} disabled={cancelling}>
+                {cancelling ? 'Cancelling...' : 'Cancel Draft'}
               </Button>
             </DialogFooter>
           </DialogContent>
