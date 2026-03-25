@@ -70,7 +70,7 @@ export default function QuoteTemplatesPage() {
       name: '',
       description: '',
       email_subject_template: 'Quote {{ quote.quote_number }}',
-      email_body_template: '<p>Dear {{ customer.name }},</p>\n\n<p>Please view your quote {{ quote.quote_number }} using the link below.</p>\n\n<p>Quote Summary:</p>\n<ul>\n  <li>Total (Ex VAT): {{ currency_symbol }}{{ quote.total_amount|round(2) }}</li>\n  <li>VAT @ 20%: {{ currency_symbol }}{{ vat_amount|round(2) }}</li>\n  <li>Total (inc VAT): {{ currency_symbol }}{{ total_amount_inc_vat|round(2) }}</li>\n  <li>Valid Until: {{ quote.valid_until.strftime(\'%d %B %Y\') if quote.valid_until else \'N/A\' }}</li>\n</ul>\n\n{% if custom_message %}\n<p>{{ custom_message }}</p>\n{% endif %}\n\n<p>Best regards,<br>\n{{ company_settings.company_name if company_settings else \'LeadLock CRM\' }}</p>',
+      email_body_template: '<p>Dear {{ customer.name }},</p>\n\n<p>Thank you for your interest. We have prepared quote {{ quote.quote_number }} for you.</p>\n\n<p>Please use the secure link below to view the full quote. If you have any questions, we would be happy to help.</p>\n\n{% if custom_message %}\n<p>{{ custom_message }}</p>\n{% endif %}\n\n<p>Best regards,<br>\n{{ company_settings.company_name if company_settings else \'LeadLock CRM\' }}</p>',
       is_default: false,
     });
     setDialogOpen(true);

@@ -44,26 +44,18 @@ def get_sample_quote_preview_data() -> Dict[str, Any]:
 
 
 def get_default_email_template() -> Tuple[str, str]:
-    """Get default email subject and body templates."""
+    """Get default email subject and body templates (no pricing; customer views details via link)."""
     subject = "Quote {{ quote.quote_number }}"
     body = """
     <p>Dear {{ customer.name }},</p>
     
-    <p>Please view your quote {{ quote.quote_number }} using the link below.</p>
+    <p>Thank you for your interest. We have prepared quote {{ quote.quote_number }} for you.</p>
     
-    <p>Quote Summary (all prices Ex VAT @ 20%):</p>
-    <ul>
-        <li>Total (Ex VAT): {{ currency_symbol }}{{ quote.total_amount|round(2) }}</li>
-        <li>VAT @ 20%: {{ currency_symbol }}{{ vat_amount|round(2) }}</li>
-        <li>Total (inc VAT): {{ currency_symbol }}{{ total_amount_inc_vat|round(2) }}</li>
-        <li>Valid Until: {{ quote.valid_until.strftime('%d %B %Y') if quote.valid_until else 'N/A' }}</li>
-    </ul>
+    <p>Please use the secure link below to view the full quote. If you have any questions, we would be happy to help.</p>
     
     {% if custom_message %}
     <p>{{ custom_message }}</p>
     {% endif %}
-    
-    <p>If you have any questions, please don't hesitate to contact us.</p>
     
     <p>Best regards,<br>
     {{ company_settings.company_name if company_settings else 'LeadLock CRM' }}</p>
@@ -168,7 +160,9 @@ def send_quote_email(
             bcc=bcc,
             attachments=None,
             user_id=user_id,
-            customer_number=customer.customer_number
+            customer_number=customer.customer_number,
+            header_tagline="Your quotation",
+            include_quote_highlight=True,
         )
 
         if success:

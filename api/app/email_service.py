@@ -5,6 +5,7 @@ When RESEND_API_KEY is set, uses Resend (HTTPS - works on Railway).
 Otherwise SMTP is used.
 """
 import base64
+import html as html_module
 import re
 import smtplib
 import imaplib
@@ -132,6 +133,236 @@ def _append_signature_and_disclaimer(
         import sys
         print(f"Error appending signature/disclaimer: {e}", file=sys.stderr, flush=True)
         return body_html, body_text
+
+
+def _sanitize_email_brand_primary(color: Optional[str]) -> str:
+    """Allow only #RGB or #RRGGBB for CSS; default matches branded quote emails."""
+    default = "#286932"
+    if not color or not isinstance(color, str):
+        return default
+    c = color.strip()
+    if re.match(r"^#[0-9A-Fa-f]{3}$", c) or re.match(r"^#[0-9A-Fa-f]{6}$", c):
+        return c
+    return default
+
+
+def _get_email_brand_primary() -> str:
+    return _sanitize_email_brand_primary((os.getenv("EMAIL_BRAND_PRIMARY") or "").strip() or None)
+
+
+def _build_email_highlight_box_html(
+    primary: str,
+    bold_label: str,
+    summary: str,
+    hint: str,
+) -> str:
+    """Green left-border callout (attachments / quotation) — table-based for email clients."""
+    prim = html_module.escape(primary)
+    bl = html_module.escape(bold_label)
+    summ = html_module.escape(summary)
+    hint_e = html_module.escape(hint)
+    return (
+        f'<table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin:0 0 18px 0;">'
+        f'<tr><td style="border:1px solid #d7e6db; background-color:#f3f8f4; border-left:5px solid {prim}; '
+        f'padding:12px 14px; border-radius:8px;">'
+        f'<div style="font-size:13px; color:#1a1a1a;">'
+        f'<strong style="color:{prim};">{bl}:</strong> {summ}'
+        f'<span style="color:#555;">&nbsp;&nbsp;|&nbsp;&nbsp;</span>'
+        f'<span style="color:#555;">{hint_e}</span>'
+        f"</div></td></tr></table>"
+    )
+
+
+def _compose_email_highlight_fragment(
+    primary: str,
+    attachments: Optional[List[Dict]],
+    include_quote_highlight: bool,
+) -> str:
+    """Highlight box for quote sends or any message with file attachments."""
+    hint_files = "If you can't see the attachment, reply to this email and we'll resend it."
+    hint_quote = "If you can't see the attachment or open the link, reply to this email and we'll resend it."
+
+    if include_quote_highlight:
+        return _build_email_highlight_box_html(
+            primary,
+            "Quotation",
+            "Secure link below — view, print, or download PDF",
+            hint_quote,
+        )
+
+    if attachments:
+        names = []
+        for a in attachments:
+            if not a:
+                continue
+            fn = a.get("filename") or "attachment"
+            names.append(fn)
+        if names:
+            summary = ", ".join(names)
+            return _build_email_highlight_box_html(primary, "Attached", summary, hint_files)
+
+    return ""
+
+
+def _append_highlight_plain_text(
+    body_text: Optional[str],
+    attachments: Optional[List[Dict]],
+    include_quote_highlight: bool,
+) -> Optional[str]:
+    if body_text is None:
+        return None
+    if include_quote_highlight:
+        return (
+            body_text
+            + "\n\nQuotation: Secure link below — view, print, or download PDF. "
+            "If you can't access it, reply to this email and we'll resend it.\n"
+        )
+    if attachments:
+        names = []
+        for a in attachments:
+            if not a:
+                continue
+            names.append(a.get("filename") or "attachment")
+        if names:
+            listed = ", ".join(names)
+            return (
+                body_text
+                + f"\n\nAttached: {listed}. If you can't see the attachment, reply to this email and we'll resend it.\n"
+            )
+    return body_text
+
+
+def _looks_like_full_html_email_document(body_html: str) -> bool:
+    """Avoid double-wrapping when the body is already a complete HTML document."""
+    head = body_html.strip()[:1200].lower()
+    return "<html" in head or head.startswith("<!doctype")
+
+
+def _website_href_for_email(url: str) -> str:
+    u = (url or "").strip()
+    if not u:
+        return ""
+    if u.lower().startswith(("http://", "https://")):
+        return u
+    return "https://" + u
+
+
+def _wrap_outbound_email_html(
+    inner_html: str,
+    company_name: str,
+    header_tagline: str,
+    phone: str,
+    website: str,
+    primary: str,
+) -> str:
+    """
+    System-wide HTML email shell: card layout, branded header/footer (table-based for clients).
+    """
+    comp = html_module.escape(company_name)
+    prim = html_module.escape(primary)
+    tag_html = html_module.escape(header_tagline.strip()) if header_tagline and header_tagline.strip() else ""
+    phone_html = html_module.escape(phone.strip()) if phone and phone.strip() else ""
+    site_disp = (website or "").strip()
+    site_href = _website_href_for_email(site_disp)
+    site_html = ""
+    if site_disp:
+        site_html = (
+            f'<a href="{html_module.escape(site_href)}" style="color:#555;text-decoration:none;">'
+            f"{html_module.escape(site_disp)}</a>"
+        )
+
+    footer_bits: List[str] = [
+        f'<span style="color:{prim};font-weight:700;">{comp}</span>',
+    ]
+    sep = '<span style="color:#9aa7a0;">&nbsp;&nbsp;|&nbsp;&nbsp;</span>'
+    if phone_html:
+        footer_bits.append(f"<span>{phone_html}</span>")
+    if site_html:
+        footer_bits.append(site_html)
+    footer_inner = sep.join(footer_bits)
+
+    if tag_html:
+        right_header = (
+            f'<td align="right" style="color:#e7f2ea; font-size:12px;">{tag_html}</td>'
+        )
+    else:
+        right_header = '<td align="right" style="color:#e7f2ea; font-size:12px;">&nbsp;</td>'
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{comp}</title>
+  </head>
+  <body style="margin:0; padding:0; background-color:#f4f6f4; font-family: Arial, Helvetica, sans-serif; color:#111;">
+    <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color:#f4f6f4;">
+      <tr>
+        <td align="center" style="padding:28px 14px;">
+          <table width="600" cellpadding="0" cellspacing="0" role="presentation" style="width:600px; max-width:600px; background-color:#ffffff; border-radius:10px; overflow:hidden;">
+            <tr>
+              <td style="background-color:{prim}; padding:18px 22px;">
+                <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
+                  <tr>
+                    <td style="color:#ffffff; font-size:16px; font-weight:700; letter-spacing:0.2px; text-transform:uppercase;">{comp}</td>
+                    {right_header}
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:24px 22px; font-size:14px; line-height:1.65;">
+                {inner_html}
+              </td>
+            </tr>
+            <tr>
+              <td style="background-color:#f1f5f2; padding:14px 22px; font-size:12px; color:#555; line-height:1.5;">
+                {footer_inner}
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>"""
+
+
+def _apply_system_email_layout(
+    body_html: Optional[str],
+    header_tagline: Optional[str] = None,
+) -> Optional[str]:
+    """Wrap HTML fragments in the standard system email shell using company settings."""
+    if not body_html or not body_html.strip():
+        return body_html
+    if _looks_like_full_html_email_document(body_html):
+        return body_html
+    try:
+        from sqlmodel import Session, select
+        from app.database import engine
+        from app.models import CompanySettings
+
+        with Session(engine) as session:
+            company = session.exec(select(CompanySettings).limit(1)).first()
+        if not company:
+            return body_html
+        company_name = (company.trading_name or company.company_name or "LeadLock CRM").strip()
+        phone = (company.phone or "").strip()
+        website = (company.website or "").strip()
+        primary = _get_email_brand_primary()
+        tag = (header_tagline or "").strip()
+        return _wrap_outbound_email_html(
+            body_html,
+            company_name=company_name,
+            header_tagline=tag,
+            phone=phone,
+            website=website,
+            primary=primary,
+        )
+    except Exception as e:
+        import sys
+        print(f"Error applying system email layout: {e}", file=sys.stderr, flush=True)
+        return body_html
 
 
 def get_smtp_config(user_id: Optional[int] = None) -> Dict:
@@ -629,7 +860,9 @@ def send_email(
     in_reply_to: Optional[str] = None,
     references: Optional[str] = None,
     user_id: Optional[int] = None,
-    customer_number: Optional[str] = None
+    customer_number: Optional[str] = None,
+    header_tagline: Optional[str] = None,
+    include_quote_highlight: bool = False,
 ) -> Tuple[bool, Optional[str], Optional[str]]:
     """
     Send an email via SMTP.
@@ -646,6 +879,8 @@ def send_email(
         references: References header for threading
         user_id: Optional user ID to use their SMTP settings
         customer_number: Optional customer number for website visit tracking links
+        header_tagline: Optional short text for the green header bar (e.g. quote emails)
+        include_quote_highlight: When True, prepend the quotation highlight box (quote sends)
     
     Returns:
         Tuple of (success, message_id, error_message)
@@ -696,6 +931,17 @@ def send_email(
 
     # Append user signature and company disclaimer to all outgoing emails
     body_html, body_text = _append_signature_and_disclaimer(body_html, body_text, user_id)
+
+    primary = _get_email_brand_primary()
+    highlight_fragment = _compose_email_highlight_fragment(
+        primary, attachments, include_quote_highlight
+    )
+    orig_body = body_html or ""
+    if highlight_fragment and not _looks_like_full_html_email_document(orig_body):
+        body_html = highlight_fragment + orig_body
+    body_text = _append_highlight_plain_text(body_text, attachments, include_quote_highlight)
+
+    body_html = _apply_system_email_layout(body_html, header_tagline=header_tagline)
 
     # Use Microsoft Graph when configured (priority 1)
     if _is_graph_configured():

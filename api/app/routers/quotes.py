@@ -1145,7 +1145,7 @@ async def send_quote_email_endpoint(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
-    """Send a quote as an email with PDF attachment."""
+    """Send a quote email with a link to view the quote online (no PDF attachment; no pricing in default body)."""
     try:
         # Check email configured: Microsoft Graph, Resend, or SMTP
         if not is_email_configured(current_user.id):
@@ -1200,7 +1200,7 @@ async def send_quote_email_endpoint(
         
         # Use rendered subject and body_html, fallback to defaults if None
         final_subject = email_subject or f"Quote {quote.quote_number}"
-        final_body_html = email_body_html or f"<p>Please find attached your quote {quote.quote_number}.</p>"
+        final_body_html = email_body_html or f"<p>Please use the link in the email to view quote {quote.quote_number}.</p>"
         
         # Create Email record
         email_record = Email(
