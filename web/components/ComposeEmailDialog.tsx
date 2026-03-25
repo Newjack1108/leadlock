@@ -12,9 +12,10 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import EmailBodyEditor from '@/components/EmailBodyEditor';
 import { sendEmail, getEmailTemplates, previewEmailTemplate, getUserEmailSettings, getSalesDocuments, downloadSalesDocument } from '@/lib/api';
+import { htmlToPlainText, isHtmlEffectivelyEmpty } from '@/lib/htmlEmail';
 import { Customer, EmailTemplate, SalesDocument } from '@/lib/types';
 import { toast } from 'sonner';
 import { Paperclip, X, FolderOpen } from 'lucide-react';
@@ -230,7 +231,7 @@ export default function ComposeEmailDialog({
       return;
     }
 
-    if (!formData.body.trim()) {
+    if (isHtmlEffectivelyEmpty(formData.body)) {
       toast.error('Email body is required');
       return;
     }
@@ -257,7 +258,7 @@ export default function ComposeEmailDialog({
           cc: formData.cc || undefined,
           subject: formData.subject,
           body_html: formData.body,
-          body_text: formData.body, // Plain text fallback
+          body_text: htmlToPlainText(formData.body),
           template_id: selectedTemplateId,
         },
         attachments.length > 0 ? attachments : undefined
@@ -441,14 +442,17 @@ export default function ComposeEmailDialog({
           </div>
 
           {/* Message Body - Takes up remaining space */}
-          <div className="flex-1 flex flex-col overflow-hidden px-6 py-4">
-            <Textarea
+          <div className="flex-1 flex flex-col overflow-hidden px-6 py-4 min-h-0">
+            <Label htmlFor="body" className="sr-only">
+              Message body
+            </Label>
+            <EmailBodyEditor
               id="body"
               value={formData.body}
-              onChange={(e) => setFormData({ ...formData, body: e.target.value })}
-              required
-              placeholder="Type your message here. HTML is supported."
-              className="flex-1 min-h-[300px] resize-none font-sans text-sm"
+              onChange={(html) => setFormData({ ...formData, body: html })}
+              disabled={loading || loadingTemplate}
+              placeholder="Write your message…"
+              className="flex-1 min-h-[300px]"
             />
             
             {/* Signature Preview */}
@@ -488,7 +492,15 @@ export default function ComposeEmailDialog({
                 >
                   Cancel
                 </Button>
-                <Button type="submit" disabled={loading || !formData.to_email || !formData.subject || !formData.body}>
+                <Button
+                  type="submit"
+                  disabled={
+                    loading ||
+                    !formData.to_email ||
+                    !formData.subject.trim() ||
+                    isHtmlEffectivelyEmpty(formData.body)
+                  }
+                >
                   {loading ? 'Sending...' : 'Send'}
                 </Button>
               </div>

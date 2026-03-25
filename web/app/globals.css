@@ -100,6 +100,15 @@
   }
 }
 
+/* TipTap placeholder (Compose email) */
+.compose-email-body .ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--muted-foreground);
+  pointer-events: none;
+  float: left;
+  height: 0;
+}
+
 /* Public quote view: print-friendly (hide actions, readable quote only) */
 @media print {
   .quote-view-page {
