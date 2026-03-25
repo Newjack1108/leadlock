@@ -447,6 +447,7 @@ export default function ComposeEmailDialog({
               Message body
             </Label>
             <EmailBodyEditor
+              key={selectedTemplateId != null ? `tpl-${selectedTemplateId}` : 'compose-none'}
               id="body"
               value={formData.body}
               onChange={(html) => setFormData({ ...formData, body: html })}

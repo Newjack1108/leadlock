@@ -1,25 +1,46 @@
 'use client';
 
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useMemo } from 'react';
 import type { Editor } from '@tiptap/core';
 import { useEditor, EditorContent, useEditorState } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
 import Placeholder from '@tiptap/extension-placeholder';
-import { Bold, Italic, List, ListOrdered, Link as LinkIcon } from 'lucide-react';
+import {
+  Bold,
+  Italic,
+  List,
+  ListOrdered,
+  Link as LinkIcon,
+  Heading2,
+  Heading3,
+  ChevronDown,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+
+export type EmailSnippetItem = { label: string; insert: string };
 
 function EmailToolbar({
   editor,
   disabled,
   onSetLink,
+  enableHeadings,
+  snippetItems,
 }: {
   editor: Editor;
   disabled: boolean;
   onSetLink: () => void;
+  enableHeadings: boolean;
+  snippetItems?: EmailSnippetItem[];
 }) {
-  const { bold, italic, bulletList, orderedList, link } = useEditorState({
+  const { bold, italic, bulletList, orderedList, link, h2, h3 } = useEditorState({
     editor,
     selector: ({ editor: ed }) => ({
       bold: ed.isActive('bold'),
@@ -27,11 +48,67 @@ function EmailToolbar({
       bulletList: ed.isActive('bulletList'),
       orderedList: ed.isActive('orderedList'),
       link: ed.isActive('link'),
+      h2: ed.isActive('heading', { level: 2 }),
+      h3: ed.isActive('heading', { level: 3 }),
     }),
   });
 
   return (
     <div className="flex flex-wrap items-center gap-0.5 border-b border-input bg-muted/30 px-1 py-1">
+      {snippetItems && snippetItems.length > 0 && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 gap-1 px-2"
+              disabled={disabled}
+            >
+              Insert variable
+              <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="max-h-[min(280px,70vh)] overflow-y-auto">
+            {snippetItems.map((item) => (
+              <DropdownMenuItem
+                key={item.label}
+                onSelect={() => {
+                  editor.chain().focus().insertContent(item.insert).run();
+                }}
+              >
+                {item.label}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+      {enableHeadings && (
+        <>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className={cn('h-8 w-8 p-0', h2 && 'bg-muted')}
+            onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+            disabled={disabled}
+            aria-label="Heading 2"
+          >
+            <Heading2 className="h-4 w-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className={cn('h-8 w-8 p-0', h3 && 'bg-muted')}
+            onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+            disabled={disabled}
+            aria-label="Heading 3"
+          >
+            <Heading3 className="h-4 w-4" />
+          </Button>
+        </>
+      )}
       <Button
         type="button"
         variant="ghost"
@@ -98,6 +175,10 @@ export interface EmailBodyEditorProps {
   disabled?: boolean;
   placeholder?: string;
   className?: string;
+  /** When true, toolbar includes H2/H3 and headings are allowed in HTML (e.g. email template settings). */
+  enableHeadings?: boolean;
+  /** Optional dropdown to insert strings at cursor (e.g. Jinja variables). */
+  snippetItems?: EmailSnippetItem[];
 }
 
 export default function EmailBodyEditor({
@@ -107,12 +188,13 @@ export default function EmailBodyEditor({
   disabled = false,
   placeholder = 'Write your message…',
   className,
+  enableHeadings = false,
+  snippetItems,
 }: EmailBodyEditorProps) {
-  const editor = useEditor({
-    immediatelyRender: false,
-    extensions: [
+  const extensions = useMemo(
+    () => [
       StarterKit.configure({
-        heading: false,
+        heading: enableHeadings ? { levels: [2, 3] } : false,
         codeBlock: false,
         code: false,
       }),
@@ -126,22 +208,33 @@ export default function EmailBodyEditor({
         placeholder,
       }),
     ],
-    content: value,
-    editable: !disabled,
-    editorProps: {
-      attributes: {
-        ...(id ? { id } : {}),
-        class: cn(
-          'min-h-[280px] px-3 py-2 text-sm text-foreground outline-none',
-          '[&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1',
-          '[&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5',
-        ),
+    [enableHeadings, placeholder],
+  );
+
+  const editor = useEditor(
+    {
+      immediatelyRender: false,
+      extensions,
+      content: value,
+      editable: !disabled,
+      editorProps: {
+        attributes: {
+          ...(id ? { id } : {}),
+          class: cn(
+            'min-h-[280px] px-3 py-2 text-sm text-foreground outline-none',
+            '[&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1',
+            '[&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5',
+            enableHeadings &&
+              '[&_h2]:text-lg [&_h2]:font-semibold [&_h2]:mt-3 [&_h2]:mb-1 [&_h3]:text-base [&_h3]:font-semibold [&_h3]:mt-2 [&_h3]:mb-1',
+          ),
+        },
+      },
+      onUpdate: ({ editor: ed }) => {
+        onChange(ed.getHTML());
       },
     },
-    onUpdate: ({ editor: ed }) => {
-      onChange(ed.getHTML());
-    },
-  });
+    [extensions],
+  );
 
   useEffect(() => {
     if (!editor) return;
@@ -189,7 +282,13 @@ export default function EmailBodyEditor({
         className,
       )}
     >
-      <EmailToolbar editor={editor} disabled={disabled} onSetLink={setLink} />
+      <EmailToolbar
+        editor={editor}
+        disabled={disabled}
+        onSetLink={setLink}
+        enableHeadings={enableHeadings}
+        snippetItems={snippetItems}
+      />
       <div className="compose-email-body flex-1 min-h-0 overflow-y-auto bg-background dark:bg-input/30">
         <EditorContent editor={editor} className="[&_.ProseMirror]:min-h-[280px]" />
       </div>

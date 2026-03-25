@@ -27,6 +27,23 @@ import {
 } from '@/lib/api';
 import { EmailTemplate, EmailTemplateCreate, EmailTemplateUpdate } from '@/lib/types';
 import { toast } from 'sonner';
+import EmailBodyEditor, { type EmailSnippetItem } from '@/components/EmailBodyEditor';
+import { isHtmlEffectivelyEmpty } from '@/lib/htmlEmail';
+
+const EMAIL_TEMPLATE_SNIPPETS: EmailSnippetItem[] = [
+  { label: 'Customer name', insert: '{{ customer.name }}' },
+  { label: 'Customer email', insert: '{{ customer.email }}' },
+  { label: 'Customer phone', insert: '{{ customer.phone }}' },
+  { label: 'Customer number', insert: '{{ customer.customer_number }}' },
+  { label: 'Address line 1', insert: '{{ customer.address_line1 }}' },
+  { label: 'Address line 2', insert: '{{ customer.address_line2 }}' },
+  { label: 'City', insert: '{{ customer.city }}' },
+  { label: 'County', insert: '{{ customer.county }}' },
+  { label: 'Postcode', insert: '{{ customer.postcode }}' },
+  { label: 'Country', insert: '{{ customer.country }}' },
+];
+
+type BodyEditMode = 'visual' | 'source';
 
 export default function EmailTemplatesPage() {
   const router = useRouter();
@@ -36,6 +53,7 @@ export default function EmailTemplatesPage() {
   const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<EmailTemplate | null>(null);
   const [previewData, setPreviewData] = useState<{ subject: string; body_html: string } | null>(null);
+  const [bodyEditMode, setBodyEditMode] = useState<BodyEditMode>('visual');
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -66,6 +84,7 @@ export default function EmailTemplatesPage() {
 
   const handleCreate = () => {
     setEditingTemplate(null);
+    setBodyEditMode('visual');
     setFormData({
       name: '',
       description: '',
@@ -121,7 +140,7 @@ export default function EmailTemplatesPage() {
       toast.error('Subject template is required');
       return;
     }
-    if (!formData.body_template.trim()) {
+    if (isHtmlEffectivelyEmpty(formData.body_template)) {
       toast.error('Body template is required');
       return;
     }
@@ -300,17 +319,55 @@ export default function EmailTemplatesPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="body_template">
-                  Body Template (HTML) <span className="text-destructive">*</span>
-                </Label>
-                <Textarea
-                  id="body_template"
-                  value={formData.body_template}
-                  onChange={(e) => setFormData({ ...formData, body_template: e.target.value })}
-                  placeholder="<p>Dear {{ customer.name }},</p><p>Welcome to our service!</p>"
-                  rows={10}
-                  className="font-mono text-sm"
-                />
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <Label htmlFor="body_template" className="block">
+                    Body template <span className="text-destructive">*</span>
+                  </Label>
+                  <div className="flex rounded-md border border-input p-0.5 bg-muted/30">
+                    <Button
+                      type="button"
+                      variant={bodyEditMode === 'visual' ? 'default' : 'ghost'}
+                      size="sm"
+                      className="h-7"
+                      onClick={() => setBodyEditMode('visual')}
+                    >
+                      Visual
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={bodyEditMode === 'source' ? 'default' : 'ghost'}
+                      size="sm"
+                      className="h-7"
+                      onClick={() => setBodyEditMode('source')}
+                    >
+                      HTML source
+                    </Button>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Use Visual for formatting and variables, or HTML source for full control (tables, custom markup).
+                </p>
+                {bodyEditMode === 'visual' ? (
+                  <EmailBodyEditor
+                    key={editingTemplate?.id ?? 'new-template'}
+                    id="body_template"
+                    value={formData.body_template}
+                    onChange={(html) => setFormData({ ...formData, body_template: html })}
+                    placeholder="Dear {{ customer.name }}, …"
+                    className="min-h-[320px]"
+                    enableHeadings
+                    snippetItems={EMAIL_TEMPLATE_SNIPPETS}
+                  />
+                ) : (
+                  <Textarea
+                    id="body_template_source"
+                    value={formData.body_template}
+                    onChange={(e) => setFormData({ ...formData, body_template: e.target.value })}
+                    placeholder="<p>Dear {{ customer.name }},</p><p>Welcome to our service!</p>"
+                    rows={14}
+                    className="font-mono text-sm min-h-[320px]"
+                  />
+                )}
               </div>
 
               <div className="flex items-center space-x-2">
