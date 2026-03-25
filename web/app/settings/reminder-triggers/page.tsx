@@ -16,8 +16,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Edit } from 'lucide-react';
-import { getReminderRules, updateReminderRule } from '@/lib/api';
+import { Edit, Plus } from 'lucide-react';
+import { getReminderRules, updateReminderRule, createReminderRule } from '@/lib/api';
 import { ReminderRule, ReminderRuleUpdate, ReminderPriority, SuggestedAction } from '@/lib/types';
 import api from '@/lib/api';
 import { toast } from 'sonner';
@@ -30,6 +30,26 @@ const CHECK_TYPE_LABELS: Record<string, string> = {
   SENT_NOT_OPENED: 'Sent, not opened',
   OPENED_NO_REPLY: 'Opened, no reply',
 };
+
+const LEAD_CHECK_TYPES = ['LAST_ACTIVITY', 'STATUS_DURATION'] as const;
+const QUOTE_CHECK_TYPES = [
+  'SENT_DATE',
+  'VALID_UNTIL',
+  'STATUS_DURATION',
+  'SENT_NOT_OPENED',
+  'OPENED_NO_REPLY',
+] as const;
+const LEAD_STATUSES = [
+  'NEW',
+  'CONTACT_ATTEMPTED',
+  'ENGAGED',
+  'QUALIFIED',
+  'QUOTED',
+  'WON',
+  'LOST',
+] as const;
+const QUOTE_STATUSES = ['DRAFT', 'SENT', 'VIEWED', 'ACCEPTED', 'REJECTED', 'EXPIRED'] as const;
+const QUOTE_STATUS_NONE = '__none__';
 
 function formatRuleName(name: string): string {
   return name
@@ -52,6 +72,18 @@ export default function ReminderTriggersPage() {
     suggested_action: SuggestedAction.FOLLOW_UP,
   });
   const [saving, setSaving] = useState(false);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [createSaving, setCreateSaving] = useState(false);
+  const [createForm, setCreateForm] = useState({
+    rule_name: '',
+    entity_type: 'LEAD' as 'LEAD' | 'QUOTE',
+    status: 'NEW' as string,
+    check_type: 'LAST_ACTIVITY' as string,
+    threshold_days: 7,
+    is_active: true,
+    priority: ReminderPriority.MEDIUM,
+    suggested_action: SuggestedAction.FOLLOW_UP,
+  });
 
   const isDirector = userRole === 'DIRECTOR';
 
@@ -122,6 +154,59 @@ export default function ReminderTriggersPage() {
     }
   };
 
+  const openCreateDialog = () => {
+    setCreateForm({
+      rule_name: '',
+      entity_type: 'LEAD',
+      status: 'NEW',
+      check_type: 'LAST_ACTIVITY',
+      threshold_days: 7,
+      is_active: true,
+      priority: ReminderPriority.MEDIUM,
+      suggested_action: SuggestedAction.FOLLOW_UP,
+    });
+    setCreateDialogOpen(true);
+  };
+
+  const handleCreateSave = async () => {
+    const name = createForm.rule_name.trim();
+    if (!name) {
+      toast.error('Rule name is required');
+      return;
+    }
+    if (createForm.entity_type === 'LEAD' && !createForm.status) {
+      toast.error('Lead status is required');
+      return;
+    }
+    try {
+      setCreateSaving(true);
+      const statusPayload =
+        createForm.entity_type === 'LEAD'
+          ? createForm.status
+          : createForm.status === QUOTE_STATUS_NONE
+            ? null
+            : createForm.status;
+      await createReminderRule({
+        rule_name: name,
+        entity_type: createForm.entity_type,
+        threshold_days: createForm.threshold_days,
+        check_type: createForm.check_type,
+        is_active: createForm.is_active,
+        priority: createForm.priority,
+        suggested_action: createForm.suggested_action,
+        status: statusPayload,
+      });
+      toast.success('Rule created successfully');
+      setCreateDialogOpen(false);
+      fetchRules();
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { detail?: string } } };
+      toast.error(err.response?.data?.detail || 'Failed to create rule');
+    } finally {
+      setCreateSaving(false);
+    }
+  };
+
   const leadRules = rules.filter((r) => r.entity_type === 'LEAD');
   const quoteRules = rules.filter((r) => r.entity_type === 'QUOTE');
   const hasNoRules = rules.length === 0;
@@ -141,11 +226,20 @@ export default function ReminderTriggersPage() {
     <div className="min-h-screen">
       <Header />
       <main className="container mx-auto px-6 py-8">
-        <div className="mb-6">
-          <h1 className="text-3xl font-semibold mb-2">Reminder Triggers</h1>
-          <p className="text-muted-foreground">
-            Configure when reminders are created for stale leads and quotes. Only Directors can edit.
-          </p>
+        <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h1 className="text-3xl font-semibold mb-2">Reminder Triggers</h1>
+            <p className="text-muted-foreground">
+              Configure when reminders are created for stale leads and quotes. Only Directors can create or edit. New
+              rules must use check types the engine already supports (see form options).
+            </p>
+          </div>
+          {isDirector && (
+            <Button type="button" className="shrink-0" onClick={openCreateDialog}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add rule
+            </Button>
+          )}
         </div>
 
         <div className="space-y-6">
@@ -200,7 +294,7 @@ export default function ReminderTriggersPage() {
             <Card>
               <CardContent>
                 <p className="text-sm text-muted-foreground py-4">
-                  No reminder rules configured yet. Restart the API server to seed default rules.
+                  No reminder rules loaded. Restart the API server to backfill default rules from the database migration.
                 </p>
               </CardContent>
             </Card>
@@ -253,6 +347,164 @@ export default function ReminderTriggersPage() {
             </CardContent>
           </Card>
         </div>
+
+        <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Add reminder rule</DialogTitle>
+              <DialogDescription>
+                Unique name (letters, numbers, underscores). Combines entity, status filter, and check type with existing
+                reminder logic—new check types still require backend changes.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="create_rule_name">Rule name</Label>
+                <Input
+                  id="create_rule_name"
+                  placeholder="e.g. ENGAGED_STALE_CUSTOM"
+                  value={createForm.rule_name}
+                  onChange={(e) => setCreateForm((f) => ({ ...f, rule_name: e.target.value }))}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label>Entity</Label>
+                <Select
+                  value={createForm.entity_type}
+                  onValueChange={(v) => {
+                    const et = v as 'LEAD' | 'QUOTE';
+                    setCreateForm((f) => ({
+                      ...f,
+                      entity_type: et,
+                      check_type: et === 'LEAD' ? LEAD_CHECK_TYPES[0] : QUOTE_CHECK_TYPES[0],
+                      status: et === 'LEAD' ? 'NEW' : QUOTE_STATUS_NONE,
+                    }));
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="LEAD">Lead</SelectItem>
+                    <SelectItem value="QUOTE">Quote</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label>
+                  {createForm.entity_type === 'LEAD' ? 'Lead status' : 'Quote status (optional)'}
+                </Label>
+                <Select
+                  value={createForm.entity_type === 'LEAD' ? createForm.status : createForm.status || QUOTE_STATUS_NONE}
+                  onValueChange={(v) => setCreateForm((f) => ({ ...f, status: v }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {createForm.entity_type === 'QUOTE' && (
+                      <SelectItem value={QUOTE_STATUS_NONE}>All quotes (no status filter)</SelectItem>
+                    )}
+                    {(createForm.entity_type === 'LEAD' ? LEAD_STATUSES : QUOTE_STATUSES).map((s) => (
+                      <SelectItem key={s} value={s}>
+                        {s.replace(/_/g, ' ')}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label>Check type</Label>
+                <Select
+                  value={createForm.check_type}
+                  onValueChange={(v) => setCreateForm((f) => ({ ...f, check_type: v }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(createForm.entity_type === 'LEAD' ? LEAD_CHECK_TYPES : QUOTE_CHECK_TYPES).map((ct) => (
+                      <SelectItem key={ct} value={ct}>
+                        {CHECK_TYPE_LABELS[ct] || ct}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="create_threshold">Threshold (days)</Label>
+                <Input
+                  id="create_threshold"
+                  type="number"
+                  min={0}
+                  value={createForm.threshold_days}
+                  onChange={(e) =>
+                    setCreateForm((f) => ({ ...f, threshold_days: parseInt(e.target.value, 10) || 0 }))
+                  }
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label>Active</Label>
+                <Select
+                  value={createForm.is_active ? 'true' : 'false'}
+                  onValueChange={(v) => setCreateForm((f) => ({ ...f, is_active: v === 'true' }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="true">Yes</SelectItem>
+                    <SelectItem value="false">No</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label>Priority</Label>
+                <Select
+                  value={createForm.priority}
+                  onValueChange={(v) => setCreateForm((f) => ({ ...f, priority: v as ReminderPriority }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ReminderPriority.LOW}>Low</SelectItem>
+                    <SelectItem value={ReminderPriority.MEDIUM}>Medium</SelectItem>
+                    <SelectItem value={ReminderPriority.HIGH}>High</SelectItem>
+                    <SelectItem value={ReminderPriority.URGENT}>Urgent</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label>Suggested action</Label>
+                <Select
+                  value={createForm.suggested_action}
+                  onValueChange={(v) => setCreateForm((f) => ({ ...f, suggested_action: v as SuggestedAction }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={SuggestedAction.FOLLOW_UP}>Follow up</SelectItem>
+                    <SelectItem value={SuggestedAction.MARK_LOST}>Mark lost</SelectItem>
+                    <SelectItem value={SuggestedAction.RESEND_QUOTE}>Resend quote</SelectItem>
+                    <SelectItem value={SuggestedAction.REVIEW_QUOTE}>Review quote</SelectItem>
+                    <SelectItem value={SuggestedAction.CONTACT_CUSTOMER}>Contact customer</SelectItem>
+                    <SelectItem value={SuggestedAction.PHONE_CALL}>Phone call</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" type="button" onClick={() => setCreateDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="button" onClick={handleCreateSave} disabled={createSaving}>
+                {createSaving ? 'Creating...' : 'Create rule'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
           <DialogContent>

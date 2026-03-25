@@ -1,24 +1,56 @@
 """
 API endpoints for reminders and stale item management.
 """
+import re
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select, and_, or_, func
 from typing import List, Optional
 from app.database import get_session
 from app.auth import get_current_user
-from datetime import date as date_type
+from datetime import date as date_type, datetime
 from app.models import (
     Reminder, ReminderRule, User, UserRole, Lead, Quote, Customer,
-    ReminderType, ReminderPriority, SuggestedAction
+    ReminderType, ReminderPriority, SuggestedAction, LeadStatus, QuoteStatus,
 )
 from app.schemas import (
     ReminderResponse, ReminderDismissRequest, ReminderActRequest,
-    ReminderRuleResponse, ReminderRuleUpdate, StaleSummaryResponse,
+    ReminderRuleResponse, ReminderRuleUpdate, ReminderRuleCreate, StaleSummaryResponse,
     ManualReminderCreate
 )
 from app.reminder_service import generate_reminders
 
 router = APIRouter(prefix="/api/reminders", tags=["reminders"])
+
+_LEAD_CHECK_TYPES = frozenset({"LAST_ACTIVITY", "STATUS_DURATION"})
+_QUOTE_CHECK_TYPES = frozenset({
+    "SENT_DATE", "VALID_UNTIL", "STATUS_DURATION", "SENT_NOT_OPENED", "OPENED_NO_REPLY",
+})
+
+
+def _normalize_rule_name(name: str) -> str:
+    s = name.strip().upper().replace(" ", "_").replace("-", "_")
+    if not s or not re.match(r"^[A-Z0-9_]+$", s):
+        raise HTTPException(
+            status_code=400,
+            detail="rule_name must be non-empty and use only A-Z, 0-9, and underscores",
+        )
+    return s
+
+
+def _reminder_rule_to_response(rule: ReminderRule) -> ReminderRuleResponse:
+    return ReminderRuleResponse(
+        id=rule.id,
+        rule_name=rule.rule_name,
+        entity_type=rule.entity_type,
+        status=rule.status,
+        threshold_days=rule.threshold_days,
+        check_type=rule.check_type,
+        is_active=rule.is_active,
+        priority=rule.priority,
+        suggested_action=rule.suggested_action,
+        created_at=rule.created_at,
+        updated_at=rule.updated_at,
+    )
 
 
 def _reminder_visibility_filter(current_user: User):
@@ -285,23 +317,73 @@ async def get_reminder_rules(
 ):
     """Get all reminder rules (configuration)."""
     rules = session.exec(select(ReminderRule).order_by(ReminderRule.entity_type, ReminderRule.rule_name)).all()
-    
-    return [
-        ReminderRuleResponse(
-            id=rule.id,
-            rule_name=rule.rule_name,
-            entity_type=rule.entity_type,
-            status=rule.status,
-            threshold_days=rule.threshold_days,
-            check_type=rule.check_type,
-            is_active=rule.is_active,
-            priority=rule.priority,
-            suggested_action=rule.suggested_action,
-            created_at=rule.created_at,
-            updated_at=rule.updated_at
+    return [_reminder_rule_to_response(rule) for rule in rules]
+
+
+@router.post("/rules", response_model=ReminderRuleResponse)
+async def create_reminder_rule(
+    body: ReminderRuleCreate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Create a reminder rule (Director only). Uses check types supported by reminder generation."""
+    if current_user.role != UserRole.DIRECTOR:
+        raise HTTPException(status_code=403, detail="Only directors can create reminder rules")
+
+    rule_name = _normalize_rule_name(body.rule_name)
+    if session.exec(select(ReminderRule).where(ReminderRule.rule_name == rule_name)).first():
+        raise HTTPException(status_code=400, detail="A rule with this name already exists")
+
+    entity = body.entity_type.strip().upper()
+    if entity not in ("LEAD", "QUOTE"):
+        raise HTTPException(status_code=400, detail="entity_type must be LEAD or QUOTE")
+
+    check_type = body.check_type.strip().upper()
+    if entity == "LEAD":
+        if check_type not in _LEAD_CHECK_TYPES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"check_type for LEAD must be one of: {sorted(_LEAD_CHECK_TYPES)}",
+            )
+    elif check_type not in _QUOTE_CHECK_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"check_type for QUOTE must be one of: {sorted(_QUOTE_CHECK_TYPES)}",
         )
-        for rule in rules
-    ]
+
+    if body.threshold_days < 0:
+        raise HTTPException(status_code=400, detail="threshold_days cannot be negative")
+
+    if entity == "LEAD":
+        if not body.status or not str(body.status).strip():
+            raise HTTPException(status_code=400, detail="status is required for LEAD rules")
+        try:
+            status_val = LeadStatus(body.status.strip().upper()).value
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid LeadStatus for status")
+    else:
+        if body.status and str(body.status).strip():
+            try:
+                status_val = QuoteStatus(body.status.strip().upper()).value
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid QuoteStatus for status")
+        else:
+            status_val = None
+
+    rule = ReminderRule(
+        rule_name=rule_name,
+        entity_type=entity,
+        status=status_val,
+        threshold_days=body.threshold_days,
+        check_type=check_type,
+        is_active=body.is_active,
+        priority=body.priority,
+        suggested_action=body.suggested_action,
+    )
+    session.add(rule)
+    session.commit()
+    session.refresh(rule)
+    return _reminder_rule_to_response(rule)
 
 
 @router.put("/rules/{rule_id}", response_model=ReminderRuleResponse)
@@ -329,23 +411,10 @@ async def update_reminder_rule(
     if rule_update.suggested_action is not None:
         rule.suggested_action = rule_update.suggested_action
     
-    from datetime import datetime
     rule.updated_at = datetime.utcnow()
-    
+
     session.add(rule)
     session.commit()
     session.refresh(rule)
-    
-    return ReminderRuleResponse(
-        id=rule.id,
-        rule_name=rule.rule_name,
-        entity_type=rule.entity_type,
-        status=rule.status,
-        threshold_days=rule.threshold_days,
-        check_type=rule.check_type,
-        is_active=rule.is_active,
-        priority=rule.priority,
-        suggested_action=rule.suggested_action,
-        created_at=rule.created_at,
-        updated_at=rule.updated_at
-    )
+
+    return _reminder_rule_to_response(rule)

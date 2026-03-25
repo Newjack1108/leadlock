@@ -1359,6 +1359,17 @@ class ReminderRuleUpdate(BaseModel):
     suggested_action: Optional[SuggestedAction] = None
 
 
+class ReminderRuleCreate(BaseModel):
+    rule_name: str
+    entity_type: str  # LEAD | QUOTE
+    status: Optional[str] = None
+    threshold_days: int = 0
+    check_type: str
+    is_active: bool = True
+    priority: ReminderPriority = ReminderPriority.MEDIUM
+    suggested_action: SuggestedAction
+
+
 class StaleSummaryResponse(BaseModel):
     total_reminders: int
     urgent_count: int

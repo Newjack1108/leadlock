@@ -1052,6 +1052,17 @@ export interface ReminderRuleUpdate {
   suggested_action?: SuggestedAction;
 }
 
+export interface ReminderRuleCreate {
+  rule_name: string;
+  entity_type: 'LEAD' | 'QUOTE';
+  status?: string | null;
+  threshold_days: number;
+  check_type: string;
+  is_active: boolean;
+  priority: ReminderPriority;
+  suggested_action: SuggestedAction;
+}
+
 export enum CustomerHistoryEventType {
   ACTIVITY = "ACTIVITY",
   LEAD_STATUS_CHANGE = "LEAD_STATUS_CHANGE",

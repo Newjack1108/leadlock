@@ -842,117 +842,116 @@ def create_db_and_tables():
         has_reminder_table = inspector.has_table("reminder")
         has_reminder_rule_table = inspector.has_table("reminderrule")
         
-        # Seed default rules when table doesn't exist OR when it's empty (create_all runs first, so table may exist but be empty)
-        def _seed_default_reminder_rules(session):
+        # Insert any canonical default ReminderRule rows missing by rule_name (fixes partial legacy seeds)
+        def _backfill_default_reminder_rules(session):
             from app.models import ReminderRule, ReminderPriority, SuggestedAction
             from sqlmodel import select
-            existing = session.exec(select(ReminderRule.id)).first()
-            if existing is not None:
-                return  # Already has rules
+            existing = set(session.exec(select(ReminderRule.rule_name)).all())
             default_rules = [
-                            ReminderRule(
-                                rule_name="NEW_LEAD_STALE",
-                                entity_type="LEAD",
-                                status="NEW",
-                                threshold_days=3,
-                                check_type="LAST_ACTIVITY",
-                                is_active=True,
-                                priority=ReminderPriority.HIGH,
-                                suggested_action=SuggestedAction.FOLLOW_UP
-                            ),
-                            ReminderRule(
-                                rule_name="CONTACT_ATTEMPTED_STALE",
-                                entity_type="LEAD",
-                                status="CONTACT_ATTEMPTED",
-                                threshold_days=5,
-                                check_type="LAST_ACTIVITY",
-                                is_active=True,
-                                priority=ReminderPriority.HIGH,
-                                suggested_action=SuggestedAction.FOLLOW_UP
-                            ),
-                            ReminderRule(
-                                rule_name="ENGAGED_STALE",
-                                entity_type="LEAD",
-                                status="ENGAGED",
-                                threshold_days=7,
-                                check_type="LAST_ACTIVITY",
-                                is_active=True,
-                                priority=ReminderPriority.MEDIUM,
-                                suggested_action=SuggestedAction.FOLLOW_UP
-                            ),
-                            ReminderRule(
-                                rule_name="QUALIFIED_STALE",
-                                entity_type="LEAD",
-                                status="QUALIFIED",
-                                threshold_days=7,
-                                check_type="LAST_ACTIVITY",
-                                is_active=True,
-                                priority=ReminderPriority.MEDIUM,
-                                suggested_action=SuggestedAction.CONTACT_CUSTOMER
-                            ),
-                            ReminderRule(
-                                rule_name="QUOTED_STALE",
-                                entity_type="LEAD",
-                                status="QUOTED",
-                                threshold_days=5,
-                                check_type="LAST_ACTIVITY",
-                                is_active=True,
-                                priority=ReminderPriority.HIGH,
-                                suggested_action=SuggestedAction.FOLLOW_UP
-                            ),
-                            ReminderRule(
-                                rule_name="QUOTE_SENT_STALE",
-                                entity_type="QUOTE",
-                                status="SENT",
-                                threshold_days=7,
-                                check_type="SENT_DATE",
-                                is_active=True,
-                                priority=ReminderPriority.HIGH,
-                                suggested_action=SuggestedAction.RESEND_QUOTE
-                            ),
-                            ReminderRule(
-                                rule_name="QUOTE_EXPIRED",
-                                entity_type="QUOTE",
-                                status=None,
-                                threshold_days=0,
-                                check_type="VALID_UNTIL",
-                                is_active=True,
-                                priority=ReminderPriority.URGENT,
-                                suggested_action=SuggestedAction.REVIEW_QUOTE
-                            ),
-                            ReminderRule(
-                                rule_name="QUOTE_NOT_OPENED_48H",
-                                entity_type="QUOTE",
-                                status="SENT",
-                                threshold_days=2,
-                                check_type="SENT_NOT_OPENED",
-                                is_active=True,
-                                priority=ReminderPriority.HIGH,
-                                suggested_action=SuggestedAction.RESEND_QUOTE
-                            ),
-                            ReminderRule(
-                                rule_name="QUOTE_OPENED_NO_REPLY",
-                                entity_type="QUOTE",
-                                status="SENT",
-                                threshold_days=5,
-                                check_type="OPENED_NO_REPLY",
-                                is_active=True,
-                                priority=ReminderPriority.HIGH,
-                                suggested_action=SuggestedAction.PHONE_CALL
-                            ),
-                        ]
-            for rule in default_rules:
+                ReminderRule(
+                    rule_name="NEW_LEAD_STALE",
+                    entity_type="LEAD",
+                    status="NEW",
+                    threshold_days=3,
+                    check_type="LAST_ACTIVITY",
+                    is_active=True,
+                    priority=ReminderPriority.HIGH,
+                    suggested_action=SuggestedAction.FOLLOW_UP,
+                ),
+                ReminderRule(
+                    rule_name="CONTACT_ATTEMPTED_STALE",
+                    entity_type="LEAD",
+                    status="CONTACT_ATTEMPTED",
+                    threshold_days=5,
+                    check_type="LAST_ACTIVITY",
+                    is_active=True,
+                    priority=ReminderPriority.HIGH,
+                    suggested_action=SuggestedAction.FOLLOW_UP,
+                ),
+                ReminderRule(
+                    rule_name="ENGAGED_STALE",
+                    entity_type="LEAD",
+                    status="ENGAGED",
+                    threshold_days=7,
+                    check_type="LAST_ACTIVITY",
+                    is_active=True,
+                    priority=ReminderPriority.MEDIUM,
+                    suggested_action=SuggestedAction.FOLLOW_UP,
+                ),
+                ReminderRule(
+                    rule_name="QUALIFIED_STALE",
+                    entity_type="LEAD",
+                    status="QUALIFIED",
+                    threshold_days=7,
+                    check_type="LAST_ACTIVITY",
+                    is_active=True,
+                    priority=ReminderPriority.MEDIUM,
+                    suggested_action=SuggestedAction.CONTACT_CUSTOMER,
+                ),
+                ReminderRule(
+                    rule_name="QUOTED_STALE",
+                    entity_type="LEAD",
+                    status="QUOTED",
+                    threshold_days=5,
+                    check_type="LAST_ACTIVITY",
+                    is_active=True,
+                    priority=ReminderPriority.HIGH,
+                    suggested_action=SuggestedAction.FOLLOW_UP,
+                ),
+                ReminderRule(
+                    rule_name="QUOTE_SENT_STALE",
+                    entity_type="QUOTE",
+                    status="SENT",
+                    threshold_days=7,
+                    check_type="SENT_DATE",
+                    is_active=True,
+                    priority=ReminderPriority.HIGH,
+                    suggested_action=SuggestedAction.RESEND_QUOTE,
+                ),
+                ReminderRule(
+                    rule_name="QUOTE_EXPIRED",
+                    entity_type="QUOTE",
+                    status=None,
+                    threshold_days=0,
+                    check_type="VALID_UNTIL",
+                    is_active=True,
+                    priority=ReminderPriority.URGENT,
+                    suggested_action=SuggestedAction.REVIEW_QUOTE,
+                ),
+                ReminderRule(
+                    rule_name="QUOTE_NOT_OPENED_48H",
+                    entity_type="QUOTE",
+                    status="SENT",
+                    threshold_days=2,
+                    check_type="SENT_NOT_OPENED",
+                    is_active=True,
+                    priority=ReminderPriority.HIGH,
+                    suggested_action=SuggestedAction.RESEND_QUOTE,
+                ),
+                ReminderRule(
+                    rule_name="QUOTE_OPENED_NO_REPLY",
+                    entity_type="QUOTE",
+                    status="SENT",
+                    threshold_days=5,
+                    check_type="OPENED_NO_REPLY",
+                    is_active=True,
+                    priority=ReminderPriority.HIGH,
+                    suggested_action=SuggestedAction.PHONE_CALL,
+                ),
+            ]
+            to_add = [r for r in default_rules if r.rule_name not in existing]
+            for rule in to_add:
                 session.add(rule)
-            session.commit()
-            print(f"Created {len(default_rules)} default reminder rules", file=sys.stderr, flush=True)
+            if to_add:
+                session.commit()
+                print(f"Backfilled {len(to_add)} default reminder rules", file=sys.stderr, flush=True)
         
-        # Run seeding when reminder_rule table exists (create_all runs first, so table may exist but be empty)
         if has_reminder_rule_table or inspector.has_table("reminderrule"):
             try:
                 with Session(engine) as session:
-                    _seed_default_reminder_rules(session)
+                    _backfill_default_reminder_rules(session)
             except Exception as e:
-                print(f"Error seeding default reminder rules: {e}", file=sys.stderr, flush=True)
+                print(f"Error backfilling default reminder rules: {e}", file=sys.stderr, flush=True)
                 import traceback
                 print(traceback.format_exc(), file=sys.stderr, flush=True)
         
@@ -966,46 +965,6 @@ def create_db_and_tables():
                 error_str = str(e).lower()
                 if "already exists" not in error_str:
                     print(f"Warning: could not add suggestedaction value PHONE_CALL: {e}", file=sys.stderr, flush=True)
-        
-        # Step 9b: Seed quote open-tracking reminder rules if missing
-        if has_reminder_rule_table or inspector.has_table("reminderrule"):
-            try:
-                with Session(engine) as session:
-                    from app.models import ReminderRule, ReminderPriority, SuggestedAction
-                    from sqlmodel import select
-                    existing = session.exec(select(ReminderRule.rule_name)).all()
-                    to_add = []
-                    if "QUOTE_NOT_OPENED_48H" not in existing:
-                        to_add.append(ReminderRule(
-                            rule_name="QUOTE_NOT_OPENED_48H",
-                            entity_type="QUOTE",
-                            status="SENT",
-                            threshold_days=2,
-                            check_type="SENT_NOT_OPENED",
-                            is_active=True,
-                            priority=ReminderPriority.HIGH,
-                            suggested_action=SuggestedAction.RESEND_QUOTE,
-                        ))
-                    if "QUOTE_OPENED_NO_REPLY" not in existing:
-                        to_add.append(ReminderRule(
-                            rule_name="QUOTE_OPENED_NO_REPLY",
-                            entity_type="QUOTE",
-                            status="SENT",
-                            threshold_days=5,
-                            check_type="OPENED_NO_REPLY",
-                            is_active=True,
-                            priority=ReminderPriority.HIGH,
-                            suggested_action=SuggestedAction.PHONE_CALL,
-                        ))
-                    for rule in to_add:
-                        session.add(rule)
-                    if to_add:
-                        session.commit()
-                        print(f"Created {len(to_add)} quote open-tracking reminder rules", file=sys.stderr, flush=True)
-            except Exception as e:
-                print(f"Error seeding quote open-tracking rules: {e}", file=sys.stderr, flush=True)
-                import traceback
-                print(traceback.format_exc(), file=sys.stderr, flush=True)
         
         # Step 9c: Extend remindertype enum with QUOTE_NOT_OPENED and QUOTE_OPENED_NO_REPLY (if reminder table exists)
         if has_reminder_table or inspector.has_table("reminder"):

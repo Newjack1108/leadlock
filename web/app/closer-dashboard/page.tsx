@@ -80,7 +80,7 @@ export default function CloserDashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [companySettings, setCompanySettings] = useState<CompanySettings | null>(null);
   const [leadLocations, setLeadLocations] = useState<LeadLocationItem[]>([]);
-  const [datePeriod, setDatePeriod] = useState<DatePeriod>('all');
+  const [datePeriod, setDatePeriod] = useState<DatePeriod>('week');
   const [loadingPhase1, setLoadingPhase1] = useState(true);
   const [loadingPhase2, setLoadingPhase2] = useState(true);
   const [loadingPhase3, setLoadingPhase3] = useState(true);

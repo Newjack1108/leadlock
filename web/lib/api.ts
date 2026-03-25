@@ -906,6 +906,20 @@ export const updateReminderRule = async (
   return response.data;
 };
 
+export const createReminderRule = async (data: {
+  rule_name: string;
+  entity_type: string;
+  status?: string | null;
+  threshold_days: number;
+  check_type: string;
+  is_active: boolean;
+  priority: string;
+  suggested_action: string;
+}) => {
+  const response = await api.post('/api/reminders/rules', data);
+  return response.data;
+};
+
 // Discount Template API functions
 export const getDiscountTemplates = async (isActive?: boolean) => {
   const params = isActive !== undefined ? { is_active: isActive } : {};

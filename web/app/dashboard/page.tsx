@@ -40,7 +40,7 @@ export default function DashboardPage() {
   const [unreadMessenger, setUnreadMessenger] = useState<UnreadMessengerSummary | null>(null);
   const [leadLocations, setLeadLocations] = useState<LeadLocationItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [datePeriod, setDatePeriod] = useState<DatePeriod>('all');
+  const [datePeriod, setDatePeriod] = useState<DatePeriod>('week');
 
   useEffect(() => {
     fetchDashboard();
