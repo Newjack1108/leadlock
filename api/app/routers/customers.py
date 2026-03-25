@@ -1,14 +1,45 @@
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
-from sqlmodel import Session, select, or_
+from sqlmodel import Session, select, or_, func
 from typing import Optional, List
 from app.database import get_session
-from app.models import Customer, User, Activity, Quote, Lead, LeadStatus, QuoteItem, StatusHistory, Email, QuoteEmail, EmailDirection, QuoteStatus, WebsiteVisit, Order, OrderItem
+from app.models import (
+    Customer,
+    User,
+    Activity,
+    Quote,
+    Lead,
+    LeadStatus,
+    QuoteItem,
+    StatusHistory,
+    Email,
+    QuoteEmail,
+    EmailDirection,
+    QuoteStatus,
+    WebsiteVisit,
+    Order,
+    OrderItem,
+    SmsMessage,
+    SmsDirection,
+    MessengerMessage,
+    MessengerDirection,
+)
 from app.models import LeadType, LeadSource
 from app.auth import get_current_user
 from app.schemas import (
-    CustomerResponse, CustomerUpdate, ActivityCreate, ActivityResponse, QuoteResponse, QuoteItemResponse,
-    CustomerHistoryResponse, CustomerHistoryEvent, CustomerHistoryEventType,
-    WebsiteVisitResponse, WebsiteVisitsListResponse, CustomerLeadCreate, LeadResponse,
+    CustomerResponse,
+    CustomerUpdate,
+    ActivityCreate,
+    ActivityResponse,
+    QuoteResponse,
+    QuoteItemResponse,
+    CustomerHistoryResponse,
+    CustomerHistoryEvent,
+    CustomerHistoryEventType,
+    WebsiteVisitResponse,
+    WebsiteVisitsListResponse,
+    CustomerLeadCreate,
+    LeadResponse,
+    CustomerUnreadChannels,
 )
 from app.workflow import check_quote_prerequisites
 from datetime import datetime
@@ -109,6 +140,46 @@ async def get_customer(
         created_at=customer.created_at,
         updated_at=customer.updated_at,
         messenger_psid=customer.messenger_psid,
+    )
+
+
+@router.get("/{customer_id}/unread-channels", response_model=CustomerUnreadChannels)
+async def get_customer_unread_channels(
+    customer_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Unread received SMS, Messenger, and email counts for this customer (read_at IS NULL)."""
+    customer = session.get(Customer, customer_id)
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+
+    sms_count = session.exec(
+        select(func.count(SmsMessage.id)).where(
+            SmsMessage.customer_id == customer_id,
+            SmsMessage.direction == SmsDirection.RECEIVED,
+            SmsMessage.read_at.is_(None),
+        )
+    ).one()
+    messenger_count = session.exec(
+        select(func.count(MessengerMessage.id)).where(
+            MessengerMessage.customer_id == customer_id,
+            MessengerMessage.direction == MessengerDirection.RECEIVED,
+            MessengerMessage.read_at.is_(None),
+        )
+    ).one()
+    email_count = session.exec(
+        select(func.count(Email.id)).where(
+            Email.customer_id == customer_id,
+            Email.direction == EmailDirection.RECEIVED,
+            Email.read_at.is_(None),
+        )
+    ).one()
+
+    return CustomerUnreadChannels(
+        sms_unread=sms_count,
+        messenger_unread=messenger_count,
+        email_unread=email_count,
     )
 
 

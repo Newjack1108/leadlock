@@ -38,7 +38,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import api, { getCustomerHistory, createLeadFromCustomer } from '@/lib/api';
+import api, { getCustomerHistory, createLeadFromCustomer, getCustomerUnreadChannels } from '@/lib/api';
 import { formatDateTime } from '@/lib/utils';
 import { Customer, Activity, ActivityType, Lead, CustomerHistoryEvent, CustomerHistoryEventType, WebsiteVisit, Order } from '@/lib/types';
 import SendQuoteEmailDialog from '@/components/SendQuoteEmailDialog';
@@ -133,6 +133,11 @@ export default function CustomerDetailPage() {
   const [editingName, setEditingName] = useState(false);
   const [nameBeforeEdit, setNameBeforeEdit] = useState('');
   const [createLeadLoading, setCreateLeadLoading] = useState(false);
+  const [unreadChannels, setUnreadChannels] = useState({
+    sms_unread: 0,
+    messenger_unread: 0,
+    email_unread: 0,
+  });
 
   useEffect(() => {
     if (customerId) {
@@ -143,7 +148,16 @@ export default function CustomerDetailPage() {
       fetchQuotes();
       fetchOrders();
       fetchWebsiteVisits();
+      fetchUnreadChannels();
     }
+  }, [customerId]);
+
+  useEffect(() => {
+    const onFocus = () => {
+      if (customerId) fetchUnreadChannels();
+    };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
   }, [customerId]);
 
   useEffect(() => {
@@ -217,6 +231,15 @@ export default function CustomerDetailPage() {
       setWebsiteVisits(response.data.visits || []);
     } catch (error: any) {
       console.error('Failed to load website visits');
+    }
+  };
+
+  const fetchUnreadChannels = async () => {
+    try {
+      const data = await getCustomerUnreadChannels(customerId);
+      setUnreadChannels(data);
+    } catch {
+      // Non-blocking; detail page still usable without unread counts
     }
   };
 
@@ -436,9 +459,14 @@ export default function CustomerDetailPage() {
               <div className="flex flex-col gap-4 md:w-80 md:flex-shrink-0 md:min-h-0">
                 <Card className="flex-1 min-h-0 flex flex-col">
                   <CardHeader>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <Image src="/email-icon.png" alt="" width={32} height={32} className="shrink-0" />
                       <CardTitle>Emails</CardTitle>
+                      {unreadChannels.email_unread > 0 && (
+                        <span className="inline-flex min-w-[20px] h-5 px-1 rounded-full bg-red-500 text-white text-xs font-semibold items-center justify-center">
+                          {unreadChannels.email_unread > 99 ? '99+' : unreadChannels.email_unread}
+                        </span>
+                      )}
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-2">
@@ -460,9 +488,14 @@ export default function CustomerDetailPage() {
                 </Card>
                 <Card className="flex-1 min-h-0 flex flex-col">
                   <CardHeader>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <Image src="/sms-icon.png" alt="" width={32} height={32} className="shrink-0" />
                       <CardTitle>SMS</CardTitle>
+                      {unreadChannels.sms_unread > 0 && (
+                        <span className="inline-flex min-w-[20px] h-5 px-1 rounded-full bg-red-500 text-white text-xs font-semibold items-center justify-center">
+                          {unreadChannels.sms_unread > 99 ? '99+' : unreadChannels.sms_unread}
+                        </span>
+                      )}
                     </div>
                   </CardHeader>
                   <CardContent>
@@ -477,9 +510,14 @@ export default function CustomerDetailPage() {
                 </Card>
                 <Card className="flex-1 min-h-0 flex flex-col">
                   <CardHeader>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <Image src="/messenger-icon.png" alt="" width={32} height={32} className="shrink-0" />
                       <CardTitle>Messenger</CardTitle>
+                      {unreadChannels.messenger_unread > 0 && (
+                        <span className="inline-flex min-w-[20px] h-5 px-1 rounded-full bg-red-500 text-white text-xs font-semibold items-center justify-center">
+                          {unreadChannels.messenger_unread > 99 ? '99+' : unreadChannels.messenger_unread}
+                        </span>
+                      )}
                     </div>
                   </CardHeader>
                   <CardContent>

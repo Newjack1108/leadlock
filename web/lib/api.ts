@@ -207,6 +207,19 @@ export const getUnreadCountsByCustomer = async (): Promise<{ customer_id: number
   return response.data;
 };
 
+export type CustomerUnreadChannels = {
+  sms_unread: number;
+  messenger_unread: number;
+  email_unread: number;
+};
+
+export const getCustomerUnreadChannels = async (
+  customerId: number
+): Promise<CustomerUnreadChannels> => {
+  const response = await api.get(`/api/customers/${customerId}/unread-channels`);
+  return response.data;
+};
+
 export const getQualifiedForQuoting = async (assignedTo?: 'me') => {
   const params = assignedTo ? { assigned_to: assignedTo } : {};
   const response = await api.get('/api/dashboard/qualified-for-quoting', { params });

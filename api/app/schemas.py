@@ -665,6 +665,13 @@ class UnreadByCustomerItem(BaseModel):
     unread_count: int
 
 
+class CustomerUnreadChannels(BaseModel):
+    """Per-channel unread counts for one customer (received, read_at IS NULL)."""
+    sms_unread: int
+    messenger_unread: int
+    email_unread: int
+
+
 PRODUCT_UNIT_VALUES = ("Per Box", "Unit", "Set")
 
 
