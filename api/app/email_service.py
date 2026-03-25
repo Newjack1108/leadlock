@@ -25,6 +25,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Shown in the recipient's mail client as the From display name when env/user fields do not override it.
+DEFAULT_OUTBOUND_FROM_NAME = "Cheshire Stables CSGB Group"
+
 _imap_missing_logged = False
 
 
@@ -346,7 +349,7 @@ def _apply_system_email_layout(
             company = session.exec(select(CompanySettings).limit(1)).first()
         if not company:
             return body_html
-        company_name = (company.trading_name or company.company_name or "LeadLock CRM").strip()
+        company_name = (company.trading_name or company.company_name or DEFAULT_OUTBOUND_FROM_NAME).strip()
         phone = (company.phone or "").strip()
         website = (company.website or "").strip()
         primary = _get_email_brand_primary()
@@ -393,7 +396,7 @@ def get_smtp_config(user_id: Optional[int] = None) -> Dict:
                             "password": smtp_password,
                             "use_tls": getattr(user, 'smtp_use_tls', True),
                             "from_email": getattr(user, 'smtp_from_email', None) or smtp_user or user.email,
-                            "from_name": getattr(user, 'smtp_from_name', None) or user.full_name or "LeadLock CRM",
+                            "from_name": getattr(user, 'smtp_from_name', None) or user.full_name or DEFAULT_OUTBOUND_FROM_NAME,
                             "test_mode": getattr(user, 'email_test_mode', False)
                         }
                     else:
@@ -405,7 +408,7 @@ def get_smtp_config(user_id: Optional[int] = None) -> Dict:
                             "password": os.getenv("SMTP_PASSWORD"),
                             "use_tls": os.getenv("SMTP_USE_TLS", "true").lower() == "true",
                             "from_email": os.getenv("SMTP_FROM_EMAIL", os.getenv("SMTP_USER")),
-                            "from_name": os.getenv("SMTP_FROM_NAME", "LeadLock CRM"),
+                            "from_name": os.getenv("SMTP_FROM_NAME", DEFAULT_OUTBOUND_FROM_NAME),
                             "test_mode": getattr(user, 'email_test_mode', False)
                         }
         except Exception as e:
@@ -421,7 +424,7 @@ def get_smtp_config(user_id: Optional[int] = None) -> Dict:
         "password": os.getenv("SMTP_PASSWORD"),
         "use_tls": os.getenv("SMTP_USE_TLS", "true").lower() == "true",
         "from_email": os.getenv("SMTP_FROM_EMAIL", os.getenv("SMTP_USER")),
-        "from_name": os.getenv("SMTP_FROM_NAME", "LeadLock CRM"),
+        "from_name": os.getenv("SMTP_FROM_NAME", DEFAULT_OUTBOUND_FROM_NAME),
         "test_mode": os.getenv("EMAIL_TEST_MODE", "false").lower() == "true"
     }
 
@@ -888,13 +891,13 @@ def send_email(
     config = get_smtp_config(user_id)
     if _is_graph_configured():
         from_email = os.getenv("MSGRAPH_FROM_EMAIL", "").strip()
-        from_name = os.getenv("MSGRAPH_FROM_NAME", "").strip() or config.get("from_name") or "LeadLock CRM"
+        from_name = os.getenv("MSGRAPH_FROM_NAME", "").strip() or config.get("from_name") or DEFAULT_OUTBOUND_FROM_NAME
     elif os.getenv("RESEND_API_KEY", "").strip():
         from_email = config.get("from_email") or config.get("user") or os.getenv("RESEND_FROM_EMAIL", "onboarding@resend.dev")
-        from_name = config.get("from_name") or os.getenv("RESEND_FROM_NAME", "LeadLock CRM")
+        from_name = config.get("from_name") or os.getenv("RESEND_FROM_NAME", DEFAULT_OUTBOUND_FROM_NAME)
     else:
         from_email = config.get("from_email") or config.get("user") or os.getenv("SMTP_FROM_EMAIL")
-        from_name = config.get("from_name") or os.getenv("SMTP_FROM_NAME", "LeadLock CRM")
+        from_name = config.get("from_name") or os.getenv("SMTP_FROM_NAME", DEFAULT_OUTBOUND_FROM_NAME)
 
     # Generate message ID (needed for both test mode and real sending)
     message_id = generate_message_id()
