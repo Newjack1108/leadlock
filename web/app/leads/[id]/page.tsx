@@ -244,6 +244,12 @@ export default function LeadDetailPage() {
             ← Back to Leads
           </Button>
           <h1 className="text-3xl font-semibold">{lead.name}</h1>
+          <p className="mt-2 text-sm text-muted-foreground flex items-center gap-2">
+            <Clock className="h-4 w-4 shrink-0" />
+            <span>
+              Lead added <span className="font-medium text-foreground">{formatDateTime(lead.created_at)}</span>
+            </span>
+          </p>
         </div>
 
         <div className="space-y-6">

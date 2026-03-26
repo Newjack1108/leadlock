@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/dialog';
 import { Lock, Unlock, Clock, Search, Plus } from 'lucide-react';
 import api from '@/lib/api';
+import { formatDateTime } from '@/lib/utils';
 import { Lead, LeadStatus, LeadType, LeadSource } from '@/lib/types';
 import { toast } from 'sonner';
 import Link from 'next/link';
@@ -329,9 +330,15 @@ function LeadsPageContent() {
                           {lead.phone && <span>{lead.phone}</span>}
                           {lead.email && <span>{lead.email}</span>}
                           {lead.postcode && <span>{lead.postcode}</span>}
-                          <span className="flex items-center gap-1">
-                            <Clock className="h-3 w-3" />
-                            {formatTimeAgo(lead.created_at)}
+                          <span
+                            className="flex items-center gap-1"
+                            title={formatDateTime(lead.created_at)}
+                          >
+                            <Clock className="h-3 w-3 shrink-0" />
+                            <span>
+                              Added {formatTimeAgo(lead.created_at)}
+                              <span className="text-muted-foreground/80"> · {formatDateTime(lead.created_at)}</span>
+                            </span>
                           </span>
                         </div>
                       </div>
