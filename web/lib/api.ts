@@ -556,6 +556,10 @@ export const createLeadFromCustomer = async (
   return response.data;
 };
 
+export const deleteCustomer = async (customerId: number) => {
+  await api.delete(`/api/customers/${customerId}`);
+};
+
 export const getOrder = async (orderId: number) => {
   const response = await api.get(`/api/orders/${orderId}`);
   return response.data;
@@ -573,6 +577,10 @@ export const updateOrder = async (
 ) => {
   const response = await api.patch(`/api/orders/${orderId}`, data);
   return response.data;
+};
+
+export const deleteOrder = async (orderId: number) => {
+  await api.delete(`/api/orders/${orderId}`);
 };
 
 /** Fetches deposit invoice PDF as Blob for download or attach-to-email. */

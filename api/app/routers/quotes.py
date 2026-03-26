@@ -17,6 +17,7 @@ from app.email_service import is_email_configured
 from app.quote_pdf_service import generate_quote_pdf
 from app.reminder_service import get_last_activity_date
 from app.constants import VAT_RATE_DECIMAL
+from app.quote_delete import delete_quote_cascade
 from datetime import datetime
 from decimal import Decimal
 import os
@@ -875,22 +876,7 @@ async def delete_draft_quote(
             status_code=400,
             detail=f"Only draft quotes can be cancelled. This quote has status: {quote.status}"
         )
-    # Delete dependent records in order
-    for dr in session.exec(select(DiscountRequest).where(DiscountRequest.quote_id == quote_id)).all():
-        session.delete(dr)
-    session.flush()
-    for discount in session.exec(select(QuoteDiscount).where(QuoteDiscount.quote_id == quote_id)).all():
-        session.delete(discount)
-    session.flush()
-    existing_items = list(session.exec(select(QuoteItem).where(QuoteItem.quote_id == quote_id)).all())
-    for item in existing_items:
-        if item.parent_quote_item_id is not None:
-            item.parent_quote_item_id = None
-            session.add(item)
-    session.flush()
-    for item in existing_items:
-        session.delete(item)
-    session.delete(quote)
+    delete_quote_cascade(session, quote_id)
     session.commit()
     return Response(status_code=204)
 

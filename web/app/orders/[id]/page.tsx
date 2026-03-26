@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import api, {
   getOrder,
   updateOrder,
+  deleteOrder,
   previewQuotePdf,
   getOrderDepositInvoicePdf,
   getOrderPaidInFullInvoicePdf,
@@ -22,7 +23,7 @@ import { Order, OrderItem, Customer } from '@/lib/types';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { formatDateTime } from '@/lib/utils';
-import { ArrowLeft, ChevronDown, ExternalLink, CheckCircle, Circle, Eye, FileDown, Mail, Upload, Copy, Link2, Send } from 'lucide-react';
+import { ArrowLeft, ChevronDown, ExternalLink, CheckCircle, Circle, Eye, FileDown, Mail, Upload, Copy, Link2, Send, Trash2 } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -58,6 +59,7 @@ export default function OrderDetailPage() {
   const [composeEmailInitialAttachments, setComposeEmailInitialAttachments] = useState<File[]>([]);
   const [composeEmailInitialSubject, setComposeEmailInitialSubject] = useState<string>('');
   const [sendEmailDialogOpen, setSendEmailDialogOpen] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   useEffect(() => {
     if (orderId) fetchOrder();
@@ -209,6 +211,28 @@ export default function OrderDetailPage() {
     }
   };
 
+  const handleDeleteOrder = async () => {
+    if (!order) return;
+    if (
+      !window.confirm(
+        `Delete order ${order.order_number} permanently? The quote will remain; this cannot be undone.`
+      )
+    ) {
+      return;
+    }
+    setDeleteLoading(true);
+    try {
+      await deleteOrder(orderId);
+      toast.success('Order removed');
+      router.push('/orders');
+    } catch (error: any) {
+      const detail = error.response?.data?.detail;
+      toast.error(typeof detail === 'string' ? detail : 'Failed to delete order');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
   const accessSheetLabels: Record<string, string> = {
     access_4x4_trailer: 'Access suitable for 4x4 and trailer',
     access_4x4_notes: 'Notes',
@@ -310,6 +334,16 @@ export default function OrderDetailPage() {
                   <ExternalLink className="h-4 w-4 mr-2" />
                   View quote
                 </Link>
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={deleteLoading}
+                className="text-destructive border-destructive/40 hover:bg-destructive/10"
+                onClick={handleDeleteOrder}
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                {deleteLoading ? 'Removing…' : 'Remove order'}
               </Button>
             </div>
           </div>

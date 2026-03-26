@@ -1,27 +1,30 @@
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from fastapi.responses import Response
 from sqlmodel import Session, select, or_, func
 from typing import Optional, List
 from app.database import get_session
 from app.models import (
-    Customer,
-    User,
     Activity,
-    Quote,
+    Customer,
+    Email,
+    EmailDirection,
     Lead,
     LeadStatus,
-    QuoteItem,
-    StatusHistory,
-    Email,
-    QuoteEmail,
-    EmailDirection,
-    QuoteStatus,
-    WebsiteVisit,
+    MessengerDirection,
+    MessengerMessage,
     Order,
     OrderItem,
-    SmsMessage,
+    Quote,
+    QuoteEmail,
+    QuoteItem,
+    QuoteStatus,
+    Reminder,
+    ScheduledSms,
     SmsDirection,
-    MessengerMessage,
-    MessengerDirection,
+    SmsMessage,
+    StatusHistory,
+    User,
+    WebsiteVisit,
 )
 from app.models import LeadType, LeadSource
 from app.auth import get_current_user
@@ -42,6 +45,8 @@ from app.schemas import (
     CustomerUnreadChannels,
 )
 from app.workflow import check_quote_prerequisites
+from app.quote_delete import delete_quote_cascade
+from app.order_delete import delete_order_cascade
 from datetime import datetime
 
 router = APIRouter(prefix="/api/customers", tags=["customers"])
@@ -311,6 +316,79 @@ async def update_customer(
     )
 
 
+@router.delete("/{customer_id}", status_code=204)
+async def delete_customer(
+    customer_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Permanently remove the customer and related records (quotes, orders, leads, messages, etc.)."""
+    customer = session.get(Customer, customer_id)
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+
+    quotes = list(session.exec(select(Quote).where(Quote.customer_id == customer_id)).all())
+    quote_ids = [q.id for q in quotes if q.id is not None]
+
+    leads = list(session.exec(select(Lead).where(Lead.customer_id == customer_id)).all())
+    lead_ids = [l.id for l in leads if l.id is not None]
+
+    reminder_conditions = [Reminder.customer_id == customer_id]
+    if quote_ids:
+        reminder_conditions.append(Reminder.quote_id.in_(quote_ids))
+    if lead_ids:
+        reminder_conditions.append(Reminder.lead_id.in_(lead_ids))
+    for rem in session.exec(select(Reminder).where(or_(*reminder_conditions))).all():
+        session.delete(rem)
+    session.flush()
+
+    for ss in session.exec(select(ScheduledSms).where(ScheduledSms.customer_id == customer_id)).all():
+        session.delete(ss)
+    session.flush()
+
+    order_conditions = [Order.customer_id == customer_id]
+    if quote_ids:
+        order_conditions.append(Order.quote_id.in_(quote_ids))
+    orders = list(session.exec(select(Order).where(or_(*order_conditions))).all())
+    seen_orders: set[int] = set()
+    for order in orders:
+        oid = order.id
+        if oid is None or oid in seen_orders:
+            continue
+        seen_orders.add(oid)
+        delete_order_cascade(session, oid)
+    session.flush()
+
+    for qid in quote_ids:
+        delete_quote_cascade(session, qid)
+    session.flush()
+
+    for em in session.exec(select(Email).where(Email.customer_id == customer_id)).all():
+        session.delete(em)
+    for sm in session.exec(select(SmsMessage).where(SmsMessage.customer_id == customer_id)).all():
+        session.delete(sm)
+    for mm in session.exec(select(MessengerMessage).where(MessengerMessage.customer_id == customer_id)).all():
+        session.delete(mm)
+    for act in session.exec(select(Activity).where(Activity.customer_id == customer_id)).all():
+        session.delete(act)
+    for wv in session.exec(select(WebsiteVisit).where(WebsiteVisit.customer_id == customer_id)).all():
+        session.delete(wv)
+    session.flush()
+
+    for lid in lead_ids:
+        for sh in session.exec(select(StatusHistory).where(StatusHistory.lead_id == lid)).all():
+            session.delete(sh)
+    session.flush()
+
+    for lead in leads:
+        session.delete(lead)
+    session.flush()
+
+    session.delete(customer)
+    session.commit()
+    return Response(status_code=204)
+
+
 @router.get("/{customer_id}/quotes")
 async def get_customer_quotes(
     customer_id: int,
@@ -329,28 +407,6 @@ async def get_customer_quotes(
         item_statement = select(QuoteItem).where(QuoteItem.quote_id == quote.id).order_by(QuoteItem.sort_order)
         quote_items = session.exec(item_statement).all()
         result.append(build_quote_response(quote, list(quote_items), session))
-
-    return result
-
-
-@router.get("/{customer_id}/orders")
-async def get_customer_orders(
-    customer_id: int,
-    session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user)
-):
-    """Get all orders for a customer."""
-    from app.routers.orders import build_order_response
-
-    statement = select(Order).where(Order.customer_id == customer_id).order_by(Order.created_at.desc())
-    orders = session.exec(statement).all()
-
-    result = []
-    for order in orders:
-        items = session.exec(
-            select(OrderItem).where(OrderItem.order_id == order.id).order_by(OrderItem.sort_order)
-        ).all()
-        result.append(build_order_response(order, list(items), session))
 
     return result
 

@@ -31,6 +31,7 @@ import {
   ChevronDown,
   ChevronUp,
   Pencil,
+  Trash2,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -38,7 +39,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import api, { getCustomerHistory, createLeadFromCustomer, getCustomerUnreadChannels } from '@/lib/api';
+import api, {
+  getCustomerHistory,
+  createLeadFromCustomer,
+  getCustomerUnreadChannels,
+  deleteCustomer,
+} from '@/lib/api';
 import { formatDateTime } from '@/lib/utils';
 import { Customer, Activity, ActivityType, Lead, CustomerHistoryEvent, CustomerHistoryEventType, WebsiteVisit, Order } from '@/lib/types';
 import SendQuoteEmailDialog from '@/components/SendQuoteEmailDialog';
@@ -138,6 +144,7 @@ export default function CustomerDetailPage() {
     messenger_unread: 0,
     email_unread: 0,
   });
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   useEffect(() => {
     if (customerId) {
@@ -273,6 +280,27 @@ export default function CustomerDetailPage() {
     }
   };
 
+  const handleDeleteCustomer = async () => {
+    if (
+      !window.confirm(
+        `Delete ${customer?.name ?? 'this customer'} permanently? This removes quotes, orders, leads, and all related activity. This cannot be undone.`
+      )
+    ) {
+      return;
+    }
+    setDeleteLoading(true);
+    try {
+      await deleteCustomer(customerId);
+      toast.success('Customer removed');
+      router.push('/customers');
+    } catch (error: any) {
+      const detail = error.response?.data?.detail;
+      toast.error(typeof detail === 'string' ? detail : 'Failed to delete customer');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen">
@@ -350,6 +378,17 @@ export default function CustomerDetailPage() {
             {customer.source_system === 'Ninox' && (
               <Badge variant="secondary" className="font-normal">Ninox</Badge>
             )}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="text-destructive border-destructive/40 hover:bg-destructive/10 ml-auto"
+              disabled={deleteLoading}
+              onClick={handleDeleteCustomer}
+            >
+              <Trash2 className="h-4 w-4 mr-1.5" />
+              {deleteLoading ? 'Removing…' : 'Remove customer'}
+            </Button>
           </div>
         </div>
 

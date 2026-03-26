@@ -14,6 +14,7 @@ from app.schemas import OrderResponse, OrderItemResponse, OrderUpdate, AccessShe
 from app.models import User
 from app.invoice_pdf_service import generate_deposit_paid_invoice_pdf, generate_paid_in_full_invoice_pdf
 from app.make_xero_service import push_order_invoice_to_make
+from app.order_delete import delete_order_cascade
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
 
@@ -149,6 +150,21 @@ async def get_order(
         select(OrderItem).where(OrderItem.order_id == order.id).order_by(OrderItem.sort_order)
     ).all()
     return build_order_response(order, list(items), session)
+
+
+@router.delete("/{order_id}", status_code=204)
+async def delete_order(
+    order_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Permanently delete this order (line items and access sheet data). The quote is not deleted."""
+    order = session.exec(select(Order).where(Order.id == order_id)).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    delete_order_cascade(session, order_id)
+    session.commit()
+    return Response(status_code=204)
 
 
 @router.patch("/{order_id}", response_model=OrderResponse)
