@@ -1188,7 +1188,7 @@ async def send_quote_email_endpoint(
         final_subject = email_subject or f"Quote {quote.quote_number}"
         final_body_html = email_body_html or f"<p>Please use the link in the email to view quote {quote.quote_number}.</p>"
         
-        # Create Email record
+        # Create Email record (body_html matches QuoteEmail so thread/history views can show content)
         email_record = Email(
             customer_id=quote.customer_id,
             message_id=message_id,
@@ -1199,7 +1199,7 @@ async def send_quote_email_endpoint(
             cc=email_data.cc,
             bcc=email_data.bcc,
             subject=final_subject,
-            body_html=None,  # Will be stored in QuoteEmail
+            body_html=final_body_html,
             sent_at=datetime.utcnow(),
             created_by_id=current_user.id
         )

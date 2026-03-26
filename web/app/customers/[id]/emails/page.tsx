@@ -204,13 +204,24 @@ export default function CustomerEmailsPage() {
                           </span>
                         </div>
                         <div className="text-sm mt-2">
-                          {email.body_html ? (
+                          {email.body_html?.trim() ? (
                             <div
                               dangerouslySetInnerHTML={{ __html: email.body_html }}
                               className="prose prose-sm max-w-none"
                             />
-                          ) : (
+                          ) : email.body_text?.trim() ? (
                             <p className="whitespace-pre-wrap">{email.body_text}</p>
+                          ) : (
+                            <p className="text-muted-foreground">
+                              {email.subject ? (
+                                <>
+                                  <span className="font-medium text-foreground">Subject:</span>{' '}
+                                  {email.subject}
+                                </>
+                              ) : (
+                                'No message content stored for this email.'
+                              )}
+                            </p>
                           )}
                         </div>
                         {email.direction === EmailDirection.RECEIVED && (
