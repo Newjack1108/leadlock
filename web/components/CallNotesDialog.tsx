@@ -101,6 +101,10 @@ export default function CallNotesDialog({
   };
 
   const handleLeftMessage = async () => {
+    if (!notes.trim()) {
+      toast.error('Please add a note for left message');
+      return;
+    }
     setSubmitting(true);
     try {
       await logCallActivity(customerId, combineNotes('Left message', notes));
@@ -142,6 +146,14 @@ export default function CallNotesDialog({
 
   const today = new Date().toISOString().slice(0, 10);
 
+  const notesLabel = callInProgress
+    ? 'Notes (required for End call & save or Left message)'
+    : 'Notes (optional for No answer; required for Left message)';
+
+  const notesPlaceholder = callInProgress
+    ? 'What was discussed, or what message was left?'
+    : 'Add notes (required if you choose Left message)';
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-md">
@@ -152,10 +164,10 @@ export default function CallNotesDialog({
 
         <div className="space-y-4">
           <div>
-            <Label htmlFor="call-notes">{callInProgress ? 'Notes (required)' : 'Notes (optional)'}</Label>
+            <Label htmlFor="call-notes">{notesLabel}</Label>
             <Textarea
               id="call-notes"
-              placeholder="Add any notes..."
+              placeholder={notesPlaceholder}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               className="mt-1 min-h-[60px]"
@@ -163,17 +175,7 @@ export default function CallNotesDialog({
             />
           </div>
 
-          {callInProgress ? (
-            <Button
-              type="button"
-              onClick={handleEndCallAndSave}
-              disabled={submitting || !notes.trim()}
-              className="w-full"
-            >
-              <PhoneOff className="h-4 w-4 mr-2" />
-              End call & save
-            </Button>
-          ) : showSetReminder ? (
+          {showSetReminder ? (
             <div className="space-y-3 rounded-md border p-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">Set reminder</span>
@@ -219,15 +221,27 @@ export default function CallNotesDialog({
             </div>
           ) : (
             <div className="flex flex-col gap-2">
-              <Button
-                type="button"
-                onClick={handleCall}
-                disabled={submitting}
-                className="w-full justify-start"
-              >
-                <Phone className="h-4 w-4 mr-2" />
-                Call
-              </Button>
+              {!callInProgress ? (
+                <Button
+                  type="button"
+                  onClick={handleCall}
+                  disabled={submitting}
+                  className="w-full justify-start"
+                >
+                  <Phone className="h-4 w-4 mr-2" />
+                  Call
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  onClick={handleEndCallAndSave}
+                  disabled={submitting || !notes.trim()}
+                  className="w-full justify-start"
+                >
+                  <PhoneOff className="h-4 w-4 mr-2" />
+                  End call & save
+                </Button>
+              )}
               <Button
                 type="button"
                 variant="outline"
@@ -242,7 +256,7 @@ export default function CallNotesDialog({
                 type="button"
                 variant="outline"
                 onClick={handleLeftMessage}
-                disabled={submitting}
+                disabled={submitting || !notes.trim()}
                 className="w-full justify-start"
               >
                 <MessageSquare className="h-4 w-4 mr-2" />
