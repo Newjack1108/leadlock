@@ -15,9 +15,10 @@ Daily PostgreSQL backups with 5-backup rotation. Backups are stored on a Railway
 
 1. In your Railway project, click **+ New** → **GitHub Repo** (or use the existing repo)
 2. Select the LeadLock repository
-3. Configure the new service:
-   - **Root Directory**: `api`
-   - Add variable **`RAILWAY_DOCKERFILE_PATH`** = `api/Dockerfile.backup` (path from repo root) so Railway uses the backup Dockerfile with `postgresql-client`
+3. Configure the new service so the image includes `postgresql-client` (otherwise you get `pg_dump not found`):
+   - **Root Directory**: `api` (or leave empty; see below)
+   - **Config as code (recommended)**: In the backup service **Settings**, set **Custom Config File** to the absolute path **`/railway.backup.json`** (repository root). That file pins the build to [`api/Dockerfile.backup`](api/Dockerfile.backup), which installs `postgresql-client`.
+   - **Or** use a variable instead of the config file: **`RAILWAY_DOCKERFILE_PATH`** = `Dockerfile.backup` when **Root Directory** is `api` (path is relative to the service source directory). If **Root Directory** is empty (repo root), use **`RAILWAY_DOCKERFILE_PATH`** = `api/Dockerfile.backup`.
 4. In **Settings**:
    - **Start Command**: `python backup.py`
    - **Cron Schedule**: `0 2 * * *` (daily at 2:00 AM UTC)

@@ -3,6 +3,10 @@
 
 FROM python:3.11-slim
 
+# Needed if this image runs backup.py (cron) or any pg_dump; small cost vs a broken backup service.
+RUN apt-get update && apt-get install -y --no-install-recommends postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 COPY requirements.txt ./
