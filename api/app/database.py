@@ -1081,6 +1081,53 @@ def create_db_and_tables():
                     error_str = str(e).lower()
                     if "already exists" not in error_str and "duplicate" not in error_str:
                         print(f"Error adding is_giveaway column: {e}", file=sys.stderr, flush=True)
+
+            # Step 11b: max_uses, expires_at on discounttemplate; discounttemplateredemption table
+            dt_columns = [col["name"] for col in inspector.get_columns("discounttemplate")]
+            if "max_uses" not in dt_columns:
+                print("Adding max_uses column to discounttemplate table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE discounttemplate ADD COLUMN max_uses INTEGER"))
+                    print("Added max_uses column to discounttemplate table", file=sys.stderr, flush=True)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Error adding max_uses column: {e}", file=sys.stderr, flush=True)
+            dt_columns = [col["name"] for col in inspector.get_columns("discounttemplate")]
+            if "expires_at" not in dt_columns:
+                print("Adding expires_at column to discounttemplate table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE discounttemplate ADD COLUMN expires_at TIMESTAMP"))
+                    print("Added expires_at column to discounttemplate table", file=sys.stderr, flush=True)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Error adding expires_at column: {e}", file=sys.stderr, flush=True)
+
+        if not inspector.has_table("discounttemplateredemption"):
+            print("Creating discounttemplateredemption table...", file=sys.stderr, flush=True)
+            try:
+                with engine.begin() as conn:
+                    conn.execute(
+                        text(
+                            """
+                            CREATE TABLE discounttemplateredemption (
+                                id SERIAL PRIMARY KEY,
+                                template_id INTEGER NOT NULL REFERENCES discounttemplate(id) ON DELETE CASCADE,
+                                quote_id INTEGER NOT NULL REFERENCES quote(id) ON DELETE CASCADE,
+                                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                                CONSTRAINT uq_discount_redemption_template_quote UNIQUE (template_id, quote_id)
+                            )
+                            """
+                        )
+                    )
+                print("Created discounttemplateredemption table", file=sys.stderr, flush=True)
+            except Exception as e:
+                error_str = str(e).lower()
+                if "already exists" not in error_str and "duplicate" not in error_str:
+                    print(f"Error creating discounttemplateredemption: {e}", file=sys.stderr, flush=True)
         
         # Step 12: Add parent_quote_item_id to QuoteItem table
         has_quoteitem_table = inspector.has_table("quoteitem")

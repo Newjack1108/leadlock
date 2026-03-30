@@ -12,7 +12,20 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getQuote, updateDraftQuote, cancelDraftQuote, getProducts, getProduct, getCompanySettings, getDiscountTemplates, getDiscountRequestsForQuote, estimateDeliveryInstall } from '@/lib/api';
 import api from '@/lib/api';
-import { Customer, Product, QuoteItemCreate, DiscountTemplate, Quote, QuoteItem, QuoteDiscount, DiscountRequest, DiscountRequestStatus, QuoteTemperature, DeliveryInstallEstimateResponse } from '@/lib/types';
+import {
+  Customer,
+  Product,
+  QuoteItemCreate,
+  DiscountTemplate,
+  Quote,
+  QuoteItem,
+  QuoteDiscount,
+  DiscountRequest,
+  DiscountRequestStatus,
+  QuoteTemperature,
+  DeliveryInstallEstimateResponse,
+  isDiscountTemplateExpired,
+} from '@/lib/types';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { formatHoursMinutes } from '@/lib/utils';
@@ -834,7 +847,7 @@ function EditQuoteContent() {
                     </SelectTrigger>
                     <SelectContent>
                       {availableDiscounts
-                        .filter((d) => !selectedDiscountIds.includes(d.id))
+                        .filter((d) => !selectedDiscountIds.includes(d.id) && !isDiscountTemplateExpired(d))
                         .map((discount) => (
                           <SelectItem key={discount.id} value={discount.id.toString()}>
                             {discount.name} -{' '}
@@ -843,6 +856,9 @@ function EditQuoteContent() {
                               : `£${discount.discount_value}`}{' '}
                             ({discount.scope === 'PRODUCT' ? 'Product (Building Only)' : 'Entire Quote'})
                             {discount.is_giveaway && ' 🎁'}
+                            {discount.max_uses != null && discount.remaining_uses != null
+                              ? ` · ${discount.remaining_uses} accept${discount.remaining_uses === 1 ? '' : 's'} left`
+                              : ''}
                           </SelectItem>
                         ))}
                     </SelectContent>

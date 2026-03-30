@@ -30,9 +30,15 @@ import {
   updateDiscountTemplate,
   deleteDiscountTemplate,
 } from '@/lib/api';
-import { DiscountTemplate, DiscountType, DiscountScope } from '@/lib/types';
+import { DiscountTemplate, DiscountType, DiscountScope, isDiscountTemplateExpired } from '@/lib/types';
 import { toast } from 'sonner';
 import { Plus, Edit, Trash2, Tag, Gift } from 'lucide-react';
+
+function toDatetimeLocalValue(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
 export default function DiscountsPage() {
   const router = useRouter();
@@ -49,6 +55,8 @@ export default function DiscountsPage() {
     discount_value: '',
     scope: DiscountScope.QUOTE,
     is_giveaway: false,
+    max_uses: '',
+    expires_at: '',
   });
 
   useEffect(() => {
@@ -80,8 +88,18 @@ export default function DiscountsPage() {
     try {
       setSaving(true);
       await createDiscountTemplate({
-        ...formData,
+        name: formData.name,
+        description: formData.description || undefined,
+        discount_type: formData.discount_type,
         discount_value: parseFloat(formData.discount_value),
+        scope: formData.scope,
+        is_giveaway: formData.is_giveaway,
+        max_uses:
+          formData.max_uses.trim() === '' ? undefined : parseInt(formData.max_uses, 10),
+        expires_at:
+          formData.expires_at.trim() === ''
+            ? undefined
+            : new Date(formData.expires_at).toISOString(),
       });
       toast.success('Discount created successfully');
       setCreateDialogOpen(false);
@@ -103,6 +121,8 @@ export default function DiscountsPage() {
       discount_value: discount.discount_value.toString(),
       scope: discount.scope,
       is_giveaway: discount.is_giveaway,
+      max_uses: discount.max_uses != null ? String(discount.max_uses) : '',
+      expires_at: discount.expires_at ? toDatetimeLocalValue(discount.expires_at) : '',
     });
     setEditDialogOpen(true);
   };
@@ -116,8 +136,18 @@ export default function DiscountsPage() {
     try {
       setSaving(true);
       await updateDiscountTemplate(editingDiscount.id, {
-        ...formData,
+        name: formData.name,
+        description: formData.description || undefined,
+        discount_type: formData.discount_type,
         discount_value: parseFloat(formData.discount_value),
+        scope: formData.scope,
+        is_giveaway: formData.is_giveaway,
+        max_uses:
+          formData.max_uses.trim() === '' ? null : parseInt(formData.max_uses, 10),
+        expires_at:
+          formData.expires_at.trim() === ''
+            ? null
+            : new Date(formData.expires_at).toISOString(),
       });
       toast.success('Discount updated successfully');
       setEditDialogOpen(false);
@@ -153,6 +183,8 @@ export default function DiscountsPage() {
       discount_value: '',
       scope: DiscountScope.QUOTE,
       is_giveaway: false,
+      max_uses: '',
+      expires_at: '',
     });
   };
 
@@ -246,6 +278,22 @@ export default function DiscountsPage() {
                       <span className="text-muted-foreground">Type:</span>
                       <span>{discount.discount_type === DiscountType.PERCENTAGE ? 'Percentage' : 'Fixed Amount'}</span>
                     </div>
+                    {discount.max_uses != null && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Accepted uses:</span>
+                        <span>
+                          {discount.usage_count ?? 0} / {discount.max_uses}
+                        </span>
+                      </div>
+                    )}
+                    {discount.expires_at && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Expires:</span>
+                        <span className={isDiscountTemplateExpired(discount) ? 'text-destructive' : ''}>
+                          {new Date(discount.expires_at).toLocaleString()}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -364,6 +412,34 @@ export default function DiscountsPage() {
                 <Label htmlFor="is_giveaway" className="cursor-pointer">
                   This is a giveaway (free product)
                 </Label>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="max_uses">Max uses (optional)</Label>
+                  <Input
+                    id="max_uses"
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={formData.max_uses}
+                    onChange={(e) => setFormData({ ...formData, max_uses: e.target.value })}
+                    placeholder="Unlimited if empty"
+                    disabled={saving}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Each accepted quote counts once. Leave empty for no limit.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="expires_at">Expiry date &amp; time (optional)</Label>
+                  <Input
+                    id="expires_at"
+                    type="datetime-local"
+                    value={formData.expires_at}
+                    onChange={(e) => setFormData({ ...formData, expires_at: e.target.value })}
+                    disabled={saving}
+                  />
+                </div>
               </div>
             </div>
             <DialogFooter>
@@ -498,6 +574,34 @@ export default function DiscountsPage() {
                 <Label htmlFor="edit-is_giveaway" className="cursor-pointer">
                   This is a giveaway (free product)
                 </Label>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-max_uses">Max uses (optional)</Label>
+                  <Input
+                    id="edit-max_uses"
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={formData.max_uses}
+                    onChange={(e) => setFormData({ ...formData, max_uses: e.target.value })}
+                    placeholder="Unlimited if empty"
+                    disabled={saving}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Each accepted quote counts once. Clear to remove limit.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-expires_at">Expiry date &amp; time (optional)</Label>
+                  <Input
+                    id="edit-expires_at"
+                    type="datetime-local"
+                    value={formData.expires_at}
+                    onChange={(e) => setFormData({ ...formData, expires_at: e.target.value })}
+                    disabled={saving}
+                  />
+                </div>
               </div>
             </div>
             <DialogFooter>

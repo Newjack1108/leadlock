@@ -906,9 +906,12 @@ export interface DiscountTemplate {
   scope: DiscountScope;
   is_active: boolean;
   is_giveaway: boolean;
+  max_uses?: number | null;
+  expires_at?: string | null;
+  usage_count?: number;
+  remaining_uses?: number | null;
   created_at: string;
   updated_at: string;
-  usage_count?: number;
 }
 
 export interface DiscountTemplateCreate {
@@ -918,6 +921,8 @@ export interface DiscountTemplateCreate {
   discount_value: number;
   scope: DiscountScope;
   is_giveaway?: boolean;
+  max_uses?: number | null;
+  expires_at?: string | null;
 }
 
 export interface DiscountTemplateUpdate {
@@ -928,6 +933,14 @@ export interface DiscountTemplateUpdate {
   scope?: DiscountScope;
   is_active?: boolean;
   is_giveaway?: boolean;
+  max_uses?: number | null;
+  expires_at?: string | null;
+}
+
+/** True if the template has an expiry time in the past (hide from quote discount picker). */
+export function isDiscountTemplateExpired(d: Pick<DiscountTemplate, 'expires_at'>): boolean {
+  if (!d.expires_at) return false;
+  return new Date(d.expires_at).getTime() < Date.now();
 }
 
 export interface QuoteDiscount {

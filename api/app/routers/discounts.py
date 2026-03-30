@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlmodel import Session, select, func
+from sqlmodel import Session, select
 from typing import Optional, List
 from app.database import get_session
-from app.models import DiscountTemplate, User, QuoteDiscount
+from app.models import DiscountTemplate, User
 from app.auth import get_current_user, require_role
 from app.schemas import (
     DiscountTemplateCreate,
@@ -11,8 +11,22 @@ from app.schemas import (
 )
 from app.models import UserRole
 from datetime import datetime
+from app.discount_limits import redemption_counts_by_template
 
 router = APIRouter(prefix="/api/discounts", tags=["discounts"])
+
+
+def _template_to_response(template: DiscountTemplate, counts: dict[int, int]) -> DiscountTemplateResponse:
+    usage_count = counts.get(template.id, 0)
+    remaining_uses = None
+    if template.max_uses is not None:
+        remaining_uses = max(0, template.max_uses - usage_count)
+    data = template.dict()
+    return DiscountTemplateResponse(
+        **data,
+        usage_count=usage_count,
+        remaining_uses=remaining_uses,
+    )
 
 
 @router.get("", response_model=List[DiscountTemplateResponse])
@@ -29,9 +43,8 @@ async def get_discount_templates(
     
     statement = statement.order_by(DiscountTemplate.created_at.desc())
     templates = session.exec(statement).all()
-    
-    # Return templates (usage_count can be calculated on frontend if needed)
-    return [DiscountTemplateResponse(**template.dict()) for template in templates]
+    counts = redemption_counts_by_template(session)
+    return [_template_to_response(t, counts) for t in templates]
 
 
 @router.get("/{discount_id}", response_model=DiscountTemplateResponse)
@@ -46,8 +59,8 @@ async def get_discount_template(
     
     if not template:
         raise HTTPException(status_code=404, detail="Discount template not found")
-    
-    return DiscountTemplateResponse(**template.dict())
+    counts = redemption_counts_by_template(session)
+    return _template_to_response(template, counts)
 
 
 @router.post("", response_model=DiscountTemplateResponse)
@@ -64,8 +77,8 @@ async def create_discount_template(
     session.add(template)
     session.commit()
     session.refresh(template)
-    
-    return DiscountTemplateResponse(**template.dict())
+    counts = redemption_counts_by_template(session)
+    return _template_to_response(template, counts)
 
 
 @router.patch("/{discount_id}", response_model=DiscountTemplateResponse)
@@ -91,7 +104,8 @@ async def update_discount_template(
     session.commit()
     session.refresh(template)
     
-    return DiscountTemplateResponse(**template.dict())
+    counts = redemption_counts_by_template(session)
+    return _template_to_response(template, counts)
 
 
 @router.delete("/{discount_id}")

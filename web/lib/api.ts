@@ -969,6 +969,8 @@ export const createDiscountTemplate = async (templateData: {
   discount_value: number;
   scope: string;
   is_giveaway?: boolean;
+  max_uses?: number | null;
+  expires_at?: string | null;
 }) => {
   const response = await api.post('/api/discounts', templateData);
   return response.data;
@@ -982,6 +984,8 @@ export const updateDiscountTemplate = async (discountId: number, templateData: {
   scope?: string;
   is_active?: boolean;
   is_giveaway?: boolean;
+  max_uses?: number | null;
+  expires_at?: string | null;
 }) => {
   const response = await api.patch(`/api/discounts/${discountId}`, templateData);
   return response.data;

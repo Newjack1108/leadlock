@@ -1,6 +1,6 @@
 from sqlmodel import SQLModel, Field, Relationship, Column
 from sqlalchemy.orm import relationship
-from sqlalchemy import Numeric, JSON
+from sqlalchemy import Numeric, JSON, UniqueConstraint, ForeignKey, Integer
 from typing import Optional, List
 from datetime import datetime, date
 from enum import Enum
@@ -600,6 +600,8 @@ class DiscountTemplate(SQLModel, table=True):
     scope: DiscountScope  # PRODUCT or QUOTE
     is_active: bool = Field(default=True)
     is_giveaway: bool = Field(default=False)  # True if this is a giveaway discount
+    max_uses: Optional[int] = None  # None = unlimited; enforced on quote accept (redemptions)
+    expires_at: Optional[datetime] = None  # None = never; UTC
     created_by_id: int = Field(foreign_key="user.id")
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
@@ -607,6 +609,33 @@ class DiscountTemplate(SQLModel, table=True):
     # Relationships
     created_by: User = Relationship()
     quote_discounts: List["QuoteDiscount"] = Relationship(back_populates="template")
+    redemptions: List["DiscountTemplateRedemption"] = Relationship(back_populates="template")
+
+
+class DiscountTemplateRedemption(SQLModel, table=True):
+    """One row per (template, quote) when a quote is accepted; counts toward max_uses."""
+    __table_args__ = (
+        UniqueConstraint("template_id", "quote_id", name="uq_discount_redemption_template_quote"),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    template_id: int = Field(
+        sa_column=Column(
+            Integer,
+            ForeignKey("discounttemplate.id", ondelete="CASCADE"),
+            nullable=False,
+        )
+    )
+    quote_id: int = Field(
+        sa_column=Column(
+            Integer,
+            ForeignKey("quote.id", ondelete="CASCADE"),
+            nullable=False,
+        )
+    )
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    template: "DiscountTemplate" = Relationship(back_populates="redemptions")
 
 
 class QuoteDiscount(SQLModel, table=True):

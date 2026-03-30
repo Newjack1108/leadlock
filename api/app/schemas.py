@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, field_validator, model_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 from typing import Optional, List
 from datetime import datetime, date
 from decimal import Decimal
@@ -1131,6 +1131,8 @@ class DiscountTemplateCreate(BaseModel):
     discount_value: Decimal
     scope: DiscountScope
     is_giveaway: Optional[bool] = False
+    max_uses: Optional[int] = Field(default=None, ge=1)
+    expires_at: Optional[datetime] = None
 
 
 class DiscountTemplateUpdate(BaseModel):
@@ -1141,6 +1143,8 @@ class DiscountTemplateUpdate(BaseModel):
     scope: Optional[DiscountScope] = None
     is_active: Optional[bool] = None
     is_giveaway: Optional[bool] = None
+    max_uses: Optional[int] = Field(default=None, ge=1)
+    expires_at: Optional[datetime] = None
 
 
 class DiscountTemplateResponse(BaseModel):
@@ -1152,6 +1156,10 @@ class DiscountTemplateResponse(BaseModel):
     scope: DiscountScope
     is_active: bool
     is_giveaway: bool
+    max_uses: Optional[int] = None
+    expires_at: Optional[datetime] = None
+    usage_count: int = 0
+    remaining_uses: Optional[int] = None  # None when max_uses is unlimited
     created_at: datetime
     updated_at: datetime
 

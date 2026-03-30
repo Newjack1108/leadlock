@@ -18,6 +18,7 @@ from app.quote_pdf_service import generate_quote_pdf
 from app.reminder_service import get_last_activity_date
 from app.constants import VAT_RATE_DECIMAL
 from app.quote_delete import delete_quote_cascade
+from app.discount_limits import assert_templates_not_expired_for_apply, validate_and_record_redemptions_on_accept
 from datetime import datetime
 from decimal import Decimal
 import os
@@ -509,6 +510,7 @@ async def create_quote(
         # Apply discounts if provided
         discount_total = Decimal(0)
         if quote_data.discount_template_ids:
+            assert_templates_not_expired_for_apply(session, quote_data.discount_template_ids)
             for template_id in quote_data.discount_template_ids:
                 template_statement = select(DiscountTemplate).where(
                     DiscountTemplate.id == template_id,
@@ -746,6 +748,7 @@ async def mark_opportunity_won(
         raise HTTPException(status_code=404, detail="Quote is not an opportunity")
     old_status = quote.status
     if old_status != QuoteStatus.ACCEPTED:
+        validate_and_record_redemptions_on_accept(session, quote.id)
         create_order_from_quote(quote, session, current_user.id)
     quote.status = QuoteStatus.ACCEPTED
     quote.opportunity_stage = OpportunityStage.WON
@@ -1015,6 +1018,7 @@ def _update_draft_quote_impl(
     
     # Apply discounts if provided
     if quote_data.discount_template_ids:
+        assert_templates_not_expired_for_apply(session, quote_data.discount_template_ids)
         for template_id in quote_data.discount_template_ids:
             template_statement = select(DiscountTemplate).where(
                 DiscountTemplate.id == template_id,
@@ -1317,6 +1321,7 @@ async def update_quote(
     if quote.status == QuoteStatus.ACCEPTED and old_status != QuoteStatus.ACCEPTED:
         if not quote.accepted_at:
             quote.accepted_at = datetime.utcnow()
+        validate_and_record_redemptions_on_accept(session, quote.id)
         create_order_from_quote(quote, session, current_user.id)
     
     # Mandatory next action validation (for open opportunities)
@@ -1389,6 +1394,8 @@ async def apply_discount_to_quote_endpoint(
     
     if not discount_template:
         raise HTTPException(status_code=404, detail="Discount template not found")
+    
+    assert_templates_not_expired_for_apply(session, [template_id])
     
     # Get quote items
     item_statement = select(QuoteItem).where(QuoteItem.quote_id == quote.id)

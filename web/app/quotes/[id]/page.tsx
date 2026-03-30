@@ -285,7 +285,14 @@ export default function QuoteDetailPage() {
                       await fetchQuote();
                       toast.success('Quote accepted. Order created.');
                     } catch (error: any) {
-                      toast.error(error.response?.data?.detail || 'Failed to accept quote');
+                      const d = error.response?.data?.detail;
+                      const msg =
+                        typeof d === 'string'
+                          ? d
+                          : Array.isArray(d)
+                            ? d.map((x: { msg?: string }) => x?.msg).filter(Boolean).join(' ')
+                            : 'Failed to accept quote';
+                      toast.error(msg || 'Failed to accept quote');
                     } finally {
                       setAccepting(false);
                     }
