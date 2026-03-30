@@ -763,11 +763,16 @@ class Reminder(SQLModel, table=True):
     dismissed_at: Optional[datetime] = None
     acted_upon_at: Optional[datetime] = None
     
-    # Relationships
+    # Relationships (two FKs to User — must specify foreign_keys each)
     lead: Optional["Lead"] = Relationship()
     quote: Optional["Quote"] = Relationship()
     customer: Optional["Customer"] = Relationship()
-    assigned_to: User = Relationship()
+    assigned_to: User = Relationship(
+        sa_relationship_kwargs={"foreign_keys": lambda: [Reminder.assigned_to_id]},
+    )
+    created_by: Optional["User"] = Relationship(
+        sa_relationship_kwargs={"foreign_keys": lambda: [Reminder.created_by_id]},
+    )
 
 
 class ReminderRule(SQLModel, table=True):
