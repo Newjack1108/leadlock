@@ -827,9 +827,31 @@ export const getReminders = async (params?: {
   done?: boolean;
   priority?: string;
   reminder_type?: string;
+  assigned_to_me?: boolean;
 }) => {
   const response = await api.get('/api/reminders', { params });
   return response.data;
+};
+
+export const createUserTask = async (data: {
+  title: string;
+  message: string;
+  due_date: string;
+  assigned_to_id?: number;
+  customer_id?: number;
+}) => {
+  const response = await api.post('/api/reminders/tasks', data);
+  return response.data;
+};
+
+export const getAssignableUsers = async () => {
+  const response = await api.get('/api/users/assignable');
+  return response.data;
+};
+
+export const getAuthMe = async () => {
+  const response = await api.get('/api/auth/me');
+  return response.data as { id: number; email: string; full_name: string; role: string };
 };
 
 export const getStaleSummary = async () => {

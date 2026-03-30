@@ -990,6 +990,7 @@ export enum ReminderType {
   QUOTE_NOT_OPENED = "QUOTE_NOT_OPENED",
   QUOTE_OPENED_NO_REPLY = "QUOTE_OPENED_NO_REPLY",
   MANUAL = "MANUAL",
+  USER_TASK = "USER_TASK",
 }
 
 export enum SuggestedAction {
@@ -1019,6 +1020,16 @@ export interface Reminder {
   lead_name?: string;
   quote_number?: string;
   customer_name?: string;
+  due_date?: string;
+  created_by_id?: number;
+  created_by_name?: string;
+  assigned_to_name?: string;
+}
+
+export interface AssignableUser {
+  id: number;
+  full_name: string;
+  email: string;
 }
 
 export interface StaleSummary {

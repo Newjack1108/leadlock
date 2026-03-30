@@ -22,6 +22,8 @@ interface ReminderListProps {
   onReminderAction?: () => void;
   priorityFilter?: ReminderPriority;
   typeFilter?: ReminderType;
+  /** When true, only reminders assigned to the current user (API filter). */
+  assignedToMe?: boolean;
   compact?: boolean;
   mode?: 'active' | 'done';
   refreshTrigger?: number;
@@ -34,6 +36,7 @@ export default function ReminderList({
   onReminderAction,
   priorityFilter,
   typeFilter,
+  assignedToMe,
   compact = false,
   mode = 'active',
   refreshTrigger,
@@ -47,9 +50,11 @@ export default function ReminderList({
   const fetchReminders = async () => {
     try {
       setLoading(true);
-      const params: any = mode === 'done' ? { done: true } : { dismissed: false };
+      const params: Record<string, unknown> =
+        mode === 'done' ? { done: true } : { dismissed: false };
       if (priorityFilter) params.priority = priorityFilter;
       if (typeFilter) params.reminder_type = typeFilter;
+      if (assignedToMe === true) params.assigned_to_me = true;
       const data = await getReminders(params);
       const sorted = mode === 'done'
         ? data.sort((a: Reminder, b: Reminder) => {
@@ -79,7 +84,33 @@ export default function ReminderList({
 
   useEffect(() => {
     fetchReminders();
-  }, [mode, priorityFilter, typeFilter, limit, refreshTrigger]);
+  }, [mode, priorityFilter, typeFilter, assignedToMe, limit, refreshTrigger]);
+
+  const isTaskOverdue = (r: Reminder) => {
+    if (r.reminder_type !== ReminderType.USER_TASK || !r.due_date) return false;
+    const d = new Date(`${r.due_date}T12:00:00`);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    d.setHours(0, 0, 0, 0);
+    return d < today;
+  };
+
+  const staleLabel = (r: Reminder) => {
+    if (r.reminder_type === ReminderType.USER_TASK && r.due_date) {
+      const due = new Date(`${r.due_date}T12:00:00`);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      due.setHours(0, 0, 0, 0);
+      if (due < today) {
+        return `${r.days_stale} day${r.days_stale === 1 ? '' : 's'} overdue`;
+      }
+      if (due.getTime() === today.getTime()) {
+        return 'Due today';
+      }
+      return `Due ${new Date(r.due_date).toLocaleDateString()}`;
+    }
+    return `${r.days_stale} days stale`;
+  };
 
   const handleDismiss = async (reminderId: number) => {
     try {
@@ -268,18 +299,21 @@ export default function ReminderList({
           {reminders.map((reminder) => (
             <div
               key={reminder.id}
-              className={`border rounded-lg ${isDoneMode ? 'bg-muted/50 border-muted-foreground/20 text-muted-foreground' : getPriorityColor(reminder.priority)} ${compact ? 'p-3' : 'p-4'}`}
+              className={`border rounded-lg ${isDoneMode ? 'bg-muted/50 border-muted-foreground/20 text-muted-foreground' : getPriorityColor(reminder.priority)} ${!isDoneMode && isTaskOverdue(reminder) ? 'ring-2 ring-destructive/40' : ''} ${compact ? 'p-3' : 'p-4'}`}
             >
               <div className="flex items-start justify-between mb-2">
                 <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <Badge variant={reminder.priority === ReminderPriority.URGENT ? 'destructive' : 'secondary'}>
                       {reminder.priority}
                     </Badge>
+                    {reminder.reminder_type === ReminderType.USER_TASK && (
+                      <Badge variant="outline">Task</Badge>
+                    )}
                     <span className="font-semibold">{reminder.title}</span>
                   </div>
                   <p className="text-sm text-muted-foreground mb-2">{reminder.message}</p>
-                  <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
                     {reminder.lead_name && (
                       <span>Lead: {reminder.lead_name}</span>
                     )}
@@ -289,7 +323,15 @@ export default function ReminderList({
                     {reminder.customer_name && (
                       <span>Customer: {reminder.customer_name}</span>
                     )}
-                    <span>{reminder.days_stale} days stale</span>
+                    {reminder.reminder_type === ReminderType.USER_TASK && reminder.assigned_to_name && (
+                      <span>Assignee: {reminder.assigned_to_name}</span>
+                    )}
+                    {reminder.reminder_type === ReminderType.USER_TASK && reminder.created_by_name && (
+                      <span>Created by: {reminder.created_by_name}</span>
+                    )}
+                    <span className={isTaskOverdue(reminder) ? 'font-medium text-destructive' : ''}>
+                      {staleLabel(reminder)}
+                    </span>
                     {isDoneMode && reminder.acted_upon_at && (
                       <span>
                         Completed on {new Date(reminder.acted_upon_at).toLocaleDateString()}

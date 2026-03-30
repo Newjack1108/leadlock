@@ -58,6 +58,13 @@ class UserListResponse(BaseModel):
     created_at: datetime
 
 
+class AssignableUserResponse(BaseModel):
+    """Minimal user info for task assignee pickers (any authenticated user)."""
+    id: int
+    full_name: str
+    email: str
+
+
 class UserEmailSettingsUpdate(BaseModel):
     smtp_host: Optional[str] = None
     smtp_port: Optional[int] = None
@@ -1319,6 +1326,18 @@ class ReminderResponse(BaseModel):
     lead_name: Optional[str] = None
     quote_number: Optional[str] = None
     customer_name: Optional[str] = None
+    due_date: Optional[date] = None
+    created_by_id: Optional[int] = None
+    created_by_name: Optional[str] = None
+    assigned_to_name: Optional[str] = None
+
+
+class UserTaskCreate(BaseModel):
+    title: str
+    message: str
+    due_date: date
+    assigned_to_id: Optional[int] = None  # Defaults to current user
+    customer_id: Optional[int] = None
 
 
 class ManualReminderCreate(BaseModel):

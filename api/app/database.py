@@ -978,6 +978,39 @@ def create_db_and_tables():
                     if "already exists" not in error_str:
                         print(f"Warning: could not add remindertype value {enum_value}: {e}", file=sys.stderr, flush=True)
         
+        # Step 9d: USER_TASK reminders — enum value + due_date + created_by_id
+        if has_reminder_table or inspector.has_table("reminder"):
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text("ALTER TYPE remindertype ADD VALUE IF NOT EXISTS 'USER_TASK'"))
+                print("Added remindertype enum value: USER_TASK", file=sys.stderr, flush=True)
+            except Exception as e:
+                error_str = str(e).lower()
+                if "already exists" not in error_str:
+                    print(f"Warning: could not add remindertype value USER_TASK: {e}", file=sys.stderr, flush=True)
+            reminder_columns = [col["name"] for col in inspector.get_columns("reminder")]
+            if "due_date" not in reminder_columns:
+                print("Adding due_date column to reminder table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE reminder ADD COLUMN due_date DATE"))
+                    print("Added due_date column to reminder table", file=sys.stderr, flush=True)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Warning: could not add due_date to reminder: {e}", file=sys.stderr, flush=True)
+            reminder_columns = [col["name"] for col in inspector.get_columns("reminder")]
+            if "created_by_id" not in reminder_columns:
+                print("Adding created_by_id column to reminder table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text('ALTER TABLE reminder ADD COLUMN created_by_id INTEGER REFERENCES "user"(id)'))
+                    print("Added created_by_id column to reminder table", file=sys.stderr, flush=True)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Warning: could not add created_by_id to reminder: {e}", file=sys.stderr, flush=True)
+        
         # Step 10: Add installation_hours to Product table
         has_product_table = inspector.has_table("product")
         if has_product_table:

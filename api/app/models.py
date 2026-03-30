@@ -2,7 +2,7 @@ from sqlmodel import SQLModel, Field, Relationship, Column
 from sqlalchemy.orm import relationship
 from sqlalchemy import Numeric, JSON
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, date
 from enum import Enum
 from decimal import Decimal
 
@@ -733,6 +733,7 @@ class ReminderType(str, Enum):
     QUOTE_NOT_OPENED = "QUOTE_NOT_OPENED"  # Sent but view link not opened in 48h
     QUOTE_OPENED_NO_REPLY = "QUOTE_OPENED_NO_REPLY"  # Opened but no reply, phone call
     MANUAL = "MANUAL"  # User-created follow-up (e.g. call back)
+    USER_TASK = "USER_TASK"  # User task with due date; may assign to self or others
 
 
 class SuggestedAction(str, Enum):
@@ -756,6 +757,8 @@ class Reminder(SQLModel, table=True):
     message: str
     suggested_action: SuggestedAction
     days_stale: int
+    due_date: Optional[date] = Field(default=None)  # USER_TASK / optional MANUAL: drives overdue
+    created_by_id: Optional[int] = Field(default=None, foreign_key="user.id")  # Who created USER_TASK
     created_at: datetime = Field(default_factory=datetime.utcnow)
     dismissed_at: Optional[datetime] = None
     acted_upon_at: Optional[datetime] = None

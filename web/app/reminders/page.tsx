@@ -4,13 +4,14 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Header from '@/components/Header';
 import ReminderList from '@/components/ReminderList';
+import CreateTaskDialog from '@/components/CreateTaskDialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getStaleSummary, generateReminders } from '@/lib/api';
 import { ReminderPriority, ReminderType, StaleSummary } from '@/lib/types';
 import { toast } from 'sonner';
-import { RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
+import { RefreshCw, ChevronDown, ChevronUp, ListTodo } from 'lucide-react';
 
 export default function RemindersPage() {
   const router = useRouter();
@@ -19,6 +20,8 @@ export default function RemindersPage() {
   const [generating, setGenerating] = useState(false);
   const [filterPriority, setFilterPriority] = useState<string>('all');
   const [filterType, setFilterType] = useState<string>('all');
+  const [assignedScope, setAssignedScope] = useState<'mine' | 'all'>('mine');
+  const [createTaskOpen, setCreateTaskOpen] = useState(false);
   const [doneExpanded, setDoneExpanded] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
@@ -116,8 +119,17 @@ export default function RemindersPage() {
         )}
 
         {/* Filters and Actions */}
-        <div className="mb-6 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-4">
+            <Select value={assignedScope} onValueChange={(v) => setAssignedScope(v as 'mine' | 'all')}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Scope" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="mine">Assigned to me</SelectItem>
+                <SelectItem value="all">Everyone (visible)</SelectItem>
+              </SelectContent>
+            </Select>
             <Select value={filterPriority} onValueChange={setFilterPriority}>
               <SelectTrigger className="w-[150px]">
                 <SelectValue placeholder="Priority" />
@@ -142,10 +154,16 @@ export default function RemindersPage() {
                 <SelectItem value={ReminderType.QUOTE_EXPIRING}>Expiring Quotes</SelectItem>
                 <SelectItem value={ReminderType.QUOTE_NOT_OPENED}>Quote not opened (48h)</SelectItem>
                 <SelectItem value={ReminderType.QUOTE_OPENED_NO_REPLY}>Quote opened, no reply</SelectItem>
+                <SelectItem value={ReminderType.MANUAL}>Manual (customer)</SelectItem>
+                <SelectItem value={ReminderType.USER_TASK}>User tasks</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => setCreateTaskOpen(true)}>
+              <ListTodo className="h-4 w-4 mr-2" />
+              Create task
+            </Button>
             <Button
               variant="outline"
               onClick={fetchData}
@@ -163,10 +181,20 @@ export default function RemindersPage() {
           </div>
         </div>
 
+        <CreateTaskDialog
+          open={createTaskOpen}
+          onOpenChange={setCreateTaskOpen}
+          onCreated={() => {
+            fetchData();
+            setRefreshTrigger((t) => t + 1);
+          }}
+        />
+
         {/* Active Reminders List */}
         <ReminderList
           showActions={true}
           showHeaderActions={false}
+          assignedToMe={assignedScope === 'mine'}
           onReminderAction={() => {
             fetchData();
             setRefreshTrigger((t) => t + 1);
@@ -196,6 +224,7 @@ export default function RemindersPage() {
                 mode="done"
                 showActions={false}
                 showHeaderActions={false}
+                assignedToMe={assignedScope === 'mine'}
                 priorityFilter={filterPriority !== 'all' ? filterPriority as ReminderPriority : undefined}
                 typeFilter={filterType !== 'all' ? filterType as ReminderType : undefined}
                 refreshTrigger={refreshTrigger}

@@ -3,7 +3,7 @@ from sqlmodel import Session, select
 from app.database import get_session
 from app.models import User, UserRole
 from app.auth import get_current_user, require_role, get_password_hash
-from app.schemas import UserCreate, UserUpdate, UserListResponse
+from app.schemas import UserCreate, UserUpdate, UserListResponse, AssignableUserResponse
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 
@@ -24,6 +24,20 @@ async def list_users(
         is_active=u.is_active,
         created_at=u.created_at,
     ) for u in users]
+
+
+@router.get("/assignable", response_model=list[AssignableUserResponse])
+async def list_assignable_users(
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Active users for task assignee picker (any authenticated user)."""
+    statement = select(User).where(User.is_active == True).order_by(User.full_name)  # noqa: E712
+    users = session.exec(statement).all()
+    return [
+        AssignableUserResponse(id=u.id, full_name=u.full_name, email=u.email)
+        for u in users
+    ]
 
 
 @router.post("", response_model=UserListResponse)
