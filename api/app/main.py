@@ -243,7 +243,14 @@ def on_startup():
 
     # Scheduled SMS worker: send due messages every 45 seconds (don't crash app if setup fails)
     try:
-        from app.models import ScheduledSms, SmsMessage, SmsDirection, ScheduledSmsStatus
+        from app.models import (
+            Activity,
+            ActivityType,
+            ScheduledSms,
+            SmsMessage,
+            SmsDirection,
+            ScheduledSmsStatus,
+        )
         from app.sms_service import send_sms, normalize_phone
         from datetime import datetime as dt
 
