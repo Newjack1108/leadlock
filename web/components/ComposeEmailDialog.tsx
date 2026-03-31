@@ -57,10 +57,22 @@ export default function ComposeEmailDialog({
     body: '',
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
+  /** Only reset form when the dialog opens — not when `customer` refetches while open (that was wiping template body after WYSIWYG). */
+  const wasOpenRef = useRef(false);
 
-  // Fetch templates and user signature when dialog opens
   useEffect(() => {
-    if (open) {
+    if (!open) {
+      if (wasOpenRef.current) {
+        setLoading(false);
+        setSelectedTemplateId(undefined);
+        setAttachments([]);
+      }
+      wasOpenRef.current = false;
+      return;
+    }
+
+    if (!wasOpenRef.current) {
+      wasOpenRef.current = true;
       fetchTemplates();
       fetchUserSignature();
       setFormData({
@@ -71,12 +83,7 @@ export default function ComposeEmailDialog({
       });
       setAttachments(initialAttachments ?? []);
       setSelectedTemplateId(undefined);
-      setLoading(false); // Reset loading state when dialog opens
-    } else {
-      // Reset all state when dialog closes
       setLoading(false);
-      setSelectedTemplateId(undefined);
-      setAttachments([]);
     }
   }, [open, customer, initialAttachments, initialSubject]);
 
@@ -102,11 +109,11 @@ export default function ComposeEmailDialog({
   const handleTemplateChange = async (templateId: string) => {
     if (templateId === 'none') {
       setSelectedTemplateId(undefined);
-      setFormData({
-        ...formData,
+      setFormData((prev) => ({
+        ...prev,
         subject: '',
         body: '',
-      });
+      }));
       return;
     }
 
@@ -115,13 +122,12 @@ export default function ComposeEmailDialog({
     setLoadingTemplate(true);
 
     try {
-      // Preview template with current customer data
       const preview = await previewEmailTemplate(id, { customer_id: customer.id });
-      setFormData({
-        ...formData,
+      setFormData((prev) => ({
+        ...prev,
         subject: preview.subject,
-        body: preview.body_html,
-      });
+        body: preview.body_html ?? '',
+      }));
     } catch (error: any) {
       toast.error('Failed to load template');
     } finally {
@@ -447,10 +453,9 @@ export default function ComposeEmailDialog({
               Message body
             </Label>
             <EmailBodyEditor
-              key={selectedTemplateId != null ? `tpl-${selectedTemplateId}` : 'compose-none'}
               id="body"
               value={formData.body}
-              onChange={(html) => setFormData({ ...formData, body: html })}
+              onChange={(html) => setFormData((prev) => ({ ...prev, body: html }))}
               disabled={loading || loadingTemplate}
               placeholder="Write your message…"
               className="flex-1 min-h-[300px]"
