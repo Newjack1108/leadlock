@@ -161,6 +161,23 @@ class EmailCreate(BaseModel):
     template_id: Optional[int] = None  # EmailTemplate ID, None to use provided subject/body
 
 
+class EmailComposePreviewRequest(BaseModel):
+    customer_id: int
+    body_html: Optional[str] = None
+    body_text: Optional[str] = None
+    subject: Optional[str] = None
+    to_email: Optional[str] = None
+    cc: Optional[str] = None
+    attachment_filenames: List[str] = Field(default_factory=list)
+
+
+class EmailComposePreviewResponse(BaseModel):
+    subject: Optional[str] = None
+    body_html: str
+    to_email: Optional[str] = None
+    cc: Optional[str] = None
+
+
 class EmailResponse(BaseModel):
     id: int
     customer_id: int

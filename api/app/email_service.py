@@ -852,6 +852,46 @@ def _receive_emails_via_graph() -> List[Dict]:
     return out
 
 
+def assemble_outbound_email_html(
+    body_html: Optional[str],
+    body_text: Optional[str],
+    user_id: Optional[int],
+    customer_number: Optional[str],
+    attachments: Optional[List[Dict]],
+    include_quote_highlight: bool,
+    header_tagline: Optional[str] = None,
+) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Apply the same HTML assembly as outbound sends: tracking, signature/disclaimer,
+    attachment highlight, system layout. Does not send mail.
+    """
+    # Append website visit tracking link before signature (order: body -> tracking link -> signature -> disclaimer)
+    if customer_number:
+        tracking_html = _build_website_tracking_link_html(customer_number)
+        tracking_text = _build_website_tracking_link_text(customer_number)
+        if tracking_html:
+            sep_html = '<br><br>' if (body_html or "").strip() else ''
+            body_html = (body_html or "") + sep_html + tracking_html
+        if tracking_text and body_text is not None:
+            body_text = body_text + tracking_text
+
+    # Append user signature and company disclaimer to all outgoing emails
+    body_html, body_text = _append_signature_and_disclaimer(body_html, body_text, user_id)
+
+    primary = _get_email_brand_primary()
+    highlight_fragment = _compose_email_highlight_fragment(
+        primary, attachments, include_quote_highlight
+    )
+    orig_body = body_html or ""
+    if highlight_fragment and not _looks_like_full_html_email_document(orig_body):
+        body_html = highlight_fragment + orig_body
+    body_text = _append_highlight_plain_text(body_text, attachments, include_quote_highlight)
+
+    body_html = _apply_system_email_layout(body_html, header_tagline=header_tagline)
+
+    return body_html, body_text
+
+
 def send_email(
     to_email: str,
     subject: str,
@@ -922,29 +962,15 @@ def send_email(
         print(f"[EMAIL TEST MODE] Email saved to database but NOT sent", file=sys.stderr, flush=True)
         return True, message_id, None
 
-    # Append website visit tracking link before signature (order: body -> tracking link -> signature -> disclaimer)
-    if customer_number:
-        tracking_html = _build_website_tracking_link_html(customer_number)
-        tracking_text = _build_website_tracking_link_text(customer_number)
-        if tracking_html:
-            sep_html = '<br><br>' if (body_html or "").strip() else ''
-            body_html = (body_html or "") + sep_html + tracking_html
-        if tracking_text and body_text is not None:
-            body_text = body_text + tracking_text
-
-    # Append user signature and company disclaimer to all outgoing emails
-    body_html, body_text = _append_signature_and_disclaimer(body_html, body_text, user_id)
-
-    primary = _get_email_brand_primary()
-    highlight_fragment = _compose_email_highlight_fragment(
-        primary, attachments, include_quote_highlight
+    body_html, body_text = assemble_outbound_email_html(
+        body_html=body_html,
+        body_text=body_text,
+        user_id=user_id,
+        customer_number=customer_number,
+        attachments=attachments,
+        include_quote_highlight=include_quote_highlight,
+        header_tagline=header_tagline,
     )
-    orig_body = body_html or ""
-    if highlight_fragment and not _looks_like_full_html_email_document(orig_body):
-        body_html = highlight_fragment + orig_body
-    body_text = _append_highlight_plain_text(body_text, attachments, include_quote_highlight)
-
-    body_html = _apply_system_email_layout(body_html, header_tagline=header_tagline)
 
     # Use Microsoft Graph when configured (priority 1)
     if _is_graph_configured():

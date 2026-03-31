@@ -11,8 +11,14 @@ import uuid
 from app.database import get_session
 from app.models import Email, Customer, User, EmailDirection, Activity, ActivityType, EmailTemplate
 from app.auth import get_current_user
-from app.schemas import EmailCreate, EmailResponse, EmailReplyRequest
-from app.email_service import send_email, receive_emails
+from app.schemas import (
+    EmailCreate,
+    EmailComposePreviewRequest,
+    EmailComposePreviewResponse,
+    EmailResponse,
+    EmailReplyRequest,
+)
+from app.email_service import send_email, receive_emails, assemble_outbound_email_html, _html_to_plain
 from app.email_template_service import render_email_template
 
 router = APIRouter(prefix="/api/emails", tags=["emails"])
@@ -35,6 +41,44 @@ def _sanitize_filename(filename: Optional[str]) -> str:
     if not filename or not filename.strip():
         return "attachment"
     return os.path.basename(filename.strip())
+
+
+@router.post("/preview", response_model=EmailComposePreviewResponse)
+async def preview_compose_email(
+    payload: EmailComposePreviewRequest,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Return assembled outbound HTML (tracking, signature, layout) without sending."""
+    statement = select(Customer).where(Customer.id == payload.customer_id)
+    customer = session.exec(statement).first()
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+
+    body_html = payload.body_html
+    body_text = payload.body_text
+    if body_text is None and body_html:
+        body_text = _html_to_plain(body_html)
+
+    names = [_sanitize_filename(n) for n in (payload.attachment_filenames or []) if n and str(n).strip()]
+    attachments = [{"filename": n, "content": b""} for n in names] or None
+
+    body_html_final, _ = assemble_outbound_email_html(
+        body_html=body_html,
+        body_text=body_text,
+        user_id=current_user.id,
+        customer_number=customer.customer_number,
+        attachments=attachments,
+        include_quote_highlight=False,
+        header_tagline=None,
+    )
+
+    return EmailComposePreviewResponse(
+        subject=payload.subject,
+        body_html=body_html_final or "",
+        to_email=payload.to_email,
+        cc=payload.cc,
+    )
 
 
 @router.post("", response_model=EmailResponse)

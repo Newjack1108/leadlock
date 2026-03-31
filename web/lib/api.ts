@@ -67,6 +67,19 @@ export const sendEmail = async (emailData: {
   return response.data;
 };
 
+export const previewComposeEmail = async (payload: {
+  customer_id: number;
+  body_html?: string;
+  body_text?: string;
+  subject?: string;
+  to_email?: string;
+  cc?: string;
+  attachment_filenames?: string[];
+}) => {
+  const response = await api.post('/api/emails/preview', payload);
+  return response.data as { subject?: string | null; body_html: string; to_email?: string | null; cc?: string | null };
+};
+
 export const getCustomerEmails = async (customerId: number) => {
   const response = await api.get(`/api/emails/customers/${customerId}`);
   return response.data;

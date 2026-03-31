@@ -15,7 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import EmailBodyEditor from '@/components/EmailBodyEditor';
-import { sendEmail, getEmailTemplates, previewEmailTemplate, getUserEmailSettings, getSalesDocuments, downloadSalesDocument } from '@/lib/api';
+import { sendEmail, getEmailTemplates, previewEmailTemplate, previewComposeEmail, getUserEmailSettings, getSalesDocuments, downloadSalesDocument } from '@/lib/api';
 import { emailHtmlPrefersSourceView, htmlToPlainText, isHtmlEffectivelyEmpty } from '@/lib/htmlEmail';
 import { Customer, EmailTemplate, SalesDocument } from '@/lib/types';
 import { toast } from 'sonner';
@@ -52,6 +52,14 @@ export default function ComposeEmailDialog({
   const [librarySelected, setLibrarySelected] = useState<Set<number>>(new Set());
   const [libraryAdding, setLibraryAdding] = useState(false);
   const [bodyEditMode, setBodyEditMode] = useState<'visual' | 'source'>('visual');
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewResult, setPreviewResult] = useState<{
+    body_html: string;
+    subject?: string;
+    to_email?: string;
+    cc?: string;
+  } | null>(null);
   const [formData, setFormData] = useState({
     to_email: customer.email || '',
     cc: '',
@@ -309,6 +317,43 @@ export default function ComposeEmailDialog({
     }
   };
 
+  const handlePreview = async () => {
+    if (isHtmlEffectivelyEmpty(formData.body)) {
+      toast.error('Add a message body to preview');
+      return;
+    }
+    setPreviewLoading(true);
+    try {
+      const data = await previewComposeEmail({
+        customer_id: customer.id,
+        body_html: formData.body,
+        body_text: htmlToPlainText(formData.body),
+        subject: formData.subject,
+        to_email: formData.to_email,
+        cc: formData.cc || undefined,
+        attachment_filenames: attachments.map((f) => f.name),
+      });
+      setPreviewResult({
+        body_html: data.body_html,
+        subject: data.subject ?? formData.subject,
+        to_email: data.to_email ?? formData.to_email,
+        cc: data.cc ?? formData.cc,
+      });
+      setPreviewOpen(true);
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { detail?: unknown } }; message?: string };
+      const detail = err.response?.data?.detail;
+      const msg =
+        typeof detail === 'string'
+          ? detail
+          : err.message || 'Failed to load preview';
+      toast.error(msg);
+      console.error('Email preview error:', error);
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
   return (
     <>
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -547,6 +592,19 @@ export default function ComposeEmailDialog({
                   Cancel
                 </Button>
                 <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handlePreview}
+                  disabled={
+                    loading ||
+                    loadingTemplate ||
+                    previewLoading ||
+                    isHtmlEffectivelyEmpty(formData.body)
+                  }
+                >
+                  {previewLoading ? 'Loading…' : 'Preview'}
+                </Button>
+                <Button
                   type="submit"
                   disabled={
                     loading ||
@@ -561,6 +619,56 @@ export default function ComposeEmailDialog({
             </div>
           </DialogFooter>
         </form>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog
+      open={previewOpen}
+      onOpenChange={(o) => {
+        setPreviewOpen(o);
+        if (!o) setPreviewResult(null);
+      }}
+    >
+      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle>Send preview</DialogTitle>
+          <DialogDescription>
+            How this message will look when sent (including signature and layout).
+          </DialogDescription>
+        </DialogHeader>
+        {previewResult && (
+          <div className="space-y-3 text-sm overflow-hidden flex flex-col flex-1 min-h-0">
+            {previewResult.subject != null && previewResult.subject !== '' && (
+              <div>
+                <span className="text-muted-foreground">Subject: </span>
+                <span className="font-medium">{previewResult.subject}</span>
+              </div>
+            )}
+            {previewResult.to_email != null && previewResult.to_email !== '' && (
+              <div>
+                <span className="text-muted-foreground">To: </span>
+                <span>{previewResult.to_email}</span>
+              </div>
+            )}
+            {previewResult.cc != null && previewResult.cc.trim() !== '' && (
+              <div>
+                <span className="text-muted-foreground">Cc: </span>
+                <span>{previewResult.cc}</span>
+              </div>
+            )}
+            <div className="border rounded-md bg-muted/30 overflow-auto max-h-[min(60vh,560px)] p-4">
+              <div
+                className="max-w-[600px] mx-auto bg-background border shadow-sm rounded-md overflow-hidden"
+                dangerouslySetInnerHTML={{ __html: previewResult.body_html }}
+              />
+            </div>
+          </div>
+        )}
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => setPreviewOpen(false)}>
+            Close
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
 
