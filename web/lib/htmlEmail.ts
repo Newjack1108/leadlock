@@ -20,3 +20,13 @@ export function isHtmlEffectivelyEmpty(html: string): boolean {
   const text = (doc.body.textContent || '').replace(/\u00a0/g, ' ').trim();
   return text.length === 0;
 }
+
+/** True when HTML is unlikely to round-trip through TipTap StarterKit; use raw HTML source in compose. */
+export function emailHtmlPrefersSourceView(html: string): boolean {
+  if (!html || !html.trim()) return false;
+  const head = html.trim().slice(0, 1200).toLowerCase();
+  if (head.startsWith('<!doctype') || head.includes('<html')) return true;
+  return /<\s*(table|tbody|thead|tfoot|tr|td|th|caption|colgroup|col|div|section|article|style|iframe|svg|pre|code)\b/i.test(
+    html,
+  );
+}

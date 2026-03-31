@@ -13,9 +13,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import EmailBodyEditor from '@/components/EmailBodyEditor';
 import { sendEmail, getEmailTemplates, previewEmailTemplate, getUserEmailSettings, getSalesDocuments, downloadSalesDocument } from '@/lib/api';
-import { htmlToPlainText, isHtmlEffectivelyEmpty } from '@/lib/htmlEmail';
+import { emailHtmlPrefersSourceView, htmlToPlainText, isHtmlEffectivelyEmpty } from '@/lib/htmlEmail';
 import { Customer, EmailTemplate, SalesDocument } from '@/lib/types';
 import { toast } from 'sonner';
 import { Paperclip, X, FolderOpen } from 'lucide-react';
@@ -50,6 +51,7 @@ export default function ComposeEmailDialog({
   const [libraryLoading, setLibraryLoading] = useState(false);
   const [librarySelected, setLibrarySelected] = useState<Set<number>>(new Set());
   const [libraryAdding, setLibraryAdding] = useState(false);
+  const [bodyEditMode, setBodyEditMode] = useState<'visual' | 'source'>('visual');
   const [formData, setFormData] = useState({
     to_email: customer.email || '',
     cc: '',
@@ -73,6 +75,7 @@ export default function ComposeEmailDialog({
 
     if (!wasOpenRef.current) {
       wasOpenRef.current = true;
+      setBodyEditMode('visual');
       fetchTemplates();
       fetchUserSignature();
       setFormData({
@@ -100,9 +103,11 @@ export default function ComposeEmailDialog({
   const fetchTemplates = async () => {
     try {
       const data = await getEmailTemplates();
-      setTemplates(data);
-    } catch (error: any) {
-      console.error('Failed to load templates');
+      setTemplates(Array.isArray(data) ? data : []);
+    } catch (error: unknown) {
+      console.error('Failed to load templates', error);
+      setTemplates([]);
+      toast.error('Failed to load email templates');
     }
   };
 
@@ -123,11 +128,13 @@ export default function ComposeEmailDialog({
 
     try {
       const preview = await previewEmailTemplate(id, { customer_id: customer.id });
+      const body = preview.body_html ?? '';
       setFormData((prev) => ({
         ...prev,
         subject: preview.subject,
-        body: preview.body_html ?? '',
+        body,
       }));
+      setBodyEditMode(emailHtmlPrefersSourceView(body) ? 'source' : 'visual');
     } catch (error: any) {
       toast.error('Failed to load template');
     } finally {
@@ -448,18 +455,59 @@ export default function ComposeEmailDialog({
           </div>
 
           {/* Message Body - Takes up remaining space */}
-          <div className="flex-1 flex flex-col overflow-hidden px-6 py-4 min-h-0">
-            <Label htmlFor="body" className="sr-only">
-              Message body
-            </Label>
-            <EmailBodyEditor
-              id="body"
-              value={formData.body}
-              onChange={(html) => setFormData((prev) => ({ ...prev, body: html }))}
-              disabled={loading || loadingTemplate}
-              placeholder="Write your message…"
-              className="flex-1 min-h-[300px]"
-            />
+          <div className="flex-1 flex flex-col overflow-hidden px-6 py-4 min-h-0 gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 flex-shrink-0">
+              <Label htmlFor={bodyEditMode === 'visual' ? 'body' : 'body_source'} className="text-sm font-normal">
+                Message
+              </Label>
+              <div className="flex rounded-md border border-input p-0.5 bg-muted/30">
+                <Button
+                  type="button"
+                  variant={bodyEditMode === 'visual' ? 'default' : 'ghost'}
+                  size="sm"
+                  className="h-7"
+                  onClick={() => setBodyEditMode('visual')}
+                  disabled={loading || loadingTemplate}
+                >
+                  Visual
+                </Button>
+                <Button
+                  type="button"
+                  variant={bodyEditMode === 'source' ? 'default' : 'ghost'}
+                  size="sm"
+                  className="h-7"
+                  onClick={() => setBodyEditMode('source')}
+                  disabled={loading || loadingTemplate}
+                >
+                  HTML source
+                </Button>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground flex-shrink-0">
+              Use Visual for formatting, or HTML source for full control (tables, custom markup).
+            </p>
+            <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+              {bodyEditMode === 'visual' ? (
+                <EmailBodyEditor
+                  id="body"
+                  value={formData.body}
+                  onChange={(html) => setFormData((prev) => ({ ...prev, body: html }))}
+                  disabled={loading || loadingTemplate}
+                  placeholder="Write your message…"
+                  className="flex-1 min-h-[300px]"
+                />
+              ) : (
+                <Textarea
+                  id="body_source"
+                  value={formData.body}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, body: e.target.value }))}
+                  placeholder="<p>Your HTML message…</p>"
+                  disabled={loading || loadingTemplate}
+                  rows={14}
+                  className="font-mono text-sm flex-1 min-h-[300px] resize-y"
+                />
+              )}
+            </div>
             
             {/* Signature Preview */}
             {signature && (
