@@ -5,6 +5,7 @@ from typing import Optional, List
 from app.database import get_session
 from app.models import (
     Activity,
+    ActivityType,
     Customer,
     Email,
     EmailDirection,
@@ -653,13 +654,17 @@ async def get_customer_history(
     ).order_by(Activity.created_at)
     activity_results = session.exec(statement).all()
     
+    _activity_history_title = {
+        ActivityType.LIVE_CALL: "Call accepted",
+    }
     for activity, user in activity_results:
         activity_type_name = activity.activity_type.value.replace("_", " ").title()
+        title = _activity_history_title.get(activity.activity_type, activity_type_name)
         events.append(CustomerHistoryEvent(
             event_type=CustomerHistoryEventType.ACTIVITY,
             timestamp=activity.created_at,
-            title=activity_type_name,
-            description=activity.notes or f"{activity_type_name} activity recorded",
+            title=title,
+            description=activity.notes or f"{title} activity recorded",
             metadata={"activity_type": activity.activity_type.value, "activity_id": activity.id},
             created_by_id=activity.created_by_id,
             created_by_name=user.full_name if user else "Unknown"

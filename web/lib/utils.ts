@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
+import { ActivityType } from '@/lib/types'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -15,6 +16,17 @@ export function getTelUrl(phone: string): string {
 export function formatDateTime(date: string | Date): string {
   const d = typeof date === 'string' ? new Date(date) : date
   return d.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })
+}
+
+/** Human-readable label for activity timeline (e.g. LIVE_CALL -> "Call accepted"). */
+export function formatActivityTypeLabel(type: ActivityType): string {
+  if (type === ActivityType.LIVE_CALL) return 'Call accepted'
+  return type
+    .replace(/_/g, ' ')
+    .toLowerCase()
+    .split(' ')
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ')
 }
 
 /** Format decimal hours as "X hrs Y min" (e.g. 2.5 -> "2 hrs 30 min"). */

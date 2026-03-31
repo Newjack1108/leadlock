@@ -45,7 +45,7 @@ import api, {
   getCustomerUnreadChannels,
   deleteCustomer,
 } from '@/lib/api';
-import { formatDateTime } from '@/lib/utils';
+import { formatDateTime, formatActivityTypeLabel } from '@/lib/utils';
 import { Customer, Activity, ActivityType, Lead, CustomerHistoryEvent, CustomerHistoryEventType, WebsiteVisit, Order } from '@/lib/types';
 import SendQuoteEmailDialog from '@/components/SendQuoteEmailDialog';
 import ComposeEmailDialog from '@/components/ComposeEmailDialog';
@@ -855,7 +855,7 @@ export default function CustomerDetailPage() {
                           <div className="flex-1">
                             <div className="flex items-center gap-2">
                               <span className="font-medium">
-                                {activity.activity_type.replace('_', ' ')}
+                                {formatActivityTypeLabel(activity.activity_type)}
                               </span>
                               <span className="text-xs text-muted-foreground">
                                 {formatDateTime(activity.created_at)}

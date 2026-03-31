@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { QuoteTemperature } from '@/lib/types';
+import { ActivityType, type QuoteTemperature } from '@/lib/types';
 import { getTelUrl } from '@/lib/utils';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -886,10 +886,11 @@ export const getCustomerHistory = async (customerId: number) => {
 /** Log a call activity for the customer (no dialer). */
 export const logCallActivity = async (
   customerId: number,
-  notes?: string
+  notes?: string,
+  activityType: ActivityType = ActivityType.CALL_ATTEMPTED
 ): Promise<void> => {
   await api.post(`/api/customers/${customerId}/activities`, {
-    activity_type: 'CALL_ATTEMPTED',
+    activity_type: activityType,
     notes: notes || undefined,
   });
 };

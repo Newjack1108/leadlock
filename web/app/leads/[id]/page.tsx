@@ -31,7 +31,7 @@ import {
   FileText,
 } from 'lucide-react';
 import api, { getLeadQuotes } from '@/lib/api';
-import { formatDateTime } from '@/lib/utils';
+import { formatDateTime, formatActivityTypeLabel } from '@/lib/utils';
 import { Lead, Activity, ActivityType, LeadStatus, Timeframe, LeadType, LeadSource } from '@/lib/types';
 import { toast } from 'sonner';
 
@@ -600,7 +600,7 @@ export default function LeadDetailPage() {
                           <div className="flex-1">
                             <div className="flex items-center gap-2">
                               <span className="font-medium">
-                                {activity.activity_type.replace('_', ' ')}
+                                {formatActivityTypeLabel(activity.activity_type)}
                               </span>
                               <span className="text-xs text-muted-foreground">
                                 {formatDateTime(activity.created_at)}

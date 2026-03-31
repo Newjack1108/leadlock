@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { logCallActivity, createManualReminder } from '@/lib/api';
+import { ActivityType } from '@/lib/types';
 import { getTelUrl } from '@/lib/utils';
 import { toast } from 'sonner';
 import { Phone, PhoneOff, MessageSquare, Bell } from 'lucide-react';
@@ -75,7 +76,7 @@ export default function CallNotesDialog({
     }
     setSubmitting(true);
     try {
-      await logCallActivity(customerId, notes.trim());
+      await logCallActivity(customerId, notes.trim(), ActivityType.LIVE_CALL);
       toast.success('Call logged');
       onSuccess?.();
       handleClose(false);
