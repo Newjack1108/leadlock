@@ -5,7 +5,7 @@ from typing import Optional, Tuple, Dict, Any
 from datetime import datetime
 from jinja2 import Template
 from sqlmodel import Session, select
-from app.models import Quote, QuoteTemplate, Customer, CompanySettings
+from app.models import Quote, QuoteTemplate, Customer, CompanySettings, Order
 from app.email_service import send_email
 from app.constants import VAT_RATE_DECIMAL
 from decimal import Decimal
@@ -144,11 +144,15 @@ def send_quote_email(
         subject = render_email_template(subject_template, quote, customer, company_settings, custom_message)
         body_html = render_email_template(body_template, quote, customer, company_settings, custom_message)
 
-        # Append "View your quote online" link for open tracking (URL-based)
+        has_order = session.exec(select(Order).where(Order.quote_id == quote.id)).first() is not None
+        link_label = "View your order online" if has_order else "View your quote online"
+        header_tagline = "Your order" if has_order else "Your quotation"
+
+        # Append tracked view link (URL-based open tracking)
         if view_token and frontend_base_url:
             base = frontend_base_url.rstrip("/")
             link_style = "color:#15803d;font-weight:bold;background-color:#dcfce7;padding:4px 8px;border-radius:4px;text-decoration:underline;"
-            view_link = f'<p style="margin-top:1.5em;"><a href="{base}/quotes/view/{view_token}" style="{link_style}">View your quote online</a></p>'
+            view_link = f'<p style="margin-top:1.5em;"><a href="{base}/quotes/view/{view_token}" style="{link_style}">{link_label}</a></p>'
             body_html = (body_html or "") + view_link
 
         # Send email (no PDF attachment; customer uses Print/Download PDF on the tracked view)
@@ -161,7 +165,7 @@ def send_quote_email(
             attachments=None,
             user_id=user_id,
             customer_number=customer.customer_number,
-            header_tagline="Your quotation",
+            header_tagline=header_tagline,
             include_quote_highlight=True,
         )
 

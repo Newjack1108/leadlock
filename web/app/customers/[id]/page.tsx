@@ -700,7 +700,7 @@ export default function CustomerDetailPage() {
                                 setSendEmailDialogOpen(true);
                               }}
                             >
-                              Send Quote
+                              {quote.order_id ? 'Send order' : 'Send quote'}
                             </Button>
                           </div>
                         </div>
@@ -971,6 +971,9 @@ export default function CustomerDetailPage() {
           onOpenChange={setSendEmailDialogOpen}
           quoteId={selectedQuoteId}
           customer={customer}
+          variant={
+            quotes.find((q) => q.id === selectedQuoteId)?.order_id ? 'order' : 'quote'
+          }
           onSuccess={() => {
             fetchQuotes();
             fetchActivities();

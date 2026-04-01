@@ -281,9 +281,14 @@ export default function QuoteDetailPage() {
                   onClick={async () => {
                     try {
                       setAccepting(true);
-                      await acceptQuote(quoteId);
-                      await fetchQuote();
-                      toast.success('Quote accepted. Order created.');
+                      const updated = await acceptQuote(quoteId);
+                      if (updated?.order_id) {
+                        toast.success('Quote accepted. Order created.');
+                        router.push(`/orders/${updated.order_id}`);
+                      } else {
+                        await fetchQuote();
+                        toast.success('Quote accepted. Order created.');
+                      }
                     } catch (error: any) {
                       const d = error.response?.data?.detail;
                       const msg =
@@ -853,6 +858,7 @@ export default function QuoteDetailPage() {
           onOpenChange={setSendEmailDialogOpen}
           quoteId={quoteId}
           customer={customer}
+          variant={quote.order_id ? 'order' : 'quote'}
           onSuccess={() => {
             fetchQuote();
           }}
