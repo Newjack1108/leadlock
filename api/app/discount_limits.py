@@ -43,7 +43,10 @@ def validate_and_record_redemptions_on_accept(session: Session, quote_id: int) -
         .where(QuoteDiscount.quote_id == quote_id, QuoteDiscount.template_id.isnot(None))
         .distinct()
     )
-    template_ids: List[int] = [row[0] for row in session.exec(statement).all()]
+    # Single-column select returns scalars (int) per row, not (int,) tuples.
+    template_ids: List[int] = [
+        row if isinstance(row, int) else row[0] for row in session.exec(statement).all()
+    ]
     if not template_ids:
         return
 
