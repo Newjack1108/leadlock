@@ -14,6 +14,7 @@ from app.schemas import (
     QuoteDiscountResponse
 )
 from app.quote_email_service import send_quote_email
+from app.customer_view_links import customer_view_path_segment
 from app.email_service import is_email_configured
 from app.sms_service import send_sms, normalize_phone
 from app.quote_pdf_service import generate_quote_pdf
@@ -67,7 +68,7 @@ def ensure_quote_share_link(
             session.add(quote_email)
             session.commit()
             session.refresh(quote_email)
-        view_url = f"{base_url.rstrip('/')}/quotes/view/{quote_email.view_token}"
+        view_url = f"{base_url.rstrip('/')}/{customer_view_path_segment(session, quote.id, quote_email.view_token)}"
         return quote_email, view_url, False
 
     view_token = uuid.uuid4().hex
@@ -108,7 +109,7 @@ def ensure_quote_share_link(
     session.add(activity)
     session.commit()
 
-    view_url = f"{base_url.rstrip('/')}/quotes/view/{view_token}"
+    view_url = f"{base_url.rstrip('/')}/{customer_view_path_segment(session, quote.id, view_token)}"
     return quote_email, view_url, True
 
 
@@ -1208,7 +1209,7 @@ async def get_quote_view_link(
     base_url = _frontend_base_url()
     if quote_email and quote_email.view_token:
         if base_url:
-            view_url = f"{base_url.rstrip('/')}/quotes/view/{quote_email.view_token}"
+            view_url = f"{base_url.rstrip('/')}/{customer_view_path_segment(session, quote.id, quote_email.view_token)}"
             return QuoteViewLinkResponse(view_url=view_url)
         return QuoteViewLinkResponse(view_url=None)
 
@@ -1450,7 +1451,7 @@ async def send_quote_email_endpoint(
         view_url = None
         if view_token and frontend_base_url:
             base = frontend_base_url.rstrip("/")
-            view_url = f"{base}/quotes/view/{view_token}"
+            view_url = f"{base}/{customer_view_path_segment(session, quote.id, view_token)}"
         test_mode = getattr(current_user, "email_test_mode", False)
 
         return QuoteEmailSendResponse(

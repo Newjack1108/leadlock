@@ -866,6 +866,7 @@ export interface AvailableExtraResponse {
 
 export interface PublicQuoteView {
   quote_number: string;
+  order_number?: string | null;
   customer_name: string;
   currency: string;
   valid_until?: string;

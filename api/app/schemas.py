@@ -1140,6 +1140,7 @@ class PublicQuoteCompanyDisplay(BaseModel):
 class PublicQuoteViewResponse(BaseModel):
     """Quote payload for public view page (no auth)."""
     quote_number: str
+    order_number: Optional[str] = None
     customer_name: str
     currency: str
     valid_until: Optional[datetime]

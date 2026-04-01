@@ -6,6 +6,7 @@ from datetime import datetime
 from jinja2 import Template
 from sqlmodel import Session, select
 from app.models import Quote, QuoteTemplate, Customer, CompanySettings, Order
+from app.customer_view_links import customer_view_path_segment
 from app.email_service import send_email
 from app.constants import VAT_RATE_DECIMAL
 from decimal import Decimal
@@ -151,8 +152,9 @@ def send_quote_email(
         # Append tracked view link (URL-based open tracking)
         if view_token and frontend_base_url:
             base = frontend_base_url.rstrip("/")
+            path_seg = customer_view_path_segment(session, quote.id, view_token)
             link_style = "color:#15803d;font-weight:bold;background-color:#dcfce7;padding:4px 8px;border-radius:4px;text-decoration:underline;"
-            view_link = f'<p style="margin-top:1.5em;"><a href="{base}/quotes/view/{view_token}" style="{link_style}">{link_label}</a></p>'
+            view_link = f'<p style="margin-top:1.5em;"><a href="{base}/{path_seg}" style="{link_style}">{link_label}</a></p>'
             body_html = (body_html or "") + view_link
 
         # Send email (no PDF attachment; customer uses Print/Download PDF on the tracked view)

@@ -2,6 +2,6 @@
 
 import PublicCustomerDocumentView from '@/components/PublicCustomerDocumentView';
 
-export default function PublicQuoteViewPage() {
+export default function PublicOrderViewPage() {
   return <PublicCustomerDocumentView />;
 }

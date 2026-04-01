@@ -204,6 +204,9 @@ def get_public_quote_view(
     )
     items = session.exec(items_stmt).all()
 
+    order_row = session.exec(select(Order).where(Order.quote_id == quote.id)).first()
+    order_number = order_row.order_number if order_row else None
+
     vat_amount = (quote.total_amount or Decimal(0)) * VAT_RATE_DECIMAL
     total_inc_vat = (quote.total_amount or Decimal(0)) + vat_amount
 
@@ -231,6 +234,7 @@ def get_public_quote_view(
 
     return PublicQuoteViewResponse(
         quote_number=quote.quote_number,
+        order_number=order_number,
         customer_name=customer_name,
         currency=quote.currency,
         valid_until=quote.valid_until,
