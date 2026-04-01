@@ -68,6 +68,8 @@ export default function ComposeEmailDialog({
     body: '',
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
+  /** Bumps on each template selection so stale `previewEmailTemplate` responses are ignored. */
+  const templatePreviewRequestIdRef = useRef(0);
   /** Only reset form when the dialog opens — not when `customer` refetches while open (that was wiping template body after WYSIWYG). */
   const wasOpenRef = useRef(false);
 
@@ -121,22 +123,30 @@ export default function ComposeEmailDialog({
   };
 
   const handleTemplateChange = async (templateId: string) => {
+    templatePreviewRequestIdRef.current += 1;
+    const requestId = templatePreviewRequestIdRef.current;
+
     if (templateId === 'none') {
       setSelectedTemplateId(undefined);
+      setLoadingTemplate(false);
       setFormData((prev) => ({
         ...prev,
-        subject: '',
         body: '',
       }));
       return;
     }
 
-    const id = parseInt(templateId);
+    const id = parseInt(templateId, 10);
+    if (Number.isNaN(id)) {
+      return;
+    }
+
     setSelectedTemplateId(id);
     setLoadingTemplate(true);
 
     try {
       const preview = await previewEmailTemplate(id, { customer_id: customer.id });
+      if (templatePreviewRequestIdRef.current !== requestId) return;
       const body = preview.body_html ?? '';
       setFormData((prev) => ({
         ...prev,
@@ -144,10 +154,13 @@ export default function ComposeEmailDialog({
         body,
       }));
       setBodyEditMode('source');
-    } catch (error: any) {
+    } catch {
+      if (templatePreviewRequestIdRef.current !== requestId) return;
       toast.error('Failed to load template');
     } finally {
-      setLoadingTemplate(false);
+      if (templatePreviewRequestIdRef.current === requestId) {
+        setLoadingTemplate(false);
+      }
     }
   };
 
@@ -354,6 +367,22 @@ export default function ComposeEmailDialog({
       setPreviewLoading(false);
     }
   };
+
+  const sendDisabled =
+    loading ||
+    !formData.to_email ||
+    !formData.subject.trim() ||
+    isHtmlEffectivelyEmpty(formData.body);
+
+  const sendDisabledTitle = sendDisabled
+    ? loading
+      ? 'Sending…'
+      : !formData.to_email
+        ? 'Add a recipient email address'
+        : !formData.subject.trim()
+          ? 'Add a subject'
+          : 'Add a message body'
+    : undefined;
 
   return (
     <>
@@ -601,12 +630,8 @@ export default function ComposeEmailDialog({
                 </Button>
                 <Button
                   type="submit"
-                  disabled={
-                    loading ||
-                    !formData.to_email ||
-                    !formData.subject.trim() ||
-                    isHtmlEffectivelyEmpty(formData.body)
-                  }
+                  title={sendDisabledTitle}
+                  disabled={sendDisabled}
                 >
                   {loading ? 'Sending...' : 'Send'}
                 </Button>
