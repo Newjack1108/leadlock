@@ -127,11 +127,15 @@ export default function ComposeEmailDialog({
     const requestId = templatePreviewRequestIdRef.current;
 
     if (templateId === 'none') {
+      // Only clear the body when leaving a real template. If the user already had "No
+      // Template" and typed a scratch message, re-selecting "none" must not wipe the body
+      // (Radix may call onValueChange('none') again in some cases).
+      const hadTemplate = selectedTemplateId != null;
       setSelectedTemplateId(undefined);
       setLoadingTemplate(false);
       setFormData((prev) => ({
         ...prev,
-        body: '',
+        ...(hadTemplate ? { body: '' } : {}),
       }));
       return;
     }
@@ -431,7 +435,9 @@ export default function ComposeEmailDialog({
                 id="to_email"
                 type="email"
                 value={formData.to_email}
-                onChange={(e) => setFormData({ ...formData, to_email: e.target.value })}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, to_email: e.target.value }))
+                }
                 required
                 placeholder="customer@example.com"
                 className="col-span-11 h-8"
@@ -446,7 +452,7 @@ export default function ComposeEmailDialog({
                 id="cc"
                 type="text"
                 value={formData.cc}
-                onChange={(e) => setFormData({ ...formData, cc: e.target.value })}
+                onChange={(e) => setFormData((prev) => ({ ...prev, cc: e.target.value }))}
                 placeholder="cc1@example.com, cc2@example.com"
                 className="col-span-11 h-8"
               />
@@ -461,7 +467,9 @@ export default function ComposeEmailDialog({
                 id="subject"
                 type="text"
                 value={formData.subject}
-                onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, subject: e.target.value }))
+                }
                 required
                 placeholder="Email subject"
                 className="col-span-11 h-8"
