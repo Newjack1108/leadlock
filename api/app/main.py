@@ -1,7 +1,13 @@
+import json
+
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
+
+from app.json_datetime import json_dumps_utf8, normalize_json_datetimes
 from app.database import create_db_and_tables, engine
 from sqlmodel import Session, select
 from sqlalchemy import func
@@ -53,6 +59,48 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["*"],
 )
+
+
+class UtcIsoJsonMiddleware(BaseHTTPMiddleware):
+    """Append Z to naive ISO datetimes in JSON so clients interpret values as UTC."""
+
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        ct = response.headers.get("content-type", "")
+        if "application/json" not in ct or response.status_code == 204:
+            return response
+        chunks: list[bytes] = []
+        async for chunk in response.body_iterator:
+            chunks.append(chunk)
+        body = b"".join(chunks)
+        if not body:
+            return Response(
+                content=body,
+                status_code=response.status_code,
+                headers=dict(response.headers),
+                media_type=response.media_type,
+            )
+        try:
+            data = json.loads(body)
+        except json.JSONDecodeError:
+            return Response(
+                content=body,
+                status_code=response.status_code,
+                headers=dict(response.headers),
+                media_type=response.media_type,
+            )
+        fixed = normalize_json_datetimes(data)
+        new_body = json_dumps_utf8(fixed)
+        out_headers = {k: v for k, v in response.headers.items() if k.lower() != "content-length"}
+        return Response(
+            content=new_body,
+            status_code=response.status_code,
+            headers=out_headers,
+            media_type=response.media_type,
+        )
+
+
+app.add_middleware(UtcIsoJsonMiddleware)
 
 # Global exception handler to ensure CORS headers are always present on errors
 @app.exception_handler(Exception)
