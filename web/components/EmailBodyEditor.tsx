@@ -276,7 +276,7 @@ export default function EmailBodyEditor({
   return (
     <div
       className={cn(
-        'flex flex-col rounded-md border border-input bg-transparent shadow-xs overflow-hidden',
+        'flex min-h-0 flex-col rounded-md border border-input bg-transparent shadow-xs overflow-hidden',
         'focus-within:border-ring focus-within:ring-ring/50 focus-within:ring-[3px]',
         disabled && 'opacity-50 pointer-events-none',
         className,

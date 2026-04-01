@@ -52,6 +52,7 @@ export default function ComposeEmailDialog({
   const [librarySelected, setLibrarySelected] = useState<Set<number>>(new Set());
   const [libraryAdding, setLibraryAdding] = useState(false);
   const [bodyEditMode, setBodyEditMode] = useState<'visual' | 'source'>('source');
+  const [signaturePreviewOpen, setSignaturePreviewOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewResult, setPreviewResult] = useState<{
@@ -502,10 +503,23 @@ export default function ComposeEmailDialog({
           {/* Message Body - Takes up remaining space */}
           <div className="flex-1 flex flex-col overflow-hidden px-6 py-4 min-h-0 gap-2">
             <div className="flex flex-wrap items-center justify-between gap-2 flex-shrink-0">
-              <Label htmlFor={bodyEditMode === 'visual' ? 'body' : 'body_source'} className="text-sm font-normal">
-                Message
-              </Label>
-              <div className="flex rounded-md border border-input p-0.5 bg-muted/30">
+              <div className="flex items-center gap-2 flex-wrap min-w-0">
+                <Label htmlFor={bodyEditMode === 'visual' ? 'body' : 'body_source'} className="text-sm font-normal">
+                  Message
+                </Label>
+                {signature ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs shrink-0"
+                    onClick={() => setSignaturePreviewOpen(true)}
+                  >
+                    View signature
+                  </Button>
+                ) : null}
+              </div>
+              <div className="flex rounded-md border border-input p-0.5 bg-muted/30 shrink-0">
                 <Button
                   type="button"
                   variant={bodyEditMode === 'visual' ? 'default' : 'ghost'}
@@ -539,7 +553,7 @@ export default function ComposeEmailDialog({
                   onChange={(html) => setFormData((prev) => ({ ...prev, body: html }))}
                   disabled={loading || loadingTemplate}
                   placeholder="Write your message…"
-                  className="flex-1 min-h-[min(50vh,560px)] [&_.ProseMirror]:text-base"
+                  className="flex-1 min-h-0 [&_.ProseMirror]:text-base"
                 />
               ) : (
                 <Textarea
@@ -553,25 +567,6 @@ export default function ComposeEmailDialog({
                 />
               )}
             </div>
-            
-            {/* Signature Preview */}
-            {signature && (
-              <div className="mt-4 pt-4 border-t">
-                <Label className="text-xs text-muted-foreground mb-2 block">
-                  Signature (from your settings)
-                </Label>
-                <div
-                  className="p-3 bg-muted rounded-md border text-sm"
-                  dangerouslySetInnerHTML={{ __html: signature }}
-                />
-                <p className="text-xs text-muted-foreground mt-2">
-                  This signature will be automatically appended to your email. Edit it in{' '}
-                  <a href="/settings/user" className="text-primary hover:underline" target="_blank">
-                    My Settings
-                  </a>
-                </p>
-              </div>
-            )}
           </div>
 
           {/* Footer */}
@@ -619,6 +614,36 @@ export default function ComposeEmailDialog({
             </div>
           </DialogFooter>
         </form>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog open={signaturePreviewOpen} onOpenChange={setSignaturePreviewOpen}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Signature preview</DialogTitle>
+          <DialogDescription>
+            This signature is appended automatically when you send. Edit it in My Settings.
+          </DialogDescription>
+        </DialogHeader>
+        {signature ? (
+          <div
+            className="p-3 bg-muted rounded-md border text-sm max-h-[50vh] overflow-y-auto"
+            dangerouslySetInnerHTML={{ __html: signature }}
+          />
+        ) : null}
+        <DialogFooter className="gap-2 sm:justify-between">
+          <a
+            href="/settings/user"
+            className="text-sm text-primary hover:underline"
+            target="_blank"
+            rel="noreferrer"
+          >
+            My Settings
+          </a>
+          <Button type="button" variant="outline" onClick={() => setSignaturePreviewOpen(false)}>
+            Close
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
 
