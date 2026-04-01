@@ -5,7 +5,7 @@ import json
 import os
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlmodel import Session, select
-from typing import List, Optional
+from typing import List, Optional, Union
 from datetime import datetime
 import uuid
 from app.database import get_session
@@ -41,6 +41,17 @@ def _sanitize_filename(filename: Optional[str]) -> str:
     if not filename or not filename.strip():
         return "attachment"
     return os.path.basename(filename.strip())
+
+
+def _normalize_upload_files(
+    files: Optional[Union[UploadFile, List[UploadFile]]],
+) -> List[UploadFile]:
+    """Single-file uploads are passed as UploadFile; multiple files as a list. Normalize to a list."""
+    if files is None:
+        return []
+    if isinstance(files, list):
+        return files
+    return [files]
 
 
 @router.post("/preview", response_model=EmailComposePreviewResponse)
@@ -84,7 +95,7 @@ async def preview_compose_email(
 @router.post("", response_model=EmailResponse)
 async def send_email_to_customer(
     email_data: str = Form(..., description="JSON string of email payload"),
-    attachments: Optional[List[UploadFile]] = File(None),
+    attachments: Optional[Union[UploadFile, List[UploadFile]]] = File(None),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
@@ -112,7 +123,7 @@ async def send_email_to_customer(
         attachment_list: List[dict] = []
         attachment_metadata: List[dict] = []
         total_size = 0
-        files_to_process = attachments or []
+        files_to_process = _normalize_upload_files(attachments)
 
         for f in files_to_process:
             if not f.filename:
@@ -353,7 +364,7 @@ async def get_email(
 async def reply_to_email(
     email_id: int,
     reply_data: str = Form(..., description="JSON string of reply payload (body_html, body_text, cc, bcc)"),
-    attachments: Optional[List[UploadFile]] = File(None),
+    attachments: Optional[Union[UploadFile, List[UploadFile]]] = File(None),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
@@ -388,7 +399,7 @@ async def reply_to_email(
     attachment_list: List[dict] = []
     attachment_metadata: List[dict] = []
     total_size = 0
-    files_to_process = attachments or []
+    files_to_process = _normalize_upload_files(attachments)
 
     for f in files_to_process:
         if not f.filename:
