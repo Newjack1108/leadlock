@@ -397,6 +397,27 @@ class QuoteViewLinkResponse(BaseModel):
     view_url: Optional[str] = None  # Latest customer view link for this quote, or null
 
 
+class QuoteShareLinkRequest(BaseModel):
+    include_available_extras: Optional[bool] = False
+
+
+class QuoteShareLinkResponse(BaseModel):
+    view_url: str
+    quote_email_id: int
+
+
+class QuoteSendSmsRequest(BaseModel):
+    to_phone: Optional[str] = None  # Defaults to customer phone
+    body: Optional[str] = None  # Defaults to a short message with the view link
+    include_available_extras: Optional[bool] = False
+
+
+class QuoteSendSmsResponse(BaseModel):
+    view_url: str
+    quote_email_id: int
+    message: str
+
+
 class OpportunityWonRequest(BaseModel):
     confirmed_value: Optional[Decimal] = None  # Optional confirmation of final value
 

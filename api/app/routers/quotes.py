@@ -4,16 +4,18 @@ from sqlmodel import Session, select, or_, and_
 from sqlalchemy import func
 from typing import List, Optional
 from app.database import get_session
-from app.models import Quote, QuoteItem, Customer, User, QuoteEmail, Email, EmailDirection, Activity, ActivityType, CompanySettings, Lead, LeadStatus, QuoteStatus, QuoteTemperature, OpportunityStage, LossCategory, DiscountTemplate, QuoteDiscount, DiscountType, DiscountScope, Order, OrderItem, QuoteItemLineType, DiscountRequest
+from app.models import Quote, QuoteItem, Customer, User, QuoteEmail, Email, EmailDirection, Activity, ActivityType, CompanySettings, Lead, LeadStatus, QuoteStatus, QuoteTemperature, OpportunityStage, LossCategory, DiscountTemplate, QuoteDiscount, DiscountType, DiscountScope, Order, OrderItem, QuoteItemLineType, DiscountRequest, SmsMessage, SmsDirection
 from app.auth import get_current_user
 from app.schemas import (
     QuoteCreate, QuoteUpdate, QuoteDraftUpdate, QuoteResponse, QuoteItemCreate, QuoteItemResponse,
     QuoteEmailSendRequest, QuoteEmailSendResponse, QuoteViewLinkResponse,
+    QuoteShareLinkRequest, QuoteShareLinkResponse, QuoteSendSmsRequest, QuoteSendSmsResponse,
     OpportunityWonRequest, OpportunityLostRequest, OpportunityCloseRequest,
     QuoteDiscountResponse
 )
 from app.quote_email_service import send_quote_email
 from app.email_service import is_email_configured
+from app.sms_service import send_sms, normalize_phone
 from app.quote_pdf_service import generate_quote_pdf
 from app.reminder_service import get_last_activity_date
 from app.constants import VAT_RATE_DECIMAL
@@ -25,6 +27,89 @@ import os
 import uuid
 
 router = APIRouter(prefix="/api/quotes", tags=["quotes"])
+
+
+def _frontend_base_url() -> Optional[str]:
+    return (os.getenv("FRONTEND_BASE_URL") or os.getenv("FRONTEND_URL") or os.getenv("PUBLIC_FRONTEND_URL") or "").strip() or None
+
+
+def ensure_quote_share_link(
+    session: Session,
+    quote: Quote,
+    customer: Customer,
+    current_user: User,
+    include_available_extras: bool,
+) -> tuple[QuoteEmail, str, bool]:
+    """
+    Ensure a QuoteEmail row with view_token exists (reuse latest with token).
+    If newly created: set quote to SENT, add NOTE activity.
+    If reusing and include_available_extras is True, upgrade the flag on the row.
+    Returns (quote_email, view_url, created_new).
+    """
+    base_url = _frontend_base_url()
+    if not base_url:
+        raise HTTPException(
+            status_code=400,
+            detail="Public view URL not configured. Set FRONTEND_BASE_URL (or FRONTEND_URL / PUBLIC_FRONTEND_URL) on the API.",
+        )
+
+    statement = (
+        select(QuoteEmail)
+        .where(QuoteEmail.quote_id == quote.id, QuoteEmail.view_token.isnot(None))
+        .order_by(QuoteEmail.sent_at.desc())
+        .limit(1)
+    )
+    quote_email = session.exec(statement).first()
+
+    if quote_email and quote_email.view_token:
+        if include_available_extras and not getattr(quote_email, "include_available_extras", False):
+            quote_email.include_available_extras = True
+            session.add(quote_email)
+            session.commit()
+            session.refresh(quote_email)
+        view_url = f"{base_url.rstrip('/')}/quotes/view/{quote_email.view_token}"
+        return quote_email, view_url, False
+
+    view_token = uuid.uuid4().hex
+    to_email = (customer.email or "").strip() or "share@local.invalid"
+    subject = f"Quote {quote.quote_number} — link shared"
+    body_html = "<p>Customer view link was shared outside email.</p>"
+    tracking_id = f"share-{quote.id}-{uuid.uuid4().hex}"
+
+    quote_email = QuoteEmail(
+        quote_id=quote.id,
+        to_email=to_email,
+        subject=subject,
+        body_html=body_html,
+        tracking_id=tracking_id,
+        view_token=view_token,
+        include_available_extras=include_available_extras,
+    )
+    session.add(quote_email)
+
+    quote.status = QuoteStatus.SENT
+    quote.sent_at = datetime.utcnow()
+    quote.updated_at = datetime.utcnow()
+    if quote.temperature is None:
+        quote.temperature = QuoteTemperature.COLD
+    if quote.opportunity_stage == OpportunityStage.CONCEPT:
+        quote.opportunity_stage = OpportunityStage.QUOTE_SENT
+    session.add(quote)
+
+    session.commit()
+    session.refresh(quote_email)
+
+    activity = Activity(
+        customer_id=quote.customer_id,
+        activity_type=ActivityType.NOTE,
+        notes=f"Quote {quote.quote_number} customer view link created (shared outside email)",
+        created_by_id=current_user.id,
+    )
+    session.add(activity)
+    session.commit()
+
+    view_url = f"{base_url.rstrip('/')}/quotes/view/{view_token}"
+    return quote_email, view_url, True
 
 
 def quote_item_to_response(item: QuoteItem) -> QuoteItemResponse:
@@ -1109,11 +1194,10 @@ async def get_quote_view_link(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    """Return the latest customer view URL for this quote (for testing open tracking)."""
+    """Return the latest customer view URL for this quote; mints a share link if none exists yet."""
     quote = session.exec(select(Quote).where(Quote.id == quote_id)).first()
     if not quote:
         raise HTTPException(status_code=404, detail="Quote not found")
-    frontend_base_url = (os.getenv("FRONTEND_BASE_URL") or os.getenv("FRONTEND_URL") or os.getenv("PUBLIC_FRONTEND_URL") or "").strip() or None
     statement = (
         select(QuoteEmail)
         .where(QuoteEmail.quote_id == quote_id, QuoteEmail.view_token.isnot(None))
@@ -1121,11 +1205,128 @@ async def get_quote_view_link(
         .limit(1)
     )
     quote_email = session.exec(statement).first()
-    view_url = None
-    if quote_email and quote_email.view_token and frontend_base_url:
-        base = frontend_base_url.rstrip("/")
-        view_url = f"{base}/quotes/view/{quote_email.view_token}"
+    base_url = _frontend_base_url()
+    if quote_email and quote_email.view_token:
+        if base_url:
+            view_url = f"{base_url.rstrip('/')}/quotes/view/{quote_email.view_token}"
+            return QuoteViewLinkResponse(view_url=view_url)
+        return QuoteViewLinkResponse(view_url=None)
+
+    if not quote.customer_id:
+        raise HTTPException(status_code=400, detail="Quote must be associated with a customer")
+    customer = session.exec(select(Customer).where(Customer.id == quote.customer_id)).first()
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+
+    _, view_url, _ = ensure_quote_share_link(
+        session, quote, customer, current_user, include_available_extras=False
+    )
     return QuoteViewLinkResponse(view_url=view_url)
+
+
+@router.post("/{quote_id}/share-link", response_model=QuoteShareLinkResponse)
+async def post_quote_share_link(
+    quote_id: int,
+    body: Optional[QuoteShareLinkRequest] = Body(default=None),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Ensure a customer view token exists and return the URL (no email or SMS)."""
+    req = body or QuoteShareLinkRequest()
+    quote = session.exec(select(Quote).where(Quote.id == quote_id)).first()
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    if not quote.customer_id:
+        raise HTTPException(status_code=400, detail="Quote must be associated with a customer")
+    customer = session.exec(select(Customer).where(Customer.id == quote.customer_id)).first()
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+
+    quote_email, view_url, _ = ensure_quote_share_link(
+        session,
+        quote,
+        customer,
+        current_user,
+        include_available_extras=bool(req.include_available_extras),
+    )
+    return QuoteShareLinkResponse(view_url=view_url, quote_email_id=quote_email.id)
+
+
+@router.post("/{quote_id}/send-sms", response_model=QuoteSendSmsResponse)
+async def post_quote_send_sms(
+    quote_id: int,
+    data: Optional[QuoteSendSmsRequest] = Body(default=None),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Send the customer view link by SMS (Twilio). Mints a share link if needed."""
+    req = data or QuoteSendSmsRequest()
+    quote = session.exec(select(Quote).where(Quote.id == quote_id)).first()
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    if not quote.customer_id:
+        raise HTTPException(status_code=400, detail="Quote must be associated with a customer")
+    customer = session.exec(select(Customer).where(Customer.id == quote.customer_id)).first()
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+
+    quote_email, view_url, _ = ensure_quote_share_link(
+        session,
+        quote,
+        customer,
+        current_user,
+        include_available_extras=bool(req.include_available_extras),
+    )
+
+    to_phone = (req.to_phone or "").strip() or (customer.phone or "").strip()
+    if not to_phone:
+        raise HTTPException(
+            status_code=400,
+            detail="No phone number; set to_phone in the request or add a phone on the customer.",
+        )
+
+    if (req.body or "").strip():
+        sms_body = (req.body or "").strip()
+    else:
+        has_order = session.exec(select(Order).where(Order.quote_id == quote.id)).first() is not None
+        label = "order" if has_order else "quote"
+        sms_body = f"View your {label}: {view_url}"
+
+    success, sid, error = send_sms(to_phone, sms_body)
+    if not success:
+        raise HTTPException(status_code=500, detail=error or "Failed to send SMS")
+
+    from_phone = (os.getenv("TWILIO_PHONE_NUMBER") or "").strip()
+    now = datetime.utcnow()
+    msg = SmsMessage(
+        customer_id=customer.id,
+        lead_id=quote.lead_id,
+        direction=SmsDirection.SENT,
+        from_phone=from_phone,
+        to_phone=normalize_phone(to_phone),
+        body=sms_body,
+        twilio_sid=sid,
+        sent_at=now,
+        created_by_id=current_user.id,
+    )
+    session.add(msg)
+    session.commit()
+    session.refresh(msg)
+
+    activity = Activity(
+        customer_id=quote.customer_id,
+        activity_type=ActivityType.SMS_SENT,
+        notes=f"Quote {quote.quote_number} link sent by SMS to {to_phone}",
+        created_by_id=current_user.id,
+    )
+    session.add(activity)
+    session.commit()
+
+    return QuoteSendSmsResponse(
+        view_url=view_url,
+        quote_email_id=quote_email.id,
+        message="SMS sent successfully",
+    )
 
 
 @router.post("/{quote_id}/send-email", response_model=QuoteEmailSendResponse)

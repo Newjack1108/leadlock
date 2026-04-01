@@ -362,9 +362,27 @@ export const downloadPublicQuotePdf = async (viewToken: string) => {
   URL.revokeObjectURL(a.href);
 };
 
-/** Get latest customer view URL for a quote (for testing open tracking). */
+/** Get latest customer view URL for a quote (mints a share link if none exists yet). */
 export const getQuoteViewLink = async (quoteId: number): Promise<{ view_url: string | null }> => {
   const response = await api.get(`/api/quotes/${quoteId}/view-link`);
+  return response.data;
+};
+
+/** Ensure a customer view token exists and return the URL (no email or SMS). */
+export const postQuoteShareLink = async (
+  quoteId: number,
+  body?: { include_available_extras?: boolean }
+): Promise<{ view_url: string; quote_email_id: number }> => {
+  const response = await api.post(`/api/quotes/${quoteId}/share-link`, body ?? {});
+  return response.data;
+};
+
+/** Send the customer view link by SMS (Twilio). */
+export const sendQuoteSms = async (
+  quoteId: number,
+  data?: { to_phone?: string; body?: string; include_available_extras?: boolean }
+): Promise<{ view_url: string; quote_email_id: number; message: string }> => {
+  const response = await api.post(`/api/quotes/${quoteId}/send-sms`, data ?? {});
   return response.data;
 };
 

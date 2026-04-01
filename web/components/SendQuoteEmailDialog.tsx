@@ -15,10 +15,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { sendQuoteEmail, previewQuotePdf, getQuoteTemplates } from '@/lib/api';
+import {
+  sendQuoteEmail,
+  previewQuotePdf,
+  getQuoteTemplates,
+  postQuoteShareLink,
+  sendQuoteSms,
+} from '@/lib/api';
 import { QuoteEmailSendRequest, QuoteEmailSendResponse, Customer } from '@/lib/types';
 import { toast } from 'sonner';
-import { Eye, ExternalLink, Copy } from 'lucide-react';
+import { Eye, ExternalLink, Copy, Mail, MessageSquare } from 'lucide-react';
 
 interface QuoteTemplate {
   id: number;
@@ -37,6 +43,10 @@ interface SendQuoteEmailDialogProps {
   variant?: 'quote' | 'order';
 }
 
+type SuccessState =
+  | { type: 'email'; data: QuoteEmailSendResponse }
+  | { type: 'sms'; view_url: string };
+
 export default function SendQuoteEmailDialog({
   open,
   onOpenChange,
@@ -46,9 +56,11 @@ export default function SendQuoteEmailDialog({
   variant = 'quote',
 }: SendQuoteEmailDialogProps) {
   const docLabel = variant === 'order' ? 'order' : 'quote';
+  const [channel, setChannel] = useState<'email' | 'sms'>('email');
   const [loading, setLoading] = useState(false);
+  const [copyLinkLoading, setCopyLinkLoading] = useState(false);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
-  const [successResponse, setSuccessResponse] = useState<QuoteEmailSendResponse | null>(null);
+  const [successState, setSuccessState] = useState<SuccessState | null>(null);
   const [templates, setTemplates] = useState<QuoteTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | undefined>(undefined);
   const [formData, setFormData] = useState<QuoteEmailSendRequest>({
@@ -58,11 +70,13 @@ export default function SendQuoteEmailDialog({
     custom_message: '',
     include_available_extras: false,
   });
+  const [smsPhone, setSmsPhone] = useState(customer.phone || '');
+  const [smsBody, setSmsBody] = useState('');
 
-  // Fetch templates and reset form when dialog opens
   useEffect(() => {
     if (open) {
-      setSuccessResponse(null);
+      setSuccessState(null);
+      setChannel('email');
       setFormData({
         to_email: customer.email || '',
         cc: '',
@@ -70,6 +84,8 @@ export default function SendQuoteEmailDialog({
         custom_message: '',
         include_available_extras: false,
       });
+      setSmsPhone(customer.phone || '');
+      setSmsBody('');
       setSelectedTemplateId(undefined);
       const fetchTemplates = async () => {
         setLoadingTemplates(true);
@@ -98,9 +114,26 @@ export default function SendQuoteEmailDialog({
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleCopyShareLink = async () => {
+    setCopyLinkLoading(true);
+    try {
+      const { view_url } = await postQuoteShareLink(quoteId, {
+        include_available_extras: formData.include_available_extras ?? false,
+      });
+      await navigator.clipboard.writeText(view_url);
+      toast.success('Customer view link copied to clipboard');
+    } catch (error: any) {
+      const detail = error.response?.data?.detail;
+      const msg = typeof detail === 'string' ? detail : 'Failed to get share link';
+      toast.error(msg);
+    } finally {
+      setCopyLinkLoading(false);
+    }
+  };
+
+  const handleSubmitEmail = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!formData.to_email) {
       toast.error('Recipient email is required');
       return;
@@ -113,10 +146,9 @@ export default function SendQuoteEmailDialog({
         template_id: selectedTemplateId,
         include_available_extras: formData.include_available_extras ?? false,
       });
-      setLoading(false);
       toast.success(`${docLabel.charAt(0).toUpperCase() + docLabel.slice(1)} email sent successfully`);
       if (response.view_url) {
-        setSuccessResponse(response);
+        setSuccessState({ type: 'email', data: response });
       } else {
         onOpenChange(false);
         setTimeout(() => onSuccess?.(), 100);
@@ -138,35 +170,65 @@ export default function SendQuoteEmailDialog({
     }
   };
 
+  const handleSubmitSms = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const response = await sendQuoteSms(quoteId, {
+        to_phone: smsPhone.trim() || undefined,
+        body: smsBody.trim() || undefined,
+        include_available_extras: formData.include_available_extras ?? false,
+      });
+      toast.success('SMS sent successfully');
+      setSuccessState({ type: 'sms', view_url: response.view_url });
+    } catch (error: any) {
+      const detail = error.response?.data?.detail;
+      const msg = typeof detail === 'string' ? detail : 'Failed to send SMS';
+      toast.error(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleClose = (open: boolean) => {
-    if (!open) setSuccessResponse(null);
+    if (!open) setSuccessState(null);
     onOpenChange(open);
   };
 
+  const successViewUrl =
+    successState?.type === 'email' ? successState.data.view_url : successState?.type === 'sms' ? successState.view_url : null;
+
   const handleCopyLink = () => {
-    if (successResponse?.view_url) {
-      navigator.clipboard.writeText(successResponse.view_url);
+    if (successViewUrl) {
+      navigator.clipboard.writeText(successViewUrl);
       toast.success('Link copied to clipboard');
     }
   };
 
-  if (successResponse?.view_url) {
+  if (successViewUrl && successState) {
+    const testMode = successState.type === 'email' ? successState.data.test_mode : undefined;
     return (
       <Dialog open={open} onOpenChange={handleClose}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{docLabel.charAt(0).toUpperCase() + docLabel.slice(1)} email sent</DialogTitle>
+            <DialogTitle>
+              {successState.type === 'email'
+                ? `${docLabel.charAt(0).toUpperCase() + docLabel.slice(1)} email sent`
+                : 'SMS sent'}
+            </DialogTitle>
             <DialogDescription>
-              {successResponse.test_mode
+              {successState.type === 'email' && testMode
                 ? 'Test mode: no email was sent. Use the link below to test the customer quote view and open tracking.'
-                : 'Use the link below to open the customer quote view (e.g. for testing).'}
+                : successState.type === 'email'
+                  ? 'Use the link below to open the customer view (e.g. for testing).'
+                  : 'The customer view link was included in the SMS. You can copy it below if needed.'}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="flex flex-col gap-2">
               <Label className="text-sm font-medium">Customer view link</Label>
               <div className="flex gap-2">
-                <Input readOnly value={successResponse.view_url} className="font-mono text-sm" />
+                <Input readOnly value={successViewUrl} className="font-mono text-sm" />
                 <Button type="button" variant="outline" size="icon" onClick={handleCopyLink} title="Copy link">
                   <Copy className="h-4 w-4" />
                 </Button>
@@ -176,7 +238,7 @@ export default function SendQuoteEmailDialog({
                   asChild
                   className="border-green-600 text-green-700 hover:bg-green-50 hover:text-green-800 hover:border-green-700"
                 >
-                  <a href={successResponse.view_url} target="_blank" rel="noopener noreferrer">
+                  <a href={successViewUrl} target="_blank" rel="noopener noreferrer">
                     <ExternalLink className="h-4 w-4 mr-2" />
                     Open
                   </a>
@@ -203,131 +265,197 @@ export default function SendQuoteEmailDialog({
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Send {docLabel.charAt(0).toUpperCase() + docLabel.slice(1)} via Email</DialogTitle>
+          <DialogTitle>
+            Send {docLabel.charAt(0).toUpperCase() + docLabel.slice(1)} by email or SMS
+          </DialogTitle>
           <DialogDescription>
-            Send this {docLabel} to the customer with a PDF attachment. Select a template or use the default.
+            Send a link to the online {docLabel} view (customer can print or download PDF from there). Choose email or SMS.
+            Long SMS messages may use multiple segments.
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="template">Email Template (Optional)</Label>
-            <Select
-              value={selectedTemplateId?.toString() || 'default'}
-              onValueChange={(value) => setSelectedTemplateId(value === 'default' ? undefined : parseInt(value))}
-              disabled={loadingTemplates}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select template or use default" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="default">Default Template</SelectItem>
-                {templates.map((template) => (
-                  <SelectItem key={template.id} value={template.id.toString()}>
-                    {template.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {loadingTemplates && (
-              <p className="text-xs text-muted-foreground">Loading templates...</p>
-            )}
-            {!loadingTemplates && templates.length === 0 && (
-              <p className="text-xs text-muted-foreground">
-                No custom templates yet. Create templates in{' '}
-                <Link href="/settings/quote-templates" className="text-primary underline hover:no-underline">
-                  Quote Templates settings
-                </Link>{' '}
-                to customize quote emails.
+        <div className="flex gap-2 mb-2">
+          <Button
+            type="button"
+            variant={channel === 'email' ? 'default' : 'outline'}
+            className="flex-1"
+            onClick={() => setChannel('email')}
+          >
+            <Mail className="h-4 w-4 mr-2" />
+            Email
+          </Button>
+          <Button
+            type="button"
+            variant={channel === 'sms' ? 'default' : 'outline'}
+            className="flex-1"
+            onClick={() => setChannel('sms')}
+          >
+            <MessageSquare className="h-4 w-4 mr-2" />
+            SMS
+          </Button>
+        </div>
+
+        <div className="flex items-center space-x-2 py-2 border-b border-border">
+          <input
+            type="checkbox"
+            id="include_extras_shared"
+            checked={formData.include_available_extras ?? false}
+            onChange={(e) =>
+              setFormData({ ...formData, include_available_extras: e.target.checked })
+            }
+            className="h-4 w-4 rounded border-gray-300"
+          />
+          <Label htmlFor="include_extras_shared" className="font-normal cursor-pointer">
+            Show available optional extras in the online view
+          </Label>
+        </div>
+
+        {channel === 'email' ? (
+          <form onSubmit={handleSubmitEmail} className="space-y-4">
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={handleCopyShareLink}
+                disabled={loading || copyLinkLoading}
+              >
+                <Copy className="h-4 w-4 mr-2" />
+                {copyLinkLoading ? 'Getting link…' : 'Copy customer view link'}
+              </Button>
+              <p className="text-xs text-muted-foreground w-full">
+                Get the link without sending email (e.g. to paste into WhatsApp). Uses the optional extras setting above.
               </p>
-            )}
-          </div>
+            </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="to_email">
-              To Email <span className="text-destructive">*</span>
-            </Label>
-            <Input
-              id="to_email"
-              type="email"
-              value={formData.to_email}
-              onChange={(e) => setFormData({ ...formData, to_email: e.target.value })}
-              required
-              placeholder="customer@example.com"
-            />
-          </div>
+            <div className="space-y-2">
+              <Label htmlFor="template">Email Template (Optional)</Label>
+              <Select
+                value={selectedTemplateId?.toString() || 'default'}
+                onValueChange={(value) => setSelectedTemplateId(value === 'default' ? undefined : parseInt(value))}
+                disabled={loadingTemplates}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select template or use default" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="default">Default Template</SelectItem>
+                  {templates.map((template) => (
+                    <SelectItem key={template.id} value={template.id.toString()}>
+                      {template.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {loadingTemplates && (
+                <p className="text-xs text-muted-foreground">Loading templates...</p>
+              )}
+              {!loadingTemplates && templates.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  No custom templates yet. Create templates in{' '}
+                  <Link href="/settings/quote-templates" className="text-primary underline hover:no-underline">
+                    Quote Templates settings
+                  </Link>{' '}
+                  to customize quote emails.
+                </p>
+              )}
+            </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="cc">CC (Optional)</Label>
-            <Input
-              id="cc"
-              type="text"
-              value={formData.cc || ''}
-              onChange={(e) => setFormData({ ...formData, cc: e.target.value })}
-              placeholder="cc1@example.com, cc2@example.com"
-            />
-          </div>
+            <div className="space-y-2">
+              <Label htmlFor="to_email">
+                To Email <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="to_email"
+                type="email"
+                value={formData.to_email}
+                onChange={(e) => setFormData({ ...formData, to_email: e.target.value })}
+                required
+                placeholder="customer@example.com"
+              />
+            </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="bcc">BCC (Optional)</Label>
-            <Input
-              id="bcc"
-              type="text"
-              value={formData.bcc || ''}
-              onChange={(e) => setFormData({ ...formData, bcc: e.target.value })}
-              placeholder="bcc@example.com"
-            />
-          </div>
+            <div className="space-y-2">
+              <Label htmlFor="cc">CC (Optional)</Label>
+              <Input
+                id="cc"
+                type="text"
+                value={formData.cc || ''}
+                onChange={(e) => setFormData({ ...formData, cc: e.target.value })}
+                placeholder="cc1@example.com, cc2@example.com"
+              />
+            </div>
 
-          <div className="flex items-center space-x-2">
-            <input
-              type="checkbox"
-              id="include_extras"
-              checked={formData.include_available_extras ?? false}
-              onChange={(e) =>
-                setFormData({ ...formData, include_available_extras: e.target.checked })
-              }
-              className="h-4 w-4 rounded border-gray-300"
-            />
-            <Label htmlFor="include_extras" className="font-normal cursor-pointer">
-              Show available optional extras after quote
-            </Label>
-          </div>
+            <div className="space-y-2">
+              <Label htmlFor="bcc">BCC (Optional)</Label>
+              <Input
+                id="bcc"
+                type="text"
+                value={formData.bcc || ''}
+                onChange={(e) => setFormData({ ...formData, bcc: e.target.value })}
+                placeholder="bcc@example.com"
+              />
+            </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="custom_message">Custom Message (Optional)</Label>
-            <Textarea
-              id="custom_message"
-              value={formData.custom_message || ''}
-              onChange={(e) => setFormData({ ...formData, custom_message: e.target.value })}
-              placeholder="Add a custom message that will be appended to the email template..."
-              rows={4}
-            />
-          </div>
+            <div className="space-y-2">
+              <Label htmlFor="custom_message">Custom Message (Optional)</Label>
+              <Textarea
+                id="custom_message"
+                value={formData.custom_message || ''}
+                onChange={(e) => setFormData({ ...formData, custom_message: e.target.value })}
+                placeholder="Add a custom message that will be appended to the email template..."
+                rows={4}
+              />
+            </div>
 
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => handleClose(false)}
-              disabled={loading}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handlePreview}
-              disabled={loading}
-            >
-              <Eye className="h-4 w-4 mr-2" />
-              Download PDF
-            </Button>
-            <Button type="submit" disabled={loading || !formData.to_email}>
-              {loading ? 'Sending...' : `Send ${docLabel.charAt(0).toUpperCase() + docLabel.slice(1)} Email`}
-            </Button>
-          </DialogFooter>
-        </form>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => handleClose(false)} disabled={loading}>
+                Cancel
+              </Button>
+              <Button type="button" variant="outline" onClick={handlePreview} disabled={loading}>
+                <Eye className="h-4 w-4 mr-2" />
+                Download PDF
+              </Button>
+              <Button type="submit" disabled={loading || !formData.to_email}>
+                {loading ? 'Sending…' : `Send ${docLabel.charAt(0).toUpperCase() + docLabel.slice(1)} email`}
+              </Button>
+            </DialogFooter>
+          </form>
+        ) : (
+          <form onSubmit={handleSubmitSms} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="sms_phone">Mobile number</Label>
+              <Input
+                id="sms_phone"
+                type="tel"
+                value={smsPhone}
+                onChange={(e) => setSmsPhone(e.target.value)}
+                placeholder="Customer mobile number"
+              />
+              <p className="text-xs text-muted-foreground">Defaults to the customer profile phone. Requires Twilio on the server.</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="sms_body">Message (optional)</Label>
+              <Textarea
+                id="sms_body"
+                value={smsBody}
+                onChange={(e) => setSmsBody(e.target.value)}
+                placeholder="Leave blank to send a short default message including the view link."
+                rows={4}
+              />
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => handleClose(false)} disabled={loading}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={loading}>
+                {loading ? 'Sending…' : `Send ${docLabel.charAt(0).toUpperCase() + docLabel.slice(1)} by SMS`}
+              </Button>
+            </DialogFooter>
+          </form>
+        )}
       </DialogContent>
     </Dialog>
   );

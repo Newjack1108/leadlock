@@ -266,7 +266,7 @@ export default function QuoteDetailPage() {
                     try {
                       const { view_url } = await getQuoteViewLink(quoteId);
                       if (view_url) window.open(view_url, '_blank');
-                      else toast.error('No view link available (set FRONTEND_BASE_URL and send the quote by email first).');
+                      else toast.error('No view link available. Set FRONTEND_BASE_URL (or FRONTEND_URL) on the API.');
                     } catch {
                       toast.error('Failed to get view link');
                     }
