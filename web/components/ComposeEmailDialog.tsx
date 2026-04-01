@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import EmailBodyEditor from '@/components/EmailBodyEditor';
 import { sendEmail, getEmailTemplates, previewEmailTemplate, previewComposeEmail, getUserEmailSettings, getSalesDocuments, downloadSalesDocument } from '@/lib/api';
-import { emailHtmlPrefersSourceView, htmlToPlainText, isHtmlEffectivelyEmpty } from '@/lib/htmlEmail';
+import { htmlToPlainText, isHtmlEffectivelyEmpty } from '@/lib/htmlEmail';
 import { Customer, EmailTemplate, SalesDocument } from '@/lib/types';
 import { toast } from 'sonner';
 import { Paperclip, X, FolderOpen } from 'lucide-react';
@@ -51,7 +51,7 @@ export default function ComposeEmailDialog({
   const [libraryLoading, setLibraryLoading] = useState(false);
   const [librarySelected, setLibrarySelected] = useState<Set<number>>(new Set());
   const [libraryAdding, setLibraryAdding] = useState(false);
-  const [bodyEditMode, setBodyEditMode] = useState<'visual' | 'source'>('visual');
+  const [bodyEditMode, setBodyEditMode] = useState<'visual' | 'source'>('source');
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewResult, setPreviewResult] = useState<{
@@ -83,7 +83,7 @@ export default function ComposeEmailDialog({
 
     if (!wasOpenRef.current) {
       wasOpenRef.current = true;
-      setBodyEditMode('visual');
+      setBodyEditMode('source');
       fetchTemplates();
       fetchUserSignature();
       setFormData({
@@ -142,7 +142,7 @@ export default function ComposeEmailDialog({
         subject: preview.subject,
         body,
       }));
-      setBodyEditMode(emailHtmlPrefersSourceView(body) ? 'source' : 'visual');
+      setBodyEditMode('source');
     } catch (error: any) {
       toast.error('Failed to load template');
     } finally {
@@ -357,7 +357,7 @@ export default function ComposeEmailDialog({
   return (
     <>
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-full w-[98vw] h-[90vh] max-h-[90vh] flex flex-col p-0">
+      <DialogContent className="w-[min(98vw,1600px)] max-w-[min(98vw,1600px)] sm:max-w-[min(98vw,1600px)] h-[92vh] max-h-[92vh] min-h-[85vh] flex flex-col p-0">
         <DialogHeader className="px-6 pt-6 pb-4 border-b">
           <DialogTitle className="text-xl">New Message</DialogTitle>
           <DialogDescription>
@@ -529,7 +529,7 @@ export default function ComposeEmailDialog({
               </div>
             </div>
             <p className="text-xs text-muted-foreground flex-shrink-0">
-              Use Visual for formatting, or HTML source for full control (tables, custom markup).
+              Templates load in HTML source so the full body appears reliably; switch to Visual for simple formatting when needed. HTML source gives full control (tables, custom markup).
             </p>
             <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
               {bodyEditMode === 'visual' ? (
@@ -539,7 +539,7 @@ export default function ComposeEmailDialog({
                   onChange={(html) => setFormData((prev) => ({ ...prev, body: html }))}
                   disabled={loading || loadingTemplate}
                   placeholder="Write your message…"
-                  className="flex-1 min-h-[300px]"
+                  className="flex-1 min-h-[min(50vh,560px)] [&_.ProseMirror]:text-base"
                 />
               ) : (
                 <Textarea
@@ -548,8 +548,8 @@ export default function ComposeEmailDialog({
                   onChange={(e) => setFormData((prev) => ({ ...prev, body: e.target.value }))}
                   placeholder="<p>Your HTML message…</p>"
                   disabled={loading || loadingTemplate}
-                  rows={14}
-                  className="font-mono text-sm flex-1 min-h-[300px] resize-y"
+                  rows={20}
+                  className="font-mono text-base flex-1 min-h-[min(50vh,560px)] resize-y"
                 />
               )}
             </div>
