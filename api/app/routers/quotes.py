@@ -1088,20 +1088,6 @@ def _update_draft_quote_impl(
     if quote_data.include_spec_sheets is not None:
         quote.include_spec_sheets = quote_data.include_spec_sheets
 
-    total_inc_vat = quote.total_amount * (Decimal("1") + VAT_RATE_DECIMAL)
-    if quote_data.deposit_amount is not None:
-        deposit_amount = Decimal(str(quote_data.deposit_amount))  # Client sends inc VAT
-    else:
-        deposit_amount = total_inc_vat * Decimal("0.5")
-    if deposit_amount > total_inc_vat:
-        deposit_amount = total_inc_vat
-    quote.deposit_amount = deposit_amount
-    quote.balance_amount = total_inc_vat - deposit_amount
-    quote.updated_at = datetime.utcnow()
-    session.add(quote)
-    session.commit()
-    session.refresh(quote)
-    
     # Apply discounts if provided
     if quote_data.discount_template_ids:
         assert_templates_not_expired_for_apply(session, quote_data.discount_template_ids)
@@ -1156,9 +1142,15 @@ def _update_draft_quote_impl(
     if quote.total_amount < 0:
         quote.total_amount = Decimal(0)
     total_inc_vat = quote.total_amount * (Decimal("1") + VAT_RATE_DECIMAL)
-    if quote.deposit_amount > total_inc_vat:
-        quote.deposit_amount = total_inc_vat
-    quote.balance_amount = total_inc_vat - quote.deposit_amount
+    # Recalculate deposit and balance (inc VAT) — same as create_quote: after final totals
+    if quote_data.deposit_amount is not None:
+        deposit_amount = Decimal(str(quote_data.deposit_amount))  # Client sends inc VAT
+    else:
+        deposit_amount = total_inc_vat * Decimal("0.5")
+    if deposit_amount > total_inc_vat:
+        deposit_amount = total_inc_vat
+    quote.deposit_amount = deposit_amount
+    quote.balance_amount = total_inc_vat - deposit_amount
     quote.updated_at = datetime.utcnow()
     session.add(quote)
     session.commit()
