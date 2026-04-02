@@ -28,6 +28,12 @@ load_dotenv()
 # Shown in the recipient's mail client as the From display name when env/user fields do not override it.
 DEFAULT_OUTBOUND_FROM_NAME = "Cheshire Stables CSGB Group"
 
+# Green pill style for tracked links (quote/order view + website tracking) — matches branded quote sends.
+EMAIL_TRACKED_LINK_STYLE = (
+    "color:#15803d;font-weight:bold;background-color:#dcfce7;"
+    "padding:4px 8px;border-radius:4px;text-decoration:underline;"
+)
+
 _imap_missing_logged = False
 
 
@@ -60,7 +66,7 @@ def _build_website_tracking_link_html(customer_number: Optional[str]) -> str:
         return ""
     from app.constants import TRACKING_WEBSITE_BASE_URLS
     token = quote(customer_number.strip(), safe="")
-    link_style = "color:#0066cc;font-weight:bold;background-color:#e8f4fc;padding:2px 6px;border-radius:4px;text-decoration:underline;"
+    link_style = EMAIL_TRACKED_LINK_STYLE
     links = [
         f'<a href="{base}?ltk={token}" style="{link_style}">{label}</a>'
         for base, label in TRACKING_WEBSITE_BASE_URLS
