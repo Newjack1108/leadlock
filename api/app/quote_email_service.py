@@ -44,26 +44,6 @@ def get_sample_quote_preview_data() -> Dict[str, Any]:
     }
 
 
-def get_default_email_template() -> Tuple[str, str]:
-    """Get default email subject and body templates (no pricing; customer views details via link)."""
-    subject = "Quote {{ quote.quote_number }}"
-    body = """
-    <p>Dear {{ customer.name }},</p>
-    
-    <p>Thank you for your interest. We have prepared quote {{ quote.quote_number }} for you.</p>
-    
-    <p>Please use the secure link below to view the full quote. If you have any questions, we would be happy to help.</p>
-    
-    {% if custom_message %}
-    <p>{{ custom_message }}</p>
-    {% endif %}
-    
-    <p>Best regards,<br>
-    {{ company_settings.company_name if company_settings else 'LeadLock CRM' }}</p>
-    """
-    return subject, body
-
-
 def render_email_template(
     template: Template,
     quote: Quote,
@@ -92,7 +72,7 @@ def send_quote_email(
     customer: Customer,
     to_email: str,
     session: Session,
-    template_id: Optional[int] = None,
+    template_id: int,
     cc: Optional[str] = None,
     bcc: Optional[str] = None,
     custom_message: Optional[str] = None,
@@ -109,7 +89,7 @@ def send_quote_email(
         customer: Customer object
         to_email: Recipient email address
         session: Database session
-        template_id: Optional QuoteTemplate ID
+        template_id: QuoteTemplate ID (must exist)
         cc: Optional CC recipients
         bcc: Optional BCC recipients
         custom_message: Optional custom message to append
@@ -125,21 +105,13 @@ def send_quote_email(
         statement = select(CompanySettings).limit(1)
         company_settings = session.exec(statement).first()
         
-        # Get email template
-        if template_id:
-            statement = select(QuoteTemplate).where(QuoteTemplate.id == template_id)
-            quote_template = session.exec(statement).first()
-            if quote_template:
-                subject_template = Template(quote_template.email_subject_template)
-                body_template = Template(quote_template.email_body_template)
-            else:
-                # Fallback to default
-                subject_template = Template(get_default_email_template()[0])
-                body_template = Template(get_default_email_template()[1])
-        else:
-            # Use default template
-            subject_template = Template(get_default_email_template()[0])
-            body_template = Template(get_default_email_template()[1])
+        statement = select(QuoteTemplate).where(QuoteTemplate.id == template_id)
+        quote_template = session.exec(statement).first()
+        if not quote_template:
+            return False, None, "Quote template not found", None, None, None
+
+        subject_template = Template(quote_template.email_subject_template)
+        body_template = Template(quote_template.email_body_template)
         
         # Render email templates
         subject = render_email_template(subject_template, quote, customer, company_settings, custom_message)

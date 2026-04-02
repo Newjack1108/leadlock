@@ -579,7 +579,7 @@ export interface SalesDocument {
 }
 
 export interface QuoteEmailSendRequest {
-  template_id?: number;
+  template_id: number;
   to_email: string;
   cc?: string;
   bcc?: string;

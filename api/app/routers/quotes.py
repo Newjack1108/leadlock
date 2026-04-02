@@ -4,7 +4,7 @@ from sqlmodel import Session, select, or_, and_
 from sqlalchemy import func
 from typing import List, Optional
 from app.database import get_session
-from app.models import Quote, QuoteItem, Customer, User, QuoteEmail, Email, EmailDirection, Activity, ActivityType, CompanySettings, Lead, LeadStatus, QuoteStatus, QuoteTemperature, OpportunityStage, LossCategory, DiscountTemplate, QuoteDiscount, DiscountType, DiscountScope, Order, OrderItem, QuoteItemLineType, DiscountRequest, SmsMessage, SmsDirection
+from app.models import Quote, QuoteItem, QuoteTemplate, Customer, User, QuoteEmail, Email, EmailDirection, Activity, ActivityType, CompanySettings, Lead, LeadStatus, QuoteStatus, QuoteTemperature, OpportunityStage, LossCategory, DiscountTemplate, QuoteDiscount, DiscountType, DiscountScope, Order, OrderItem, QuoteItemLineType, DiscountRequest, SmsMessage, SmsDirection
 from app.auth import get_current_user
 from app.schemas import (
     QuoteCreate, QuoteUpdate, QuoteDraftUpdate, QuoteResponse, QuoteItemCreate, QuoteItemResponse,
@@ -1361,6 +1361,10 @@ async def send_quote_email_endpoint(
         # Generate view token for "View your quote" link (open tracking)
         view_token = uuid.uuid4().hex
         frontend_base_url = (os.getenv("FRONTEND_BASE_URL") or os.getenv("FRONTEND_URL") or os.getenv("PUBLIC_FRONTEND_URL") or "").strip() or None
+
+        qt_statement = select(QuoteTemplate).where(QuoteTemplate.id == email_data.template_id)
+        if not session.exec(qt_statement).first():
+            raise HTTPException(status_code=404, detail="Quote template not found")
 
         # Send quote email
         success, message_id, error, pdf_buffer, email_subject, email_body_html = send_quote_email(

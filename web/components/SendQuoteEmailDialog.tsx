@@ -47,6 +47,10 @@ type SuccessState =
   | { type: 'email'; data: QuoteEmailSendResponse }
   | { type: 'sms'; view_url: string };
 
+function preferredQuoteTemplateName(variant: 'quote' | 'order'): string {
+  return variant === 'order' ? 'Order Confirmation' : 'First Quote';
+}
+
 export default function SendQuoteEmailDialog({
   open,
   onOpenChange,
@@ -63,7 +67,7 @@ export default function SendQuoteEmailDialog({
   const [successState, setSuccessState] = useState<SuccessState | null>(null);
   const [templates, setTemplates] = useState<QuoteTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | undefined>(undefined);
-  const [formData, setFormData] = useState<QuoteEmailSendRequest>({
+  const [formData, setFormData] = useState<Omit<QuoteEmailSendRequest, 'template_id'>>({
     to_email: customer.email || '',
     cc: '',
     bcc: '',
@@ -92,8 +96,12 @@ export default function SendQuoteEmailDialog({
         try {
           const data = await getQuoteTemplates();
           setTemplates(data);
+          const preferred = preferredQuoteTemplateName(variant);
+          const match = data.find((t: QuoteTemplate) => t.name === preferred);
+          setSelectedTemplateId(match?.id);
         } catch (error) {
           setTemplates([]);
+          setSelectedTemplateId(undefined);
           toast.error('Failed to load quote templates');
           console.error('Quote templates fetch error:', error);
         } finally {
@@ -102,7 +110,7 @@ export default function SendQuoteEmailDialog({
       };
       fetchTemplates();
     }
-  }, [open, customer]);
+  }, [open, customer, variant]);
 
   const handlePreview = async () => {
     try {
@@ -136,6 +144,11 @@ export default function SendQuoteEmailDialog({
 
     if (!formData.to_email) {
       toast.error('Recipient email is required');
+      return;
+    }
+
+    if (selectedTemplateId === undefined) {
+      toast.error('Please select an email template');
       return;
     }
 
@@ -329,17 +342,18 @@ export default function SendQuoteEmailDialog({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="template">Email Template (Optional)</Label>
+              <Label htmlFor="template">
+                Email template <span className="text-destructive">*</span>
+              </Label>
               <Select
-                value={selectedTemplateId?.toString() || 'default'}
-                onValueChange={(value) => setSelectedTemplateId(value === 'default' ? undefined : parseInt(value))}
+                value={selectedTemplateId !== undefined ? String(selectedTemplateId) : undefined}
+                onValueChange={(value) => setSelectedTemplateId(parseInt(value, 10))}
                 disabled={loadingTemplates}
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select template or use default" />
+                <SelectTrigger id="template">
+                  <SelectValue placeholder="Select a template" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="default">Default Template</SelectItem>
                   {templates.map((template) => (
                     <SelectItem key={template.id} value={template.id.toString()}>
                       {template.name}
@@ -416,7 +430,15 @@ export default function SendQuoteEmailDialog({
                 <Eye className="h-4 w-4 mr-2" />
                 Download PDF
               </Button>
-              <Button type="submit" disabled={loading || !formData.to_email}>
+              <Button
+                type="submit"
+                disabled={
+                  loading ||
+                  !formData.to_email ||
+                  loadingTemplates ||
+                  selectedTemplateId === undefined
+                }
+              >
                 {loading ? 'Sending…' : `Send ${docLabel.charAt(0).toUpperCase() + docLabel.slice(1)} email`}
               </Button>
             </DialogFooter>

@@ -377,7 +377,7 @@ class QuoteTemplatePreviewResponse(BaseModel):
 
 
 class QuoteEmailSendRequest(BaseModel):
-    template_id: Optional[int] = None  # QuoteTemplate ID, None for default
+    template_id: int  # Required QuoteTemplate id (must exist)
     to_email: str
     cc: Optional[str] = None
     bcc: Optional[str] = None

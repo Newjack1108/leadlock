@@ -316,7 +316,7 @@ export const previewSmsTemplate = async (templateId: number, previewData?: {
 };
 
 export const sendQuoteEmail = async (quoteId: number, emailData: {
-  template_id?: number;
+  template_id: number;
   to_email: string;
   cc?: string;
   bcc?: string;
