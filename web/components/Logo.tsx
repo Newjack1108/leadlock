@@ -8,7 +8,33 @@ const STATIC_FALLBACKS = ['/logo.png', '/logo1.jpg', '/logo1.png'];
 
 const logoWrapperClass = 'flex items-center py-2';
 
-export default function Logo({ disableLink = false }: { disableLink?: boolean }) {
+type LogoSize = 'default' | 'sm';
+
+const sizeConfig: Record<
+  LogoSize,
+  { wrapper: string; img: string; skeletonMinW: string; maxWidth: string }
+> = {
+  default: {
+    wrapper: 'relative h-20 w-auto flex-shrink-0',
+    img: 'h-20 w-auto object-contain',
+    skeletonMinW: '80px',
+    maxWidth: '380px',
+  },
+  sm: {
+    wrapper: 'relative h-5 w-auto flex-shrink-0',
+    img: 'h-5 w-auto object-contain',
+    skeletonMinW: '28px',
+    maxWidth: '96px',
+  },
+};
+
+export default function Logo({
+  disableLink = false,
+  size = 'default',
+}: {
+  disableLink?: boolean;
+  size?: LogoSize;
+}) {
   const [imgSrc, setImgSrc] = useState<string | null>(null);
   const [imgError, setImgError] = useState(false);
 
@@ -44,15 +70,19 @@ export default function Logo({ disableLink = false }: { disableLink?: boolean })
     }
   };
 
+  const cfg = sizeConfig[size];
   const content = imgSrc === null ? (
-    <div className="relative h-20 w-auto flex-shrink-0 animate-pulse bg-muted rounded" style={{ minWidth: '80px' }} />
+    <div
+      className={`${cfg.wrapper} animate-pulse bg-muted rounded`}
+      style={{ minWidth: cfg.skeletonMinW }}
+    />
   ) : (
-    <div className="relative h-20 w-auto flex-shrink-0">
+    <div className={cfg.wrapper}>
       <img
         src={imgSrc}
         alt="LeadLock Logo"
-        className="h-20 w-auto object-contain"
-        style={{ maxWidth: '380px' }}
+        className={cfg.img}
+        style={{ maxWidth: cfg.maxWidth }}
         onLoad={handleImageLoad}
         onError={handleImageError}
       />
@@ -64,12 +94,14 @@ export default function Logo({ disableLink = false }: { disableLink?: boolean })
     </div>
   );
 
+  const outerClass = size === 'sm' ? 'flex items-center' : logoWrapperClass;
+
   if (disableLink) {
-    return <div className={logoWrapperClass}>{content}</div>;
+    return <div className={outerClass}>{content}</div>;
   }
 
   return (
-    <Link href="/dashboard" className={`${logoWrapperClass} cursor-pointer hover:opacity-80 transition-opacity`}>
+    <Link href="/dashboard" className={`${outerClass} cursor-pointer hover:opacity-80 transition-opacity`}>
       {content}
     </Link>
   );
