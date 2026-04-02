@@ -15,7 +15,10 @@ from app.schemas import (
     EmailTemplatePreviewRequest,
     EmailTemplatePreviewResponse
 )
-from app.email_template_service import render_email_template, get_sample_customer_data
+from jinja2 import Template
+from jinja2.exceptions import TemplateSyntaxError, TemplateRuntimeError
+
+from app.email_template_service import get_email_template_preview_context
 
 router = APIRouter(prefix="/api/email-templates", tags=["email-templates"])
 
@@ -216,24 +219,31 @@ async def preview_email_template(
     if not template:
         raise HTTPException(status_code=404, detail="Email template not found")
     
-    # Get customer data (real or sample)
     if preview_data.customer_id:
         statement = select(Customer).where(Customer.id == preview_data.customer_id)
         customer = session.exec(statement).first()
         if not customer:
             raise HTTPException(status_code=404, detail="Customer not found")
-        
-        subject, body_html = render_email_template(template, customer)
+        ctx = get_email_template_preview_context(customer)
     else:
-        # Use sample data
-        from jinja2 import Template
-        subject_template = Template(template.subject_template)
-        body_template = Template(template.body_template)
-        sample_data = get_sample_customer_data()
-        
-        subject = subject_template.render(**sample_data)
-        body_html = body_template.render(**sample_data)
-    
+        ctx = get_email_template_preview_context(None)
+
+    try:
+        subject_tpl = Template(template.subject_template)
+        body_tpl = Template(template.body_template)
+        subject = subject_tpl.render(**ctx)
+        body_html = body_tpl.render(**ctx)
+    except TemplateSyntaxError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Template syntax error: {e!s}",
+        ) from e
+    except TemplateRuntimeError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=str(e),
+        ) from e
+
     return EmailTemplatePreviewResponse(
         subject=subject,
         body_html=body_html

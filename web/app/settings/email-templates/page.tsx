@@ -127,7 +127,14 @@ export default function EmailTemplatesPage() {
       setPreviewData(preview);
       setPreviewDialogOpen(true);
     } catch (error: any) {
-      toast.error('Failed to preview template');
+      const detail = error.response?.data?.detail;
+      const message =
+        typeof detail === 'string'
+          ? detail
+          : Array.isArray(detail)
+            ? detail.map((d: { msg?: string }) => d.msg || '').filter(Boolean).join(' ')
+            : 'Failed to preview template';
+      toast.error(message);
     }
   };
 
