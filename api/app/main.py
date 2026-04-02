@@ -177,12 +177,19 @@ def on_startup():
         raise
     print("=" * 50, file=sys.stderr, flush=True)
 
+    try:
+        from app.email_service import log_inbound_poll_configuration
+
+        log_inbound_poll_configuration()
+    except Exception as e:
+        print(f"Inbound config log failed: {e}", file=sys.stderr, flush=True)
+
     # Start IMAP polling background task (optional - don't crash if import/config fails)
     import threading
     import time
 
     def poll_imap():
-        """Background task to poll IMAP for new emails."""
+        """Background task to poll inbox for new emails (Graph or IMAP)."""
         from app.email_service import receive_emails
         from app.email_threading import find_thread_id_for_inbound
         from app.models import Email, Customer, Activity, ActivityType, EmailDirection
@@ -195,7 +202,7 @@ def on_startup():
                 # Receive emails (poll first so a deploy does not wait a full interval before the first run)
                 received = receive_emails()
                 if received:
-                    print(f"IMAP poll: processing {len(received)} message(s)", file=__import__("sys").stderr, flush=True)
+                    print(f"Inbound poll: processing {len(received)} message(s)", file=__import__("sys").stderr, flush=True)
                 
                 if received:
                     with Session(engine) as session:
@@ -206,19 +213,30 @@ def on_startup():
                                 # Extract email address (handle "Name <email@domain.com>" format)
                                 email_match = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', from_email)
                                 if not email_match:
+                                    print(
+                                        f"Inbound email skipped: could not parse From address: {from_email!r}",
+                                        file=__import__("sys").stderr,
+                                        flush=True,
+                                    )
                                     continue
-                                
+
                                 email_address = email_match.group(0).lower()
-                                
+
                                 # Find customer by email (case-insensitive)
                                 statement = select(Customer).where(
                                     Customer.email.isnot(None),
                                     func.lower(Customer.email) == email_address,
                                 )
                                 customer = session.exec(statement).first()
-                                
+
                                 if not customer:
-                                    # Skip emails from unknown customers
+                                    subj = (email_data.get("subject") or "")[:120]
+                                    print(
+                                        f"Inbound email skipped: no Customer with email={email_address} "
+                                        f"(subject={subj!r})",
+                                        file=__import__("sys").stderr,
+                                        flush=True,
+                                    )
                                     continue
                                 
                                 # Check if email already exists

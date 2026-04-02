@@ -737,10 +737,53 @@ def _parse_graph_datetime(s: Optional[str]) -> datetime:
         return datetime.utcnow()
 
 
+def log_inbound_poll_configuration() -> None:
+    """
+    Log how inbound email will be polled (no secrets). Call once at API startup.
+    """
+    import sys
+
+    poll_interval = int(os.getenv("IMAP_POLL_INTERVAL", "300"))
+    if _is_graph_configured():
+        mb = os.getenv("MSGRAPH_FROM_EMAIL", "").strip()
+        mode = (os.getenv("GRAPH_INBOUND_MODE") or "unread").strip().lower()
+        print(
+            f"Inbound email: Microsoft Graph — mailbox={mb}, GRAPH_INBOUND_MODE={mode}, "
+            f"poll_interval={poll_interval}s",
+            file=sys.stderr,
+            flush=True,
+        )
+        return
+    cfg = get_imap_config_for_poll()
+    if cfg.get("user") and cfg.get("password"):
+        host = cfg.get("host") or ""
+        user = cfg.get("user") or ""
+        search = (os.getenv("IMAP_SEARCH_MODE") or "unseen").strip().lower()
+        print(
+            f"Inbound email: IMAP — host={host} user={user} IMAP_SEARCH_MODE={search} "
+            f"poll_interval={poll_interval}s",
+            file=sys.stderr,
+            flush=True,
+        )
+        return
+    print(
+        "Inbound email: not configured — set Microsoft Graph (CLIENT_ID, CLIENT_SECRET, TENANT_ID, "
+        "MSGRAPH_FROM_EMAIL) or IMAP_HOST/IMAP_USER/IMAP_PASSWORD (or IMAP under My Settings). "
+        "Customer replies will not be imported.",
+        file=sys.stderr,
+        flush=True,
+    )
+
+
 def _receive_emails_via_graph() -> List[Dict]:
     """
-    List unread inbox messages via Microsoft Graph (OAuth) — works when M365 blocks IMAP basic auth.
+    List inbox messages via Microsoft Graph (OAuth) — works when M365 blocks IMAP basic auth.
     Requires Mail.Read (Application) permission. Marks messages read after listing (same behaviour as IMAP).
+
+    GRAPH_INBOUND_MODE:
+      - unread (default): only messages with isRead eq false (same as IMAP UNSEEN).
+      - recent: latest GRAPH_INBOUND_TOP messages by date regardless of read state; duplicates skipped in API by message_id.
+        Use when replies were opened in Outlook before LeadLock polled.
     """
     import httpx
     import sys
@@ -755,7 +798,6 @@ def _receive_emails_via_graph() -> List[Dict]:
         return []
 
     user_path = quote(mailbox, safe="")
-    # Optional: GRAPH_INBOUND_TOP (default 50), GRAPH_INBOUND_READ_FILTER (false = list recent + filter client-side)
     top = int(os.getenv("GRAPH_INBOUND_TOP", "50"))
     base_url = f"https://graph.microsoft.com/v1.0/users/{user_path}/mailFolders/inbox/messages"
 
@@ -765,14 +807,18 @@ def _receive_emails_via_graph() -> List[Dict]:
         r = httpx.get(base_url, params=params, headers=headers, timeout=30)
         return r
 
+    mode = (os.getenv("GRAPH_INBOUND_MODE") or "unread").strip().lower()
+    use_unread_only = mode != "recent"
+
     params = {
         "$top": str(top),
         "$orderby": "receivedDateTime desc",
-        "$filter": "isRead eq false",
         "$select": "id,internetMessageId,subject,from,toRecipients,body,receivedDateTime,isRead",
     }
+    if use_unread_only:
+        params["$filter"] = "isRead eq false"
     resp = _fetch(params)
-    if resp.status_code == 400:
+    if resp.status_code == 400 and use_unread_only:
         # Some tenants/query combinations reject $filter; retry without filter
         params.pop("$filter", None)
         resp = _fetch(params)
@@ -799,7 +845,7 @@ def _receive_emails_via_graph() -> List[Dict]:
     graph_ids_to_mark_read: List[str] = []
 
     for msg in items:
-        if msg.get("isRead") is True:
+        if use_unread_only and msg.get("isRead") is True:
             continue
         gid = msg.get("id")
         if not gid:
