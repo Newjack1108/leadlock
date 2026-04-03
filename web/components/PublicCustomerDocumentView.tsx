@@ -184,7 +184,6 @@ export default function PublicCustomerDocumentView() {
                     <tr className="border-b text-left text-muted-foreground">
                       <th className="py-2 pr-2">Description</th>
                       <th className="py-2 pr-2 w-24 text-right">Price (Ex VAT)</th>
-                      <th className="py-2 w-32 text-left">Available for</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -192,7 +191,6 @@ export default function PublicCustomerDocumentView() {
                       <tr key={i} className="border-b">
                         <td className="py-2 pr-2">{extra.name}</td>
                         <td className="py-2 pr-2 text-right">{formatAmount(extra.base_price, data.currency)}</td>
-                        <td className="py-2">{extra.for_product}</td>
                       </tr>
                     ))}
                   </tbody>

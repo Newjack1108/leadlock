@@ -1124,7 +1124,6 @@ class AvailableExtraResponse(BaseModel):
     """Optional extra available for products in the quote (not already quoted)."""
     name: str
     base_price: Decimal
-    for_product: str  # Parent product name
 
 
 class PublicQuoteCompanyDisplay(BaseModel):

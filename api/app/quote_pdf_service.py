@@ -742,19 +742,16 @@ def generate_quote_pdf(
             [
                 Paragraph("Description", extras_header_style),
                 Paragraph("Price (Ex VAT)", extras_header_style),
-                Paragraph("Available for", extras_header_style),
             ]
         ]
         for extra in available_optional_extras:
             name = getattr(extra, "name", str(extra.get("name", ""))) if hasattr(extra, "name") else str(extra.get("name", ""))
             price = getattr(extra, "base_price", extra.get("base_price", 0)) if hasattr(extra, "base_price") else extra.get("base_price", 0)
-            for_product = getattr(extra, "for_product", str(extra.get("for_product", ""))) if hasattr(extra, "for_product") else str(extra.get("for_product", ""))
             extras_data.append([
                 name,
                 format_currency(Decimal(str(price)), quote.currency),
-                for_product,
             ])
-        extras_table = Table(extras_data, colWidths=[70*mm, 35*mm, 55*mm])
+        extras_table = Table(extras_data, colWidths=[105*mm, 55*mm])
         extras_table.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e8f5e9")),
             ("TEXTCOLOR", (0, 0), (-1, 0), brand_color),

@@ -873,7 +873,6 @@ export interface PublicQuoteCompanyDisplay {
 export interface AvailableExtraResponse {
   name: string;
   base_price: number;
-  for_product: string;
 }
 
 export interface PublicQuoteView {

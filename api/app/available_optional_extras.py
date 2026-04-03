@@ -10,7 +10,7 @@ from app.models import Product, ProductOptionalExtra, QuoteItemLineType
 def get_available_optional_extras_for_quote(quote_items: list, session: Session) -> List[dict[str, Any]]:
     """
     Get optional extras linked to main products in the quote that are not already in the quote.
-    Each item is a dict with keys name, base_price, for_product (compatible with PDF and public API).
+    Each item is a dict with keys name, base_price (compatible with PDF and public API).
     """
     main_items = [
         i
@@ -28,10 +28,6 @@ def get_available_optional_extras_for_quote(quote_items: list, session: Session)
         pid = getattr(main_item, "product_id", None)
         if not pid:
             continue
-        parent_product_name = main_item.description or ""
-        parent_product = session.get(Product, pid)
-        if parent_product:
-            parent_product_name = parent_product.name or parent_product_name
 
         stmt = (
             select(ProductOptionalExtra, Product)
@@ -52,7 +48,6 @@ def get_available_optional_extras_for_quote(quote_items: list, session: Session)
                 {
                     "name": extra_product.name,
                     "base_price": extra_product.base_price or Decimal(0),
-                    "for_product": parent_product_name,
                 }
             )
     return result
