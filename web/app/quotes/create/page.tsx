@@ -103,6 +103,7 @@ function CreateQuoteContent() {
   const [notes, setNotes] = useState('');
   const [temperature, setTemperature] = useState<QuoteTemperature | ''>(QuoteTemperature.WARM);
   const [includeSpecSheets, setIncludeSpecSheets] = useState(true);
+  const [includeAvailableOptionalExtras, setIncludeAvailableOptionalExtras] = useState(false);
   const [depositAmount, setDepositAmount] = useState<number | ''>('');
   const [companySettings, setCompanySettings] = useState<any>(null);
   const [availableDiscounts, setAvailableDiscounts] = useState<DiscountTemplate[]>([]);
@@ -462,6 +463,7 @@ function CreateQuoteContent() {
         quoteData.temperature = temperature;
       }
       quoteData.include_spec_sheets = includeSpecSheets;
+      quoteData.include_available_optional_extras = includeAvailableOptionalExtras;
 
       const newQuote = await createQuote(quoteData);
       toast.success('Quote created successfully');
@@ -950,6 +952,18 @@ function CreateQuoteContent() {
                   />
                   <Label htmlFor="include_spec_sheets" className="font-normal cursor-pointer">
                     Include product spec sheets with PDF (dimensions, floor plan, specs for products in quote)
+                  </Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="include_available_optional_extras"
+                    checked={includeAvailableOptionalExtras}
+                    onChange={(e) => setIncludeAvailableOptionalExtras(e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300"
+                  />
+                  <Label htmlFor="include_available_optional_extras" className="font-normal cursor-pointer">
+                    Show available optional extras on customer quote (online view and PDF)
                   </Label>
                 </div>
                 <div className="space-y-2">

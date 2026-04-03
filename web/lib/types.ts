@@ -829,6 +829,8 @@ export interface Quote {
   owner_id?: number;
   temperature?: QuoteTemperature;
   include_spec_sheets?: boolean;
+  /** Show extras not yet on the quote in customer online view and PDF */
+  include_available_optional_extras?: boolean;
   total_open_count?: number;
   order_id?: number | null;
   customer_last_interacted_at?: string | null;

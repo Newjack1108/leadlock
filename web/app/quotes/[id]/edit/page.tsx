@@ -161,6 +161,7 @@ function EditQuoteContent() {
   const [notes, setNotes] = useState('');
   const [temperature, setTemperature] = useState<QuoteTemperature | ''>('');
   const [includeSpecSheets, setIncludeSpecSheets] = useState(true);
+  const [includeAvailableOptionalExtras, setIncludeAvailableOptionalExtras] = useState(false);
   const [depositAmount, setDepositAmount] = useState<number | ''>('');
   const [companySettings, setCompanySettings] = useState<any>(null);
   const [availableDiscounts, setAvailableDiscounts] = useState<DiscountTemplate[]>([]);
@@ -223,6 +224,7 @@ function EditQuoteContent() {
       setNotes(quoteData.notes ?? '');
       setTemperature(quoteData.temperature ?? '');
       setIncludeSpecSheets(quoteData.include_spec_sheets ?? true);
+      setIncludeAvailableOptionalExtras(quoteData.include_available_optional_extras ?? false);
       setDepositAmount(quoteData.deposit_amount ?? '');
       setSelectedDiscountIds(
         (quoteData.discounts ?? [])
@@ -495,6 +497,7 @@ function EditQuoteContent() {
       if (notes?.trim()) payload.notes = notes.trim();
       if (temperature) payload.temperature = temperature;
       payload.include_spec_sheets = includeSpecSheets;
+      payload.include_available_optional_extras = includeAvailableOptionalExtras;
       if (depositAmount !== '') payload.deposit_amount = Number(depositAmount);
 
       await updateDraftQuote(quoteId, payload);
@@ -1082,6 +1085,18 @@ function EditQuoteContent() {
                   />
                   <Label htmlFor="include_spec_sheets" className="font-normal cursor-pointer">
                     Include product spec sheets with PDF (dimensions, floor plan, specs for products in quote)
+                  </Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="include_available_optional_extras_edit"
+                    checked={includeAvailableOptionalExtras}
+                    onChange={(e) => setIncludeAvailableOptionalExtras(e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300"
+                  />
+                  <Label htmlFor="include_available_optional_extras_edit" className="font-normal cursor-pointer">
+                    Show available optional extras on customer quote (online view and PDF)
                   </Label>
                 </div>
                 <div className="space-y-2">

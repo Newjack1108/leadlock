@@ -129,7 +129,10 @@ export default function OrderDetailPage() {
       } else if ((order.deposit_paid || order.paid_in_full) && order.invoice_number) {
         await handleDepositInvoice();
       } else {
-        await previewQuotePdf(order.quote_id, { includeSpecSheets: false });
+        await previewQuotePdf(order.quote_id, {
+          includeSpecSheets: false,
+          includeOptionalExtras: false,
+        });
         toast.info('No invoice yet; showing quote. Mark deposit or paid in full to generate invoice.');
       }
     } catch (error: any) {

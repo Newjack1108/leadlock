@@ -482,7 +482,8 @@ class Quote(SQLModel, table=True):
     
     temperature: Optional[QuoteTemperature] = Field(default=None)
     include_spec_sheets: bool = Field(default=True)  # Include product spec sheets when generating quote PDF
-    
+    include_available_optional_extras: bool = Field(default=False)  # Show extras not on quote in customer view/PDF
+
     # Opportunity management fields
     opportunity_stage: Optional["OpportunityStage"] = Field(default=None)
     close_probability: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(5, 2)))  # 0-100 percentage

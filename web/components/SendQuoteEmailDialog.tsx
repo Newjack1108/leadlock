@@ -21,6 +21,7 @@ import {
   getQuoteTemplates,
   postQuoteShareLink,
   sendQuoteSms,
+  getQuote,
 } from '@/lib/api';
 import { QuoteEmailSendRequest, QuoteEmailSendResponse, Customer } from '@/lib/types';
 import { toast } from 'sonner';
@@ -109,8 +110,19 @@ export default function SendQuoteEmailDialog({
         }
       };
       fetchTemplates();
+      (async () => {
+        try {
+          const q = await getQuote(quoteId);
+          setFormData((prev) => ({
+            ...prev,
+            include_available_extras: q.include_available_optional_extras ?? false,
+          }));
+        } catch {
+          // keep default false
+        }
+      })();
     }
-  }, [open, customer, variant]);
+  }, [open, customer, variant, quoteId]);
 
   const handlePreview = async () => {
     try {

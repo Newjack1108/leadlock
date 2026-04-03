@@ -18,9 +18,6 @@ from app.models import (
     Quote,
     QuoteItem,
     Customer,
-    Product,
-    ProductOptionalExtra,
-    QuoteItemLineType,
     QuoteStatus,
     QuoteTemperature,
     WebsiteVisit,
@@ -29,11 +26,11 @@ from app.models import (
     AccessSheetRequest,
     Order,
 )
+from app.available_optional_extras import get_available_optional_extras_for_quote
 from app.schemas import (
     PublicQuoteViewResponse,
     PublicQuoteViewItemResponse,
     PublicQuoteCompanyDisplay,
-    AvailableExtraResponse,
     AccessSheetContextResponse,
     AccessSheetSubmitRequest,
 )
@@ -51,59 +48,6 @@ SITE_SLUG_TO_ENUM = {
     "csgb": TrackedWebsite.CSGB,
     "blc": TrackedWebsite.BLC,
 }
-
-
-def _get_available_optional_extras_for_quote(
-    quote_items: list, session: Session
-) -> list:
-    """
-    Get optional extras linked to main products in the quote that are not already in the quote.
-    Returns list of AvailableExtraResponse.
-    """
-    main_items = [
-        i
-        for i in quote_items
-        if getattr(i, "parent_quote_item_id", None) is None
-        and getattr(i, "line_type", None) not in (QuoteItemLineType.DELIVERY, QuoteItemLineType.INSTALLATION)
-        and getattr(i, "product_id", None) is not None
-    ]
-    already_in_quote = {getattr(i, "product_id", None) for i in quote_items if getattr(i, "product_id", None) is not None}
-
-    result = []
-    seen = set()  # (optional_extra_id, product_id) to deduplicate
-
-    for main_item in main_items:
-        pid = getattr(main_item, "product_id", None)
-        if not pid:
-            continue
-        parent_product_name = main_item.description or ""
-        parent_product = session.get(Product, pid)
-        if parent_product:
-            parent_product_name = parent_product.name or parent_product_name
-
-        stmt = (
-            select(ProductOptionalExtra, Product)
-            .join(Product, ProductOptionalExtra.optional_extra_id == Product.id)
-            .where(
-                ProductOptionalExtra.product_id == pid,
-                Product.is_active == True,
-            )
-        )
-        for link, extra_product in session.exec(stmt).all():
-            if extra_product.id in already_in_quote:
-                continue
-            key = (extra_product.id, pid)
-            if key in seen:
-                continue
-            seen.add(key)
-            result.append(
-                AvailableExtraResponse(
-                    name=extra_product.name,
-                    base_price=extra_product.base_price or Decimal(0),
-                    for_product=parent_product_name,
-                )
-            )
-    return result
 
 
 def _resolve_public_logo_url(
@@ -259,8 +203,11 @@ def get_public_quote_view(
         terms_and_conditions=quote.terms_and_conditions,
         company_display=company_display,
         available_optional_extras=(
-            _get_available_optional_extras_for_quote(list(items), session)
-            if getattr(quote_email, "include_available_extras", False)
+            get_available_optional_extras_for_quote(list(items), session)
+            if (
+                getattr(quote, "include_available_optional_extras", False)
+                or getattr(quote_email, "include_available_extras", False)
+            )
             else None
         ),
     )
@@ -318,10 +265,12 @@ def get_public_quote_pdf(
 
     try:
         include_spec_sheets = getattr(quote, "include_spec_sheets", True)
-        include_available_extras = getattr(quote_email, "include_available_extras", False)
+        show_optional_extras = getattr(quote, "include_available_optional_extras", False) or getattr(
+            quote_email, "include_available_extras", False
+        )
         available_extras = (
-            _get_available_optional_extras_for_quote(list(quote_items), session)
-            if include_available_extras
+            get_available_optional_extras_for_quote(list(quote_items), session)
+            if show_optional_extras
             else None
         )
         pdf_buffer = generate_quote_pdf(

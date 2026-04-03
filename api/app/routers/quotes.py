@@ -18,6 +18,7 @@ from app.customer_view_links import customer_view_path_segment
 from app.email_service import is_email_configured
 from app.sms_service import send_sms, normalize_phone
 from app.quote_pdf_service import generate_quote_pdf
+from app.available_optional_extras import get_available_optional_extras_for_quote
 from app.reminder_service import get_last_activity_date
 from app.constants import VAT_RATE_DECIMAL
 from app.quote_delete import delete_quote_cascade
@@ -206,6 +207,7 @@ def build_quote_response(quote: Quote, quote_items: List[QuoteItem], session: Se
         owner_id=quote.owner_id,
         temperature=quote.temperature,
         include_spec_sheets=getattr(quote, "include_spec_sheets", True),
+        include_available_optional_extras=getattr(quote, "include_available_optional_extras", False),
         total_open_count=total_open_count,
         order_id=order_id,
         customer_last_interacted_at=customer_last_interacted_at,
@@ -563,6 +565,7 @@ async def create_quote(
             created_by_id=current_user.id,
             temperature=quote_data.temperature,
             include_spec_sheets=getattr(quote_data, "include_spec_sheets", True),
+            include_available_optional_extras=getattr(quote_data, "include_available_optional_extras", False),
         )
         session.add(quote)
         session.commit()
@@ -1087,6 +1090,8 @@ def _update_draft_quote_impl(
         quote.temperature = quote_data.temperature
     if quote_data.include_spec_sheets is not None:
         quote.include_spec_sheets = quote_data.include_spec_sheets
+    if quote_data.include_available_optional_extras is not None:
+        quote.include_available_optional_extras = quote_data.include_available_optional_extras
 
     # Apply discounts if provided
     if quote_data.discount_template_ids:
@@ -1212,7 +1217,11 @@ async def get_quote_view_link(
         raise HTTPException(status_code=404, detail="Customer not found")
 
     _, view_url, _ = ensure_quote_share_link(
-        session, quote, customer, current_user, include_available_extras=False
+        session,
+        quote,
+        customer,
+        current_user,
+        include_available_extras=getattr(quote, "include_available_optional_extras", False),
     )
     return QuoteViewLinkResponse(view_url=view_url)
 
@@ -1660,6 +1669,10 @@ async def apply_discount_to_quote_endpoint(
 async def preview_quote_pdf(
     quote_id: int,
     include_spec_sheets: bool | None = Query(default=None, description="Override quote setting. False to exclude spec sheets (e.g. for order/invoice context)."),
+    include_optional_extras: bool | None = Query(
+        default=None,
+        description="Override quote setting for 'Other Available Options' section. None uses quote.include_available_optional_extras.",
+    ),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
@@ -1692,9 +1705,20 @@ async def preview_quote_pdf(
     # Generate PDF
     try:
         use_spec_sheets = include_spec_sheets if include_spec_sheets is not None else getattr(quote, "include_spec_sheets", True)
+        use_optional_extras = (
+            include_optional_extras
+            if include_optional_extras is not None
+            else getattr(quote, "include_available_optional_extras", False)
+        )
+        available_extras = (
+            get_available_optional_extras_for_quote(list(quote_items), session)
+            if use_optional_extras
+            else None
+        )
         pdf_buffer = generate_quote_pdf(
             quote, customer, quote_items, company_settings, session,
             include_spec_sheets=use_spec_sheets,
+            available_optional_extras=available_extras,
         )
         pdf_content = pdf_buffer.read()
         

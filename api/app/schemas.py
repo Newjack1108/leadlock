@@ -1016,6 +1016,7 @@ class QuoteCreate(BaseModel):
     discount_template_ids: Optional[List[int]] = None  # List of discount template IDs to apply
     temperature: Optional[QuoteTemperature] = None
     include_spec_sheets: bool = True  # Include product spec sheets when generating quote PDF
+    include_available_optional_extras: bool = False  # Show extras not on quote in customer view/PDF
 
 
 class QuoteDraftUpdate(BaseModel):
@@ -1028,6 +1029,7 @@ class QuoteDraftUpdate(BaseModel):
     discount_template_ids: Optional[List[int]] = None
     temperature: Optional[QuoteTemperature] = None
     include_spec_sheets: Optional[bool] = None  # Include product spec sheets when generating quote PDF
+    include_available_optional_extras: Optional[bool] = None  # Show extras not on quote in customer view/PDF
 
 
 class QuoteUpdate(BaseModel):
@@ -1037,6 +1039,7 @@ class QuoteUpdate(BaseModel):
     notes: Optional[str] = None
     deposit_amount: Optional[Decimal] = None  # inc VAT
     include_spec_sheets: Optional[bool] = None  # Include product spec sheets when generating quote PDF
+    include_available_optional_extras: Optional[bool] = None  # Show extras not on quote in customer view/PDF
     # Opportunity fields
     opportunity_stage: Optional["OpportunityStage"] = None
     close_probability: Optional[Decimal] = None
@@ -1090,6 +1093,7 @@ class QuoteResponse(BaseModel):
     owner_id: Optional[int] = None
     temperature: Optional[QuoteTemperature] = None
     include_spec_sheets: bool = True  # Include product spec sheets when generating quote PDF
+    include_available_optional_extras: bool = False  # Show extras not on quote in customer view/PDF
     total_open_count: int = 0  # Total times quote view link was opened (across all sends)
     order_id: Optional[int] = None  # Order ID when quote is accepted (for View order link)
     customer_last_interacted_at: Optional[datetime] = None  # Last Activity date for this customer

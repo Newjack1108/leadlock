@@ -48,6 +48,7 @@ export default function CreateQuoteDialog({
   const [notes, setNotes] = useState('');
   const [depositAmount, setDepositAmount] = useState<number | ''>('');
   const [includeSpecSheets, setIncludeSpecSheets] = useState(true);
+  const [includeAvailableOptionalExtras, setIncludeAvailableOptionalExtras] = useState(false);
   const [productDetails, setProductDetails] = useState<Record<number, Product>>({});
   const [termsExpanded, setTermsExpanded] = useState(false);
 
@@ -247,6 +248,7 @@ export default function CreateQuoteDialog({
         quoteData.deposit_amount = Number(depositAmount);
       }
       quoteData.include_spec_sheets = includeSpecSheets;
+      quoteData.include_available_optional_extras = includeAvailableOptionalExtras;
 
       await createQuote(quoteData);
       toast.success('Quote created successfully');
@@ -516,6 +518,18 @@ export default function CreateQuoteDialog({
                 />
                 <Label htmlFor="include_spec_sheets" className="font-normal cursor-pointer">
                   Include product spec sheets with PDF
+                </Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="include_available_optional_extras_dialog"
+                  checked={includeAvailableOptionalExtras}
+                  onChange={(e) => setIncludeAvailableOptionalExtras(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300"
+                />
+                <Label htmlFor="include_available_optional_extras_dialog" className="font-normal cursor-pointer">
+                  Show available optional extras on customer quote (online view and PDF)
                 </Label>
               </div>
               <div className="space-y-2">

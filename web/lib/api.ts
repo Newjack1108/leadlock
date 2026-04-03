@@ -545,6 +545,7 @@ export const createQuote = async (quoteData: {
   discount_template_ids?: number[];
   temperature?: QuoteTemperature;
   include_spec_sheets?: boolean;
+  include_available_optional_extras?: boolean;
 }) => {
   const response = await api.post('/api/quotes', quoteData);
   return response.data;
@@ -717,6 +718,7 @@ export const updateDraftQuote = async (quoteId: number, quoteData: {
   discount_template_ids?: number[];
   temperature?: QuoteTemperature;
   include_spec_sheets?: boolean;
+  include_available_optional_extras?: boolean;
 }) => {
   const response = await api.put(`/api/quotes/${quoteId}/draft`, quoteData);
   return response.data;
@@ -734,10 +736,12 @@ export const getLeadQuotes = async (leadId: number) => {
 
 export const previewQuotePdf = async (
   quoteId: number,
-  options?: { includeSpecSheets?: boolean }
+  options?: { includeSpecSheets?: boolean; includeOptionalExtras?: boolean }
 ) => {
-  const params =
-    options?.includeSpecSheets === false ? { include_spec_sheets: 'false' } : {};
+  const params: Record<string, string> = {};
+  if (options?.includeSpecSheets === false) params.include_spec_sheets = 'false';
+  if (options?.includeOptionalExtras === false) params.include_optional_extras = 'false';
+  if (options?.includeOptionalExtras === true) params.include_optional_extras = 'true';
   const response = await api.get(`/api/quotes/${quoteId}/preview-pdf`, {
     responseType: 'blob',
     params,
