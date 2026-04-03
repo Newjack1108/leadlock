@@ -7,11 +7,12 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak, Image, KeepTogether
 from reportlab.pdfgen import canvas
+from collections import defaultdict
 from typing import Optional, Tuple, List, Any
 from io import BytesIO
 from datetime import datetime
 from decimal import Decimal
-from app.models import Quote, Customer, QuoteItem, CompanySettings, Product, QuoteItemLineType
+from app.models import Quote, Customer, QuoteItem, CompanySettings, Product, QuoteItemLineType, QuoteDiscount
 from app.constants import VAT_RATE_DECIMAL, TRACKING_WEBSITE_BASE_URLS
 from sqlmodel import Session, select
 import os
@@ -26,6 +27,17 @@ def format_currency(amount: Decimal, currency: str = "GBP") -> str:
     if currency == "GBP":
         return f"£{amount:,.2f}"
     return f"{currency} {amount:,.2f}"
+
+
+def aggregate_quote_discount_lines(session: Session, quote_id: int) -> List[Tuple[str, Decimal]]:
+    """Group QuoteDiscount rows by description (template/custom name) for quotation display."""
+    statement = select(QuoteDiscount).where(QuoteDiscount.quote_id == quote_id)
+    rows = session.exec(statement).all()
+    by_desc: dict[str, Decimal] = defaultdict(Decimal)
+    for d in rows:
+        key = (d.description or "").strip() or "Discount"
+        by_desc[key] += d.discount_amount
+    return sorted(by_desc.items(), key=lambda x: x[0].casefold())
 
 
 def _image_from_bytes(
@@ -658,10 +670,18 @@ def generate_quote_pdf(
     # Add totals (label spans cols 0-2, value in col 3). All amounts Ex VAT.
     subtotal_row_index = len(table_data)
     table_data.append(["Subtotal (Ex VAT):", "", "", format_currency(quote.subtotal, quote.currency)])
-    discount_row_index = None
+    discount_row_indices: List[int] = []
     if quote.discount_total > 0:
-        discount_row_index = len(table_data)
-        table_data.append(["Discount:", "", "", format_currency(quote.discount_total, quote.currency)])
+        discount_lines: List[Tuple[str, Decimal]] = []
+        if session:
+            discount_lines = aggregate_quote_discount_lines(session, quote.id)
+        if discount_lines:
+            for desc, amt in discount_lines:
+                discount_row_indices.append(len(table_data))
+                table_data.append([f"Discount ({desc}):", "", "", format_currency(amt, quote.currency)])
+        else:
+            discount_row_indices.append(len(table_data))
+            table_data.append(["Discount:", "", "", format_currency(quote.discount_total, quote.currency)])
     total_ex_vat_row_index = len(table_data)
     table_data.append(["Total (Ex VAT):", "", "", format_currency(quote.total_amount, quote.currency)])
     vat_amount = quote.total_amount * VAT_RATE_DECIMAL
@@ -702,11 +722,11 @@ def generate_quote_pdf(
         ("FONTNAME", (0, vat_row_index), (3, vat_row_index), "Helvetica-Bold"),
         ("FONTNAME", (0, total_row_index), (3, total_row_index), "Helvetica-Bold"),
     ]
-    if discount_row_index is not None:
-        table_style_list.append(("SPAN", (0, discount_row_index), (2, discount_row_index)))
-        table_style_list.append(("ALIGN", (0, discount_row_index), (2, discount_row_index), "RIGHT"))
-        table_style_list.append(("TEXTCOLOR", (0, discount_row_index), (3, discount_row_index), colors.red))
-        table_style_list.append(("FONTNAME", (0, discount_row_index), (3, discount_row_index), "Helvetica-Bold"))
+    for idx in discount_row_indices:
+        table_style_list.append(("SPAN", (0, idx), (2, idx)))
+        table_style_list.append(("ALIGN", (0, idx), (2, idx), "RIGHT"))
+        table_style_list.append(("TEXTCOLOR", (0, idx), (3, idx), colors.red))
+        table_style_list.append(("FONTNAME", (0, idx), (3, idx), "Helvetica-Bold"))
     table_style_list.append(("SPAN", (0, total_ex_vat_row_index), (2, total_ex_vat_row_index)))
     table_style_list.append(("ALIGN", (0, total_ex_vat_row_index), (2, total_ex_vat_row_index), "RIGHT"))
     table_style_list.append(("SPAN", (0, vat_row_index), (2, vat_row_index)))

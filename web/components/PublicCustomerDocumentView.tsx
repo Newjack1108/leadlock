@@ -132,14 +132,26 @@ export default function PublicCustomerDocumentView() {
             </div>
 
             <div className="border-t pt-4 space-y-1 text-sm">
-              {data.discount_total > 0 && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Discount</span>
-                  <span className="font-bold text-red-600 dark:text-red-500">
-                    -{formatAmount(data.discount_total, data.currency)}
-                  </span>
-                </div>
-              )}
+              {data.discount_total > 0 &&
+                (data.discount_lines && data.discount_lines.length > 0 ? (
+                  data.discount_lines.map((line, i) => (
+                    <div key={i} className="flex justify-between">
+                      <span className="text-muted-foreground">
+                        Discount{line.description ? ` (${line.description})` : ''}
+                      </span>
+                      <span className="font-bold text-red-600 dark:text-red-500">
+                        -{formatAmount(line.discount_amount, data.currency)}
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Discount</span>
+                    <span className="font-bold text-red-600 dark:text-red-500">
+                      -{formatAmount(data.discount_total, data.currency)}
+                    </span>
+                  </div>
+                ))}
               <div className="flex justify-between font-medium">
                 <span>Total (ex VAT)</span>
                 <span>{formatAmount(data.total_amount, data.currency)}</span>

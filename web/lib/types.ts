@@ -875,6 +875,12 @@ export interface AvailableExtraResponse {
   base_price: number;
 }
 
+/** Named discount line on quotation (matches template/custom discount name). */
+export interface PublicQuoteDiscountLine {
+  description: string;
+  discount_amount: number;
+}
+
 export interface PublicQuoteView {
   quote_number: string;
   order_number?: string | null;
@@ -883,6 +889,7 @@ export interface PublicQuoteView {
   valid_until?: string;
   subtotal: number;
   discount_total: number;
+  discount_lines?: PublicQuoteDiscountLine[];
   total_amount: number;
   /** Deposit amount inc VAT */
   deposit_amount: number;

@@ -1126,6 +1126,12 @@ class AvailableExtraResponse(BaseModel):
     base_price: Decimal
 
 
+class PublicQuoteDiscountLineResponse(BaseModel):
+    """Named discount line for public quotation (aggregated by description)."""
+    description: str
+    discount_amount: Decimal
+
+
 class PublicQuoteCompanyDisplay(BaseModel):
     """Company display info for public quote view header (logo + contact)."""
     trading_name: Optional[str] = None
@@ -1149,6 +1155,7 @@ class PublicQuoteViewResponse(BaseModel):
     valid_until: Optional[datetime]
     subtotal: Decimal
     discount_total: Decimal
+    discount_lines: List[PublicQuoteDiscountLineResponse] = Field(default_factory=list)
     total_amount: Decimal
     deposit_amount: Decimal
     balance_amount: Decimal

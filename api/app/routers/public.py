@@ -31,11 +31,12 @@ from app.schemas import (
     PublicQuoteViewResponse,
     PublicQuoteViewItemResponse,
     PublicQuoteCompanyDisplay,
+    PublicQuoteDiscountLineResponse,
     AccessSheetContextResponse,
     AccessSheetSubmitRequest,
 )
 from app.constants import VAT_RATE_DECIMAL
-from app.quote_pdf_service import generate_quote_pdf
+from app.quote_pdf_service import aggregate_quote_discount_lines, generate_quote_pdf
 from app.temperature_service import recompute_quote_temperature
 
 router = APIRouter(prefix="/api/public", tags=["public"])
@@ -154,6 +155,22 @@ def get_public_quote_view(
     vat_amount = (quote.total_amount or Decimal(0)) * VAT_RATE_DECIMAL
     total_inc_vat = (quote.total_amount or Decimal(0)) + vat_amount
 
+    discount_lines: list[PublicQuoteDiscountLineResponse] = []
+    if quote.discount_total and quote.discount_total > 0:
+        aggregated = aggregate_quote_discount_lines(session, quote.id)
+        if aggregated:
+            discount_lines = [
+                PublicQuoteDiscountLineResponse(description=desc, discount_amount=amt)
+                for desc, amt in aggregated
+            ]
+        else:
+            discount_lines = [
+                PublicQuoteDiscountLineResponse(
+                    description="",
+                    discount_amount=quote.discount_total,
+                )
+            ]
+
     # Company display for header (logo + contact) – same as PDF
     company_display = None
     company_settings = session.exec(select(CompanySettings).limit(1)).first()
@@ -184,6 +201,7 @@ def get_public_quote_view(
         valid_until=quote.valid_until,
         subtotal=quote.subtotal,
         discount_total=quote.discount_total,
+        discount_lines=discount_lines,
         total_amount=quote.total_amount,
         deposit_amount=quote.deposit_amount,
         balance_amount=quote.balance_amount,
