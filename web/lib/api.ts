@@ -546,6 +546,7 @@ export const createQuote = async (quoteData: {
   temperature?: QuoteTemperature;
   include_spec_sheets?: boolean;
   include_available_optional_extras?: boolean;
+  include_delivery_installation_contact_note?: boolean;
 }) => {
   const response = await api.post('/api/quotes', quoteData);
   return response.data;
@@ -719,6 +720,7 @@ export const updateDraftQuote = async (quoteId: number, quoteData: {
   temperature?: QuoteTemperature;
   include_spec_sheets?: boolean;
   include_available_optional_extras?: boolean;
+  include_delivery_installation_contact_note?: boolean;
 }) => {
   const response = await api.put(`/api/quotes/${quoteId}/draft`, quoteData);
   return response.data;

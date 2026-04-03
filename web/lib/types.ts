@@ -841,6 +841,8 @@ export interface Quote {
   include_spec_sheets?: boolean;
   /** Show extras not yet on the quote in customer online view and PDF */
   include_available_optional_extras?: boolean;
+  /** Footer note: delivery/installation contact (SMS, email, phone) below totals */
+  include_delivery_installation_contact_note?: boolean;
   total_open_count?: number;
   order_id?: number | null;
   customer_last_interacted_at?: string | null;
@@ -901,6 +903,8 @@ export interface PublicQuoteView {
   terms_and_conditions?: string;
   company_display?: PublicQuoteCompanyDisplay;
   available_optional_extras?: AvailableExtraResponse[];
+  /** Full message when quote opts in; omitted when disabled */
+  delivery_installation_contact_note?: string | null;
 }
 
 export interface QuoteCreate {

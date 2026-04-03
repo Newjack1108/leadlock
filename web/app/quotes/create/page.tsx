@@ -104,6 +104,8 @@ function CreateQuoteContent() {
   const [temperature, setTemperature] = useState<QuoteTemperature | ''>(QuoteTemperature.WARM);
   const [includeSpecSheets, setIncludeSpecSheets] = useState(true);
   const [includeAvailableOptionalExtras, setIncludeAvailableOptionalExtras] = useState(false);
+  const [includeDeliveryInstallationContactNote, setIncludeDeliveryInstallationContactNote] =
+    useState(false);
   const [depositAmount, setDepositAmount] = useState<number | ''>('');
   const [companySettings, setCompanySettings] = useState<any>(null);
   const [availableDiscounts, setAvailableDiscounts] = useState<DiscountTemplate[]>([]);
@@ -464,6 +466,7 @@ function CreateQuoteContent() {
       }
       quoteData.include_spec_sheets = includeSpecSheets;
       quoteData.include_available_optional_extras = includeAvailableOptionalExtras;
+      quoteData.include_delivery_installation_contact_note = includeDeliveryInstallationContactNote;
 
       const newQuote = await createQuote(quoteData);
       toast.success('Quote created successfully');
@@ -964,6 +967,18 @@ function CreateQuoteContent() {
                   />
                   <Label htmlFor="include_available_optional_extras" className="font-normal cursor-pointer">
                     Show available optional extras on customer quote (online view and PDF)
+                  </Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="include_delivery_installation_contact_note"
+                    checked={includeDeliveryInstallationContactNote}
+                    onChange={(e) => setIncludeDeliveryInstallationContactNote(e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300"
+                  />
+                  <Label htmlFor="include_delivery_installation_contact_note" className="font-normal cursor-pointer">
+                    Show delivery and installation contact message below quote totals (SMS, email, phone)
                   </Label>
                 </div>
                 <div className="space-y-2">

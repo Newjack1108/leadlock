@@ -208,6 +208,7 @@ def build_quote_response(quote: Quote, quote_items: List[QuoteItem], session: Se
         temperature=quote.temperature,
         include_spec_sheets=getattr(quote, "include_spec_sheets", True),
         include_available_optional_extras=getattr(quote, "include_available_optional_extras", False),
+        include_delivery_installation_contact_note=getattr(quote, "include_delivery_installation_contact_note", False),
         total_open_count=total_open_count,
         order_id=order_id,
         customer_last_interacted_at=customer_last_interacted_at,
@@ -566,6 +567,7 @@ async def create_quote(
             temperature=quote_data.temperature,
             include_spec_sheets=getattr(quote_data, "include_spec_sheets", True),
             include_available_optional_extras=getattr(quote_data, "include_available_optional_extras", False),
+            include_delivery_installation_contact_note=getattr(quote_data, "include_delivery_installation_contact_note", False),
         )
         session.add(quote)
         session.commit()
@@ -1092,6 +1094,8 @@ def _update_draft_quote_impl(
         quote.include_spec_sheets = quote_data.include_spec_sheets
     if quote_data.include_available_optional_extras is not None:
         quote.include_available_optional_extras = quote_data.include_available_optional_extras
+    if quote_data.include_delivery_installation_contact_note is not None:
+        quote.include_delivery_installation_contact_note = quote_data.include_delivery_installation_contact_note
 
     # Apply discounts if provided
     if quote_data.discount_template_ids:

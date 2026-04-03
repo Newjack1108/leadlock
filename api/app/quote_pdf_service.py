@@ -13,7 +13,7 @@ from io import BytesIO
 from datetime import datetime
 from decimal import Decimal
 from app.models import Quote, Customer, QuoteItem, CompanySettings, Product, QuoteItemLineType, QuoteDiscount
-from app.constants import VAT_RATE_DECIMAL, TRACKING_WEBSITE_BASE_URLS
+from app.constants import VAT_RATE_DECIMAL, TRACKING_WEBSITE_BASE_URLS, DELIVERY_INSTALLATION_CONTACT_NOTE
 from sqlmodel import Session, select
 import os
 import sys
@@ -745,6 +745,18 @@ def generate_quote_pdf(
     items_table = Table(table_data, colWidths=[90*mm, 25*mm, 30*mm, 35*mm])
     items_table.setStyle(TableStyle(table_style_list))
     elements.append(items_table)
+    if getattr(quote, "include_delivery_installation_contact_note", False):
+        delivery_note_style = ParagraphStyle(
+            "DeliveryInstallNote",
+            parent=normal_style,
+            fontSize=8,
+            textColor=colors.HexColor("#555555"),
+            spaceBefore=6,
+            leading=11,
+        )
+        elements.append(
+            Paragraph(DELIVERY_INSTALLATION_CONTACT_NOTE.replace("&", "&amp;"), delivery_note_style)
+        )
     elements.append(Spacer(1, 8))
 
     # Other Available Options (optional extras not in quote) – after totals, before terms
@@ -783,6 +795,17 @@ def generate_quote_pdf(
             ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#e0e0e0")),
         ]))
         elements.append(extras_table)
+        extras_footnote_style = ParagraphStyle(
+            "ExtrasFootnote",
+            parent=normal_style,
+            fontSize=7,
+            textColor=colors.HexColor("#888888"),
+            spaceBefore=4,
+            leading=9,
+        )
+        elements.append(
+            Paragraph("Optional extras are priced per 12ft box", extras_footnote_style)
+        )
         elements.append(Spacer(1, 8))
 
     # Footer drawn on every page via onFirstPage/onLaterPages (not flowables)

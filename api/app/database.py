@@ -511,6 +511,19 @@ def create_db_and_tables():
                     if "already exists" not in error_str and "duplicate" not in error_str:
                         print(f"Warning: Could not add include_available_optional_extras column: {col_error}", file=sys.stderr, flush=True)
 
+            # Add include_delivery_installation_contact_note to quote table
+            quote_columns = [col['name'] for col in inspector.get_columns("quote")]
+            if "include_delivery_installation_contact_note" not in quote_columns:
+                print("Adding include_delivery_installation_contact_note column to quote table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE quote ADD COLUMN include_delivery_installation_contact_note BOOLEAN DEFAULT FALSE"))
+                    print("Added include_delivery_installation_contact_note column to quote table", file=sys.stderr, flush=True)
+                except Exception as col_error:
+                    error_str = str(col_error).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Warning: Could not add include_delivery_installation_contact_note column: {col_error}", file=sys.stderr, flush=True)
+
             # Add lead_id to quote table (quote generated from lead)
             quote_columns = [col['name'] for col in inspector.get_columns("quote")]
             if "lead_id" not in quote_columns:

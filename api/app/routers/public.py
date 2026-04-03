@@ -35,7 +35,7 @@ from app.schemas import (
     AccessSheetContextResponse,
     AccessSheetSubmitRequest,
 )
-from app.constants import VAT_RATE_DECIMAL
+from app.constants import VAT_RATE_DECIMAL, DELIVERY_INSTALLATION_CONTACT_NOTE
 from app.quote_pdf_service import aggregate_quote_discount_lines, generate_quote_pdf
 from app.temperature_service import recompute_quote_temperature
 
@@ -226,6 +226,11 @@ def get_public_quote_view(
                 getattr(quote, "include_available_optional_extras", False)
                 or getattr(quote_email, "include_available_extras", False)
             )
+            else None
+        ),
+        delivery_installation_contact_note=(
+            DELIVERY_INSTALLATION_CONTACT_NOTE
+            if getattr(quote, "include_delivery_installation_contact_note", False)
             else None
         ),
     )

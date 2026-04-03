@@ -162,6 +162,8 @@ function EditQuoteContent() {
   const [temperature, setTemperature] = useState<QuoteTemperature | ''>('');
   const [includeSpecSheets, setIncludeSpecSheets] = useState(true);
   const [includeAvailableOptionalExtras, setIncludeAvailableOptionalExtras] = useState(false);
+  const [includeDeliveryInstallationContactNote, setIncludeDeliveryInstallationContactNote] =
+    useState(false);
   const [depositAmount, setDepositAmount] = useState<number | ''>('');
   const [companySettings, setCompanySettings] = useState<any>(null);
   const [availableDiscounts, setAvailableDiscounts] = useState<DiscountTemplate[]>([]);
@@ -225,6 +227,9 @@ function EditQuoteContent() {
       setTemperature(quoteData.temperature ?? '');
       setIncludeSpecSheets(quoteData.include_spec_sheets ?? true);
       setIncludeAvailableOptionalExtras(quoteData.include_available_optional_extras ?? false);
+      setIncludeDeliveryInstallationContactNote(
+        quoteData.include_delivery_installation_contact_note ?? false
+      );
       setDepositAmount(quoteData.deposit_amount ?? '');
       setSelectedDiscountIds(
         (quoteData.discounts ?? [])
@@ -498,6 +503,7 @@ function EditQuoteContent() {
       if (temperature) payload.temperature = temperature;
       payload.include_spec_sheets = includeSpecSheets;
       payload.include_available_optional_extras = includeAvailableOptionalExtras;
+      payload.include_delivery_installation_contact_note = includeDeliveryInstallationContactNote;
       if (depositAmount !== '') payload.deposit_amount = Number(depositAmount);
 
       await updateDraftQuote(quoteId, payload);
@@ -1097,6 +1103,18 @@ function EditQuoteContent() {
                   />
                   <Label htmlFor="include_available_optional_extras_edit" className="font-normal cursor-pointer">
                     Show available optional extras on customer quote (online view and PDF)
+                  </Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="include_delivery_installation_contact_note_edit"
+                    checked={includeDeliveryInstallationContactNote}
+                    onChange={(e) => setIncludeDeliveryInstallationContactNote(e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300"
+                  />
+                  <Label htmlFor="include_delivery_installation_contact_note_edit" className="font-normal cursor-pointer">
+                    Show delivery and installation contact message below quote totals (SMS, email, phone)
                   </Label>
                 </div>
                 <div className="space-y-2">

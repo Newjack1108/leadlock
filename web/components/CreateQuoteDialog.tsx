@@ -49,6 +49,8 @@ export default function CreateQuoteDialog({
   const [depositAmount, setDepositAmount] = useState<number | ''>('');
   const [includeSpecSheets, setIncludeSpecSheets] = useState(true);
   const [includeAvailableOptionalExtras, setIncludeAvailableOptionalExtras] = useState(false);
+  const [includeDeliveryInstallationContactNote, setIncludeDeliveryInstallationContactNote] =
+    useState(false);
   const [productDetails, setProductDetails] = useState<Record<number, Product>>({});
   const [termsExpanded, setTermsExpanded] = useState(false);
 
@@ -249,6 +251,7 @@ export default function CreateQuoteDialog({
       }
       quoteData.include_spec_sheets = includeSpecSheets;
       quoteData.include_available_optional_extras = includeAvailableOptionalExtras;
+      quoteData.include_delivery_installation_contact_note = includeDeliveryInstallationContactNote;
 
       await createQuote(quoteData);
       toast.success('Quote created successfully');
@@ -530,6 +533,18 @@ export default function CreateQuoteDialog({
                 />
                 <Label htmlFor="include_available_optional_extras_dialog" className="font-normal cursor-pointer">
                   Show available optional extras on customer quote (online view and PDF)
+                </Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="include_delivery_installation_contact_note_dialog"
+                  checked={includeDeliveryInstallationContactNote}
+                  onChange={(e) => setIncludeDeliveryInstallationContactNote(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300"
+                />
+                <Label htmlFor="include_delivery_installation_contact_note_dialog" className="font-normal cursor-pointer">
+                  Show delivery and installation contact message below quote totals (SMS, email, phone)
                 </Label>
               </div>
               <div className="space-y-2">

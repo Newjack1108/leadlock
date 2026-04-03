@@ -13,3 +13,9 @@ TRACKING_WEBSITE_BASE_URLS = [
     ("https://www.beaverlogcabins.co.uk", "www.beaverlogcabins.co.uk"),
     ("https://www.cheshirestables.co.uk", "www.cheshirestables.co.uk"),
 ]
+
+# Shown on quote PDF / public view when quote.include_delivery_installation_contact_note is True
+DELIVERY_INSTALLATION_CONTACT_NOTE = (
+    "Delivery and installation available on request please contact us via SMS 07782352354, "
+    "Email cheshirestables@csgbsales.co.uk or Call on 01606 272788"
+)

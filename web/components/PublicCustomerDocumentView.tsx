@@ -180,6 +180,11 @@ export default function PublicCustomerDocumentView() {
                   <span>{formatAmount(data.balance_amount, data.currency)}</span>
                 </div>
               )}
+              {data.delivery_installation_contact_note && (
+                <p className="text-sm text-muted-foreground pt-3 mt-2 border-t border-border">
+                  {data.delivery_installation_contact_note}
+                </p>
+              )}
             </div>
 
             {data.valid_until && (
@@ -207,6 +212,9 @@ export default function PublicCustomerDocumentView() {
                     ))}
                   </tbody>
                 </table>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Optional extras are priced per 12ft box
+                </p>
               </div>
             )}
 
