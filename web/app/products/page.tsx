@@ -27,7 +27,7 @@ import {
 import { Plus, Edit, Trash2, Package, List, LayoutGrid } from 'lucide-react';
 import Link from 'next/link';
 import api from '@/lib/api';
-import { Product, ProductCategory } from '@/lib/types';
+import { Product, ProductCategory, PRODUCT_SUBCATEGORIES, ProductSubcategory } from '@/lib/types';
 import { toast } from 'sonner';
 
 const PRODUCT_UNIT_OPTIONS = ['Per Box', 'Unit', 'Set'] as const;
@@ -38,6 +38,7 @@ export default function ProductsPage() {
   const [loading, setLoading] = useState(true);
   const [categoryFilter, setCategoryFilter] = useState<ProductCategory | 'ALL'>('ALL');
   const [extrasFilter, setExtrasFilter] = useState<'ALL' | true | false>(false);
+  const [subcategoryFilter, setSubcategoryFilter] = useState<'ALL' | ProductSubcategory>('ALL');
   const [viewMode, setViewMode] = useState<'list' | 'tile'>('list');
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -57,7 +58,7 @@ export default function ProductsPage() {
 
   useEffect(() => {
     fetchProducts();
-  }, [categoryFilter, extrasFilter]);
+  }, [categoryFilter, extrasFilter, subcategoryFilter]);
 
   const fetchProducts = async () => {
     try {
@@ -68,6 +69,9 @@ export default function ProductsPage() {
       }
       if (extrasFilter !== 'ALL') {
         params.is_extra = extrasFilter;
+      }
+      if (subcategoryFilter !== 'ALL') {
+        params.subcategory = subcategoryFilter;
       }
 
       const response = await api.get('/api/products', { params });
@@ -192,6 +196,22 @@ export default function ProductsPage() {
                 <SelectItem value="ALL">All Types</SelectItem>
                 <SelectItem value="false">Regular Products</SelectItem>
                 <SelectItem value="true">Extras Only</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select
+              value={subcategoryFilter}
+              onValueChange={(value) => setSubcategoryFilter(value as 'ALL' | ProductSubcategory)}
+            >
+              <SelectTrigger className="w-full md:w-[200px]">
+                <SelectValue placeholder="Subcategory" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All Subcategories</SelectItem>
+                {PRODUCT_SUBCATEGORIES.map((sub) => (
+                  <SelectItem key={sub} value={sub}>
+                    {sub}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>

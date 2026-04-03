@@ -17,6 +17,7 @@ async def get_products(
     category: Optional[ProductCategory] = Query(None),
     is_extra: Optional[bool] = Query(None),
     is_active: Optional[bool] = Query(None),
+    subcategory: Optional[str] = Query(None),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
@@ -28,6 +29,9 @@ async def get_products(
     
     if is_extra is not None:
         statement = statement.where(Product.is_extra == is_extra)
+
+    if subcategory:
+        statement = statement.where(Product.subcategory == subcategory)
     
     # Default to active products if is_active is not specified
     if is_active is None:

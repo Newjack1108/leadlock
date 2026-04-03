@@ -37,6 +37,16 @@ export enum ProductCategory {
   CABINS = "CABINS",
 }
 
+/** Fixed subcategory labels for catalog filtering and forms (matches Product.subcategory). */
+export const PRODUCT_SUBCATEGORIES = [
+  "Standard",
+  "Extras",
+  "Bespoke",
+  "Other",
+] as const;
+
+export type ProductSubcategory = (typeof PRODUCT_SUBCATEGORIES)[number];
+
 export enum LeadType {
   UNKNOWN = "UNKNOWN",
   STABLES = "STABLES",
