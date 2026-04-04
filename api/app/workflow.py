@@ -48,25 +48,28 @@ def get_allowed_transitions(user_role: UserRole, current_status: LeadStatus) -> 
 
 def check_quote_prerequisites(customer: Customer, session: Session) -> tuple[bool, Optional[dict]]:
     """
-    Check if customer profile is complete for quote creation.
+    Check if customer profile meets quote contact rules.
+    At least two of postcode, email, and phone must be present (any pair).
     Returns (can_quote, error_dict)
     """
     missing = []
-    
-    # Customer profile requirements (address_line1, city, county are optional)
+
+    # Customer profile: need any two of postcode, email, phone
     if not customer.postcode:
         missing.append("postcode")
-    
+
     if not customer.email:
         missing.append("email")
-    
+
     if not customer.phone:
         missing.append("phone")
-    
-    if missing:
+
+    contact_filled = 3 - len(missing)
+    if contact_filled < 2:
         return False, {
             "error": "QUOTE_PREREQS_MISSING",
-            "missing": missing
+            "missing": missing,
+            "message": "At least two of postcode, email, and phone are required.",
         }
     
     # Engagement proof: only required when company setting is enabled

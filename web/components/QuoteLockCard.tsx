@@ -22,7 +22,8 @@ export default function QuoteLockCard({ customer, quoteLocked = false, quoteLock
   const hasPostcode = !!customer.postcode;
   const hasEmail = !!customer.email;
   const hasPhone = !!customer.phone;
-  
+  const prereqsMissing = reason?.error === 'QUOTE_PREREQS_MISSING';
+
   // Map missing field names to display names
   const fieldDisplayNames: Record<string, string> = {
     'postcode': 'Postcode',
@@ -51,11 +52,15 @@ export default function QuoteLockCard({ customer, quoteLocked = false, quoteLock
         {isLocked ? (
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Complete the requirements below to unlock quote sending:
+              {prereqsMissing
+                ? 'You need at least two of postcode, email, and phone on the customer to unlock quoting.'
+                : reason?.error === 'NO_ENGAGEMENT_PROOF'
+                  ? 'Contact details meet the two-of-three rule. Your company still requires engagement proof before quoting.'
+                  : 'Complete the requirements below to unlock quote sending.'}
             </p>
             <div className="space-y-2">
               <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                Customer Profile
+                Customer profile (any two unlock)
               </div>
               <div className="flex items-center gap-2">
                 {hasPostcode ? (
@@ -63,9 +68,8 @@ export default function QuoteLockCard({ customer, quoteLocked = false, quoteLock
                 ) : (
                   <XCircle className="h-4 w-4 text-destructive" />
                 )}
-                <span className={hasPostcode ? 'text-foreground' : missingItems.includes('postcode') ? 'text-destructive font-medium' : 'text-muted-foreground'}>
+                <span className={hasPostcode ? 'text-foreground' : prereqsMissing && missingItems.includes('postcode') ? 'text-destructive font-medium' : 'text-muted-foreground'}>
                   Postcode
-                  {missingItems.includes('postcode') && <span className="ml-1 text-xs">(Required)</span>}
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -74,9 +78,8 @@ export default function QuoteLockCard({ customer, quoteLocked = false, quoteLock
                 ) : (
                   <XCircle className="h-4 w-4 text-destructive" />
                 )}
-                <span className={hasEmail ? 'text-foreground' : missingItems.includes('email') ? 'text-destructive font-medium' : 'text-muted-foreground'}>
+                <span className={hasEmail ? 'text-foreground' : prereqsMissing && missingItems.includes('email') ? 'text-destructive font-medium' : 'text-muted-foreground'}>
                   Email
-                  {missingItems.includes('email') && <span className="ml-1 text-xs">(Required)</span>}
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -85,16 +88,19 @@ export default function QuoteLockCard({ customer, quoteLocked = false, quoteLock
                 ) : (
                   <XCircle className="h-4 w-4 text-destructive" />
                 )}
-                <span className={hasPhone ? 'text-foreground' : missingItems.includes('phone') ? 'text-destructive font-medium' : 'text-muted-foreground'}>
+                <span className={hasPhone ? 'text-foreground' : prereqsMissing && missingItems.includes('phone') ? 'text-destructive font-medium' : 'text-muted-foreground'}>
                   Phone
-                  {missingItems.includes('phone') && <span className="ml-1 text-xs">(Required)</span>}
                 </span>
               </div>
-              {reason?.error === 'QUOTE_PREREQS_MISSING' && missingItems.length > 0 && (
+              {prereqsMissing && missingItems.length > 0 && (
                 <div className="mt-3 pt-3 border-t border-border space-y-2">
                   <div className="text-xs font-semibold text-destructive uppercase tracking-wide mb-2">
-                    Missing Required Fields
+                    Still needed for quote unlock
                   </div>
+                  <p className="text-sm text-muted-foreground">
+                    {reason?.message ||
+                      `Fill in any ${missingItems.length === 3 ? 'two' : 'one'} of: ${missingItems.map((f) => fieldDisplayNames[f] || f).join(', ')}.`}
+                  </p>
                   {missingItems.map((field: string) => (
                     <div key={field} className="flex items-center gap-2">
                       <XCircle className="h-4 w-4 text-destructive" />
@@ -127,7 +133,7 @@ export default function QuoteLockCard({ customer, quoteLocked = false, quoteLock
           <div className="flex items-center gap-2 text-success">
             <CheckCircle2 className="h-5 w-5" />
             <p className="text-sm font-medium">
-              All requirements met. You can now send a quote.
+              Contact details and other quote rules are satisfied. You can send a quote.
             </p>
           </div>
         )}
