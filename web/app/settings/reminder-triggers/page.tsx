@@ -322,7 +322,7 @@ export default function ReminderTriggersPage() {
     return (
       <div className="min-h-screen">
         <Header />
-        <div className="container mx-auto px-6 py-8">
+        <div className="container mx-auto px-4 sm:px-6 py-8">
           <div className="text-center py-12 text-muted-foreground">Loading...</div>
         </div>
       </div>
@@ -332,7 +332,7 @@ export default function ReminderTriggersPage() {
   return (
     <div className="min-h-screen">
       <Header />
-      <main className="container mx-auto px-6 py-8">
+      <main className="container mx-auto px-4 sm:px-6 py-8">
         <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h1 className="text-3xl font-semibold mb-2">Reminder Triggers</h1>

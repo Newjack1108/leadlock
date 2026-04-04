@@ -219,7 +219,7 @@ function LeadsPageContent() {
   return (
     <div className="min-h-screen">
       <Header />
-      <main className="container mx-auto px-6 py-8">
+      <main className="container mx-auto px-4 sm:px-6 py-8">
         <div className="mb-6">
           <h1 className="text-3xl font-semibold mb-6">Leads</h1>
           
@@ -235,7 +235,7 @@ function LeadsPageContent() {
               />
             </div>
             <Select value={leadTypeFilter} onValueChange={(value) => setLeadTypeFilter(value as LeadType | 'ALL')}>
-              <SelectTrigger className="w-[150px]">
+              <SelectTrigger className="w-full sm:w-[150px]">
                 <SelectValue placeholder="Lead Type" />
               </SelectTrigger>
               <SelectContent>
@@ -246,7 +246,7 @@ function LeadsPageContent() {
               </SelectContent>
             </Select>
             <Select value={leadSourceFilter} onValueChange={(value) => setLeadSourceFilter(value as LeadSource | 'ALL')}>
-              <SelectTrigger className="w-[150px]">
+              <SelectTrigger className="w-full sm:w-[150px]">
                 <SelectValue placeholder="Lead Source" />
               </SelectTrigger>
               <SelectContent>
@@ -299,7 +299,7 @@ function LeadsPageContent() {
                   <CardContent className="p-6">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
+                        <div className="flex flex-wrap items-center gap-3 mb-2">
                           <h3 className="text-lg font-semibold">{lead.name}</h3>
                           <Badge className={statusColors[lead.status]}>
                             {lead.status.replace('_', ' ')}
@@ -476,7 +476,7 @@ export default function LeadsPage() {
     <Suspense fallback={
       <div className="min-h-screen">
         <Header />
-        <main className="container mx-auto px-6 py-8">
+        <main className="container mx-auto px-4 sm:px-6 py-8">
           <div className="text-center py-12 text-muted-foreground">Loading...</div>
         </main>
       </div>

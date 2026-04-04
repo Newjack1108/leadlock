@@ -109,7 +109,7 @@ function QuotesPageContent() {
     return (
       <div className="min-h-screen">
         <Header />
-        <div className="container mx-auto px-6 py-8">
+        <div className="container mx-auto px-4 sm:px-6 py-8">
           <div className="text-center py-12 text-muted-foreground">Loading...</div>
         </div>
       </div>
@@ -119,7 +119,7 @@ function QuotesPageContent() {
   return (
     <div className="min-h-screen">
       <Header />
-      <main className="container mx-auto px-6 py-8">
+      <main className="container mx-auto px-4 sm:px-6 py-8">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-3xl font-semibold">Quotes</h1>
           {quotes.length > 0 && (
@@ -416,7 +416,7 @@ export default function QuotesPage() {
     <Suspense fallback={
       <div className="min-h-screen">
         <Header />
-        <main className="container mx-auto px-6 py-8">
+        <main className="container mx-auto px-4 sm:px-6 py-8">
           <div className="text-center py-12 text-muted-foreground">Loading...</div>
         </main>
       </div>

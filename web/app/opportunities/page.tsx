@@ -88,7 +88,7 @@ export default function OpportunitiesPage() {
   return (
     <div className="min-h-screen">
       <Header />
-      <main className="container mx-auto px-6 py-8">
+      <main className="container mx-auto px-4 sm:px-6 py-8">
         <div className="mb-6">
           <h1 className="text-3xl font-semibold mb-6">Opportunities</h1>
           

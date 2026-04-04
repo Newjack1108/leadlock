@@ -5,7 +5,24 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Logo from './Logo';
 import { Button } from '@/components/ui/button';
-import { LogOut, Users, Settings, Package, User, Mail, Bell, FileText, ShoppingCart, ChevronDown, Gift, Send, MessageSquare, FolderOpen, LayoutDashboard } from 'lucide-react';
+import {
+  LogOut,
+  Users,
+  Settings,
+  Package,
+  User,
+  Mail,
+  Bell,
+  FileText,
+  ShoppingCart,
+  ChevronDown,
+  Gift,
+  Send,
+  MessageSquare,
+  FolderOpen,
+  LayoutDashboard,
+  Menu,
+} from 'lucide-react';
 import api from '@/lib/api';
 import {
   getStaleSummary,
@@ -22,6 +39,22 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Sheet,
+  SheetContent,
+  SheetTitle,
+  SheetTrigger,
+} from '@/components/ui/sheet';
+import { cn } from '@/lib/utils';
+
+function BadgePill({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return (
+    <span className="min-w-[22px] h-5 px-1 rounded-full bg-red-500 text-white text-xs font-semibold flex items-center justify-center shrink-0">
+      {count > 99 ? '99+' : count}
+    </span>
+  );
+}
 
 export default function Header() {
   const router = useRouter();
@@ -32,14 +65,14 @@ export default function Header() {
   const [unreadMessagesCount, setUnreadMessagesCount] = useState<number>(0);
   const [pendingDiscountCount, setPendingDiscountCount] = useState<number>(0);
   const [newQualifiedDashboardCount, setNewQualifiedDashboardCount] = useState<number>(0);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   useEffect(() => {
     const fetchUser = async () => {
       try {
         const response = await api.get('/api/auth/me');
         setUserRole(response.data.role);
-      } catch (error) {
-        // User not authenticated or error fetching user
+      } catch {
         setUserRole(null);
       }
     };
@@ -50,8 +83,7 @@ export default function Header() {
     try {
       const summary = await getStaleSummary();
       setReminderCount(summary.total_reminders || 0);
-    } catch (error) {
-      // Silently fail to avoid disrupting navigation
+    } catch {
       setReminderCount(0);
     }
   };
@@ -60,8 +92,7 @@ export default function Header() {
     try {
       const response = await api.get('/api/dashboard/stats');
       setNewLeadsCount(response.data.new_count || 0);
-    } catch (error) {
-      // Silently fail to avoid disrupting navigation
+    } catch {
       setNewLeadsCount(0);
     }
   };
@@ -99,6 +130,7 @@ export default function Header() {
     }
   };
 
+  /* eslint-disable react-hooks/set-state-in-effect -- async API helpers update badge state after await; not synchronous setState */
   useEffect(() => {
     fetchReminderCount();
     fetchNewLeadsCount();
@@ -108,39 +140,46 @@ export default function Header() {
     }
     if (userRole === 'CLOSER') {
       fetchNewQualifiedDashboardCount();
-    } else {
-      setNewQualifiedDashboardCount(0);
     }
   }, [pathname, userRole]);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  const closerQualifiedBadgeCount =
+    userRole === 'CLOSER' ? newQualifiedDashboardCount : 0;
 
   const handleLogout = () => {
-    // Clear token from localStorage
     localStorage.removeItem('token');
-    // Clear token cookie
     document.cookie = 'token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-    // Redirect to login
     router.push('/login');
-    // Force a hard reload to clear any cached state
     window.location.href = '/login';
   };
+
+  const closeMobile = () => setMobileNavOpen(false);
 
   const isDirector = userRole === 'DIRECTOR';
   const isCloser = userRole === 'CLOSER';
   const canApproveDiscounts = userRole === 'DIRECTOR' || userRole === 'SALES_MANAGER';
 
+  const mobileNavLinkClass =
+    'flex w-full min-h-11 items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground';
+
   return (
     <header className="border-b border-border bg-card shadow-sm">
-      <div className="container mx-auto px-6 py-0 flex items-center justify-between">
-        <Logo disableLink={isCloser} />
-        <nav className="flex items-center gap-4">
-          {/* Closer: Leads first, then Dashboard with new-qualified badge; Director/Sales Manager: Leads first */}
+      <div className="container mx-auto flex items-center justify-between px-4 py-0 sm:px-6">
+        <Logo disableLink={isCloser} size="header" />
+        {/* Desktop nav */}
+        <nav className="hidden lg:flex items-center gap-4">
           {isCloser ? (
             <>
               <Link href="/leads" className="relative">
                 <Button
                   variant={pathname?.startsWith('/leads') ? 'default' : 'ghost'}
                   size="sm"
-                  className={pathname?.startsWith('/leads') ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}
+                  className={
+                    pathname?.startsWith('/leads')
+                      ? 'text-primary-foreground'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }
                 >
                   <Users className="h-4 w-4 mr-2" />
                   Leads
@@ -150,14 +189,18 @@ export default function Header() {
                 <Button
                   variant={pathname?.startsWith('/closer-dashboard') ? 'default' : 'ghost'}
                   size="sm"
-                  className={pathname?.startsWith('/closer-dashboard') ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}
+                  className={
+                    pathname?.startsWith('/closer-dashboard')
+                      ? 'text-primary-foreground'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }
                 >
                   <LayoutDashboard className="h-4 w-4 mr-2" />
                   Dashboard
                 </Button>
-                {newQualifiedDashboardCount > 0 && (
+                {closerQualifiedBadgeCount > 0 && (
                   <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-red-500 text-white text-xs font-semibold flex items-center justify-center">
-                    {newQualifiedDashboardCount > 99 ? '99+' : newQualifiedDashboardCount}
+                    {closerQualifiedBadgeCount > 99 ? '99+' : closerQualifiedBadgeCount}
                   </span>
                 )}
               </Link>
@@ -167,7 +210,11 @@ export default function Header() {
               <Button
                 variant={pathname?.startsWith('/leads') ? 'default' : 'ghost'}
                 size="sm"
-                className={pathname?.startsWith('/leads') ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}
+                className={
+                  pathname?.startsWith('/leads')
+                    ? 'text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                }
               >
                 <Users className="h-4 w-4 mr-2" />
                 Leads
@@ -184,7 +231,11 @@ export default function Header() {
               <Button
                 variant={pathname?.startsWith('/customers') ? 'default' : 'ghost'}
                 size="sm"
-                className={pathname?.startsWith('/customers') ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}
+                className={
+                  pathname?.startsWith('/customers')
+                    ? 'text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                }
               >
                 <Users className="h-4 w-4 mr-2" />
                 Customers
@@ -208,7 +259,11 @@ export default function Header() {
             <Button
               variant={pathname?.startsWith('/quotes') ? 'default' : 'ghost'}
               size="sm"
-              className={pathname?.startsWith('/quotes') ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}
+              className={
+                pathname?.startsWith('/quotes')
+                  ? 'text-primary-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
+              }
             >
               <FileText className="h-4 w-4 mr-2" />
               Quotes
@@ -218,7 +273,11 @@ export default function Header() {
             <Button
               variant={pathname?.startsWith('/orders') ? 'default' : 'ghost'}
               size="sm"
-              className={pathname?.startsWith('/orders') ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}
+              className={
+                pathname?.startsWith('/orders')
+                  ? 'text-primary-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
+              }
             >
               <ShoppingCart className="h-4 w-4 mr-2" />
               Orders
@@ -229,7 +288,11 @@ export default function Header() {
               <Button
                 variant={pathname?.startsWith('/products') ? 'default' : 'ghost'}
                 size="sm"
-                className={pathname?.startsWith('/products') ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}
+                className={
+                  pathname?.startsWith('/products')
+                    ? 'text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                }
               >
                 <Package className="h-4 w-4 mr-2" />
                 Products
@@ -240,7 +303,11 @@ export default function Header() {
             <Button
               variant={pathname?.startsWith('/reminders') ? 'default' : 'ghost'}
               size="sm"
-              className={pathname?.startsWith('/reminders') ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}
+              className={
+                pathname?.startsWith('/reminders')
+                  ? 'text-primary-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
+              }
             >
               <Bell className="h-4 w-4 mr-2" />
               Reminders
@@ -255,7 +322,11 @@ export default function Header() {
             <Button
               variant={pathname?.startsWith('/sales-documents') ? 'default' : 'ghost'}
               size="sm"
-              className={pathname?.startsWith('/sales-documents') ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}
+              className={
+                pathname?.startsWith('/sales-documents')
+                  ? 'text-primary-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
+              }
             >
               <FolderOpen className="h-4 w-4 mr-2" />
               Documents
@@ -266,7 +337,11 @@ export default function Header() {
               <Button
                 variant={pathname?.startsWith('/discount-requests') ? 'default' : 'ghost'}
                 size="sm"
-                className={pathname?.startsWith('/discount-requests') ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}
+                className={
+                  pathname?.startsWith('/discount-requests')
+                    ? 'text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                }
               >
                 <Send className="h-4 w-4 mr-2" />
                 Discount requests
@@ -279,7 +354,6 @@ export default function Header() {
             </Link>
           )}
 
-          {/* Profile Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
@@ -355,6 +429,316 @@ export default function Header() {
             </DropdownMenuContent>
           </DropdownMenu>
         </nav>
+
+        {/* Mobile menu */}
+        <div className="flex lg:hidden">
+          <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
+            <SheetTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="min-h-11 min-w-11 shrink-0"
+                aria-label="Open menu"
+              >
+                <Menu className="h-6 w-6" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right" className="flex w-[min(100vw,20rem)] flex-col overflow-hidden sm:max-w-sm">
+              <SheetTitle className="sr-only">Main navigation</SheetTitle>
+              <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto pr-1">
+                {isCloser ? (
+                  <>
+                    <Link
+                      href="/leads"
+                      onClick={closeMobile}
+                      className={cn(
+                        mobileNavLinkClass,
+                        pathname?.startsWith('/leads') && 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground'
+                      )}
+                    >
+                      <span className="flex items-center gap-2">
+                        <Users className="h-4 w-4 shrink-0" />
+                        Leads
+                      </span>
+                    </Link>
+                    <Link
+                      href="/closer-dashboard"
+                      onClick={closeMobile}
+                      className={cn(
+                        mobileNavLinkClass,
+                        pathname?.startsWith('/closer-dashboard') && 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground'
+                      )}
+                    >
+                      <span className="flex items-center gap-2">
+                        <LayoutDashboard className="h-4 w-4 shrink-0" />
+                        Dashboard
+                      </span>
+                      <BadgePill count={closerQualifiedBadgeCount} />
+                    </Link>
+                  </>
+                ) : (
+                  <Link
+                    href="/leads"
+                    onClick={closeMobile}
+                    className={cn(
+                      mobileNavLinkClass,
+                      pathname?.startsWith('/leads') && 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground'
+                    )}
+                  >
+                    <span className="flex items-center gap-2">
+                      <Users className="h-4 w-4 shrink-0" />
+                      Leads
+                    </span>
+                    <BadgePill count={newLeadsCount} />
+                  </Link>
+                )}
+
+                <div className="flex flex-col gap-1">
+                  <Link
+                    href="/customers"
+                    onClick={closeMobile}
+                    className={cn(
+                      mobileNavLinkClass,
+                      pathname?.startsWith('/customers') && 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground'
+                    )}
+                  >
+                    <span className="flex items-center gap-2">
+                      <Users className="h-4 w-4 shrink-0" />
+                      Customers
+                    </span>
+                    <BadgePill count={unreadMessagesCount} />
+                  </Link>
+                  {unreadMessagesCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        router.push('/customers?has_unread=1');
+                        closeMobile();
+                      }}
+                      className={cn(mobileNavLinkClass, 'text-muted-foreground pl-9 text-xs font-normal')}
+                    >
+                      View unread only
+                    </button>
+                  )}
+                </div>
+
+                <Link
+                  href="/quotes"
+                  onClick={closeMobile}
+                  className={cn(
+                    mobileNavLinkClass,
+                    pathname?.startsWith('/quotes') && 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground'
+                  )}
+                >
+                  <span className="flex items-center gap-2">
+                    <FileText className="h-4 w-4 shrink-0" />
+                    Quotes
+                  </span>
+                </Link>
+                <Link
+                  href="/orders"
+                  onClick={closeMobile}
+                  className={cn(
+                    mobileNavLinkClass,
+                    pathname?.startsWith('/orders') && 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground'
+                  )}
+                >
+                  <span className="flex items-center gap-2">
+                    <ShoppingCart className="h-4 w-4 shrink-0" />
+                    Orders
+                  </span>
+                </Link>
+                {(isDirector || isCloser) && (
+                  <Link
+                    href="/products"
+                    onClick={closeMobile}
+                    className={cn(
+                      mobileNavLinkClass,
+                      pathname?.startsWith('/products') && 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground'
+                    )}
+                  >
+                    <span className="flex items-center gap-2">
+                      <Package className="h-4 w-4 shrink-0" />
+                      Products
+                    </span>
+                  </Link>
+                )}
+                <Link
+                  href="/reminders"
+                  onClick={closeMobile}
+                  className={cn(
+                    mobileNavLinkClass,
+                    pathname?.startsWith('/reminders') && 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground'
+                  )}
+                >
+                  <span className="flex items-center gap-2">
+                    <Bell className="h-4 w-4 shrink-0" />
+                    Reminders
+                  </span>
+                  <BadgePill count={reminderCount} />
+                </Link>
+                <Link
+                  href="/sales-documents"
+                  onClick={closeMobile}
+                  className={cn(
+                    mobileNavLinkClass,
+                    pathname?.startsWith('/sales-documents') && 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground'
+                  )}
+                >
+                  <span className="flex items-center gap-2">
+                    <FolderOpen className="h-4 w-4 shrink-0" />
+                    Documents
+                  </span>
+                </Link>
+                {!isCloser && (
+                  <Link
+                    href="/discount-requests"
+                    onClick={closeMobile}
+                    className={cn(
+                      mobileNavLinkClass,
+                      pathname?.startsWith('/discount-requests') && 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground'
+                    )}
+                  >
+                    <span className="flex items-center gap-2">
+                      <Send className="h-4 w-4 shrink-0" />
+                      Discount requests
+                    </span>
+                    {canApproveDiscounts && <BadgePill count={pendingDiscountCount} />}
+                  </Link>
+                )}
+
+                <div className="my-2 border-t border-border" />
+
+                <p className="px-3 pb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Account
+                </p>
+                <Link
+                  href="/settings/user"
+                  onClick={closeMobile}
+                  className={cn(
+                    mobileNavLinkClass,
+                    pathname?.startsWith('/settings/user') && 'bg-accent'
+                  )}
+                >
+                  <span className="flex items-center gap-2">
+                    <User className="h-4 w-4 shrink-0" />
+                    My Settings
+                  </span>
+                </Link>
+                {isDirector && (
+                  <>
+                    <Link
+                      href="/settings/users"
+                      onClick={closeMobile}
+                      className={cn(
+                        mobileNavLinkClass,
+                        pathname?.startsWith('/settings/users') && 'bg-accent'
+                      )}
+                    >
+                      <span className="flex items-center gap-2">
+                        <Users className="h-4 w-4 shrink-0" />
+                        Users
+                      </span>
+                    </Link>
+                    <Link
+                      href="/settings/company"
+                      onClick={closeMobile}
+                      className={cn(
+                        mobileNavLinkClass,
+                        pathname?.startsWith('/settings/company') && 'bg-accent'
+                      )}
+                    >
+                      <span className="flex items-center gap-2">
+                        <Settings className="h-4 w-4 shrink-0" />
+                        Company Settings
+                      </span>
+                    </Link>
+                    <Link
+                      href="/settings/email-templates"
+                      onClick={closeMobile}
+                      className={cn(
+                        mobileNavLinkClass,
+                        pathname?.startsWith('/settings/email-templates') && 'bg-accent'
+                      )}
+                    >
+                      <span className="flex items-center gap-2">
+                        <Mail className="h-4 w-4 shrink-0" />
+                        Email Templates
+                      </span>
+                    </Link>
+                    <Link
+                      href="/settings/quote-templates"
+                      onClick={closeMobile}
+                      className={cn(
+                        mobileNavLinkClass,
+                        pathname?.startsWith('/settings/quote-templates') && 'bg-accent'
+                      )}
+                    >
+                      <span className="flex items-center gap-2">
+                        <FileText className="h-4 w-4 shrink-0" />
+                        Quote Templates
+                      </span>
+                    </Link>
+                    <Link
+                      href="/settings/sms-templates"
+                      onClick={closeMobile}
+                      className={cn(
+                        mobileNavLinkClass,
+                        pathname?.startsWith('/settings/sms-templates') && 'bg-accent'
+                      )}
+                    >
+                      <span className="flex items-center gap-2">
+                        <MessageSquare className="h-4 w-4 shrink-0" />
+                        SMS Templates
+                      </span>
+                    </Link>
+                    <Link
+                      href="/settings/reminder-triggers"
+                      onClick={closeMobile}
+                      className={cn(
+                        mobileNavLinkClass,
+                        pathname?.startsWith('/settings/reminder-triggers') && 'bg-accent'
+                      )}
+                    >
+                      <span className="flex items-center gap-2">
+                        <Bell className="h-4 w-4 shrink-0" />
+                        Reminder Triggers
+                      </span>
+                    </Link>
+                    <Link
+                      href="/discounts"
+                      onClick={closeMobile}
+                      className={cn(
+                        mobileNavLinkClass,
+                        pathname?.startsWith('/discounts') && 'bg-accent'
+                      )}
+                    >
+                      <span className="flex items-center gap-2">
+                        <Gift className="h-4 w-4 shrink-0" />
+                        Discounts & Giveaways
+                      </span>
+                    </Link>
+                  </>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    closeMobile();
+                    handleLogout();
+                  }}
+                  className={cn(mobileNavLinkClass, 'text-destructive hover:text-destructive hover:bg-destructive/10')}
+                >
+                  <span className="flex items-center gap-2">
+                    <LogOut className="h-4 w-4 shrink-0" />
+                    Logout
+                  </span>
+                </button>
+              </nav>
+            </SheetContent>
+          </Sheet>
+        </div>
       </div>
     </header>
   );

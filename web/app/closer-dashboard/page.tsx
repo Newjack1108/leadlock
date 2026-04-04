@@ -150,7 +150,7 @@ export default function CloserDashboardPage() {
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
-      <main className="flex-1 container mx-auto px-6 py-4 overflow-y-auto">
+      <main className="flex-1 container mx-auto px-4 sm:px-6 py-4 overflow-y-auto">
         <div className="shrink-0 mb-4">
           <p className="text-2xl font-bold">
             {getGreeting()}

@@ -545,7 +545,7 @@ function EditQuoteContent() {
     return (
       <div className="min-h-screen">
         <Header />
-        <div className="container mx-auto px-6 py-8">
+        <div className="container mx-auto px-4 sm:px-6 py-8">
           <div className="text-center py-12 text-muted-foreground">Loading...</div>
         </div>
       </div>
@@ -556,7 +556,7 @@ function EditQuoteContent() {
     return (
       <div className="min-h-screen">
         <Header />
-        <div className="container mx-auto px-6 py-8">
+        <div className="container mx-auto px-4 sm:px-6 py-8">
           <div className="text-center py-12 text-muted-foreground">Quote not found</div>
           <Button variant="outline" onClick={() => router.push('/quotes')}>
             Back to Quotes
@@ -570,7 +570,7 @@ function EditQuoteContent() {
     return (
       <div className="min-h-screen">
         <Header />
-        <div className="container mx-auto px-6 py-8">
+        <div className="container mx-auto px-4 sm:px-6 py-8">
           <div className="text-center py-12 text-muted-foreground">
             Only draft quotes can be edited.
           </div>
@@ -585,7 +585,7 @@ function EditQuoteContent() {
   return (
     <div className="min-h-screen">
       <Header />
-      <main className="container mx-auto px-6 py-8">
+      <main className="container mx-auto px-4 sm:px-6 py-8">
         <div className="mb-6">
           <div className="flex items-center gap-2 mb-4">
             <Button
@@ -1174,7 +1174,7 @@ export default function EditQuotePage() {
       fallback={
         <div className="min-h-screen">
           <Header />
-          <div className="container mx-auto px-6 py-8">
+          <div className="container mx-auto px-4 sm:px-6 py-8">
             <div className="text-center py-12 text-muted-foreground">Loading...</div>
           </div>
         </div>

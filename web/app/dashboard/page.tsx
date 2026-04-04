@@ -79,7 +79,7 @@ export default function DashboardPage() {
     return (
       <div className="min-h-screen">
         <Header />
-        <div className="container mx-auto px-6 py-8">
+        <div className="container mx-auto px-4 sm:px-6 py-8">
           <div className="text-center py-12 text-muted-foreground">Loading...</div>
         </div>
       </div>
@@ -93,15 +93,16 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen">
       <Header />
-      <main className="container mx-auto px-6 py-8">
+      <main className="container mx-auto px-4 sm:px-6 py-8">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
           <h1 className="text-3xl font-semibold">Dashboard</h1>
-          <div className="flex gap-2">
+          <div className="flex max-w-full flex-wrap gap-2">
             {(['all', 'week', 'month', 'quarter', 'year'] as const).map((period) => (
               <Button
                 key={period}
                 variant={datePeriod === period ? 'default' : 'outline'}
                 size="sm"
+                className="shrink-0"
                 onClick={() => setDatePeriod(period)}
               >
                 {period === 'all' ? 'All' : period.charAt(0).toUpperCase() + period.slice(1)}
@@ -114,7 +115,7 @@ export default function DashboardPage() {
         {companySettings?.installation_lead_time && (
           <Card className="mb-8 border-primary/30 bg-primary/5">
             <CardContent className="py-4">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
                     <Clock className="h-5 w-5 text-primary" />
@@ -126,8 +127,8 @@ export default function DashboardPage() {
                     <p className="text-2xl font-bold">{companySettings.installation_lead_time}</p>
                   </div>
                 </div>
-                <Link href="/settings/company">
-                  <Button variant="outline" size="sm">
+                <Link href="/settings/company" className="shrink-0">
+                  <Button variant="outline" size="sm" className="w-full sm:w-auto">
                     Edit in Company Settings
                   </Button>
                 </Link>

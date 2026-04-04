@@ -276,7 +276,7 @@ export default function OrderDetailPage() {
     return (
       <div className="min-h-screen">
         <Header />
-        <div className="container mx-auto px-6 py-8">
+        <div className="container mx-auto px-4 sm:px-6 py-8">
           <div className="text-center py-12 text-muted-foreground">Loading...</div>
         </div>
       </div>
@@ -287,7 +287,7 @@ export default function OrderDetailPage() {
     return (
       <div className="min-h-screen">
         <Header />
-        <div className="container mx-auto px-6 py-8">
+        <div className="container mx-auto px-4 sm:px-6 py-8">
           <div className="text-center py-12 text-muted-foreground">Order not found</div>
         </div>
       </div>
@@ -297,7 +297,7 @@ export default function OrderDetailPage() {
   return (
     <div className="min-h-screen">
       <Header />
-      <main className="container mx-auto px-6 py-8">
+      <main className="container mx-auto px-4 sm:px-6 py-8">
         <div className="mb-6">
           <Button variant="ghost" onClick={() => router.back()} className="mb-4">
             <ArrowLeft className="h-4 w-4 mr-2" />

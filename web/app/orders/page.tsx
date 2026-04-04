@@ -98,7 +98,7 @@ export default function OrdersPage() {
     return (
       <div className="min-h-screen">
         <Header />
-        <div className="container mx-auto px-6 py-8">
+        <div className="container mx-auto px-4 sm:px-6 py-8">
           <div className="text-center py-12 text-muted-foreground">Loading...</div>
         </div>
       </div>
@@ -108,7 +108,7 @@ export default function OrdersPage() {
   return (
     <div className="min-h-screen">
       <Header />
-      <main className="container mx-auto px-6 py-8">
+      <main className="container mx-auto px-4 sm:px-6 py-8">
         <h1 className="text-3xl font-semibold mb-6">Orders</h1>
 
         {orders.length > 0 && (
