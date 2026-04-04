@@ -51,7 +51,7 @@ export default function ComposeEmailDialog({
   const [libraryLoading, setLibraryLoading] = useState(false);
   const [librarySelected, setLibrarySelected] = useState<Set<number>>(new Set());
   const [libraryAdding, setLibraryAdding] = useState(false);
-  const [bodyEditMode, setBodyEditMode] = useState<'visual' | 'source'>('source');
+  const [bodyEditMode, setBodyEditMode] = useState<'visual' | 'source'>('visual');
   const [signaturePreviewOpen, setSignaturePreviewOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -86,7 +86,7 @@ export default function ComposeEmailDialog({
 
     if (!wasOpenRef.current) {
       wasOpenRef.current = true;
-      setBodyEditMode('source');
+      setBodyEditMode('visual');
       fetchTemplates();
       fetchUserSignature();
       setFormData({
