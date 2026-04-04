@@ -513,3 +513,22 @@ async def update_reminder_rule(
     session.refresh(rule)
 
     return _reminder_rule_to_response(rule)
+
+
+@router.delete("/rules/{rule_id}")
+async def delete_reminder_rule(
+    rule_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Delete a reminder rule (Director only)."""
+    if current_user.role != UserRole.DIRECTOR:
+        raise HTTPException(status_code=403, detail="Only directors can delete reminder rules")
+
+    rule = session.exec(select(ReminderRule).where(ReminderRule.id == rule_id)).first()
+    if not rule:
+        raise HTTPException(status_code=404, detail="Reminder rule not found")
+
+    session.delete(rule)
+    session.commit()
+    return {"message": "Reminder rule deleted", "id": rule_id}

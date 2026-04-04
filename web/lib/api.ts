@@ -1007,6 +1007,11 @@ export const createReminderRule = async (data: {
   return response.data;
 };
 
+export const deleteReminderRule = async (ruleId: number) => {
+  const response = await api.delete(`/api/reminders/rules/${ruleId}`);
+  return response.data;
+};
+
 // Discount Template API functions
 export const getDiscountTemplates = async (isActive?: boolean) => {
   const params = isActive !== undefined ? { is_active: isActive } : {};

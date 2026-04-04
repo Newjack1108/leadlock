@@ -16,8 +16,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Edit, Plus } from 'lucide-react';
-import { getReminderRules, updateReminderRule, createReminderRule } from '@/lib/api';
+import { Edit, Plus, Trash2 } from 'lucide-react';
+import { getReminderRules, updateReminderRule, createReminderRule, deleteReminderRule } from '@/lib/api';
 import { ReminderRule, ReminderRuleUpdate, ReminderPriority, SuggestedAction } from '@/lib/types';
 import api from '@/lib/api';
 import { toast } from 'sonner';
@@ -168,6 +168,29 @@ export default function ReminderTriggersPage() {
     setCreateDialogOpen(true);
   };
 
+  const handleDelete = async (rule: ReminderRule) => {
+    const label = formatRuleName(rule.rule_name);
+    if (
+      !confirm(
+        `Delete reminder rule "${label}"? Existing reminders are not removed; this rule will no longer create new ones.`
+      )
+    ) {
+      return;
+    }
+    try {
+      await deleteReminderRule(rule.id);
+      if (editingRule?.id === rule.id) {
+        setEditDialogOpen(false);
+        setEditingRule(null);
+      }
+      toast.success('Rule deleted');
+      fetchRules();
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { detail?: string } } };
+      toast.error(err.response?.data?.detail || 'Failed to delete rule');
+    }
+  };
+
   const handleCreateSave = async () => {
     const name = createForm.rule_name.trim();
     if (!name) {
@@ -230,8 +253,8 @@ export default function ReminderTriggersPage() {
           <div>
             <h1 className="text-3xl font-semibold mb-2">Reminder Triggers</h1>
             <p className="text-muted-foreground">
-              Configure when reminders are created for stale leads and quotes. Only Directors can create or edit. New
-              rules must use check types the engine already supports (see form options).
+              Configure when reminders are created for stale leads and quotes. Only Directors can create, edit, or delete.
+              New rules must use check types the engine already supports (see form options).
             </p>
           </div>
           {isDirector && (
@@ -262,7 +285,7 @@ export default function ReminderTriggersPage() {
                       <th className="text-left py-2 px-2 font-medium">Active</th>
                       <th className="text-left py-2 px-2 font-medium">Priority</th>
                       <th className="text-left py-2 px-2 font-medium">Action</th>
-                      {isDirector && <th className="w-12" />}
+                      {isDirector && <th className="text-right py-2 px-2 font-medium">Manage</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -276,10 +299,21 @@ export default function ReminderTriggersPage() {
                         <td className="py-2 px-2">{rule.priority}</td>
                         <td className="py-2 px-2">{rule.suggested_action.replace(/_/g, ' ')}</td>
                         {isDirector && (
-                          <td className="py-2 px-2">
-                            <Button variant="ghost" size="sm" onClick={() => handleEdit(rule)}>
-                              <Edit className="h-4 w-4" />
-                            </Button>
+                          <td className="py-2 px-2 text-right">
+                            <div className="inline-flex items-center gap-0">
+                              <Button variant="ghost" size="sm" onClick={() => handleEdit(rule)} aria-label="Edit rule">
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-destructive hover:text-destructive"
+                                onClick={() => handleDelete(rule)}
+                                aria-label="Delete rule"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
                           </td>
                         )}
                       </tr>
@@ -319,7 +353,7 @@ export default function ReminderTriggersPage() {
                       <th className="text-left py-2 px-2 font-medium">Active</th>
                       <th className="text-left py-2 px-2 font-medium">Priority</th>
                       <th className="text-left py-2 px-2 font-medium">Action</th>
-                      {isDirector && <th className="w-12" />}
+                      {isDirector && <th className="text-right py-2 px-2 font-medium">Manage</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -333,10 +367,21 @@ export default function ReminderTriggersPage() {
                         <td className="py-2 px-2">{rule.priority}</td>
                         <td className="py-2 px-2">{rule.suggested_action.replace(/_/g, ' ')}</td>
                         {isDirector && (
-                          <td className="py-2 px-2">
-                            <Button variant="ghost" size="sm" onClick={() => handleEdit(rule)}>
-                              <Edit className="h-4 w-4" />
-                            </Button>
+                          <td className="py-2 px-2 text-right">
+                            <div className="inline-flex items-center gap-0">
+                              <Button variant="ghost" size="sm" onClick={() => handleEdit(rule)} aria-label="Edit rule">
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-destructive hover:text-destructive"
+                                onClick={() => handleDelete(rule)}
+                                aria-label="Delete rule"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
                           </td>
                         )}
                       </tr>
