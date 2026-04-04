@@ -7,7 +7,14 @@ import Logo from './Logo';
 import { Button } from '@/components/ui/button';
 import { LogOut, Users, Settings, Package, User, Mail, Bell, FileText, ShoppingCart, ChevronDown, Gift, Send, MessageSquare, FolderOpen, LayoutDashboard } from 'lucide-react';
 import api from '@/lib/api';
-import { getStaleSummary, getDiscountRequests, getUnreadSms, getUnreadMessenger, getUnreadEmails } from '@/lib/api';
+import {
+  getStaleSummary,
+  getDiscountRequests,
+  getUnreadSms,
+  getUnreadMessenger,
+  getUnreadEmails,
+  getQualifiedForQuoting,
+} from '@/lib/api';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,6 +31,7 @@ export default function Header() {
   const [newLeadsCount, setNewLeadsCount] = useState<number>(0);
   const [unreadMessagesCount, setUnreadMessagesCount] = useState<number>(0);
   const [pendingDiscountCount, setPendingDiscountCount] = useState<number>(0);
+  const [newQualifiedDashboardCount, setNewQualifiedDashboardCount] = useState<number>(0);
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -82,12 +90,26 @@ export default function Header() {
     }
   };
 
+  const fetchNewQualifiedDashboardCount = async () => {
+    try {
+      const summary = await getQualifiedForQuoting();
+      setNewQualifiedDashboardCount(summary?.count ?? 0);
+    } catch {
+      setNewQualifiedDashboardCount(0);
+    }
+  };
+
   useEffect(() => {
     fetchReminderCount();
     fetchNewLeadsCount();
     fetchUnreadMessagesCount();
     if (userRole === 'DIRECTOR' || userRole === 'SALES_MANAGER') {
       fetchPendingDiscountCount();
+    }
+    if (userRole === 'CLOSER') {
+      fetchNewQualifiedDashboardCount();
+    } else {
+      setNewQualifiedDashboardCount(0);
     }
   }, [pathname, userRole]);
 
@@ -111,7 +133,7 @@ export default function Header() {
       <div className="container mx-auto px-6 py-0 flex items-center justify-between">
         <Logo disableLink={isCloser} />
         <nav className="flex items-center gap-4">
-          {/* Closer: Leads first, then Dashboard (no new-leads badge); Director/Sales Manager: Leads first */}
+          {/* Closer: Leads first, then Dashboard with new-qualified badge; Director/Sales Manager: Leads first */}
           {isCloser ? (
             <>
               <Link href="/leads" className="relative">
@@ -133,6 +155,11 @@ export default function Header() {
                   <LayoutDashboard className="h-4 w-4 mr-2" />
                   Dashboard
                 </Button>
+                {newQualifiedDashboardCount > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-red-500 text-white text-xs font-semibold flex items-center justify-center">
+                    {newQualifiedDashboardCount > 99 ? '99+' : newQualifiedDashboardCount}
+                  </span>
+                )}
               </Link>
             </>
           ) : (

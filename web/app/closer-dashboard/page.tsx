@@ -220,10 +220,10 @@ export default function CloserDashboardPage() {
             <CardHeader className="py-3 px-4 flex flex-row items-center justify-between">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
                 <FileText className="h-4 w-4" />
-                Qualified for Quoting
+                New qualified leads
               </CardTitle>
               <span className="text-xs text-muted-foreground">
-                {qualified?.count ?? 0} ready
+                {qualified?.count ?? 0} need attention
               </span>
             </CardHeader>
             <CardContent className="px-4 pb-4 pt-0">
@@ -255,7 +255,7 @@ export default function CloserDashboardPage() {
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground py-2">No qualified leads.</p>
+                <p className="text-sm text-muted-foreground py-2">No new qualified leads.</p>
               )}
             </CardContent>
           </Card>

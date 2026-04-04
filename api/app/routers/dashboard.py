@@ -8,6 +8,7 @@ from app.models import (
     Quote,
     QuoteStatus,
     Activity,
+    StatusHistory,
     SmsMessage,
     SmsDirection,
     Customer,
@@ -339,10 +340,35 @@ async def get_qualified_for_quoting(
     current_user=Depends(get_current_user),
     assigned_to: Optional[str] = Query(None, description="Filter: 'me' for leads assigned to current user. Omit for all QUALIFIED leads."),
 ):
-    """Get leads with status QUALIFIED that need quoting. For closer dashboard."""
+    """QUALIFIED leads with no customer Activity since last time they became QUALIFIED (new qualified queue)."""
+    qualified_at_subq = (
+        select(
+            StatusHistory.lead_id.label("lead_id"),
+            func.max(StatusHistory.created_at).label("qualified_at"),
+        )
+        .where(StatusHistory.new_status == LeadStatus.QUALIFIED)
+        .group_by(StatusHistory.lead_id)
+    ).subquery()
+
+    post_qualified_activity = (
+        select(Activity.id)
+        .where(
+            Activity.customer_id == Lead.customer_id,
+            Activity.created_at > qualified_at_subq.c.qualified_at,
+        )
+        .exists()
+    )
+
     statement = (
         select(Lead)
+        .outerjoin(qualified_at_subq, qualified_at_subq.c.lead_id == Lead.id)
         .where(Lead.status == LeadStatus.QUALIFIED)
+        .where(
+            or_(
+                qualified_at_subq.c.qualified_at.is_(None),
+                ~post_qualified_activity,
+            )
+        )
         .order_by(Lead.updated_at.asc())
     )
     if assigned_to == "me":

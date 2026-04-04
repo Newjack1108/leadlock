@@ -39,16 +39,24 @@ for _logo_name in ("logo1.jpg", "logo1.png"):
 # Mount static files
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
-# Get allowed origins from environment or use defaults
-allowed_origins_str = os.getenv(
-    "CORS_ORIGINS",
-    "http://localhost:3000,http://localhost:3001,https://leadlock-frontend-production.up.railway.app,https://leadlock-production.up.railway.app"
+# CORS: os.getenv("CORS_ORIGINS", default) does NOT use default when the var is set but empty
+# (common in dashboards). Empty list => no Access-Control-Allow-Origin on any response.
+_default_cors_origins = (
+    "http://localhost:3000,http://localhost:3001,"
+    "https://leadlock-frontend-production.up.railway.app,https://leadlock-production.up.railway.app"
 )
+_raw_cors = os.getenv("CORS_ORIGINS", "").strip()
+allowed_origins_str = _raw_cors if _raw_cors else _default_cors_origins
 allowed_origins = [origin.strip() for origin in allowed_origins_str.split(",") if origin.strip()]
 
-# Log allowed origins for debugging (only in non-production or if DEBUG is set)
+_sys = __import__("sys")
 if os.getenv("DEBUG", "false").lower() == "true" or not os.getenv("RAILWAY_ENVIRONMENT"):
-    print(f"CORS allowed origins: {allowed_origins}", file=__import__('sys').stderr, flush=True)
+    print(f"CORS allowed origins: {allowed_origins}", file=_sys.stderr, flush=True)
+elif os.getenv("RAILWAY_ENVIRONMENT"):
+    _cors_msg = f"CORS: {len(allowed_origins)} allowed origin(s)"
+    if not _raw_cors:
+        _cors_msg += " (using defaults; CORS_ORIGINS unset/blank)"
+    print(_cors_msg, file=_sys.stderr, flush=True)
 
 # CORS middleware - must be added before routers
 app.add_middleware(
