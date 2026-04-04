@@ -731,6 +731,8 @@ export interface QuoteItem {
   is_custom: boolean;
   parent_quote_item_id?: number | null;
   line_type?: QuoteItemLineType | null;
+  /** When false, line is excluded from PRODUCT-scope (“building items only”) discounts */
+  include_in_building_discount?: boolean | null;
 }
 
 export interface QuoteItemCreate {
@@ -742,6 +744,8 @@ export interface QuoteItemCreate {
   sort_order?: number;
   parent_index?: number | null;
   line_type?: QuoteItemLineType | null;
+  /** Default true; set false to exclude from “building items only” discounts */
+  include_in_building_discount?: boolean;
 }
 
 export interface OrderItem {

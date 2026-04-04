@@ -60,6 +60,7 @@ def quote_item_to_response(item: QuoteItem) -> QuoteItemResponse:
         id=item.id,
         quote_id=item.quote_id,
         product_id=item.product_id,
+        parent_quote_item_id=item.parent_quote_item_id,
         description=item.description,
         quantity=item.quantity,
         unit_price=item.unit_price,
@@ -67,7 +68,9 @@ def quote_item_to_response(item: QuoteItem) -> QuoteItemResponse:
         discount_amount=item.discount_amount,
         final_line_total=item.final_line_total,
         sort_order=item.sort_order,
-        is_custom=item.is_custom
+        is_custom=item.is_custom,
+        line_type=getattr(item, "line_type", None),
+        include_in_building_discount=getattr(item, "include_in_building_discount", True),
     )
 
 

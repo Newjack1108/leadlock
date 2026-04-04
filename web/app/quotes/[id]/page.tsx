@@ -376,6 +376,11 @@ export default function QuoteDetailPage() {
                                 <tr key={item.id} className="border-b">
                                   <td className="py-2 px-3">
                                     {item.description}
+                                    {item.include_in_building_discount === false && (
+                                      <span className="block text-xs text-muted-foreground mt-0.5">
+                                        Not included in &apos;building items only&apos; discounts
+                                      </span>
+                                    )}
                                     {hasDiscount && (
                                       <Badge variant="outline" className="ml-2 text-xs">
                                         Discounted

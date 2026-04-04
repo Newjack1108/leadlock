@@ -108,6 +108,7 @@ function quoteItemsToFormItems(items: QuoteItem[]): QuoteItemCreate[] {
     sort_order: item.sort_order ?? 0,
     parent_index: item.parent_quote_item_id != null ? idToIndex[item.parent_quote_item_id] : undefined,
     line_type: item.line_type ?? undefined,
+    include_in_building_discount: item.include_in_building_discount ?? true,
   }));
 }
 
@@ -491,6 +492,7 @@ function EditQuoteContent() {
             sort_order: index,
             parent_index: parentIndexInPayload >= 0 ? parentIndexInPayload : undefined,
             line_type: item.line_type ?? undefined,
+            include_in_building_discount: item.include_in_building_discount !== false,
           };
         }),
         discount_template_ids:
@@ -728,6 +730,25 @@ function EditQuoteContent() {
                         (Math.max(0, Number(item.unit_price)) || 0)
                       ).toFixed(2)}
                     </div>
+                    {item.parent_index == null && (
+                      <div className="flex items-center gap-2 pt-1">
+                        <input
+                          type="checkbox"
+                          id={`exclude-building-discount-edit-${index}`}
+                          className="h-4 w-4 rounded border-muted-foreground"
+                          checked={item.include_in_building_discount === false}
+                          onChange={(e) =>
+                            updateItem(index, 'include_in_building_discount', !e.target.checked)
+                          }
+                        />
+                        <Label
+                          htmlFor={`exclude-building-discount-edit-${index}`}
+                          className="text-sm font-normal text-muted-foreground cursor-pointer"
+                        >
+                          Exclude from &apos;building items only&apos; discount
+                        </Label>
+                      </div>
+                    )}
                     {(() => {
                       const selectedProduct = getSelectedProduct(item);
                       if (!selectedProduct) return null;

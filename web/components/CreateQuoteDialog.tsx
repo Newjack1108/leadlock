@@ -231,6 +231,7 @@ export default function CreateQuoteDialog({
             is_custom: item.is_custom !== undefined ? item.is_custom : (item.product_id === undefined || item.product_id === null),
             sort_order: index,
             parent_index: parentIndexInPayload >= 0 ? parentIndexInPayload : undefined,
+            include_in_building_discount: item.include_in_building_discount !== false,
           };
         }),
       };
@@ -399,6 +400,25 @@ export default function CreateQuoteDialog({
                       (Math.max(0, Number(item.unit_price)) || 0)
                     ).toFixed(2)}
                   </div>
+                  {item.parent_index == null && (
+                    <div className="flex items-center gap-2 pt-1">
+                      <input
+                        type="checkbox"
+                        id={`exclude-building-discount-dialog-${index}`}
+                        className="h-4 w-4 rounded border-muted-foreground"
+                        checked={item.include_in_building_discount === false}
+                        onChange={(e) =>
+                          updateItem(index, 'include_in_building_discount', !e.target.checked)
+                        }
+                      />
+                      <Label
+                        htmlFor={`exclude-building-discount-dialog-${index}`}
+                        className="text-sm font-normal text-muted-foreground cursor-pointer"
+                      >
+                        Exclude from &apos;building items only&apos; discount
+                      </Label>
+                    </div>
+                  )}
                   {(() => {
                     const selectedProduct = getSelectedProduct(item);
                     if (!selectedProduct) return null;

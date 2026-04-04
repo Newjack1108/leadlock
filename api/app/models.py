@@ -524,6 +524,7 @@ class QuoteItem(SQLModel, table=True):
     sort_order: int = Field(default=0)
     is_custom: bool = Field(default=False)  # True if not from product catalog
     line_type: Optional[QuoteItemLineType] = Field(default=None)  # DELIVERY or INSTALLATION; excluded from PRODUCT-scope discount
+    include_in_building_discount: bool = Field(default=True)  # False = exclude line from PRODUCT-scope ("building items only") discounts
     
     # Relationships
     quote: Quote = Relationship(back_populates="items")

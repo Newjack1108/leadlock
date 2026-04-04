@@ -999,6 +999,7 @@ class QuoteItemCreate(BaseModel):
     sort_order: int = 0
     parent_index: Optional[int] = None  # Index of parent item (0-based) when this is an optional extra; backend sets parent_quote_item_id
     line_type: Optional[QuoteItemLineType] = None  # DELIVERY or INSTALLATION; excluded from PRODUCT-scope discount
+    include_in_building_discount: bool = True  # False = exclude from PRODUCT-scope ("building items only") discounts
 
 
 class QuoteItemResponse(BaseModel):
@@ -1015,6 +1016,7 @@ class QuoteItemResponse(BaseModel):
     sort_order: int
     is_custom: bool
     line_type: Optional[QuoteItemLineType] = None
+    include_in_building_discount: bool = True
 
 
 class QuoteCreate(BaseModel):

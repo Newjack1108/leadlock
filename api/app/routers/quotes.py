@@ -137,7 +137,22 @@ def quote_item_to_response(item: QuoteItem) -> QuoteItemResponse:
         sort_order=item.sort_order,
         is_custom=item.is_custom,
         line_type=getattr(item, "line_type", None),
+        include_in_building_discount=getattr(item, "include_in_building_discount", True),
     )
+
+
+def _item_eligible_for_product_scope_discount(item: QuoteItem) -> bool:
+    """Main lines only; respects include_in_building_discount and delivery/install exclusions."""
+    if item.parent_quote_item_id is not None:
+        return False
+    if not getattr(item, "include_in_building_discount", True):
+        return False
+    line_type = getattr(item, "line_type", None)
+    if line_type in (QuoteItemLineType.DELIVERY, QuoteItemLineType.INSTALLATION):
+        return False
+    if item.description == "Delivery & Installation":
+        return False
+    return True
 
 
 def build_quote_response(quote: Quote, quote_items: List[QuoteItem], session: Session) -> QuoteResponse:
@@ -236,15 +251,10 @@ def apply_discount_to_quote(
     total_discount = Decimal(0)
     
     if discount_template.scope == DiscountScope.PRODUCT:
-        # Apply discount only to main/building items (exclude extras, delivery, installation)
+        # Apply discount only to main/building items (exclude extras, delivery, installation, opt-outs)
         for item in quote_items:
-            if item.parent_quote_item_id is not None:
-                continue  # Skip optional extras
-            line_type = getattr(item, "line_type", None)
-            if line_type in (QuoteItemLineType.DELIVERY, QuoteItemLineType.INSTALLATION):
-                continue  # Skip delivery and installation lines
-            if item.description == "Delivery & Installation":
-                continue  # Legacy combined line
+            if not _item_eligible_for_product_scope_discount(item):
+                continue
             if item.line_total > 0:  # Only apply to items with value
                 # Calculate discount based on current line total (before other discounts)
                 base_amount = item.line_total + item.discount_amount  # Original line total
@@ -320,13 +330,8 @@ def apply_custom_discount_to_quote(
 
     if scope == DiscountScope.PRODUCT:
         for item in quote_items:
-            if item.parent_quote_item_id is not None:
-                continue  # Skip optional extras (building-only discount)
-            line_type = getattr(item, "line_type", None)
-            if line_type in (QuoteItemLineType.DELIVERY, QuoteItemLineType.INSTALLATION):
-                continue  # Skip delivery and installation lines
-            if item.description == "Delivery & Installation":
-                continue  # Legacy combined line
+            if not _item_eligible_for_product_scope_discount(item):
+                continue
             if item.line_total > 0:
                 base_amount = item.line_total + item.discount_amount
                 if discount_type == DiscountType.PERCENTAGE:
@@ -538,6 +543,7 @@ async def create_quote(
                 sort_order=item_data.sort_order or 0,
                 is_custom=item_data.is_custom if item_data.is_custom is not None else False,
                 line_type=getattr(item_data, "line_type", None),
+                include_in_building_discount=getattr(item_data, "include_in_building_discount", True),
             )
             items.append(item)
     
@@ -623,7 +629,7 @@ async def create_quote(
                         # with a 100% discount applied. The discount template just marks it.
                         # Apply 100% discount to matching products if needed (building items only, not extras)
                         for item in quote_items:
-                            if item.parent_quote_item_id is not None:
+                            if not _item_eligible_for_product_scope_discount(item):
                                 continue
                             if item.product_id and discount_template.scope == DiscountScope.PRODUCT:
                                 # Apply 100% discount to this item
@@ -1073,6 +1079,7 @@ def _update_draft_quote_impl(
             sort_order=item_data.sort_order or 0,
             is_custom=item_data.is_custom if item_data.is_custom is not None else False,
             line_type=getattr(item_data, "line_type", None),
+            include_in_building_discount=getattr(item_data, "include_in_building_discount", True),
         )
         items.append(item)
     
@@ -1129,7 +1136,7 @@ def _update_draft_quote_impl(
             quote_items = list(session.exec(statement).all())
             if discount_template.is_giveaway:
                 for item in quote_items:
-                    if item.parent_quote_item_id is not None:
+                    if not _item_eligible_for_product_scope_discount(item):
                         continue
                     if item.product_id and discount_template.scope == DiscountScope.PRODUCT:
                         item.discount_amount = item.line_total
@@ -1678,7 +1685,7 @@ async def apply_discount_to_quote_endpoint(
     if discount_template.is_giveaway:
         # Handle giveaway - apply 100% discount to building products only (not optional extras)
         for item in quote_items:
-            if item.parent_quote_item_id is not None:
+            if not _item_eligible_for_product_scope_discount(item):
                 continue
             if item.product_id and discount_template.scope == DiscountScope.PRODUCT:
                 item.discount_amount = item.line_total
