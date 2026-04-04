@@ -6,6 +6,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
 from sqlmodel import Session, select
 from typing import Optional
+
+# Production `product_type` -> Product.is_extra (see import_product_webhook). Add aliases here if production uses other literals.
+PRODUCT_IMPORT_TYPE_EXTRA = frozenset({"extra"})
+PRODUCT_IMPORT_TYPE_MAIN = frozenset({"product"})
 from app.database import get_session
 from app.models import (
     Lead,
@@ -38,6 +42,26 @@ from app.messenger_service import (
 )
 
 router = APIRouter(prefix="/api/webhooks", tags=["webhooks"])
+
+
+def resolve_is_extra_from_product_type(product_type: Optional[str]) -> Optional[bool]:
+    """
+    If product_type is omitted (None), return None — caller defaults new products to is_extra=False
+    and leaves is_extra unchanged on update.
+    If present, return True/False or raise HTTPException 422 for unknown values.
+    """
+    if product_type is None:
+        return None
+    key = product_type.strip().lower()
+    if key in PRODUCT_IMPORT_TYPE_EXTRA:
+        return True
+    if key in PRODUCT_IMPORT_TYPE_MAIN:
+        return False
+    allowed = sorted(PRODUCT_IMPORT_TYPE_EXTRA | PRODUCT_IMPORT_TYPE_MAIN)
+    raise HTTPException(
+        status_code=422,
+        detail=f"Invalid product_type {product_type!r}. Expected one of: {allowed}",
+    )
 
 
 @router.post("/leads", response_model=LeadResponse)
@@ -196,7 +220,10 @@ async def import_product_webhook(
     Requires Bearer token in Authorization header.
     Upsert: if product_id (Production's ID) provided, match by production_product_id; else match by name.
     Products from production send cost ex VAT; RRP (base_price) is derived using company gross margin % if set.
+    Optional product_type maps to is_extra (e.g. extra vs product); omitted on update preserves existing is_extra.
     """
+    resolved_is_extra = resolve_is_extra_from_product_type(payload.product_type)
+
     # Map payload to Product fields: cost ex VAT from production
     cost_ex_vat = payload.price_ex_vat
     settings = get_company_settings(session)
@@ -225,6 +252,8 @@ async def import_product_webhook(
         existing.base_price = base_price
         existing.installation_hours = installation_hours
         existing.boxes_per_product = number_of_boxes_int
+        if resolved_is_extra is not None:
+            existing.is_extra = resolved_is_extra
         if payload.product_id is not None:
             existing.production_product_id = payload.product_id
         existing.updated_at = datetime.utcnow()
@@ -238,7 +267,7 @@ async def import_product_webhook(
             description=payload.description or None,
             category=ProductCategory.STABLES,
             subcategory=None,
-            is_extra=False,
+            is_extra=resolved_is_extra if resolved_is_extra is not None else False,
             base_price=base_price,
             unit="Unit",
             is_active=True,

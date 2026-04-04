@@ -819,6 +819,17 @@ class ProductImportPayload(BaseModel):
     price_ex_vat: Decimal
     install_hours: Decimal
     number_of_boxes: Decimal  # Accepted as number; validated and stored as int
+    product_type: Optional[str] = None  # e.g. "extra" vs "product"; maps to Product.is_extra
+
+    @field_validator("product_type", mode="before")
+    @classmethod
+    def normalize_product_type(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        if isinstance(v, str):
+            s = v.strip()
+            return s if s else None
+        return v
 
     @field_validator("price_ex_vat")
     @classmethod
