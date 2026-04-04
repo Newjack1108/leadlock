@@ -577,6 +577,18 @@ def create_db_and_tables():
                     if "already exists" not in error_str and "duplicate" not in error_str:
                         print(f"Error adding email_disclaimer column: {e}", file=sys.stderr, flush=True)
 
+            company_columns = [col['name'] for col in inspector.get_columns("companysettings")]
+            if "default_email_signature" not in company_columns:
+                print("Adding default_email_signature column to companysettings table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text('ALTER TABLE companysettings ADD COLUMN default_email_signature TEXT'))
+                    print("Added default_email_signature column to companysettings table", file=sys.stderr, flush=True)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Error adding default_email_signature column: {e}", file=sys.stderr, flush=True)
+
             if "hourly_install_rate" not in company_columns:
                 print("Adding hourly_install_rate column to companysettings table...", file=sys.stderr, flush=True)
                 try:

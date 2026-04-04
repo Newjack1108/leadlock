@@ -1434,7 +1434,7 @@ async def send_quote_email_endpoint(
             attachment_list.append({"filename": safe_name, "content": content})
             attachment_metadata.append({"filename": safe_name})
 
-        success, message_id, error, pdf_buffer, email_subject, email_body_html = send_quote_email(
+        success, message_id, error, pdf_buffer, email_subject, email_body_html, email_body_text = send_quote_email(
             quote=quote,
             customer=customer,
             to_email=req.to_email,
@@ -1471,6 +1471,7 @@ async def send_quote_email_endpoint(
             bcc=req.bcc,
             subject=final_subject,
             body_html=final_body_html,
+            body_text=email_body_text,
             attachments=attachments_json,
             sent_at=datetime.utcnow(),
             created_by_id=current_user.id
@@ -1484,7 +1485,8 @@ async def send_quote_email_endpoint(
             quote_id=quote.id,
             to_email=req.to_email,
             subject=final_subject,
-            body_html=final_body_html,  # Template rendered content
+            body_html=final_body_html,
+            body_text=email_body_text,
             tracking_id=message_id or f"quote-{quote.id}-{datetime.utcnow().timestamp()}",
             view_token=view_token,
             include_available_extras=getattr(req, "include_available_extras", False) or False,

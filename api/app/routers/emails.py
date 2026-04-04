@@ -164,7 +164,7 @@ async def send_email_to_customer(
                     body_text = rendered_body_html
 
         # Send email via SMTP
-        success, message_id, error = send_email(
+        success, message_id, error, sent_html, sent_text = send_email(
             to_email=email_data_parsed.to_email,
             subject=subject,
             body_html=body_html,
@@ -199,8 +199,8 @@ async def send_email_to_customer(
         cc=email_data_parsed.cc,
         bcc=email_data_parsed.bcc,
         subject=subject,
-        body_html=body_html,
-        body_text=body_text,
+        body_html=sent_html or body_html,
+        body_text=sent_text if sent_text is not None else body_text,
         attachments=attachments_json,
         sent_at=datetime.utcnow(),
         created_by_id=current_user.id,
@@ -426,7 +426,7 @@ async def reply_to_email(
     reply_customer = session.exec(statement).first()
 
     # Send reply email
-    success, message_id, error = send_email(
+    success, message_id, error, sent_html, sent_text = send_email(
         to_email=to_email,
         subject=subject,
         body_html=reply_data_parsed.body_html,
@@ -455,8 +455,8 @@ async def reply_to_email(
         cc=reply_data_parsed.cc,
         bcc=reply_data_parsed.bcc,
         subject=subject,
-        body_html=reply_data_parsed.body_html,
-        body_text=reply_data_parsed.body_text,
+        body_html=sent_html or reply_data_parsed.body_html,
+        body_text=sent_text if sent_text is not None else reply_data_parsed.body_text,
         attachments=attachments_json,
         sent_at=datetime.utcnow(),
         created_by_id=current_user.id

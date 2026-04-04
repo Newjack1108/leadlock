@@ -90,23 +90,26 @@ def _append_signature_and_disclaimer(
     user_id: Optional[int],
 ) -> Tuple[Optional[str], Optional[str]]:
     """
-    Append user signature and company disclaimer to email body.
+    Append signature and company disclaimer to email body.
     Order: [body] -> [signature] -> [disclaimer]
-    """
-    if not user_id:
-        return body_html, body_text
 
+    With user_id: uses that user's email_signature plus company email_disclaimer.
+    Without user_id: uses company default_email_signature plus email_disclaimer.
+    """
     try:
         from sqlmodel import Session, select
         from app.database import engine
         from app.models import User, CompanySettings
 
         with Session(engine) as session:
-            user = session.exec(select(User).where(User.id == user_id)).first()
             company = session.exec(select(CompanySettings).limit(1)).first()
-
-            signature = (user.email_signature or "").strip() if user else ""
             disclaimer = (getattr(company, "email_disclaimer", None) or "").strip() if company else ""
+
+            if user_id:
+                user = session.exec(select(User).where(User.id == user_id)).first()
+                signature = (user.email_signature or "").strip() if user else ""
+            else:
+                signature = (getattr(company, "default_email_signature", None) or "").strip() if company else ""
 
             if not signature and not disclaimer:
                 return body_html, body_text
@@ -958,7 +961,7 @@ def send_email(
     customer_number: Optional[str] = None,
     header_tagline: Optional[str] = None,
     include_quote_highlight: bool = False,
-) -> Tuple[bool, Optional[str], Optional[str]]:
+) -> Tuple[bool, Optional[str], Optional[str], Optional[str], Optional[str]]:
     """
     Send an email via SMTP.
     
@@ -978,7 +981,8 @@ def send_email(
         include_quote_highlight: When True, prepend the quotation highlight box (quote sends)
     
     Returns:
-        Tuple of (success, message_id, error_message)
+        Tuple of (success, message_id, error_message, body_html_as_sent, body_text_as_sent).
+        Assembled bodies match what recipients receive; use for persisting Email rows.
     """
     config = get_smtp_config(user_id)
     if _is_graph_configured():
@@ -993,10 +997,20 @@ def send_email(
 
     # Generate message ID (needed for both test mode and real sending)
     message_id = generate_message_id()
-    
+
+    body_html_out, body_text_out = assemble_outbound_email_html(
+        body_html=body_html,
+        body_text=body_text,
+        user_id=user_id,
+        customer_number=customer_number,
+        attachments=attachments,
+        include_quote_highlight=include_quote_highlight,
+        header_tagline=header_tagline,
+    )
+
     # Check if test mode is enabled
     test_mode = config.get("test_mode", False)
-    
+
     if test_mode:
         # Test mode: Log email details but don't send
         import sys
@@ -1012,37 +1026,29 @@ def send_email(
         if attachments:
             print(f"  Attachments: {[a.get('filename', 'unknown') for a in attachments]}", file=sys.stderr, flush=True)
         print(f"[EMAIL TEST MODE] Email saved to database but NOT sent", file=sys.stderr, flush=True)
-        return True, message_id, None
-
-    body_html, body_text = assemble_outbound_email_html(
-        body_html=body_html,
-        body_text=body_text,
-        user_id=user_id,
-        customer_number=customer_number,
-        attachments=attachments,
-        include_quote_highlight=include_quote_highlight,
-        header_tagline=header_tagline,
-    )
+        return True, message_id, None, body_html_out, body_text_out
 
     # Use Microsoft Graph when configured (priority 1)
     if _is_graph_configured():
-        return _send_via_graph(
-            to_email=to_email, subject=subject, body_html=body_html, body_text=body_text,
+        ok, mid, err = _send_via_graph(
+            to_email=to_email, subject=subject, body_html=body_html_out, body_text=body_text_out,
             from_email=from_email, from_name=from_name, cc=cc, bcc=bcc,
             attachments=attachments, message_id=message_id, in_reply_to=in_reply_to, references=references,
         )
+        return ok, mid, err, body_html_out, body_text_out
 
     # Use Resend when configured (priority 2 - works when SMTP is blocked e.g. on Railway)
     if os.getenv("RESEND_API_KEY", "").strip():
-        return _send_via_resend(
-            to_email=to_email, subject=subject, body_html=body_html, body_text=body_text,
+        ok, mid, err = _send_via_resend(
+            to_email=to_email, subject=subject, body_html=body_html_out, body_text=body_text_out,
             from_email=from_email, from_name=from_name, cc=cc, bcc=bcc,
             attachments=attachments, message_id=message_id, in_reply_to=in_reply_to, references=references,
         )
+        return ok, mid, err, body_html_out, body_text_out
 
     # SMTP path (priority 3)
     if not config["user"] or not config["password"]:
-        return False, None, "Email not configured. Set Microsoft Graph vars (CLIENT_ID, CLIENT_SECRET, TENANT_ID, MSGRAPH_FROM_EMAIL), RESEND_API_KEY, or configure SMTP in My Settings."
+        return False, None, "Email not configured. Set Microsoft Graph vars (CLIENT_ID, CLIENT_SECRET, TENANT_ID, MSGRAPH_FROM_EMAIL), RESEND_API_KEY, or configure SMTP in My Settings.", body_html_out, body_text_out
 
     try:
         # Create message
@@ -1065,10 +1071,10 @@ def send_email(
             msg["References"] = references
         
         # Add body
-        if body_text:
-            msg.attach(MIMEText(body_text, "plain"))
-        if body_html:
-            msg.attach(MIMEText(body_html, "html"))
+        if body_text_out:
+            msg.attach(MIMEText(body_text_out, "plain"))
+        if body_html_out:
+            msg.attach(MIMEText(body_html_out, "html"))
         
         # Add attachments
         if attachments:
@@ -1102,13 +1108,13 @@ def send_email(
         server.sendmail(config["from_email"], recipients, msg.as_string())
         server.quit()
         
-        return True, message_id, None
+        return True, message_id, None, body_html_out, body_text_out
     
     except Exception as e:
         err = str(e)
         if "timed out" in err.lower() or "connection" in err.lower():
             err += " Try: Gmail App Password (myaccount.google.com/apppasswords); port 465 with Use TLS off."
-        return False, None, err
+        return False, None, err, body_html_out, body_text_out
 
 
 def receive_emails() -> List[Dict]:

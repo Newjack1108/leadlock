@@ -51,6 +51,7 @@ export default function CompanySettingsPage() {
     footer_logo_url: '',
     default_terms_and_conditions: '',
     email_disclaimer: '',
+    default_email_signature: '',
     installation_lead_time: '' as InstallationLeadTime | '',
     hourly_install_rate: '',
     distance_before_overnight_miles: '',
@@ -95,6 +96,7 @@ export default function CompanySettingsPage() {
         footer_logo_url: response.data.footer_logo_url || '',
         default_terms_and_conditions: response.data.default_terms_and_conditions || '',
         email_disclaimer: response.data.email_disclaimer || '',
+        default_email_signature: response.data.default_email_signature || '',
         installation_lead_time: response.data.installation_lead_time || '',
         hourly_install_rate: response.data.hourly_install_rate != null ? String(response.data.hourly_install_rate) : '',
         distance_before_overnight_miles: response.data.distance_before_overnight_miles != null ? String(response.data.distance_before_overnight_miles) : '',
@@ -712,6 +714,23 @@ export default function CompanySettingsPage() {
                   </p>
                 </>
               )}
+            </div>
+
+            <div className="rounded-lg p-4 bg-zinc-50/30 dark:bg-zinc-950/20 border-l-4 border-l-zinc-200 dark:border-l-zinc-800 mt-6 space-y-2">
+              <h3 className="text-lg font-medium">Default email signature (system sends)</h3>
+              <Label htmlFor="default_email_signature">Default email signature</Label>
+              <Textarea
+                id="default_email_signature"
+                value={formData.default_email_signature}
+                onChange={(e) => setFormData({ ...formData, default_email_signature: e.target.value })}
+                placeholder="HTML signature used only when email is sent without a logged-in user (e.g. future automations). Normal sends use each user’s signature from My Settings."
+                rows={5}
+                disabled={saving}
+                className="font-mono text-sm"
+              />
+              <p className="text-sm text-muted-foreground">
+                Per-user signatures in My Settings take precedence for compose, replies, and quote emails.
+              </p>
             </div>
 
             <div className="rounded-lg p-4 bg-zinc-50/30 dark:bg-zinc-950/20 border-l-4 border-l-zinc-200 dark:border-l-zinc-800 mt-6 space-y-2">

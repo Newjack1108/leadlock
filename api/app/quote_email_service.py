@@ -80,7 +80,7 @@ def send_quote_email(
     view_token: Optional[str] = None,
     frontend_base_url: Optional[str] = None,
     attachments: Optional[List[Dict[str, Any]]] = None,
-) -> Tuple[bool, Optional[str], Optional[str], None, Optional[str], Optional[str]]:
+) -> Tuple[bool, Optional[str], Optional[str], None, Optional[str], Optional[str], Optional[str]]:
     """
     Send a quote email with a tracked "View your quote online" link and optional file attachments.
     Customer opens the tracked view and can Print or Download PDF from there.
@@ -100,7 +100,7 @@ def send_quote_email(
         attachments: Optional list of dicts with keys filename (str) and content (bytes)
 
     Returns:
-        Tuple of (success, message_id, error_message, None, subject, body_html)
+        Tuple of (success, message_id, error_message, None, subject, body_html_as_sent, body_text_as_sent)
     """
     try:
         # Get company settings
@@ -110,7 +110,7 @@ def send_quote_email(
         statement = select(QuoteTemplate).where(QuoteTemplate.id == template_id)
         quote_template = session.exec(statement).first()
         if not quote_template:
-            return False, None, "Quote template not found", None, None, None
+            return False, None, "Quote template not found", None, None, None, None
 
         subject_template = Template(quote_template.email_subject_template)
         body_template = Template(quote_template.email_body_template)
@@ -131,7 +131,7 @@ def send_quote_email(
             view_link = f'<p style="margin-top:1.5em;"><a href="{base}/{path_seg}" style="{link_style}">{link_label}</a></p>'
             body_html = (body_html or "") + view_link
 
-        success, message_id, error = send_email(
+        success, message_id, error, sent_html, sent_text = send_email(
             to_email=to_email,
             subject=subject,
             body_html=body_html,
@@ -145,9 +145,9 @@ def send_quote_email(
         )
 
         if success:
-            return True, message_id, None, None, subject, body_html
+            return True, message_id, None, None, subject, sent_html or body_html, sent_text
         else:
-            return False, None, error, None, subject, body_html
+            return False, None, error, None, subject, sent_html or body_html, sent_text
 
     except Exception as e:
-        return False, None, str(e), None, None, None
+        return False, None, str(e), None, None, None, None

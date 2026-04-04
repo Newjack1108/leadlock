@@ -352,6 +352,7 @@ export interface CompanySettings {
   footer_logo_url?: string;
   default_terms_and_conditions?: string;
   email_disclaimer?: string;
+  default_email_signature?: string;
   hourly_install_rate?: number;
   installation_lead_time?: InstallationLeadTime;
   distance_before_overnight_miles?: number;

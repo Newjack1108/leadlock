@@ -868,6 +868,7 @@ class CompanySettingsCreate(BaseModel):
     footer_logo_url: Optional[str] = None
     default_terms_and_conditions: Optional[str] = None
     email_disclaimer: Optional[str] = None
+    default_email_signature: Optional[str] = None  # HTML; used for sends without a user_id
     hourly_install_rate: Optional[Decimal] = None
     installation_lead_time: Optional[InstallationLeadTime] = None
     distance_before_overnight_miles: Optional[Decimal] = None
@@ -903,6 +904,7 @@ class CompanySettingsUpdate(BaseModel):
     footer_logo_url: Optional[str] = None
     default_terms_and_conditions: Optional[str] = None
     email_disclaimer: Optional[str] = None
+    default_email_signature: Optional[str] = None
     hourly_install_rate: Optional[Decimal] = None
     installation_lead_time: Optional[InstallationLeadTime] = None
     distance_before_overnight_miles: Optional[Decimal] = None
@@ -939,6 +941,7 @@ class CompanySettingsResponse(BaseModel):
     footer_logo_url: Optional[str] = None
     default_terms_and_conditions: Optional[str]
     email_disclaimer: Optional[str] = None
+    default_email_signature: Optional[str] = None
     hourly_install_rate: Optional[Decimal] = None
     installation_lead_time: Optional[InstallationLeadTime] = None
     distance_before_overnight_miles: Optional[Decimal] = None

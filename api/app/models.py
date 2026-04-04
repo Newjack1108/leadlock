@@ -378,6 +378,7 @@ class CompanySettings(SQLModel, table=True):
     footer_logo_url: Optional[str] = None  # Separate logo for PDF footer (optional; falls back to logo_url if not set)
     default_terms_and_conditions: Optional[str] = None  # Default terms and conditions for quotes
     email_disclaimer: Optional[str] = None  # Standard disclaimer appended to all outgoing emails (HTML)
+    default_email_signature: Optional[str] = None  # Used when sending without a user_id (HTML); per-user signature overrides when user_id is set
     hourly_install_rate: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(10, 2)))  # Hourly rate for installation cost calculation
     installation_lead_time: Optional[InstallationLeadTime] = Field(default=None)  # Current lead time; amended by production, visible to sales
     # Installation & travel (mileage, overnight, 2-man team)
