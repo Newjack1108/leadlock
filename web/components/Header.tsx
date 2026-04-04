@@ -224,7 +224,7 @@ export default function Header() {
               Orders
             </Button>
           </Link>
-          {isDirector && (
+          {(isDirector || isCloser) && (
             <Link href="/products">
               <Button
                 variant={pathname?.startsWith('/products') ? 'default' : 'ghost'}

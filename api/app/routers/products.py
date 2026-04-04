@@ -11,6 +11,8 @@ from datetime import datetime
 
 router = APIRouter(prefix="/api/products", tags=["products"])
 
+PRODUCT_EDITOR_ROLES = [UserRole.DIRECTOR, UserRole.CLOSER]
+
 
 @router.get("", response_model=List[ProductResponse])
 async def get_products(
@@ -71,9 +73,9 @@ async def get_categories(
 @router.post("/upload-image")
 async def upload_image(
     file: UploadFile = File(...),
-    current_user: User = Depends(require_role([UserRole.DIRECTOR]))
+    current_user: User = Depends(require_role(PRODUCT_EDITOR_ROLES))
 ):
-    """Upload a product image. DIRECTOR only."""
+    """Upload a product image. DIRECTOR and CLOSER."""
     try:
         image_url = await upload_product_image(file)
         return {"image_url": image_url}
@@ -130,9 +132,9 @@ async def get_product(
 async def create_product(
     product_data: ProductCreate,
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_role([UserRole.DIRECTOR]))
+    current_user: User = Depends(require_role(PRODUCT_EDITOR_ROLES))
 ):
-    """Create a new product. DIRECTOR only."""
+    """Create a new product. DIRECTOR and CLOSER."""
     product_dict = product_data.dict()
     optional_extras = product_dict.pop("optional_extras", None)
     
@@ -179,9 +181,9 @@ async def update_product(
     product_id: int,
     product_data: ProductUpdate,
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_role([UserRole.DIRECTOR]))
+    current_user: User = Depends(require_role(PRODUCT_EDITOR_ROLES))
 ):
-    """Update a product. DIRECTOR only."""
+    """Update a product. DIRECTOR and CLOSER."""
     statement = select(Product).where(Product.id == product_id)
     product = session.exec(statement).first()
     
@@ -245,9 +247,9 @@ async def add_optional_extra(
     product_id: int,
     extra_id: int = Query(...),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_role([UserRole.DIRECTOR]))
+    current_user: User = Depends(require_role(PRODUCT_EDITOR_ROLES))
 ):
-    """Add an optional extra to a product. DIRECTOR only."""
+    """Add an optional extra to a product. DIRECTOR and CLOSER."""
     # Verify product exists
     product_statement = select(Product).where(Product.id == product_id)
     product = session.exec(product_statement).first()
@@ -288,9 +290,9 @@ async def remove_optional_extra(
     product_id: int,
     extra_id: int,
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_role([UserRole.DIRECTOR]))
+    current_user: User = Depends(require_role(PRODUCT_EDITOR_ROLES))
 ):
-    """Remove an optional extra from a product. DIRECTOR only."""
+    """Remove an optional extra from a product. DIRECTOR and CLOSER."""
     statement = select(ProductOptionalExtra).where(
         ProductOptionalExtra.product_id == product_id,
         ProductOptionalExtra.optional_extra_id == extra_id
@@ -336,9 +338,9 @@ async def get_product_optional_extras(
 async def delete_product(
     product_id: int,
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_role([UserRole.DIRECTOR]))
+    current_user: User = Depends(require_role(PRODUCT_EDITOR_ROLES))
 ):
-    """Soft delete a product (set is_active=False). DIRECTOR only."""
+    """Soft delete a product (set is_active=False). DIRECTOR and CLOSER."""
     statement = select(Product).where(Product.id == product_id)
     product = session.exec(statement).first()
     
