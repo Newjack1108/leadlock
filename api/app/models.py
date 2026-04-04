@@ -807,6 +807,11 @@ class Reminder(SQLModel, table=True):
     )
 
 
+class CustomerOutreachChannel(str, Enum):
+    SMS = "SMS"
+    EMAIL = "EMAIL"
+
+
 class ReminderRule(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     rule_name: str = Field(unique=True, index=True)  # "NEW_LEAD_STALE", "QUOTE_SENT_STALE"
@@ -819,6 +824,23 @@ class ReminderRule(SQLModel, table=True):
     suggested_action: SuggestedAction
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+    # Optional automatic customer message when rule matches stale detection (background worker)
+    customer_outreach_channel: Optional[str] = Field(default=None)  # CustomerOutreachChannel.value or None
+    customer_outreach_sms_template_id: Optional[int] = Field(default=None, foreign_key="smstemplate.id")
+    customer_outreach_email_template_id: Optional[int] = Field(default=None, foreign_key="emailtemplate.id")
+    customer_outreach_cooldown_days: int = Field(default=14)
+
+
+class CustomerOutreachSend(SQLModel, table=True):
+    """Log of automated customer SMS/email sends for cooldown and audit."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    reminder_rule_id: int = Field(foreign_key="reminderrule.id")
+    customer_id: int = Field(foreign_key="customer.id")
+    channel: str  # CustomerOutreachChannel.value
+    lead_id: Optional[int] = Field(default=None, foreign_key="lead.id")
+    quote_id: Optional[int] = Field(default=None, foreign_key="quote.id")
+    external_message_id: Optional[str] = Field(default=None)  # Twilio SID or email Message-ID
+    sent_at: datetime = Field(default_factory=datetime.utcnow)
 
 
 class ProductOptionalExtra(SQLModel, table=True):

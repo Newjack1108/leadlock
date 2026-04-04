@@ -383,6 +383,32 @@ def on_startup():
     except Exception as e:
         print("SMS worker not started:", str(e), file=__import__("sys").stderr, flush=True)
 
+    # Customer outreach: SMS/email when reminder rules match stale leads/quotes (optional templates on rules)
+    try:
+        import time
+        from app.customer_outreach_service import run_customer_outreach_cycle, any_outreach_rules_active
+
+        def poll_customer_outreach():
+            poll_interval = int(os.getenv("CUSTOMER_OUTREACH_INTERVAL", "300"))
+            while True:
+                try:
+                    time.sleep(poll_interval)
+                    with Session(engine) as session:
+                        if not any_outreach_rules_active(session):
+                            continue
+                        n = run_customer_outreach_cycle(session)
+                        if n:
+                            print(f"Customer outreach worker sent {n} message(s)", file=__import__("sys").stderr, flush=True)
+                except Exception as e:
+                    print(f"Error in customer outreach worker: {e}", file=__import__("sys").stderr, flush=True)
+                    time.sleep(60)
+
+        outreach_thread = threading.Thread(target=poll_customer_outreach, daemon=True)
+        outreach_thread.start()
+        print("Customer outreach worker started", file=__import__("sys").stderr, flush=True)
+    except Exception as e:
+        print("Customer outreach worker not started:", str(e), file=__import__("sys").stderr, flush=True)
+
 
 @app.get("/")
 async def root():

@@ -67,8 +67,15 @@ Group by risk so nothing critical is forgotten when rotating keys or cloning an 
 ### Webhooks & automation
 
 - `WEBHOOK_API_KEY` — Make.com (and similar) lead creation; treat as a secret.
-- `WEBHOOK_DEFAULT_USER_ID` — Optional default assignee for webhook-created leads.
+- `WEBHOOK_DEFAULT_USER_ID` — Optional default assignee for webhook-created leads; also used as a fallback “actor” for automated customer outreach (email/SMS) when no lead assignee or quote owner is set.
 - `PRODUCT_IMPORT_API_KEY` — Product import; can fall back to `WEBHOOK_API_KEY` in code.
+
+### Customer outreach (reminder rules)
+
+Background worker in `main.py` evaluates the same stale conditions as reminder rules (`reminder_service.py`) for rules that have customer SMS or email enabled in **Settings → Reminder Triggers**. Sends are logged in `customeroutreachsend` and throttled per rule by `customer_outreach_cooldown_days`.
+
+- `CUSTOMER_OUTREACH_INTERVAL` — Seconds between evaluation runs (default **300**).
+- `CUSTOMER_OUTREACH_ACTOR_USER_ID` — Optional user ID used for signatures, `Email` / `Activity` attribution, and SMTP when sending automated emails; overrides assignee/owner fallback order.
 
 ### Email (multiple backends; configure one coherent path)
 

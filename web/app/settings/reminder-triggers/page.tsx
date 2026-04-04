@@ -17,8 +17,22 @@ import {
 } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Edit, Plus, Trash2 } from 'lucide-react';
-import { getReminderRules, updateReminderRule, createReminderRule, deleteReminderRule } from '@/lib/api';
-import { ReminderRule, ReminderRuleUpdate, ReminderPriority, SuggestedAction } from '@/lib/types';
+import {
+  getReminderRules,
+  updateReminderRule,
+  createReminderRule,
+  deleteReminderRule,
+  getSmsTemplates,
+  getEmailTemplates,
+} from '@/lib/api';
+import {
+  ReminderRule,
+  ReminderRuleUpdate,
+  ReminderPriority,
+  SuggestedAction,
+  SmsTemplate,
+  EmailTemplate,
+} from '@/lib/types';
 import api from '@/lib/api';
 import { toast } from 'sonner';
 
@@ -50,6 +64,7 @@ const LEAD_STATUSES = [
 ] as const;
 const QUOTE_STATUSES = ['DRAFT', 'SENT', 'VIEWED', 'ACCEPTED', 'REJECTED', 'EXPIRED'] as const;
 const QUOTE_STATUS_NONE = '__none__';
+const OUTREACH_NONE = 'NONE';
 
 function formatRuleName(name: string): string {
   return name
@@ -70,7 +85,13 @@ export default function ReminderTriggersPage() {
     is_active: true,
     priority: ReminderPriority.MEDIUM,
     suggested_action: SuggestedAction.FOLLOW_UP,
+    outreach_channel: OUTREACH_NONE as typeof OUTREACH_NONE | 'SMS' | 'EMAIL',
+    outreach_sms_template_id: null as number | null,
+    outreach_email_template_id: null as number | null,
+    outreach_cooldown_days: 14,
   });
+  const [smsTemplates, setSmsTemplates] = useState<SmsTemplate[]>([]);
+  const [emailTemplates, setEmailTemplates] = useState<EmailTemplate[]>([]);
   const [saving, setSaving] = useState(false);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [createSaving, setCreateSaving] = useState(false);
@@ -83,6 +104,10 @@ export default function ReminderTriggersPage() {
     is_active: true,
     priority: ReminderPriority.MEDIUM,
     suggested_action: SuggestedAction.FOLLOW_UP,
+    outreach_channel: OUTREACH_NONE as typeof OUTREACH_NONE | 'SMS' | 'EMAIL',
+    outreach_sms_template_id: null as number | null,
+    outreach_email_template_id: null as number | null,
+    outreach_cooldown_days: 14,
   });
 
   const isDirector = userRole === 'DIRECTOR';
@@ -103,6 +128,20 @@ export default function ReminderTriggersPage() {
     fetchRules();
   }, []);
 
+  useEffect(() => {
+    if (!isDirector) return;
+    const loadTemplates = async () => {
+      try {
+        const [sms, email] = await Promise.all([getSmsTemplates(), getEmailTemplates()]);
+        setSmsTemplates(sms);
+        setEmailTemplates(email);
+      } catch {
+        toast.error('Failed to load templates for outreach settings');
+      }
+    };
+    loadTemplates();
+  }, [isDirector]);
+
   const fetchRules = async () => {
     try {
       setLoading(true);
@@ -122,17 +161,30 @@ export default function ReminderTriggersPage() {
 
   const handleEdit = (rule: ReminderRule) => {
     setEditingRule(rule);
+    const ch = rule.customer_outreach_channel;
     setFormData({
       threshold_days: rule.threshold_days,
       is_active: rule.is_active,
       priority: rule.priority,
       suggested_action: rule.suggested_action,
+      outreach_channel: ch === 'SMS' ? 'SMS' : ch === 'EMAIL' ? 'EMAIL' : OUTREACH_NONE,
+      outreach_sms_template_id: rule.customer_outreach_sms_template_id ?? null,
+      outreach_email_template_id: rule.customer_outreach_email_template_id ?? null,
+      outreach_cooldown_days: rule.customer_outreach_cooldown_days ?? 14,
     });
     setEditDialogOpen(true);
   };
 
   const handleSave = async () => {
     if (!editingRule) return;
+    if (formData.outreach_channel === 'SMS' && formData.outreach_sms_template_id == null) {
+      toast.error('Choose an SMS template for customer outreach');
+      return;
+    }
+    if (formData.outreach_channel === 'EMAIL' && formData.outreach_email_template_id == null) {
+      toast.error('Choose an email template for customer outreach');
+      return;
+    }
     try {
       setSaving(true);
       const update: ReminderRuleUpdate = {
@@ -141,6 +193,16 @@ export default function ReminderTriggersPage() {
         priority: formData.priority,
         suggested_action: formData.suggested_action,
       };
+      if (formData.outreach_channel === OUTREACH_NONE) {
+        update.customer_outreach_channel = null;
+      } else {
+        update.customer_outreach_channel = formData.outreach_channel;
+        update.customer_outreach_sms_template_id =
+          formData.outreach_channel === 'SMS' ? formData.outreach_sms_template_id : null;
+        update.customer_outreach_email_template_id =
+          formData.outreach_channel === 'EMAIL' ? formData.outreach_email_template_id : null;
+        update.customer_outreach_cooldown_days = formData.outreach_cooldown_days;
+      }
       await updateReminderRule(editingRule.id, update);
       toast.success('Rule updated successfully');
       setEditDialogOpen(false);
@@ -164,6 +226,10 @@ export default function ReminderTriggersPage() {
       is_active: true,
       priority: ReminderPriority.MEDIUM,
       suggested_action: SuggestedAction.FOLLOW_UP,
+      outreach_channel: OUTREACH_NONE,
+      outreach_sms_template_id: null,
+      outreach_email_template_id: null,
+      outreach_cooldown_days: 14,
     });
     setCreateDialogOpen(true);
   };
@@ -201,6 +267,14 @@ export default function ReminderTriggersPage() {
       toast.error('Lead status is required');
       return;
     }
+    if (createForm.outreach_channel === 'SMS' && createForm.outreach_sms_template_id == null) {
+      toast.error('Choose an SMS template for customer outreach');
+      return;
+    }
+    if (createForm.outreach_channel === 'EMAIL' && createForm.outreach_email_template_id == null) {
+      toast.error('Choose an email template for customer outreach');
+      return;
+    }
     try {
       setCreateSaving(true);
       const statusPayload =
@@ -218,6 +292,16 @@ export default function ReminderTriggersPage() {
         priority: createForm.priority,
         suggested_action: createForm.suggested_action,
         status: statusPayload,
+        ...(createForm.outreach_channel !== OUTREACH_NONE
+          ? {
+              customer_outreach_channel: createForm.outreach_channel,
+              customer_outreach_sms_template_id:
+                createForm.outreach_channel === 'SMS' ? createForm.outreach_sms_template_id : null,
+              customer_outreach_email_template_id:
+                createForm.outreach_channel === 'EMAIL' ? createForm.outreach_email_template_id : null,
+              customer_outreach_cooldown_days: createForm.outreach_cooldown_days,
+            }
+          : {}),
       });
       toast.success('Rule created successfully');
       setCreateDialogOpen(false);
@@ -254,7 +338,10 @@ export default function ReminderTriggersPage() {
             <h1 className="text-3xl font-semibold mb-2">Reminder Triggers</h1>
             <p className="text-muted-foreground">
               Configure when reminders are created for stale leads and quotes. Only Directors can create, edit, or delete.
-              New rules must use check types the engine already supports (see form options).
+              New rules must use check types the engine already supports (see form options). You can optionally send a
+              customer-facing SMS or email when the same conditions match; the server runs that on a
+              timer (not when you click Generate Reminders), with a cooldown per rule to limit repeat sends. You are
+              responsible for consent and compliance.
             </p>
           </div>
           {isDirector && (
@@ -285,6 +372,7 @@ export default function ReminderTriggersPage() {
                       <th className="text-left py-2 px-2 font-medium">Active</th>
                       <th className="text-left py-2 px-2 font-medium">Priority</th>
                       <th className="text-left py-2 px-2 font-medium">Action</th>
+                      <th className="text-left py-2 px-2 font-medium">Customer auto</th>
                       {isDirector && <th className="text-right py-2 px-2 font-medium">Manage</th>}
                     </tr>
                   </thead>
@@ -298,6 +386,9 @@ export default function ReminderTriggersPage() {
                         <td className="py-2 px-2">{rule.is_active ? 'Yes' : 'No'}</td>
                         <td className="py-2 px-2">{rule.priority}</td>
                         <td className="py-2 px-2">{rule.suggested_action.replace(/_/g, ' ')}</td>
+                        <td className="py-2 px-2 text-muted-foreground">
+                          {rule.customer_outreach_channel || '—'}
+                        </td>
                         {isDirector && (
                           <td className="py-2 px-2 text-right">
                             <div className="inline-flex items-center gap-0">
@@ -353,6 +444,7 @@ export default function ReminderTriggersPage() {
                       <th className="text-left py-2 px-2 font-medium">Active</th>
                       <th className="text-left py-2 px-2 font-medium">Priority</th>
                       <th className="text-left py-2 px-2 font-medium">Action</th>
+                      <th className="text-left py-2 px-2 font-medium">Customer auto</th>
                       {isDirector && <th className="text-right py-2 px-2 font-medium">Manage</th>}
                     </tr>
                   </thead>
@@ -366,6 +458,9 @@ export default function ReminderTriggersPage() {
                         <td className="py-2 px-2">{rule.is_active ? 'Yes' : 'No'}</td>
                         <td className="py-2 px-2">{rule.priority}</td>
                         <td className="py-2 px-2">{rule.suggested_action.replace(/_/g, ' ')}</td>
+                        <td className="py-2 px-2 text-muted-foreground">
+                          {rule.customer_outreach_channel || '—'}
+                        </td>
                         {isDirector && (
                           <td className="py-2 px-2 text-right">
                             <div className="inline-flex items-center gap-0">
@@ -539,6 +634,114 @@ export default function ReminderTriggersPage() {
                   </SelectContent>
                 </Select>
               </div>
+              {isDirector && (
+                <>
+                  <div className="rounded-md border p-3 space-y-3 bg-muted/30">
+                    <p className="text-sm font-medium">Customer outreach (optional)</p>
+                    <p className="text-xs text-muted-foreground">
+                      Sends automatically when this rule matches; not tied to Generate Reminders. Cooldown limits repeats.
+                    </p>
+                    <div className="grid gap-2">
+                      <Label>Channel</Label>
+                      <Select
+                        value={createForm.outreach_channel}
+                        onValueChange={(v) =>
+                          setCreateForm((f) => ({
+                            ...f,
+                            outreach_channel: v as typeof OUTREACH_NONE | 'SMS' | 'EMAIL',
+                          }))
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={OUTREACH_NONE}>None</SelectItem>
+                          <SelectItem value="SMS">SMS</SelectItem>
+                          <SelectItem value="EMAIL">Email</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {createForm.outreach_channel === 'SMS' && (
+                      <div className="grid gap-2">
+                        <Label>SMS template</Label>
+                        <Select
+                          value={
+                            createForm.outreach_sms_template_id != null
+                              ? String(createForm.outreach_sms_template_id)
+                              : 'none'
+                          }
+                          onValueChange={(v) =>
+                            setCreateForm((f) => ({
+                              ...f,
+                              outreach_sms_template_id: v === 'none' ? null : parseInt(v, 10),
+                            }))
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Choose template" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Choose template</SelectItem>
+                            {smsTemplates.map((t) => (
+                              <SelectItem key={t.id} value={String(t.id!)}>
+                                {t.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                    {createForm.outreach_channel === 'EMAIL' && (
+                      <div className="grid gap-2">
+                        <Label>Email template</Label>
+                        <Select
+                          value={
+                            createForm.outreach_email_template_id != null
+                              ? String(createForm.outreach_email_template_id)
+                              : 'none'
+                          }
+                          onValueChange={(v) =>
+                            setCreateForm((f) => ({
+                              ...f,
+                              outreach_email_template_id: v === 'none' ? null : parseInt(v, 10),
+                            }))
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Choose template" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Choose template</SelectItem>
+                            {emailTemplates.map((t) => (
+                              <SelectItem key={t.id} value={String(t.id!)}>
+                                {t.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                    {createForm.outreach_channel !== OUTREACH_NONE && (
+                      <div className="grid gap-2">
+                        <Label htmlFor="create_cooldown">Cooldown (days)</Label>
+                        <Input
+                          id="create_cooldown"
+                          type="number"
+                          min={0}
+                          value={createForm.outreach_cooldown_days}
+                          onChange={(e) =>
+                            setCreateForm((f) => ({
+                              ...f,
+                              outreach_cooldown_days: parseInt(e.target.value, 10) || 0,
+                            }))
+                          }
+                        />
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
             <DialogFooter>
               <Button variant="outline" type="button" onClick={() => setCreateDialogOpen(false)}>
@@ -620,6 +823,110 @@ export default function ReminderTriggersPage() {
                     <SelectItem value={SuggestedAction.PHONE_CALL}>Phone call</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="rounded-md border p-3 space-y-3 bg-muted/30">
+                <p className="text-sm font-medium">Customer outreach (optional)</p>
+                <p className="text-xs text-muted-foreground">
+                  Sends automatically when this rule matches; not tied to Generate Reminders. Cooldown limits repeats.
+                </p>
+                <div className="grid gap-2">
+                  <Label>Channel</Label>
+                  <Select
+                    value={formData.outreach_channel}
+                    onValueChange={(v) =>
+                      setFormData((f) => ({
+                        ...f,
+                        outreach_channel: v as typeof OUTREACH_NONE | 'SMS' | 'EMAIL',
+                      }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={OUTREACH_NONE}>None</SelectItem>
+                      <SelectItem value="SMS">SMS</SelectItem>
+                      <SelectItem value="EMAIL">Email</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {formData.outreach_channel === 'SMS' && (
+                  <div className="grid gap-2">
+                    <Label>SMS template</Label>
+                    <Select
+                      value={
+                        formData.outreach_sms_template_id != null
+                          ? String(formData.outreach_sms_template_id)
+                          : 'none'
+                      }
+                      onValueChange={(v) =>
+                        setFormData((f) => ({
+                          ...f,
+                          outreach_sms_template_id: v === 'none' ? null : parseInt(v, 10),
+                        }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Choose template" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Choose template</SelectItem>
+                        {smsTemplates.map((t) => (
+                          <SelectItem key={t.id} value={String(t.id!)}>
+                            {t.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                {formData.outreach_channel === 'EMAIL' && (
+                  <div className="grid gap-2">
+                    <Label>Email template</Label>
+                    <Select
+                      value={
+                        formData.outreach_email_template_id != null
+                          ? String(formData.outreach_email_template_id)
+                          : 'none'
+                      }
+                      onValueChange={(v) =>
+                        setFormData((f) => ({
+                          ...f,
+                          outreach_email_template_id: v === 'none' ? null : parseInt(v, 10),
+                        }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Choose template" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Choose template</SelectItem>
+                        {emailTemplates.map((t) => (
+                          <SelectItem key={t.id} value={String(t.id!)}>
+                            {t.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                {formData.outreach_channel !== OUTREACH_NONE && (
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit_cooldown">Cooldown (days)</Label>
+                    <Input
+                      id="edit_cooldown"
+                      type="number"
+                      min={0}
+                      value={formData.outreach_cooldown_days}
+                      onChange={(e) =>
+                        setFormData((f) => ({
+                          ...f,
+                          outreach_cooldown_days: parseInt(e.target.value, 10) || 0,
+                        }))
+                      }
+                    />
+                  </div>
+                )}
               </div>
             </div>
             <DialogFooter>

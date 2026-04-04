@@ -1091,6 +1091,10 @@ export interface ReminderRule {
   suggested_action: SuggestedAction;
   created_at: string;
   updated_at: string;
+  customer_outreach_channel?: string | null;
+  customer_outreach_sms_template_id?: number | null;
+  customer_outreach_email_template_id?: number | null;
+  customer_outreach_cooldown_days?: number;
 }
 
 export interface ReminderRuleUpdate {
@@ -1098,6 +1102,10 @@ export interface ReminderRuleUpdate {
   is_active?: boolean;
   priority?: ReminderPriority;
   suggested_action?: SuggestedAction;
+  customer_outreach_channel?: string | null;
+  customer_outreach_sms_template_id?: number | null;
+  customer_outreach_email_template_id?: number | null;
+  customer_outreach_cooldown_days?: number | null;
 }
 
 export interface ReminderRuleCreate {
@@ -1109,6 +1117,10 @@ export interface ReminderRuleCreate {
   is_active: boolean;
   priority: ReminderPriority;
   suggested_action: SuggestedAction;
+  customer_outreach_channel?: string | null;
+  customer_outreach_sms_template_id?: number | null;
+  customer_outreach_email_template_id?: number | null;
+  customer_outreach_cooldown_days?: number | null;
 }
 
 export enum CustomerHistoryEventType {

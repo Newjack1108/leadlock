@@ -11,6 +11,7 @@ from datetime import date as date_type, datetime
 from app.models import (
     Reminder, ReminderRule, User, UserRole, Lead, Quote, Customer,
     ReminderType, ReminderPriority, SuggestedAction, LeadStatus, QuoteStatus,
+    CustomerOutreachChannel,
 )
 from app.schemas import (
     ReminderResponse, ReminderDismissRequest, ReminderActRequest,
@@ -25,6 +26,42 @@ _LEAD_CHECK_TYPES = frozenset({"LAST_ACTIVITY", "STATUS_DURATION"})
 _QUOTE_CHECK_TYPES = frozenset({
     "SENT_DATE", "VALID_UNTIL", "STATUS_DURATION", "SENT_NOT_OPENED", "OPENED_NO_REPLY",
 })
+
+
+def _normalize_outreach_fields(
+    *,
+    channel: Optional[str],
+    sms_template_id: Optional[int],
+    email_template_id: Optional[int],
+    cooldown_days: Optional[int],
+) -> tuple:
+    cd = 14 if cooldown_days is None else cooldown_days
+    if cd < 0:
+        raise HTTPException(
+            status_code=400,
+            detail="customer_outreach_cooldown_days cannot be negative",
+        )
+    if channel is None or str(channel).strip() == "":
+        return None, None, None, cd
+    ch = str(channel).strip().upper()
+    if ch not in (CustomerOutreachChannel.SMS.value, CustomerOutreachChannel.EMAIL.value):
+        raise HTTPException(
+            status_code=400,
+            detail="customer_outreach_channel must be SMS, EMAIL, or omitted",
+        )
+    if ch == CustomerOutreachChannel.SMS.value:
+        if not sms_template_id:
+            raise HTTPException(
+                status_code=400,
+                detail="customer_outreach_sms_template_id is required when channel is SMS",
+            )
+        return ch, sms_template_id, None, cd
+    if not email_template_id:
+        raise HTTPException(
+            status_code=400,
+            detail="customer_outreach_email_template_id is required when channel is EMAIL",
+        )
+    return ch, None, email_template_id, cd
 
 
 def _normalize_rule_name(name: str) -> str:
@@ -50,6 +87,12 @@ def _reminder_rule_to_response(rule: ReminderRule) -> ReminderRuleResponse:
         suggested_action=rule.suggested_action,
         created_at=rule.created_at,
         updated_at=rule.updated_at,
+        customer_outreach_channel=rule.customer_outreach_channel,
+        customer_outreach_sms_template_id=rule.customer_outreach_sms_template_id,
+        customer_outreach_email_template_id=rule.customer_outreach_email_template_id,
+        customer_outreach_cooldown_days=rule.customer_outreach_cooldown_days
+        if rule.customer_outreach_cooldown_days is not None
+        else 14,
     )
 
 
@@ -465,6 +508,13 @@ async def create_reminder_rule(
         else:
             status_val = None
 
+    och, ost, oet, ocd = _normalize_outreach_fields(
+        channel=body.customer_outreach_channel,
+        sms_template_id=body.customer_outreach_sms_template_id,
+        email_template_id=body.customer_outreach_email_template_id,
+        cooldown_days=body.customer_outreach_cooldown_days,
+    )
+
     rule = ReminderRule(
         rule_name=rule_name,
         entity_type=entity,
@@ -474,6 +524,10 @@ async def create_reminder_rule(
         is_active=body.is_active,
         priority=body.priority,
         suggested_action=body.suggested_action,
+        customer_outreach_channel=och,
+        customer_outreach_sms_template_id=ost,
+        customer_outreach_email_template_id=oet,
+        customer_outreach_cooldown_days=ocd,
     )
     session.add(rule)
     session.commit()
@@ -505,7 +559,63 @@ async def update_reminder_rule(
         rule.priority = rule_update.priority
     if rule_update.suggested_action is not None:
         rule.suggested_action = rule_update.suggested_action
-    
+
+    patch = rule_update.model_dump(exclude_unset=True)
+    outreach_keys = (
+        "customer_outreach_channel",
+        "customer_outreach_sms_template_id",
+        "customer_outreach_email_template_id",
+        "customer_outreach_cooldown_days",
+    )
+    if any(k in patch for k in outreach_keys):
+        if "customer_outreach_channel" in patch:
+            raw_ch = patch["customer_outreach_channel"]
+            if raw_ch is None or (isinstance(raw_ch, str) and raw_ch.strip() == ""):
+                rule.customer_outreach_channel = None
+                rule.customer_outreach_sms_template_id = None
+                rule.customer_outreach_email_template_id = None
+                if "customer_outreach_cooldown_days" in patch and patch["customer_outreach_cooldown_days"] is not None:
+                    if patch["customer_outreach_cooldown_days"] < 0:
+                        raise HTTPException(
+                            status_code=400,
+                            detail="customer_outreach_cooldown_days cannot be negative",
+                        )
+                    rule.customer_outreach_cooldown_days = patch["customer_outreach_cooldown_days"]
+            else:
+                ch_n, st_n, et_n, cd_n = _normalize_outreach_fields(
+                    channel=raw_ch,
+                    sms_template_id=patch.get(
+                        "customer_outreach_sms_template_id", rule.customer_outreach_sms_template_id
+                    ),
+                    email_template_id=patch.get(
+                        "customer_outreach_email_template_id", rule.customer_outreach_email_template_id
+                    ),
+                    cooldown_days=patch.get(
+                        "customer_outreach_cooldown_days", rule.customer_outreach_cooldown_days
+                    ),
+                )
+                rule.customer_outreach_channel = ch_n
+                rule.customer_outreach_sms_template_id = st_n
+                rule.customer_outreach_email_template_id = et_n
+                rule.customer_outreach_cooldown_days = cd_n
+        elif rule.customer_outreach_channel:
+            ch_n, st_n, et_n, cd_n = _normalize_outreach_fields(
+                channel=rule.customer_outreach_channel,
+                sms_template_id=patch.get(
+                    "customer_outreach_sms_template_id", rule.customer_outreach_sms_template_id
+                ),
+                email_template_id=patch.get(
+                    "customer_outreach_email_template_id", rule.customer_outreach_email_template_id
+                ),
+                cooldown_days=patch.get(
+                    "customer_outreach_cooldown_days", rule.customer_outreach_cooldown_days
+                ),
+            )
+            rule.customer_outreach_channel = ch_n
+            rule.customer_outreach_sms_template_id = st_n
+            rule.customer_outreach_email_template_id = et_n
+            rule.customer_outreach_cooldown_days = cd_n
+
     rule.updated_at = datetime.utcnow()
 
     session.add(rule)

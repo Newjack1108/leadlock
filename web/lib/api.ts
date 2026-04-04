@@ -987,7 +987,16 @@ export const getReminderRules = async () => {
 
 export const updateReminderRule = async (
   ruleId: number,
-  data: { threshold_days?: number; is_active?: boolean; priority?: string; suggested_action?: string }
+  data: {
+    threshold_days?: number;
+    is_active?: boolean;
+    priority?: string;
+    suggested_action?: string;
+    customer_outreach_channel?: string | null;
+    customer_outreach_sms_template_id?: number | null;
+    customer_outreach_email_template_id?: number | null;
+    customer_outreach_cooldown_days?: number | null;
+  }
 ) => {
   const response = await api.put(`/api/reminders/rules/${ruleId}`, data);
   return response.data;
@@ -1002,6 +1011,10 @@ export const createReminderRule = async (data: {
   is_active: boolean;
   priority: string;
   suggested_action: string;
+  customer_outreach_channel?: string | null;
+  customer_outreach_sms_template_id?: number | null;
+  customer_outreach_email_template_id?: number | null;
+  customer_outreach_cooldown_days?: number | null;
 }) => {
   const response = await api.post('/api/reminders/rules', data);
   return response.data;

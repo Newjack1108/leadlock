@@ -1233,6 +1233,74 @@ def create_db_and_tables():
                     if "already exists" not in error_str and "duplicate" not in error_str:
                         print(f"Error adding read_at to email: {e}", file=sys.stderr, flush=True)
 
+        # Step 14: ReminderRule customer outreach + CustomerOutreachSend audit table
+        if has_reminder_rule_table:
+            outreach_alters = [
+                ("customer_outreach_channel", "ALTER TABLE reminderrule ADD COLUMN customer_outreach_channel VARCHAR(10)"),
+                ("customer_outreach_sms_template_id", "ALTER TABLE reminderrule ADD COLUMN customer_outreach_sms_template_id INTEGER REFERENCES smstemplate(id)"),
+                ("customer_outreach_email_template_id", "ALTER TABLE reminderrule ADD COLUMN customer_outreach_email_template_id INTEGER REFERENCES emailtemplate(id)"),
+                ("customer_outreach_cooldown_days", "ALTER TABLE reminderrule ADD COLUMN customer_outreach_cooldown_days INTEGER DEFAULT 14 NOT NULL"),
+            ]
+            for col_name, ddl in outreach_alters:
+                rr_columns = [col["name"] for col in inspector.get_columns("reminderrule")]
+                if col_name not in rr_columns:
+                    print(f"Adding {col_name} to reminderrule...", file=sys.stderr, flush=True)
+                    try:
+                        with engine.begin() as conn:
+                            conn.execute(text(ddl))
+                    except Exception as e:
+                        error_str = str(e).lower()
+                        if "already exists" not in error_str and "duplicate" not in error_str:
+                            print(f"Error adding {col_name} to reminderrule: {e}", file=sys.stderr, flush=True)
+
+            try:
+                with engine.begin() as conn:
+                    conn.execute(
+                        text(
+                            "UPDATE reminderrule SET customer_outreach_cooldown_days = 14 "
+                            "WHERE customer_outreach_cooldown_days IS NULL"
+                        )
+                    )
+            except Exception:
+                pass
+
+        has_outreach_table = inspector.has_table("customeroutreachsend")
+        if not has_outreach_table:
+            print("Creating customeroutreachsend table...", file=sys.stderr, flush=True)
+            try:
+                with engine.begin() as conn:
+                    conn.execute(
+                        text(
+                            """
+                            CREATE TABLE customeroutreachsend (
+                                id SERIAL PRIMARY KEY,
+                                reminder_rule_id INTEGER NOT NULL REFERENCES reminderrule(id) ON DELETE CASCADE,
+                                customer_id INTEGER NOT NULL REFERENCES customer(id) ON DELETE CASCADE,
+                                channel VARCHAR(10) NOT NULL,
+                                lead_id INTEGER REFERENCES lead(id) ON DELETE SET NULL,
+                                quote_id INTEGER REFERENCES quote(id) ON DELETE SET NULL,
+                                external_message_id VARCHAR(512),
+                                sent_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                            )
+                            """
+                        )
+                    )
+                    conn.execute(
+                        text(
+                            "CREATE INDEX ix_customeroutreachsend_rule_lead ON customeroutreachsend (reminder_rule_id, lead_id)"
+                        )
+                    )
+                    conn.execute(
+                        text(
+                            "CREATE INDEX ix_customeroutreachsend_rule_quote ON customeroutreachsend (reminder_rule_id, quote_id)"
+                        )
+                    )
+                print("Created customeroutreachsend table", file=sys.stderr, flush=True)
+            except Exception as e:
+                error_str = str(e).lower()
+                if "already exists" not in error_str and "duplicate" not in error_str:
+                    print(f"Error creating customeroutreachsend: {e}", file=sys.stderr, flush=True)
+
         # messenger_message table is created by SQLModel.metadata.create_all() when MessengerMessage model is imported
         
         print("Migration check completed", file=sys.stderr, flush=True)

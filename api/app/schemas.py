@@ -1434,6 +1434,10 @@ class ReminderRuleResponse(BaseModel):
     suggested_action: SuggestedAction
     created_at: datetime
     updated_at: datetime
+    customer_outreach_channel: Optional[str] = None
+    customer_outreach_sms_template_id: Optional[int] = None
+    customer_outreach_email_template_id: Optional[int] = None
+    customer_outreach_cooldown_days: int = 14
 
 
 class ReminderRuleUpdate(BaseModel):
@@ -1441,6 +1445,10 @@ class ReminderRuleUpdate(BaseModel):
     is_active: Optional[bool] = None
     priority: Optional[ReminderPriority] = None
     suggested_action: Optional[SuggestedAction] = None
+    customer_outreach_channel: Optional[str] = None
+    customer_outreach_sms_template_id: Optional[int] = None
+    customer_outreach_email_template_id: Optional[int] = None
+    customer_outreach_cooldown_days: Optional[int] = None
 
 
 class ReminderRuleCreate(BaseModel):
@@ -1452,6 +1460,10 @@ class ReminderRuleCreate(BaseModel):
     is_active: bool = True
     priority: ReminderPriority = ReminderPriority.MEDIUM
     suggested_action: SuggestedAction
+    customer_outreach_channel: Optional[str] = None
+    customer_outreach_sms_template_id: Optional[int] = None
+    customer_outreach_email_template_id: Optional[int] = None
+    customer_outreach_cooldown_days: Optional[int] = 14
 
 
 class StaleSummaryResponse(BaseModel):
