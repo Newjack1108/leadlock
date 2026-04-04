@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { ActivityType, type QuoteTemperature } from '@/lib/types';
+import { ActivityType, type QuoteTemperature, type QuoteStatus } from '@/lib/types';
 import { getTelUrl } from '@/lib/utils';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -315,15 +315,32 @@ export const previewSmsTemplate = async (templateId: number, previewData?: {
   return response.data;
 };
 
-export const sendQuoteEmail = async (quoteId: number, emailData: {
-  template_id: number;
-  to_email: string;
-  cc?: string;
-  bcc?: string;
-  custom_message?: string;
-  include_available_extras?: boolean;
-}) => {
-  const response = await api.post(`/api/quotes/${quoteId}/send-email`, emailData);
+export const sendQuoteEmail = async (
+  quoteId: number,
+  emailData: {
+    template_id: number;
+    to_email: string;
+    cc?: string;
+    bcc?: string;
+    custom_message?: string;
+    include_available_extras?: boolean;
+  },
+  attachments?: File[]
+) => {
+  const formData = new FormData();
+  formData.append('email_data', JSON.stringify(emailData));
+  if (attachments?.length) {
+    for (const file of attachments) {
+      formData.append('attachments', file);
+    }
+  }
+  const response = await api.post(`/api/quotes/${quoteId}/send-email`, formData, {
+    timeout: attachments?.length ? 60000 : 15000,
+    transformRequest: [(data: unknown, headers?: Record<string, unknown>) => {
+      if (data instanceof FormData && headers) delete (headers as Record<string, unknown>)['Content-Type'];
+      return data;
+    }],
+  });
   return response.data;
 };
 
@@ -552,8 +569,10 @@ export const createQuote = async (quoteData: {
   return response.data;
 };
 
-export const getQuotes = async () => {
-  const response = await api.get('/api/quotes');
+export const getQuotes = async (options?: { status?: QuoteStatus }) => {
+  const response = await api.get('/api/quotes', {
+    ...(options?.status ? { params: { status: options.status } } : {}),
+  });
   return response.data;
 };
 

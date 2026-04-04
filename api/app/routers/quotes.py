@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Body, Depends, HTTPException, Query
+import json
+from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import Response
 from sqlmodel import Session, select, or_, and_
 from sqlalchemy import func
-from typing import List, Optional
+from typing import List, Optional, Union
 from app.database import get_session
 from app.models import Quote, QuoteItem, QuoteTemplate, Customer, User, QuoteEmail, Email, EmailDirection, Activity, ActivityType, CompanySettings, Lead, LeadStatus, QuoteStatus, QuoteTemperature, OpportunityStage, LossCategory, DiscountTemplate, QuoteDiscount, DiscountType, DiscountScope, Order, OrderItem, QuoteItemLineType, DiscountRequest, SmsMessage, SmsDirection
 from app.auth import get_current_user
@@ -14,13 +15,19 @@ from app.schemas import (
     QuoteDiscountResponse
 )
 from app.quote_email_service import send_quote_email
+from app.routers.emails import (
+    MAX_ATTACHMENT_SIZE,
+    MAX_TOTAL_ATTACHMENTS,
+    _normalize_upload_files,
+    _sanitize_filename,
+)
 from app.customer_view_links import customer_view_path_segment
 from app.email_service import is_email_configured
 from app.sms_service import send_sms, normalize_phone
 from app.quote_pdf_service import generate_quote_pdf
 from app.available_optional_extras import get_available_optional_extras_for_quote
 from app.reminder_service import get_last_activity_date
-from app.constants import VAT_RATE_DECIMAL
+from app.constants import QUOTE_LIST_EXCLUDED_STATUSES, VAT_RATE_DECIMAL
 from app.quote_delete import delete_quote_cascade
 from app.discount_limits import assert_templates_not_expired_for_apply, validate_and_record_redemptions_on_accept
 from datetime import datetime
@@ -717,12 +724,18 @@ async def create_quote(
 
 @router.get("", response_model=List[QuoteResponse])
 async def get_all_quotes(
+    status: Optional[QuoteStatus] = Query(None),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
-    """Get all quotes."""
+    """Get all quotes. By default excludes REJECTED and EXPIRED; pass status= to list only that status."""
     try:
-        statement = select(Quote).order_by(Quote.created_at.desc())
+        statement = select(Quote)
+        if status is not None:
+            statement = statement.where(Quote.status == status)
+        else:
+            statement = statement.where(Quote.status.notin_(QUOTE_LIST_EXCLUDED_STATUSES))
+        statement = statement.order_by(Quote.created_at.desc())
         quotes = session.exec(statement).all()
         
         result = []
@@ -749,8 +762,11 @@ async def get_opportunities(
     current_user: User = Depends(get_current_user)
 ):
     """Get all opportunities (quotes with opportunity_stage set)."""
-    statement = select(Quote).where(Quote.opportunity_stage.isnot(None))
-    
+    statement = select(Quote).where(
+        Quote.opportunity_stage.isnot(None),
+        Quote.status.notin_(QUOTE_LIST_EXCLUDED_STATUSES),
+    )
+
     if stage:
         statement = statement.where(Quote.opportunity_stage == stage)
     if owner_id:
@@ -783,6 +799,7 @@ async def get_stale_opportunities(
         and_(
             Quote.opportunity_stage.isnot(None),
             Quote.opportunity_stage.notin_([OpportunityStage.WON, OpportunityStage.LOST]),
+            Quote.status.notin_(QUOTE_LIST_EXCLUDED_STATUSES),
             or_(
                 and_(Quote.next_action_due_date.isnot(None), Quote.next_action_due_date < now),
                 and_(Quote.expected_close_date.isnot(None), Quote.expected_close_date < now)
@@ -1178,9 +1195,16 @@ async def get_customer_quotes(
     """Get all quotes for a customer."""
     customer = session.exec(select(Customer).where(Customer.id == customer_id)).first()
     customer_name = customer.name if customer else None
-    statement = select(Quote).where(Quote.customer_id == customer_id).order_by(Quote.created_at.desc())
+    statement = (
+        select(Quote)
+        .where(
+            Quote.customer_id == customer_id,
+            Quote.status.notin_(QUOTE_LIST_EXCLUDED_STATUSES),
+        )
+        .order_by(Quote.created_at.desc())
+    )
     quotes = session.exec(statement).all()
-    
+
     result = []
     for quote in quotes:
         item_statement = select(QuoteItem).where(QuoteItem.quote_id == quote.id).order_by(QuoteItem.sort_order)
@@ -1338,12 +1362,20 @@ async def post_quote_send_sms(
 @router.post("/{quote_id}/send-email", response_model=QuoteEmailSendResponse)
 async def send_quote_email_endpoint(
     quote_id: int,
-    email_data: QuoteEmailSendRequest,
+    email_data: str = Form(..., description="JSON string matching QuoteEmailSendRequest"),
+    attachments: Optional[Union[UploadFile, List[UploadFile]]] = File(None),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
-    """Send a quote email with a link to view the quote online (no PDF attachment; no pricing in default body)."""
+    """Send a quote email with a link to view the quote online. Optional file attachments (same limits as compose email: 10MB each, 25MB total)."""
     try:
+        try:
+            req = QuoteEmailSendRequest.model_validate(json.loads(email_data))
+        except json.JSONDecodeError as e:
+            raise HTTPException(status_code=400, detail=f"Invalid email_data JSON: {e}")
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
         # Check email configured: Microsoft Graph, Resend, or SMTP
         if not is_email_configured(current_user.id):
             raise HTTPException(
@@ -1375,23 +1407,46 @@ async def send_quote_email_endpoint(
         view_token = uuid.uuid4().hex
         frontend_base_url = (os.getenv("FRONTEND_BASE_URL") or os.getenv("FRONTEND_URL") or os.getenv("PUBLIC_FRONTEND_URL") or "").strip() or None
 
-        qt_statement = select(QuoteTemplate).where(QuoteTemplate.id == email_data.template_id)
+        qt_statement = select(QuoteTemplate).where(QuoteTemplate.id == req.template_id)
         if not session.exec(qt_statement).first():
             raise HTTPException(status_code=404, detail="Quote template not found")
 
-        # Send quote email
+        attachment_list: List[dict] = []
+        attachment_metadata: List[dict] = []
+        total_size = 0
+        for f in _normalize_upload_files(attachments):
+            if not f.filename:
+                continue
+            content = await f.read()
+            size = len(content)
+            if size > MAX_ATTACHMENT_SIZE:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Attachment '{f.filename}' exceeds 10MB limit",
+                )
+            total_size += size
+            if total_size > MAX_TOTAL_ATTACHMENTS:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Total attachments exceed 25MB limit",
+                )
+            safe_name = _sanitize_filename(f.filename)
+            attachment_list.append({"filename": safe_name, "content": content})
+            attachment_metadata.append({"filename": safe_name})
+
         success, message_id, error, pdf_buffer, email_subject, email_body_html = send_quote_email(
             quote=quote,
             customer=customer,
-            to_email=email_data.to_email,
+            to_email=req.to_email,
             session=session,
-            template_id=email_data.template_id,
-            cc=email_data.cc,
-            bcc=email_data.bcc,
-            custom_message=email_data.custom_message,
+            template_id=req.template_id,
+            cc=req.cc,
+            bcc=req.bcc,
+            custom_message=req.custom_message,
             user_id=current_user.id,
             view_token=view_token,
             frontend_base_url=frontend_base_url,
+            attachments=attachment_list if attachment_list else None,
         )
         
         if not success:
@@ -1404,17 +1459,19 @@ async def send_quote_email_endpoint(
         final_body_html = email_body_html or f"<p>Please use the link in the email to view quote {quote.quote_number}.</p>"
         
         # Create Email record (body_html matches QuoteEmail so thread/history views can show content)
+        attachments_json = json.dumps(attachment_metadata) if attachment_metadata else None
         email_record = Email(
             customer_id=quote.customer_id,
             message_id=message_id,
             thread_id=message_id,
             direction=EmailDirection.SENT,
             from_email=current_user.email,
-            to_email=email_data.to_email,
-            cc=email_data.cc,
-            bcc=email_data.bcc,
+            to_email=req.to_email,
+            cc=req.cc,
+            bcc=req.bcc,
             subject=final_subject,
             body_html=final_body_html,
+            attachments=attachments_json,
             sent_at=datetime.utcnow(),
             created_by_id=current_user.id
         )
@@ -1425,12 +1482,12 @@ async def send_quote_email_endpoint(
         # Create QuoteEmail record (view_token for public view link / open tracking)
         quote_email = QuoteEmail(
             quote_id=quote.id,
-            to_email=email_data.to_email,
+            to_email=req.to_email,
             subject=final_subject,
             body_html=final_body_html,  # Template rendered content
             tracking_id=message_id or f"quote-{quote.id}-{datetime.utcnow().timestamp()}",
             view_token=view_token,
-            include_available_extras=getattr(email_data, "include_available_extras", False) or False,
+            include_available_extras=getattr(req, "include_available_extras", False) or False,
         )
         session.add(quote_email)
         
@@ -1451,7 +1508,7 @@ async def send_quote_email_endpoint(
         activity = Activity(
             customer_id=quote.customer_id,
             activity_type=ActivityType.EMAIL_SENT,
-            notes=f"Quote {quote.quote_number} sent to {email_data.to_email}",
+            notes=f"Quote {quote.quote_number} sent to {req.to_email}",
             created_by_id=current_user.id
         )
         session.add(activity)

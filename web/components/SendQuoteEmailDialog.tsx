@@ -77,6 +77,7 @@ export default function SendQuoteEmailDialog({
   });
   const [smsPhone, setSmsPhone] = useState(customer.phone || '');
   const [smsBody, setSmsBody] = useState('');
+  const [emailAttachments, setEmailAttachments] = useState<File[]>([]);
 
   useEffect(() => {
     if (open) {
@@ -91,6 +92,7 @@ export default function SendQuoteEmailDialog({
       });
       setSmsPhone(customer.phone || '');
       setSmsBody('');
+      setEmailAttachments([]);
       setSelectedTemplateId(undefined);
       const fetchTemplates = async () => {
         setLoadingTemplates(true);
@@ -123,6 +125,17 @@ export default function SendQuoteEmailDialog({
       })();
     }
   }, [open, customer, variant, quoteId]);
+
+  const handleEmailAttachmentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const list = e.target.files;
+    if (!list?.length) return;
+    setEmailAttachments((prev) => [...prev, ...Array.from(list)]);
+    e.target.value = '';
+  };
+
+  const removeEmailAttachment = (index: number) => {
+    setEmailAttachments((prev) => prev.filter((_, i) => i !== index));
+  };
 
   const handlePreview = async () => {
     try {
@@ -166,11 +179,15 @@ export default function SendQuoteEmailDialog({
 
     setLoading(true);
     try {
-      const response = await sendQuoteEmail(quoteId, {
-        ...formData,
-        template_id: selectedTemplateId,
-        include_available_extras: formData.include_available_extras ?? false,
-      });
+      const response = await sendQuoteEmail(
+        quoteId,
+        {
+          ...formData,
+          template_id: selectedTemplateId,
+          include_available_extras: formData.include_available_extras ?? false,
+        },
+        emailAttachments.length ? emailAttachments : undefined
+      );
       toast.success(`${docLabel.charAt(0).toUpperCase() + docLabel.slice(1)} email sent successfully`);
       if (response.view_url) {
         setSuccessState({ type: 'email', data: response });
@@ -432,6 +449,39 @@ export default function SendQuoteEmailDialog({
                 placeholder="Add a custom message that will be appended to the email template..."
                 rows={4}
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="quote_email_attachments">Attachments (optional)</Label>
+              <Input
+                id="quote_email_attachments"
+                type="file"
+                multiple
+                onChange={handleEmailAttachmentChange}
+                disabled={loading}
+                className="cursor-pointer"
+              />
+              {emailAttachments.length > 0 && (
+                <ul className="text-sm space-y-1">
+                  {emailAttachments.map((f, i) => (
+                    <li key={`${f.name}-${i}-${f.size}`} className="flex items-center justify-between gap-2">
+                      <span className="truncate text-muted-foreground">{f.name}</span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="shrink-0"
+                        onClick={() => removeEmailAttachment(i)}
+                      >
+                        Remove
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Up to 10MB per file, 25MB total (same limits as compose email).
+              </p>
             </div>
 
             <DialogFooter>

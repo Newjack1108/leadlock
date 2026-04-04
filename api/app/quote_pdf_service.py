@@ -13,7 +13,12 @@ from io import BytesIO
 from datetime import datetime
 from decimal import Decimal
 from app.models import Quote, Customer, QuoteItem, CompanySettings, Product, QuoteItemLineType, QuoteDiscount
-from app.constants import VAT_RATE_DECIMAL, TRACKING_WEBSITE_BASE_URLS, DELIVERY_INSTALLATION_CONTACT_NOTE
+from app.constants import (
+    VAT_RATE_DECIMAL,
+    TRACKING_WEBSITE_BASE_URLS,
+    DELIVERY_INSTALLATION_CONTACT_NOTE,
+    QUOTE_BALANCE_BEFORE_DELIVERY_NOTE,
+)
 from sqlmodel import Session, select
 import os
 import sys
@@ -745,6 +750,20 @@ def generate_quote_pdf(
     items_table = Table(table_data, colWidths=[90*mm, 25*mm, 30*mm, 35*mm])
     items_table.setStyle(TableStyle(table_style_list))
     elements.append(items_table)
+    balance_before_delivery_style = ParagraphStyle(
+        "BalanceBeforeDeliveryNote",
+        parent=normal_style,
+        fontSize=9,
+        textColor=colors.HexColor("#333333"),
+        spaceBefore=8,
+        leading=12,
+    )
+    elements.append(
+        Paragraph(
+            QUOTE_BALANCE_BEFORE_DELIVERY_NOTE.replace("&", "&amp;"),
+            balance_before_delivery_style,
+        )
+    )
     if getattr(quote, "include_delivery_installation_contact_note", False):
         delivery_note_style = ParagraphStyle(
             "DeliveryInstallNote",

@@ -8,6 +8,7 @@ from app.models import (
     Lead, Quote, QuoteEmail, Activity, Reminder, ReminderRule, ReminderType,
     ReminderPriority, SuggestedAction, LeadStatus, QuoteStatus, OpportunityStage
 )
+from app.constants import QUOTE_LIST_EXCLUDED_STATUSES
 
 
 def get_last_activity_date(customer_id: Optional[int], session: Session) -> Optional[datetime]:
@@ -217,7 +218,8 @@ def detect_stale_opportunities(session: Session) -> List[Tuple[Quote, str, int]]
     statement = select(Quote).where(
         and_(
             Quote.opportunity_stage.isnot(None),
-            Quote.opportunity_stage.notin_([OpportunityStage.WON, OpportunityStage.LOST])
+            Quote.opportunity_stage.notin_([OpportunityStage.WON, OpportunityStage.LOST]),
+            Quote.status.notin_(QUOTE_LIST_EXCLUDED_STATUSES),
         )
     )
     opportunities = session.exec(statement).all()

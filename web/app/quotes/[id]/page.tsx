@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import api, { getQuote, previewQuotePdf, getDiscountRequestsForQuote, getQuoteViewLink, acceptQuote, cancelDraftQuote } from '@/lib/api';
 import { Quote, QuoteItem, Customer, QuoteDiscount, DiscountRequest, DiscountRequestStatus, QuoteTemperature, LossCategory } from '@/lib/types';
+import { QUOTE_BALANCE_BEFORE_DELIVERY_NOTE } from '@/lib/quoteCopy';
 import SendQuoteEmailDialog from '@/components/SendQuoteEmailDialog';
 import CallNotesDialog from '@/components/CallNotesDialog';
 import { toast } from 'sonner';
@@ -480,6 +481,9 @@ export default function QuoteDetailPage() {
                         </div>
                       </>
                     )}
+                    <p className="text-sm pt-3 mt-2 border-t border-border">
+                      {QUOTE_BALANCE_BEFORE_DELIVERY_NOTE}
+                    </p>
                   </div>
                 </div>
               </CardContent>

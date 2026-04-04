@@ -1,7 +1,7 @@
 """
-Service for sending quote emails (link only; customer downloads/prints from tracked view).
+Service for sending quote emails (online view link; optional file attachments).
 """
-from typing import Optional, Tuple, Dict, Any
+from typing import Optional, Tuple, Dict, Any, List
 from datetime import datetime
 from jinja2 import Template
 from sqlmodel import Session, select
@@ -79,9 +79,10 @@ def send_quote_email(
     user_id: Optional[int] = None,
     view_token: Optional[str] = None,
     frontend_base_url: Optional[str] = None,
+    attachments: Optional[List[Dict[str, Any]]] = None,
 ) -> Tuple[bool, Optional[str], Optional[str], None, Optional[str], Optional[str]]:
     """
-    Send a quote as an email with "View your quote online" link only (no PDF attachment).
+    Send a quote email with a tracked "View your quote online" link and optional file attachments.
     Customer opens the tracked view and can Print or Download PDF from there.
     
     Args:
@@ -96,7 +97,8 @@ def send_quote_email(
         user_id: Optional user ID for email sending
         view_token: Token for public quote view link
         frontend_base_url: Base URL for view link
-    
+        attachments: Optional list of dicts with keys filename (str) and content (bytes)
+
     Returns:
         Tuple of (success, message_id, error_message, None, subject, body_html)
     """
@@ -129,14 +131,13 @@ def send_quote_email(
             view_link = f'<p style="margin-top:1.5em;"><a href="{base}/{path_seg}" style="{link_style}">{link_label}</a></p>'
             body_html = (body_html or "") + view_link
 
-        # Send email (no PDF attachment; customer uses Print/Download PDF on the tracked view)
         success, message_id, error = send_email(
             to_email=to_email,
             subject=subject,
             body_html=body_html,
             cc=cc,
             bcc=bcc,
-            attachments=None,
+            attachments=attachments if attachments else None,
             user_id=user_id,
             customer_number=customer.customer_number,
             header_tagline=header_tagline,

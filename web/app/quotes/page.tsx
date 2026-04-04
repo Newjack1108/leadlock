@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState, useMemo } from 'react';
+import { Suspense, useCallback, useEffect, useState, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Header from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -51,10 +51,6 @@ function QuotesPageContent() {
   const [temperatureFilter, setTemperatureFilter] = useState<QuoteTemperature | 'ALL'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
 
-  useEffect(() => {
-    fetchQuotes();
-  }, []);
-
   // Sync status filter from URL when search params change (e.g. navigation from dashboard)
   useEffect(() => {
     const status = searchParams.get('status');
@@ -62,6 +58,25 @@ function QuotesPageContent() {
       setStatusFilter(status as QuoteStatus);
     }
   }, [searchParams]);
+
+  const fetchQuotes = useCallback(async () => {
+    try {
+      setLoading(true);
+      const data = await getQuotes(statusFilter === 'ALL' ? undefined : { status: statusFilter });
+      setQuotes(data);
+    } catch (error: any) {
+      toast.error('Failed to load quotes');
+      if (error.response?.status === 401) {
+        router.push('/login');
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [statusFilter, router]);
+
+  useEffect(() => {
+    fetchQuotes();
+  }, [fetchQuotes]);
 
   // Auto-refresh when user returns to this tab/window
   useEffect(() => {
@@ -72,28 +87,10 @@ function QuotesPageContent() {
     };
     document.addEventListener('visibilitychange', onVisibilityChange);
     return () => document.removeEventListener('visibilitychange', onVisibilityChange);
-  }, []);
-
-  const fetchQuotes = async () => {
-    try {
-      setLoading(true);
-      const data = await getQuotes();
-      setQuotes(data);
-    } catch (error: any) {
-      toast.error('Failed to load quotes');
-      if (error.response?.status === 401) {
-        router.push('/login');
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [fetchQuotes]);
 
   const filteredQuotes = useMemo(() => {
     let result = quotes;
-    if (statusFilter !== 'ALL') {
-      result = result.filter((q) => q.status === statusFilter);
-    }
     if (temperatureFilter !== 'ALL') {
       result = result.filter((q) => q.temperature === temperatureFilter);
     }
@@ -106,7 +103,7 @@ function QuotesPageContent() {
       );
     }
     return result;
-  }, [quotes, statusFilter, temperatureFilter, searchQuery]);
+  }, [quotes, temperatureFilter, searchQuery]);
 
   if (loading) {
     return (

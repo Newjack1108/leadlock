@@ -9,6 +9,7 @@ from app.schemas import (
     ActivityCreate, ActivityResponse, StatusHistoryResponse, CustomerResponse, QuoteResponse
 )
 from app.workflow import can_transition, check_sla_overdue, check_quote_prerequisites
+from app.constants import QUOTE_LIST_EXCLUDED_STATUSES
 from datetime import datetime
 
 router = APIRouter(prefix="/api/leads", tags=["leads"])
@@ -583,7 +584,14 @@ async def get_lead_quotes(
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
 
-    statement = select(Quote).where(Quote.lead_id == lead_id).order_by(Quote.created_at.desc())
+    statement = (
+        select(Quote)
+        .where(
+            Quote.lead_id == lead_id,
+            Quote.status.notin_(QUOTE_LIST_EXCLUDED_STATUSES),
+        )
+        .order_by(Quote.created_at.desc())
+    )
     quotes = session.exec(statement).all()
 
     result = []

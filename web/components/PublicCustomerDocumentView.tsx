@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { getPublicQuoteView, downloadPublicQuotePdf } from '@/lib/api';
+import { QUOTE_BALANCE_BEFORE_DELIVERY_NOTE } from '@/lib/quoteCopy';
 import type { PublicQuoteView } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -179,6 +180,11 @@ export default function PublicCustomerDocumentView() {
                   <span>Balance (inc VAT)</span>
                   <span>{formatAmount(data.balance_amount, data.currency)}</span>
                 </div>
+              )}
+              {!hasOrder && (
+                <p className="text-sm text-foreground pt-3 mt-2 border-t border-border">
+                  {QUOTE_BALANCE_BEFORE_DELIVERY_NOTE}
+                </p>
               )}
               {data.delivery_installation_contact_note && (
                 <p className="text-sm text-muted-foreground pt-3 mt-2 border-t border-border">

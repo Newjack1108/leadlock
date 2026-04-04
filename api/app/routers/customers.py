@@ -28,6 +28,7 @@ from app.models import (
     WebsiteVisit,
 )
 from app.models import LeadType, LeadSource
+from app.constants import QUOTE_LIST_EXCLUDED_STATUSES
 from app.auth import get_current_user
 from app.schemas import (
     CustomerResponse,
@@ -400,7 +401,14 @@ async def get_customer_quotes(
     from app.routers.quotes import build_quote_response
     from app.models import QuoteItem
 
-    statement = select(Quote).where(Quote.customer_id == customer_id).order_by(Quote.created_at.desc())
+    statement = (
+        select(Quote)
+        .where(
+            Quote.customer_id == customer_id,
+            Quote.status.notin_(QUOTE_LIST_EXCLUDED_STATUSES),
+        )
+        .order_by(Quote.created_at.desc())
+    )
     quotes = session.exec(statement).all()
 
     result = []
