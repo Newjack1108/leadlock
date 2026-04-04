@@ -7,8 +7,8 @@ from fastapi.responses import Response
 from sqlmodel import Session, select
 from typing import Optional
 
-# Production `product_type` -> Product.is_extra (see import_product_webhook). Add aliases here if production uses other literals.
-PRODUCT_IMPORT_TYPE_EXTRA = frozenset({"extra"})
+# Production `product_type` -> Product.is_extra (see import_product_webhook). Includes optional_extra from production-routes salesProductType.
+PRODUCT_IMPORT_TYPE_EXTRA = frozenset({"extra", "optional_extra"})
 PRODUCT_IMPORT_TYPE_MAIN = frozenset({"product"})
 from app.database import get_session
 from app.models import (
