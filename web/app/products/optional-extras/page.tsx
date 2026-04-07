@@ -6,10 +6,10 @@ import Header from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { getOptionalExtras, getProducts } from '@/lib/api';
+import { deleteProduct, getOptionalExtras, getProducts } from '@/lib/api';
 import { Product, ProductCategory } from '@/lib/types';
 import { toast } from 'sonner';
-import { ArrowLeft, Plus, Edit, Package } from 'lucide-react';
+import { ArrowLeft, Plus, Edit, Package, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 
 export default function OptionalExtrasPage() {
@@ -56,6 +56,23 @@ export default function OptionalExtrasPage() {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeleteExtra = async (extra: Product) => {
+    if (
+      !confirm(
+        `Deactivate "${extra.name}"? It will be removed from linked products and will no longer appear in the catalogue or on quotes.`
+      )
+    ) {
+      return;
+    }
+    try {
+      await deleteProduct(extra.id);
+      toast.success('Optional extra deactivated');
+      fetchOptionalExtras();
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || 'Failed to deactivate optional extra');
     }
   };
 
@@ -126,13 +143,25 @@ export default function OptionalExtrasPage() {
                         )}
                       </div>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => router.push(`/products/${extra.id}/edit`)}
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => router.push(`/products/${extra.id}/edit`)}
+                        aria-label="Edit optional extra"
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-destructive hover:text-destructive"
+                        onClick={() => handleDeleteExtra(extra)}
+                        aria-label="Deactivate optional extra"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent>

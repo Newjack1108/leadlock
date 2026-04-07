@@ -346,10 +346,20 @@ async def delete_product(
     
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
-    
+
+    # Drop optional-extra links so deactivated products do not leave stale associations
+    for link in session.exec(
+        select(ProductOptionalExtra).where(ProductOptionalExtra.product_id == product_id)
+    ).all():
+        session.delete(link)
+    for link in session.exec(
+        select(ProductOptionalExtra).where(ProductOptionalExtra.optional_extra_id == product_id)
+    ).all():
+        session.delete(link)
+
     product.is_active = False
     product.updated_at = datetime.utcnow()
     session.add(product)
     session.commit()
-    
+
     return {"message": "Product deactivated successfully"}
