@@ -20,7 +20,7 @@ import {
 import { Lock, Unlock, Clock, Search, Plus, Eye, MessageCircleReply } from 'lucide-react';
 import api from '@/lib/api';
 import { formatDateTime } from '@/lib/utils';
-import { Lead, LeadStatus, LeadType, LeadSource } from '@/lib/types';
+import { Lead, LeadStatus, LeadType, LeadSource, QuoteTemperature } from '@/lib/types';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import {
@@ -30,6 +30,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+
+const temperatureColors: Record<QuoteTemperature, string> = {
+  HOT: 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300',
+  WARM: 'bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-200',
+  COLD: 'bg-slate-100 text-slate-700 dark:bg-slate-500/15 dark:text-slate-300',
+};
 
 const statusColors: Record<LeadStatus, string> = {
   NEW: 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300',
@@ -350,6 +356,25 @@ function LeadsPageContent() {
                             >
                               <MessageCircleReply className="h-3 w-3 mr-1 shrink-0" />
                               Replied
+                            </Badge>
+                          )}
+                          {lead.latest_quote_temperature && (
+                            <Badge
+                              className={temperatureColors[lead.latest_quote_temperature]}
+                              title="Temperature on the most recently updated quote for this lead"
+                            >
+                              {lead.latest_quote_temperature}
+                            </Badge>
+                          )}
+                          {(lead.quotes_sent_count ?? 0) > 0 && (
+                            <Badge
+                              variant="outline"
+                              className="text-muted-foreground border-border"
+                              title="Quotes emailed (sent) for this lead"
+                            >
+                              {(lead.quotes_sent_count ?? 0) === 1
+                                ? '1 quote sent'
+                                : `${lead.quotes_sent_count} quotes sent`}
                             </Badge>
                           )}
                         </div>

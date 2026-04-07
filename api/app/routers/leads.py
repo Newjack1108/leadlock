@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlmodel import Session, select, or_
+from sqlalchemy import func
 from typing import Optional, List, Dict, Tuple
 from app.database import get_session
 from app.models import (
@@ -21,6 +22,7 @@ from app.models import (
     SmsDirection,
     MessengerMessage,
     MessengerDirection,
+    QuoteTemperature,
 )
 from app.auth import get_current_user
 from app.schemas import (
@@ -170,16 +172,68 @@ def compute_lead_engagement_flags(session: Session, leads: List[Lead]) -> Dict[i
     return out
 
 
+def compute_lead_quote_list_stats(
+    session: Session, leads: List[Lead]
+) -> Dict[int, Tuple[Optional[QuoteTemperature], int]]:
+    """
+    Per lead: (latest_quote_temperature from most recently updated quote, quotes_sent_count).
+    """
+    if not leads:
+        return {}
+    lead_ids = [l.id for l in leads]
+
+    sent_counts: Dict[int, int] = {}
+    stmt_sent = (
+        select(Quote.lead_id, func.count(Quote.id))
+        .where(Quote.lead_id.in_(lead_ids), Quote.sent_at.isnot(None))
+        .group_by(Quote.lead_id)
+    )
+    for row in session.exec(stmt_sent).all():
+        lid, cnt = row[0], row[1]
+        if lid is not None:
+            sent_counts[int(lid)] = int(cnt)
+
+    temp_by_lead: Dict[int, Optional[QuoteTemperature]] = {}
+    stmt_temp = (
+        select(Quote.lead_id, Quote.temperature)
+        .where(Quote.lead_id.in_(lead_ids))
+        .distinct(Quote.lead_id)
+        .order_by(Quote.lead_id, Quote.updated_at.desc(), Quote.id.desc())
+    )
+    for row in session.exec(stmt_temp).all():
+        lid, temp = row[0], row[1]
+        if lid is not None:
+            tid = int(lid)
+            if isinstance(temp, QuoteTemperature):
+                temp_by_lead[tid] = temp
+            elif temp is None:
+                temp_by_lead[tid] = None
+            else:
+                try:
+                    temp_by_lead[tid] = QuoteTemperature(str(temp))
+                except ValueError:
+                    temp_by_lead[tid] = None
+
+    out: Dict[int, Tuple[Optional[QuoteTemperature], int]] = {}
+    for lead in leads:
+        out[lead.id] = (temp_by_lead.get(lead.id), sent_counts.get(lead.id, 0))
+    return out
+
+
 def enrich_lead_response(
     lead: Lead,
     session: Session,
     current_user: User,
     engagement: Optional[Tuple[bool, bool]] = None,
+    quote_stats: Optional[Tuple[Optional[QuoteTemperature], int]] = None,
 ) -> LeadResponse:
-    """Enrich lead with SLA badge, quote lock info, and engagement flags."""
+    """Enrich lead with SLA badge, quote lock info, engagement flags, and quote list stats."""
     if engagement is None:
         engagement = compute_lead_engagement_flags(session, [lead]).get(lead.id, (False, False))
     quote_viewed, has_inbound_reply = engagement
+    if quote_stats is None:
+        quote_stats = compute_lead_quote_list_stats(session, [lead]).get(lead.id, (None, 0))
+    latest_quote_temperature, quotes_sent_count = quote_stats
     sla_badge = check_sla_overdue(lead, session)
     
     quote_locked = False
@@ -254,6 +308,8 @@ def enrich_lead_response(
         customer=customer_response,
         quote_viewed=quote_viewed,
         has_inbound_reply=has_inbound_reply,
+        latest_quote_temperature=latest_quote_temperature,
+        quotes_sent_count=quotes_sent_count,
     )
 
 
@@ -295,13 +351,16 @@ async def get_leads(
         
         statement = statement.order_by(Lead.created_at.desc())
         leads = session.exec(statement).all()
-        engagement_by_lead = compute_lead_engagement_flags(session, list(leads))
+        lead_list = list(leads)
+        engagement_by_lead = compute_lead_engagement_flags(session, lead_list)
+        quote_stats_by_lead = compute_lead_quote_list_stats(session, lead_list)
         return [
             enrich_lead_response(
                 lead,
                 session,
                 current_user,
                 engagement=engagement_by_lead.get(lead.id, (False, False)),
+                quote_stats=quote_stats_by_lead.get(lead.id, (None, 0)),
             )
             for lead in leads
         ]

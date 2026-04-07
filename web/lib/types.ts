@@ -175,6 +175,10 @@ export interface Lead {
   quote_viewed?: boolean;
   /** True if the customer has inbound email, SMS, or Messenger for this lead/customer. */
   has_inbound_reply?: boolean;
+  /** Deal temperature on the most recently updated quote linked to this lead. */
+  latest_quote_temperature?: QuoteTemperature | null;
+  /** Number of quotes linked to this lead with sent_at set. */
+  quotes_sent_count?: number;
 }
 
 export interface Activity {

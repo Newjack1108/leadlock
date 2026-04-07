@@ -509,6 +509,8 @@ class LeadResponse(BaseModel):
     customer: Optional[CustomerResponse] = None
     quote_viewed: bool = False
     has_inbound_reply: bool = False
+    latest_quote_temperature: Optional[QuoteTemperature] = None
+    quotes_sent_count: int = 0
 
 
 class StatusTransitionRequest(BaseModel):
