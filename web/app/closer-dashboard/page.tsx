@@ -331,6 +331,7 @@ export default function CloserDashboardPage() {
                   quotedCount={stats?.leads_with_sent_quotes_count ?? 0}
                   wonCount={stats?.won_count ?? 0}
                   lostCount={stats?.lost_count ?? 0}
+                  closedCount={stats?.closed_count ?? 0}
                 />
               )}
             </CardContent>

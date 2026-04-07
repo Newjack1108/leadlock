@@ -573,6 +573,7 @@ def generate_weekly_summary_pdf(data: Dict[str, Any], company_name: str = "") ->
     quoted_count = data.get("quoted_count", 0)
     won_count = data.get("won_count", 0)
     lost_count = data.get("lost_count", 0)
+    closed_count = data.get("closed_count", 0)
 
     # Bar chart
     chart_data = [
@@ -580,6 +581,7 @@ def generate_weekly_summary_pdf(data: Dict[str, Any], company_name: str = "") ->
         ("Quoted", quoted_count),
         ("Won", won_count),
         ("Lost", lost_count),
+        ("Closed (qualified)", closed_count),
     ]
     if any(v > 0 for _, v in chart_data):
         chart = _create_bar_chart(chart_data, "Weekly Pipeline Activity", width=350, height=180)
@@ -593,6 +595,7 @@ def generate_weekly_summary_pdf(data: Dict[str, Any], company_name: str = "") ->
         ["Quoted", str(quoted_count)],
         ["Won", str(won_count)],
         ["Lost", str(lost_count)],
+        ["Closed (qualified)", str(closed_count)],
     ]
 
     t = Table(table_data, colWidths=[180, 100])
@@ -600,7 +603,7 @@ def generate_weekly_summary_pdf(data: Dict[str, Any], company_name: str = "") ->
     flowables.append(t)
 
     # Summary
-    total_activity = new_count + quoted_count + won_count + lost_count
+    total_activity = new_count + quoted_count + won_count + lost_count + closed_count
     if total_activity > 0:
         flowables.append(Spacer(1, 15))
         win_rate = (won_count / (won_count + lost_count) * 100) if (won_count + lost_count) > 0 else 0

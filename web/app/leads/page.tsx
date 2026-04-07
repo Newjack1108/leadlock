@@ -39,6 +39,7 @@ const statusColors: Record<LeadStatus, string> = {
   QUOTED: 'bg-secondary/10 text-secondary',
   WON: 'bg-success/10 text-success',
   LOST: 'bg-destructive/10 text-destructive',
+  CLOSED: 'bg-slate-200 text-slate-800 dark:bg-slate-500/20 dark:text-slate-300',
 };
 
 function formatTimeAgo(dateString: string): string {
@@ -54,13 +55,19 @@ function formatTimeAgo(dateString: string): string {
   return `${diffDays}d ago`;
 }
 
-const TERMINAL_STATUSES: LeadStatus[] = [LeadStatus.QUOTED, LeadStatus.WON, LeadStatus.LOST];
+const TERMINAL_STATUSES: LeadStatus[] = [LeadStatus.QUOTED, LeadStatus.WON, LeadStatus.LOST, LeadStatus.CLOSED];
 
 // Exclude legacy WEBSITE from new-lead dropdown; prefer CSGB/CS/BLC WEBSITE
 const LEAD_SOURCE_OPTIONS_FOR_NEW = Object.values(LeadSource).filter((s) => s !== LeadSource.WEBSITE);
 
 // Closers only see these statuses; default to QUALIFIED
-const CLOSER_STATUS_TABS: LeadStatus[] = [LeadStatus.QUALIFIED, LeadStatus.QUOTED, LeadStatus.WON, LeadStatus.LOST];
+const CLOSER_STATUS_TABS: LeadStatus[] = [
+  LeadStatus.QUALIFIED,
+  LeadStatus.QUOTED,
+  LeadStatus.WON,
+  LeadStatus.LOST,
+  LeadStatus.CLOSED,
+];
 const CLOSER_DISALLOWED_STATUSES: (LeadStatus | 'ALL')[] = ['ALL', LeadStatus.NEW, LeadStatus.CONTACT_ATTEMPTED, LeadStatus.ENGAGED];
 
 function LeadsPageContent() {

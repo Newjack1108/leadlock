@@ -11,7 +11,7 @@ WORKFLOW_TRANSITIONS = {
         LeadStatus.NEW: [LeadStatus.ENGAGED, LeadStatus.CONTACT_ATTEMPTED, LeadStatus.LOST],
         LeadStatus.CONTACT_ATTEMPTED: [LeadStatus.ENGAGED, LeadStatus.LOST],
         LeadStatus.ENGAGED: [LeadStatus.QUALIFIED, LeadStatus.LOST],
-        LeadStatus.QUALIFIED: [LeadStatus.QUOTED, LeadStatus.LOST],
+        LeadStatus.QUALIFIED: [LeadStatus.QUOTED, LeadStatus.LOST, LeadStatus.CLOSED],
         LeadStatus.QUOTED: [LeadStatus.WON, LeadStatus.LOST],
     },
     UserRole.SALES_MANAGER: {
@@ -20,7 +20,7 @@ WORKFLOW_TRANSITIONS = {
         LeadStatus.ENGAGED: [LeadStatus.QUALIFIED],
     },
     UserRole.CLOSER: {
-        LeadStatus.QUALIFIED: [LeadStatus.QUOTED],
+        LeadStatus.QUALIFIED: [LeadStatus.QUOTED, LeadStatus.CLOSED],
         LeadStatus.QUOTED: [LeadStatus.WON, LeadStatus.LOST],
     },
 }

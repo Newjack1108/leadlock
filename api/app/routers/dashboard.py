@@ -91,6 +91,7 @@ async def get_dashboard_stats(
     quoted_count = count_leads(Lead.status == LeadStatus.QUOTED)
     won_count = count_leads(Lead.status == LeadStatus.WON)
     lost_count = count_leads(Lead.status == LeadStatus.LOST)
+    closed_count = count_leads(Lead.status == LeadStatus.CLOSED)
 
     # Count quotes sent (Quote records with status beyond DRAFT; one lead can have multiple)
     quotes_sent_stmt = select(func.count(Quote.id)).where(
@@ -149,6 +150,7 @@ async def get_dashboard_stats(
         leads_with_sent_quotes_count=leads_with_sent_quotes_count,
         won_count=won_count,
         lost_count=lost_count,
+        closed_count=closed_count,
         engaged_percentage=round(engaged_percentage, 1),
         qualified_percentage=round(qualified_percentage, 1),
         leads_by_source=leads_by_source,
@@ -228,8 +230,11 @@ async def get_stuck_leads(
 ):
     """Get oldest lead per status that hasn't been updated recently."""
     stuck_leads = []
-    
+    terminal_stuck_exclude = {LeadStatus.WON, LeadStatus.LOST, LeadStatus.CLOSED}
+
     for status in LeadStatus:
+        if status in terminal_stuck_exclude:
+            continue
         statement = select(Lead).where(Lead.status == status).order_by(Lead.updated_at.asc()).limit(1)
         lead = session.exec(statement).first()
         if lead:

@@ -21,6 +21,14 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
   Phone,
   Mail,
   MessageSquare,
@@ -29,6 +37,7 @@ import {
   CheckCircle,
   XCircle,
   FileText,
+  DoorClosed,
 } from 'lucide-react';
 import api, { getLeadQuotes } from '@/lib/api';
 import { formatDateTime, formatActivityTypeLabel } from '@/lib/utils';
@@ -74,6 +83,10 @@ export default function LeadDetailPage() {
   const [allowedTransitions, setAllowedTransitions] = useState<string[]>([]);
   const [qualifyLoading, setQualifyLoading] = useState(false);
   const [rejectLoading, setRejectLoading] = useState(false);
+  const [closeDialogOpen, setCloseDialogOpen] = useState(false);
+  const [closeReasonPreset, setCloseReasonPreset] = useState<string>('Cannot contact');
+  const [closeOtherNotes, setCloseOtherNotes] = useState('');
+  const [closeLoading, setCloseLoading] = useState(false);
   const [composeEmailOpen, setComposeEmailOpen] = useState(false);
   const [callNotesDialogOpen, setCallNotesDialogOpen] = useState(false);
   const [ensureCustomerLoading, setEnsureCustomerLoading] = useState(false);
@@ -199,6 +212,39 @@ export default function LeadDetailPage() {
     }
   };
 
+  const buildCloseReason = () => {
+    if (closeReasonPreset === 'Other') {
+      return (closeOtherNotes || '').trim();
+    }
+    const extra = closeOtherNotes.trim();
+    return extra ? `${closeReasonPreset}: ${extra}` : closeReasonPreset;
+  };
+
+  const handleCloseLead = async () => {
+    if (!allowedTransitions.includes('CLOSED')) return;
+    const reason = buildCloseReason();
+    if (!reason) {
+      toast.error('Please add a reason or notes');
+      return;
+    }
+    setCloseLoading(true);
+    try {
+      await api.post(`/api/leads/${leadId}/transition`, {
+        new_status: 'CLOSED',
+        override_reason: reason,
+      });
+      toast.success('Lead closed');
+      setCloseDialogOpen(false);
+      setCloseOtherNotes('');
+      router.push('/leads?status=CLOSED');
+    } catch (error: any) {
+      const d = error.response?.data?.detail;
+      toast.error(typeof d === 'object' && d?.message ? d.message : d || 'Failed to close lead');
+    } finally {
+      setCloseLoading(false);
+    }
+  };
+
   const handleFieldChange = (field: string, value: any) => {
     setLead((prev) => (prev ? { ...prev, [field]: value } : null));
   };
@@ -270,6 +316,21 @@ export default function LeadDetailPage() {
                       >
                         <CheckCircle className="h-4 w-4" />
                         {qualifyLoading ? 'Qualifying...' : 'Qualify'}
+                      </Button>
+                    )}
+                    {allowedTransitions.includes('CLOSED') && lead.status === LeadStatus.QUALIFIED && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setCloseReasonPreset('Cannot contact');
+                          setCloseOtherNotes('');
+                          setCloseDialogOpen(true);
+                        }}
+                        className="gap-1"
+                      >
+                        <DoorClosed className="h-4 w-4" />
+                        Close lead
                       </Button>
                     )}
                     {allowedTransitions.includes('LOST') && lead.status !== LeadStatus.LOST && (
@@ -625,6 +686,52 @@ export default function LeadDetailPage() {
               </CardContent>
             </Card>
           </div>
+
+        <Dialog open={closeDialogOpen} onOpenChange={setCloseDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Close lead</DialogTitle>
+              <DialogDescription>
+                Use this when the lead is qualified but you cannot reach them, they ordered elsewhere, or they are no longer pursuing a quote. Draft opportunities for this lead will be removed.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <div className="space-y-2">
+                <Label>Reason</Label>
+                <Select value={closeReasonPreset} onValueChange={setCloseReasonPreset}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Cannot contact">Cannot contact</SelectItem>
+                    <SelectItem value="Ordered elsewhere">Ordered elsewhere</SelectItem>
+                    <SelectItem value="Not interested">Not interested</SelectItem>
+                    <SelectItem value="Other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>{closeReasonPreset === 'Other' ? 'Details (required)' : 'Extra notes (optional)'}</Label>
+                <Textarea
+                  value={closeOtherNotes}
+                  onChange={(e) => setCloseOtherNotes(e.target.value)}
+                  placeholder={
+                    closeReasonPreset === 'Other' ? 'Describe why this lead is being closed' : 'Optional context'
+                  }
+                  rows={3}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setCloseDialogOpen(false)} disabled={closeLoading}>
+                Cancel
+              </Button>
+              <Button onClick={handleCloseLead} disabled={closeLoading}>
+                {closeLoading ? 'Closing...' : 'Close lead'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {lead.customer && (
           <ComposeEmailDialog

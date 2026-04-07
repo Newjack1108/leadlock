@@ -2,13 +2,14 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlmodel import Session, select, or_
 from typing import Optional, List
 from app.database import get_session
-from app.models import Lead, User, Activity, StatusHistory, LeadStatus, LeadType, LeadSource, ActivityType, Customer, Quote, QuoteItem
+from app.models import Lead, User, Activity, StatusHistory, LeadStatus, LeadType, LeadSource, ActivityType, Customer, Quote, QuoteItem, QuoteStatus
 from app.auth import get_current_user
 from app.schemas import (
     LeadCreate, LeadUpdate, LeadResponse, StatusTransitionRequest,
     ActivityCreate, ActivityResponse, StatusHistoryResponse, CustomerResponse, QuoteResponse
 )
 from app.workflow import can_transition, check_sla_overdue, check_quote_prerequisites
+from app.quote_delete import delete_quote_cascade
 from app.constants import QUOTE_LIST_EXCLUDED_STATUSES
 from datetime import datetime
 
@@ -302,6 +303,14 @@ async def transition_lead_status(
     
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
+
+    if transition.new_status == LeadStatus.CLOSED:
+        reason = (transition.override_reason or "").strip()
+        if not reason:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"error": "CLOSE_REASON_REQUIRED", "message": "A reason is required to close this lead."},
+            )
     
     is_override = transition.override_reason is not None and transition.override_reason.strip() != ""
     allowed, error = can_transition(
@@ -327,16 +336,29 @@ async def transition_lead_status(
     if transition.new_status == LeadStatus.QUALIFIED and not lead.customer_id:
         customer = find_or_create_customer(lead, session)
         lead.customer_id = customer.id
+
+    if transition.new_status == LeadStatus.CLOSED:
+        draft_stmt = select(Quote).where(
+            Quote.lead_id == lead.id,
+            Quote.status == QuoteStatus.DRAFT,
+        )
+        for q in list(session.exec(draft_stmt).all()):
+            delete_quote_cascade(session, q.id)
     
     session.add(lead)
     
     # Log status change
+    history_reason = (
+        transition.override_reason.strip()
+        if transition.new_status == LeadStatus.CLOSED
+        else (transition.override_reason if is_override else None)
+    )
     status_history = StatusHistory(
         lead_id=lead.id,
         old_status=old_status,
         new_status=transition.new_status,
         changed_by_id=current_user.id,
-        override_reason=transition.override_reason if is_override else None
+        override_reason=history_reason
     )
     session.add(status_history)
     session.commit()

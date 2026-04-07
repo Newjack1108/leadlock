@@ -7,6 +7,7 @@ const STATUS_COLORS: Record<string, string> = {
   Quoted: '#7c3aed',
   Won: '#16a34a',
   Lost: '#dc2626',
+  Closed: '#64748b',
 };
 
 interface StatusPieChartProps {
@@ -14,15 +15,24 @@ interface StatusPieChartProps {
   quotedCount: number;
   wonCount: number;
   lostCount: number;
+  closedCount?: number;
   height?: number;
 }
 
-export default function StatusPieChart({ newCount, quotedCount, wonCount, lostCount, height = 280 }: StatusPieChartProps) {
+export default function StatusPieChart({
+  newCount,
+  quotedCount,
+  wonCount,
+  lostCount,
+  closedCount = 0,
+  height = 280,
+}: StatusPieChartProps) {
   const data = [
     { name: 'New', value: Number(newCount ?? 0), color: STATUS_COLORS.New },
     { name: 'Quoted', value: Number(quotedCount ?? 0), color: STATUS_COLORS.Quoted },
     { name: 'Won', value: Number(wonCount ?? 0), color: STATUS_COLORS.Won },
     { name: 'Lost', value: Number(lostCount ?? 0), color: STATUS_COLORS.Lost },
+    { name: 'Closed', value: Number(closedCount ?? 0), color: STATUS_COLORS.Closed },
   ].filter((d) => d.value > 0);
 
   const total = data.reduce((sum, d) => sum + d.value, 0);

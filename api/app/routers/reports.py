@@ -403,6 +403,10 @@ async def get_weekly_summary_report(
         select(func.count(Lead.id)).where(date_filter, Lead.status == LeadStatus.LOST)
     ).one()
 
+    closed_count = session.exec(
+        select(func.count(Lead.id)).where(date_filter, Lead.status == LeadStatus.CLOSED)
+    ).one()
+
     start_of_week = start - timedelta(days=start.weekday()) if hasattr(start, "weekday") else start
     week_label = f"{start.strftime('%d %b')} - {end.strftime('%d %b %Y')}"
 
@@ -413,6 +417,7 @@ async def get_weekly_summary_report(
         quoted_count=quoted_count,
         won_count=won_count,
         lost_count=lost_count,
+        closed_count=closed_count,
         start_date=start,
         end_date=end,
     )

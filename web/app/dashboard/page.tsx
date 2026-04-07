@@ -22,7 +22,7 @@ import api, {
 } from '@/lib/api';
 import { DashboardStats, StaleSummary, CompanySettings, UnreadSmsSummary, UnreadMessengerSummary, LeadLocationItem } from '@/lib/types';
 import { toast } from 'sonner';
-import { TrendingUp, Users, CheckCircle2, Trophy, Bell, ArrowRight, Clock, MessageSquare, FileDown, BarChart3, Target, MessageCircle, Calendar } from 'lucide-react';
+import { TrendingUp, Users, CheckCircle2, Trophy, Bell, ArrowRight, Clock, MessageSquare, FileDown, BarChart3, Target, MessageCircle, Calendar, DoorClosed } from 'lucide-react';
 import StatusPieChart from '@/components/StatusPieChart';
 import LeadsBySourceBarChart from '@/components/LeadsBySourceBarChart';
 
@@ -203,6 +203,7 @@ export default function DashboardPage() {
                 quotedCount={stats.leads_with_sent_quotes_count}
                 wonCount={stats.won_count}
                 lostCount={stats.lost_count}
+                closedCount={stats.closed_count}
               />
             </CardContent>
           </Card>
@@ -225,7 +226,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Status Breakdown */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-6 mb-8">
           <Link href="/leads?status=NEW" className="block">
             <Card className="cursor-pointer transition-colors hover:border-primary/50 h-full">
               <CardHeader>
@@ -266,6 +267,18 @@ export default function DashboardPage() {
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-bold">{stats.lost_count}</div>
+              </CardContent>
+            </Card>
+          </Link>
+          <Link href="/leads?status=CLOSED" className="block">
+            <Card className="cursor-pointer transition-colors hover:border-primary/50 h-full">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-lg">Closed</CardTitle>
+                <DoorClosed className="h-5 w-5 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold">{stats.closed_count}</div>
+                <p className="text-xs text-muted-foreground mt-1">Qualified, no quote</p>
               </CardContent>
             </Card>
           </Link>

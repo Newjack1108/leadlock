@@ -21,6 +21,7 @@ class LeadStatus(str, Enum):
     QUOTED = "QUOTED"
     WON = "WON"
     LOST = "LOST"
+    CLOSED = "CLOSED"
 
 
 class ActivityType(str, Enum):

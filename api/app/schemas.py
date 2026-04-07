@@ -563,6 +563,7 @@ class DashboardStats(BaseModel):
     leads_with_sent_quotes_count: int
     won_count: int
     lost_count: int
+    closed_count: int
     engaged_percentage: float
     qualified_percentage: float
     leads_by_source: List[LeadSourceCount] = []
@@ -644,6 +645,7 @@ class WeeklyPipelineSummaryReport(BaseModel):
     quoted_count: int
     won_count: int
     lost_count: int
+    closed_count: int
     start_date: datetime
     end_date: datetime
 

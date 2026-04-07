@@ -6,6 +6,7 @@ export enum LeadStatus {
   QUOTED = "QUOTED",
   WON = "WON",
   LOST = "LOST",
+  CLOSED = "CLOSED",
 }
 
 export enum ActivityType {
@@ -215,6 +216,7 @@ export interface DashboardStats {
   leads_with_sent_quotes_count: number;
   won_count: number;
   lost_count: number;
+  closed_count: number;
   engaged_percentage: number;
   qualified_percentage: number;
   leads_by_source: LeadSourceCount[];
@@ -295,6 +297,7 @@ export interface WeeklyPipelineSummaryReport {
   quoted_count: number;
   won_count: number;
   lost_count: number;
+  closed_count: number;
   start_date: string;
   end_date: string;
 }
