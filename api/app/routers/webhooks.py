@@ -7,9 +7,20 @@ from fastapi.responses import Response
 from sqlmodel import Session, select
 from typing import Optional
 
-# Production `product_type` -> Product.is_extra (see import_product_webhook). Includes optional_extra from production-routes salesProductType.
+# Production `product_type` -> Product.is_extra (see import_product_webhook). Matching is case-insensitive.
+# Extras: optional_extra / extra. Main catalogue: product plus line labels (e.g. Stable) from production salesProductType.
 PRODUCT_IMPORT_TYPE_EXTRA = frozenset({"extra", "optional_extra"})
-PRODUCT_IMPORT_TYPE_MAIN = frozenset({"product"})
+PRODUCT_IMPORT_TYPE_MAIN = frozenset(
+    {
+        "product",
+        "stable",
+        "stables",
+        "shed",
+        "sheds",
+        "cabin",
+        "cabins",
+    }
+)
 from app.database import get_session
 from app.models import (
     Lead,
@@ -62,6 +73,22 @@ def resolve_is_extra_from_product_type(product_type: Optional[str]) -> Optional[
         status_code=422,
         detail=f"Invalid product_type {product_type!r}. Expected one of: {allowed}",
     )
+
+
+def resolve_product_category_from_product_type(product_type: Optional[str]) -> Optional[ProductCategory]:
+    """If product_type is omitted, return None (keep existing category on update; create uses STABLES)."""
+    if product_type is None:
+        return None
+    key = product_type.strip().lower()
+    if key in PRODUCT_IMPORT_TYPE_EXTRA:
+        return ProductCategory.STABLES
+    if key in ("shed", "sheds"):
+        return ProductCategory.SHEDS
+    if key in ("cabin", "cabins"):
+        return ProductCategory.CABINS
+    if key in PRODUCT_IMPORT_TYPE_MAIN:
+        return ProductCategory.STABLES
+    return None
 
 
 @router.post("/leads", response_model=LeadResponse)
@@ -220,9 +247,10 @@ async def import_product_webhook(
     Requires Bearer token in Authorization header.
     Upsert: if product_id (Production's ID) provided, match by production_product_id; else match by name.
     Products from production send cost ex VAT; RRP (base_price) is derived using company gross margin % if set.
-    Optional product_type maps to is_extra (e.g. extra vs product); omitted on update preserves existing is_extra.
+    Optional product_type maps to is_extra and category (e.g. Stable / optional_extra); omitted on update preserves existing is_extra and category.
     """
     resolved_is_extra = resolve_is_extra_from_product_type(payload.product_type)
+    resolved_category = resolve_product_category_from_product_type(payload.product_type)
 
     # Map payload to Product fields: cost ex VAT from production
     cost_ex_vat = payload.price_ex_vat
@@ -254,6 +282,8 @@ async def import_product_webhook(
         existing.boxes_per_product = number_of_boxes_int
         if resolved_is_extra is not None:
             existing.is_extra = resolved_is_extra
+        if resolved_category is not None:
+            existing.category = resolved_category
         if payload.product_id is not None:
             existing.production_product_id = payload.product_id
         existing.updated_at = datetime.utcnow()
@@ -265,7 +295,7 @@ async def import_product_webhook(
         product = Product(
             name=payload.name,
             description=payload.description or None,
-            category=ProductCategory.STABLES,
+            category=resolved_category or ProductCategory.STABLES,
             subcategory=None,
             is_extra=resolved_is_extra if resolved_is_extra is not None else False,
             base_price=base_price,
