@@ -820,6 +820,7 @@ class ProductImportPayload(BaseModel):
     install_hours: Decimal
     number_of_boxes: Decimal  # Accepted as number; validated and stored as int
     product_type: Optional[str] = None  # e.g. "extra" vs "product"; maps to Product.is_extra
+    parent_product_id: Optional[int] = None  # Production main product id when this row is an optional extra; links via ProductOptionalExtra
 
     @field_validator("product_type", mode="before")
     @classmethod

@@ -9,12 +9,9 @@ from app.models import Product, ProductOptionalExtra, QuoteItemLineType
 
 def get_available_optional_extras_for_quote(quote_items: list, session: Session) -> List[dict[str, Any]]:
     """
-    Get optional extras for the quote that are not already line items.
-
-    Includes:
-    - Extras linked via ProductOptionalExtra to a main product line on the quote (sales UI / catalogue links).
-    - Unlinked optional extras (is_extra, active, no ProductOptionalExtra row), e.g. pushed from production
-      without parent links — only when the quote has at least one main product line.
+    Get optional extras linked to main products on the quote that are not already line items.
+    Only ProductOptionalExtra associations are included (parent main product must be on the quote).
+    Each item is a dict with keys name, base_price (compatible with PDF and public API).
     """
     main_items = [
         i
@@ -25,13 +22,8 @@ def get_available_optional_extras_for_quote(quote_items: list, session: Session)
     ]
     already_in_quote = {getattr(i, "product_id", None) for i in quote_items if getattr(i, "product_id", None) is not None}
 
-    linked_optional_extra_ids = set(
-        session.exec(select(ProductOptionalExtra.optional_extra_id).distinct()).all()
-    )
-
     result = []
     seen = set()  # (optional_extra_id, product_id) to deduplicate
-    seen_extra_ids = set()
 
     for main_item in main_items:
         pid = getattr(main_item, "product_id", None)
@@ -53,27 +45,6 @@ def get_available_optional_extras_for_quote(quote_items: list, session: Session)
             if key in seen:
                 continue
             seen.add(key)
-            seen_extra_ids.add(extra_product.id)
-            result.append(
-                {
-                    "name": extra_product.name,
-                    "base_price": extra_product.base_price or Decimal(0),
-                }
-            )
-
-    if main_items:
-        orphan_stmt = select(Product).where(
-            Product.is_extra == True,
-            Product.is_active == True,
-        )
-        for extra_product in session.exec(orphan_stmt).all():
-            if extra_product.id in already_in_quote:
-                continue
-            if extra_product.id in linked_optional_extra_ids:
-                continue
-            if extra_product.id in seen_extra_ids:
-                continue
-            seen_extra_ids.add(extra_product.id)
             result.append(
                 {
                     "name": extra_product.name,

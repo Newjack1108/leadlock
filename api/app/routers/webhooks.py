@@ -38,6 +38,7 @@ from app.models import (
     MessengerDirection,
     Product,
     ProductCategory,
+    ProductOptionalExtra,
 )
 from app.schemas import LeadCreate, LeadResponse, ProductImportPayload, ProductImportResponse
 from app.auth import get_webhook_api_key, get_product_import_api_key
@@ -248,6 +249,7 @@ async def import_product_webhook(
     Upsert: if product_id (Production's ID) provided, match by production_product_id; else match by name.
     Products from production send cost ex VAT; RRP (base_price) is derived using company gross margin % if set.
     Optional product_type maps to is_extra and category (e.g. Stable / optional_extra); omitted on update preserves existing is_extra and category.
+    For optional extras, parent_product_id (production id of the main product) creates ProductOptionalExtra when set.
     """
     resolved_is_extra = resolve_is_extra_from_product_type(payload.product_type)
     resolved_category = resolve_product_category_from_product_type(payload.product_type)
@@ -308,6 +310,36 @@ async def import_product_webhook(
         session.add(product)
         session.commit()
         session.refresh(product)
+
+    if product.is_extra and payload.parent_product_id is not None:
+        parent = session.exec(
+            select(Product).where(
+                Product.production_product_id == payload.parent_product_id,
+                Product.is_extra == False,
+            )
+        ).first()
+        if not parent:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"Parent product not found in sales for production id {payload.parent_product_id}; "
+                    "sync the main product first or check parent_product_id."
+                ),
+            )
+        existing_link = session.exec(
+            select(ProductOptionalExtra).where(
+                ProductOptionalExtra.product_id == parent.id,
+                ProductOptionalExtra.optional_extra_id == product.id,
+            )
+        ).first()
+        if not existing_link:
+            session.add(
+                ProductOptionalExtra(
+                    product_id=parent.id,
+                    optional_extra_id=product.id,
+                )
+            )
+            session.commit()
 
     return ProductImportResponse(success=True, product_id=str(product.id))
 
