@@ -1,8 +1,27 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlmodel import Session, select, or_
-from typing import Optional, List
+from typing import Optional, List, Dict, Tuple
 from app.database import get_session
-from app.models import Lead, User, Activity, StatusHistory, LeadStatus, LeadType, LeadSource, ActivityType, Customer, Quote, QuoteItem, QuoteStatus
+from app.models import (
+    Lead,
+    User,
+    Activity,
+    StatusHistory,
+    LeadStatus,
+    LeadType,
+    LeadSource,
+    ActivityType,
+    Customer,
+    Quote,
+    QuoteItem,
+    QuoteStatus,
+    Email,
+    EmailDirection,
+    SmsMessage,
+    SmsDirection,
+    MessengerMessage,
+    MessengerDirection,
+)
 from app.auth import get_current_user
 from app.schemas import (
     LeadCreate, LeadUpdate, LeadResponse, StatusTransitionRequest,
@@ -79,8 +98,88 @@ def find_or_create_customer(lead: Lead, session: Session) -> Customer:
     return customer
 
 
-def enrich_lead_response(lead: Lead, session: Session, current_user: User) -> LeadResponse:
-    """Enrich lead with SLA badge and quote lock info."""
+def compute_lead_engagement_flags(session: Session, leads: List[Lead]) -> Dict[int, Tuple[bool, bool]]:
+    """
+    Per lead: (quote_viewed, has_inbound_reply).
+    Quote viewed: any Quote for this lead with viewed_at set.
+    Inbound reply: received Email/SMS/Messenger for the lead's customer and/or lead_id.
+    """
+    if not leads:
+        return {}
+    lead_ids = [l.id for l in leads]
+    customer_ids = list({l.customer_id for l in leads if l.customer_id})
+
+    stmt = select(Quote.lead_id).where(
+        Quote.lead_id.in_(lead_ids),
+        Quote.viewed_at.isnot(None),
+    )
+    quote_viewed_ids = {lid for lid in session.exec(stmt).all() if lid is not None}
+
+    email_customers: set = set()
+    if customer_ids:
+        stmt = select(Email.customer_id).where(
+            Email.customer_id.in_(customer_ids),
+            Email.direction == EmailDirection.RECEIVED,
+        ).distinct()
+        email_customers = set(session.exec(stmt).all())
+
+    sms_customers: set = set()
+    if customer_ids:
+        stmt = select(SmsMessage.customer_id).where(
+            SmsMessage.customer_id.in_(customer_ids),
+            SmsMessage.direction == SmsDirection.RECEIVED,
+        ).distinct()
+        sms_customers = set(session.exec(stmt).all())
+
+    stmt = select(SmsMessage.lead_id).where(
+        SmsMessage.lead_id.in_(lead_ids),
+        SmsMessage.direction == SmsDirection.RECEIVED,
+    ).distinct()
+    sms_leads = {lid for lid in session.exec(stmt).all() if lid is not None}
+
+    messenger_customers: set = set()
+    if customer_ids:
+        stmt = select(MessengerMessage.customer_id).where(
+            MessengerMessage.customer_id.in_(customer_ids),
+            MessengerMessage.direction == MessengerDirection.RECEIVED,
+        ).distinct()
+        messenger_customers = set(session.exec(stmt).all())
+
+    stmt = select(MessengerMessage.lead_id).where(
+        MessengerMessage.lead_id.in_(lead_ids),
+        MessengerMessage.direction == MessengerDirection.RECEIVED,
+    ).distinct()
+    messenger_leads = {lid for lid in session.exec(stmt).all() if lid is not None}
+
+    out: Dict[int, Tuple[bool, bool]] = {}
+    for lead in leads:
+        qv = lead.id in quote_viewed_ids
+        cid = lead.customer_id
+        reply = False
+        if cid and cid in email_customers:
+            reply = True
+        elif cid and cid in sms_customers:
+            reply = True
+        elif lead.id in sms_leads:
+            reply = True
+        elif cid and cid in messenger_customers:
+            reply = True
+        elif lead.id in messenger_leads:
+            reply = True
+        out[lead.id] = (qv, reply)
+    return out
+
+
+def enrich_lead_response(
+    lead: Lead,
+    session: Session,
+    current_user: User,
+    engagement: Optional[Tuple[bool, bool]] = None,
+) -> LeadResponse:
+    """Enrich lead with SLA badge, quote lock info, and engagement flags."""
+    if engagement is None:
+        engagement = compute_lead_engagement_flags(session, [lead]).get(lead.id, (False, False))
+    quote_viewed, has_inbound_reply = engagement
     sla_badge = check_sla_overdue(lead, session)
     
     quote_locked = False
@@ -152,7 +251,9 @@ def enrich_lead_response(lead: Lead, session: Session, current_user: User) -> Le
         sla_badge=sla_badge,
         quote_locked=quote_locked,
         quote_lock_reason=quote_lock_reason,
-        customer=customer_response
+        customer=customer_response,
+        quote_viewed=quote_viewed,
+        has_inbound_reply=has_inbound_reply,
     )
 
 
@@ -194,8 +295,16 @@ async def get_leads(
         
         statement = statement.order_by(Lead.created_at.desc())
         leads = session.exec(statement).all()
-        
-        return [enrich_lead_response(lead, session, current_user) for lead in leads]
+        engagement_by_lead = compute_lead_engagement_flags(session, list(leads))
+        return [
+            enrich_lead_response(
+                lead,
+                session,
+                current_user,
+                engagement=engagement_by_lead.get(lead.id, (False, False)),
+            )
+            for lead in leads
+        ]
     except Exception as e:
         import traceback
         error_msg = f"Error fetching leads: {str(e)}"

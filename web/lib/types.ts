@@ -171,6 +171,10 @@ export interface Lead {
     message?: string;
   };
   customer?: Customer;
+  /** True if any quote for this lead was opened via the customer view link. */
+  quote_viewed?: boolean;
+  /** True if the customer has inbound email, SMS, or Messenger for this lead/customer. */
+  has_inbound_reply?: boolean;
 }
 
 export interface Activity {

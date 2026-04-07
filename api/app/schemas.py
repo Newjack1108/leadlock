@@ -507,6 +507,8 @@ class LeadResponse(BaseModel):
     quote_locked: bool = False
     quote_lock_reason: Optional[dict] = None
     customer: Optional[CustomerResponse] = None
+    quote_viewed: bool = False
+    has_inbound_reply: bool = False
 
 
 class StatusTransitionRequest(BaseModel):

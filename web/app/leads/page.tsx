@@ -17,7 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Lock, Unlock, Clock, Search, Plus } from 'lucide-react';
+import { Lock, Unlock, Clock, Search, Plus, Eye, MessageCircleReply } from 'lucide-react';
 import api from '@/lib/api';
 import { formatDateTime } from '@/lib/utils';
 import { Lead, LeadStatus, LeadType, LeadSource } from '@/lib/types';
@@ -330,6 +330,26 @@ function LeadsPageContent() {
                             >
                               <Clock className="h-3 w-3 mr-1" />
                               Overdue
+                            </Badge>
+                          )}
+                          {lead.quote_viewed && (
+                            <Badge
+                              variant="outline"
+                              className="bg-amber-50 text-amber-900 border-amber-200 dark:bg-amber-500/15 dark:text-amber-200 dark:border-amber-500/30"
+                              title="Customer opened the quote (view link or PDF)"
+                            >
+                              <Eye className="h-3 w-3 mr-1 shrink-0" />
+                              Quote viewed
+                            </Badge>
+                          )}
+                          {lead.has_inbound_reply && (
+                            <Badge
+                              variant="outline"
+                              className="bg-violet-50 text-violet-900 border-violet-200 dark:bg-violet-500/15 dark:text-violet-200 dark:border-violet-500/30"
+                              title="Inbound email, SMS, or Messenger received"
+                            >
+                              <MessageCircleReply className="h-3 w-3 mr-1 shrink-0" />
+                              Replied
                             </Badge>
                           )}
                         </div>
