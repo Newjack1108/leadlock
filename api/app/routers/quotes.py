@@ -4,7 +4,7 @@ from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Query, 
 from fastapi.responses import Response
 from sqlmodel import Session, select, or_, and_
 from sqlalchemy import func
-from typing import List, Optional, Union
+from typing import Dict, List, Optional, Union
 from app.database import get_session
 from app.models import Quote, QuoteItem, QuoteTemplate, QuoteTemplateSalesDocument, SalesDocument, Customer, User, QuoteEmail, Email, EmailDirection, Activity, ActivityType, CompanySettings, Lead, LeadStatus, QuoteStatus, QuoteTemperature, OpportunityStage, LossCategory, DiscountTemplate, QuoteDiscount, DiscountType, DiscountScope, Order, OrderItem, QuoteItemLineType, DiscountRequest, SmsMessage, SmsDirection
 from app.auth import get_current_user
@@ -37,6 +37,27 @@ import os
 import uuid
 
 router = APIRouter(prefix="/api/quotes", tags=["quotes"])
+
+
+def apply_qualified_to_quoted_transition_for_customer(
+    customer_id: int,
+    session: Session,
+    current_user_id: int,
+    reason: str = "Automatic transition: Quote created",
+) -> None:
+    """QUALIFIED → QUOTED for leads on this customer (same as after create_quote when not deferred)."""
+    from app.workflow import auto_transition_lead_status, find_leads_by_customer_id
+
+    leads = find_leads_by_customer_id(customer_id, session)
+    for lead in leads:
+        if lead.status == LeadStatus.QUALIFIED:
+            auto_transition_lead_status(
+                lead.id,
+                LeadStatus.QUOTED,
+                session,
+                current_user_id,
+                reason,
+            )
 
 
 def _frontend_base_url() -> Optional[str]:
@@ -703,18 +724,13 @@ async def create_quote(
         session.add(quote)
         session.commit()
         
-        # QUALIFIED → QUOTED: Transition lead when quote is created
-        from app.workflow import auto_transition_lead_status, find_leads_by_customer_id
-        leads = find_leads_by_customer_id(quote.customer_id, session)
-        for lead in leads:
-            if lead.status == LeadStatus.QUALIFIED:
-                auto_transition_lead_status(
-                    lead.id,
-                    LeadStatus.QUOTED,
-                    session,
-                    current_user.id,
-                    "Automatic transition: Quote created"
-                )
+        if not quote_data.defer_qualified_to_quoted_transition:
+            apply_qualified_to_quoted_transition_for_customer(
+                quote.customer_id,
+                session,
+                current_user.id,
+                "Automatic transition: Quote created",
+            )
         
         # Refresh to get items
         session.refresh(quote)
@@ -958,6 +974,149 @@ async def mark_opportunity_lost(
     statement = select(QuoteItem).where(QuoteItem.quote_id == quote.id).order_by(QuoteItem.sort_order)
     quote_items = session.exec(statement).all()
     return build_quote_response(quote, quote_items, session)
+
+
+@router.post("/{quote_id}/apply-qualified-to-quoted", status_code=204)
+async def apply_qualified_to_quoted_for_quote(
+    quote_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Run deferred QUALIFIED→QUOTED transition after a draft is finalized (e.g. bootstrap create flow)."""
+    statement = select(Quote).where(Quote.id == quote_id)
+    quote = session.exec(statement).first()
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    apply_qualified_to_quoted_transition_for_customer(
+        quote.customer_id,
+        session,
+        current_user.id,
+        "Automatic transition: Quote created",
+    )
+    return Response(status_code=204)
+
+
+def _build_duplicate_draft_payload_from_source(source: Quote, session: Session) -> QuoteDraftUpdate:
+    """
+    Build QuoteDraftUpdate from a persisted quote using pre-discount line fields (unit_price × qty).
+    Template-based discounts are passed as discount_template_ids for re-application.
+    QuoteDiscount rows with template_id NULL are not reproduced; staff may need to re-enter manual deals.
+    """
+    items_db = list(
+        session.exec(
+            select(QuoteItem)
+            .where(QuoteItem.quote_id == source.id)
+            .order_by(QuoteItem.sort_order)
+        ).all()
+    )
+    if not items_db:
+        raise HTTPException(status_code=400, detail="Source quote has no line items to duplicate.")
+
+    id_to_index: Dict[int, int] = {}
+    for i, row in enumerate(items_db):
+        if row.id is not None:
+            id_to_index[row.id] = i
+
+    item_rows: List[QuoteItemCreate] = []
+    for row in items_db:
+        parent_idx = None
+        if row.parent_quote_item_id is not None and row.parent_quote_item_id in id_to_index:
+            parent_idx = id_to_index[row.parent_quote_item_id]
+        item_rows.append(
+            QuoteItemCreate(
+                product_id=row.product_id,
+                description=row.description,
+                quantity=row.quantity,
+                unit_price=row.unit_price,
+                is_custom=row.is_custom,
+                sort_order=row.sort_order,
+                parent_index=parent_idx,
+                line_type=row.line_type,
+                include_in_building_discount=row.include_in_building_discount,
+            )
+        )
+
+    discount_rows = session.exec(
+        select(QuoteDiscount).where(QuoteDiscount.quote_id == source.id)
+    ).all()
+    template_ids: List[int] = []
+    seen: set[int] = set()
+    for d in discount_rows:
+        if d.template_id is not None and d.template_id not in seen:
+            seen.add(d.template_id)
+            template_ids.append(d.template_id)
+
+    return QuoteDraftUpdate(
+        valid_until=source.valid_until,
+        terms_and_conditions=source.terms_and_conditions,
+        notes=source.notes,
+        deposit_amount=source.deposit_amount,
+        items=item_rows,
+        discount_template_ids=template_ids if template_ids else None,
+        temperature=source.temperature,
+        include_spec_sheets=source.include_spec_sheets,
+        include_available_optional_extras=source.include_available_optional_extras,
+        include_delivery_installation_contact_note=source.include_delivery_installation_contact_note,
+    )
+
+
+@router.post("/{quote_id}/duplicate-to-draft", response_model=QuoteResponse)
+async def duplicate_quote_to_draft(
+    quote_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Clone a non-draft quote into a new DRAFT with a new id and quote_number (see _build_duplicate_draft_payload_from_source)."""
+    source = session.exec(select(Quote).where(Quote.id == quote_id)).first()
+    if not source:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    if source.status == QuoteStatus.DRAFT:
+        raise HTTPException(
+            status_code=400,
+            detail="Source quote is already a draft. Use Edit to change it.",
+        )
+    if not source.customer_id or not source.lead_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Source quote must have customer_id and lead_id to duplicate.",
+        )
+
+    payload = _build_duplicate_draft_payload_from_source(source, session)
+
+    new_quote = Quote(
+        customer_id=source.customer_id,
+        lead_id=source.lead_id,
+        quote_number=generate_quote_number(session),
+        version=1,
+        status=QuoteStatus.DRAFT,
+        subtotal=Decimal(0),
+        discount_total=Decimal(0),
+        total_amount=Decimal(0),
+        deposit_amount=Decimal(0),
+        balance_amount=Decimal(0),
+        currency=source.currency or "GBP",
+        created_by_id=current_user.id,
+        sent_at=None,
+        viewed_at=None,
+        last_viewed_at=None,
+        accepted_at=None,
+        opportunity_stage=None,
+        close_probability=None,
+        expected_close_date=None,
+        next_action=None,
+        next_action_due_date=None,
+        loss_reason=None,
+        loss_category=None,
+        owner_id=None,
+        include_spec_sheets=source.include_spec_sheets,
+        include_available_optional_extras=source.include_available_optional_extras,
+        include_delivery_installation_contact_note=source.include_delivery_installation_contact_note,
+    )
+    session.add(new_quote)
+    session.commit()
+    session.refresh(new_quote)
+
+    return _update_draft_quote_impl(new_quote.id, payload, session, current_user)
 
 
 @router.get("/{quote_id}", response_model=QuoteResponse)

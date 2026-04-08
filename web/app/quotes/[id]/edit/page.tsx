@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense, useMemo, useCallback, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Header from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -28,6 +28,9 @@ import {
 } from '@/lib/types';
 import Link from 'next/link';
 import { toast } from 'sonner';
+import { quoteItemsToFormItems, buildUpdateDraftPayload } from '@/lib/quoteDraftPayload';
+import { prefetchProductDetailsForQuoteItems } from '@/lib/prefetchQuoteProductDetails';
+import { useDraftAutosave } from '@/hooks/useDraftAutosave';
 import { formatHoursMinutes } from '@/lib/utils';
 import { Plus, Trash2, ArrowLeft, X, ChevronDown, ChevronUp, Send, FileSearch } from 'lucide-react';
 import RequestDiscountDialog from '@/components/RequestDiscountDialog';
@@ -92,59 +95,6 @@ We are not liable for third-party installation, access damage, weather events, o
 
 Full Terms & Conditions available on request or on our website.
 Statutory consumer rights are not affected.`;
-
-function quoteItemsToFormItems(items: QuoteItem[]): QuoteItemCreate[] {
-  const sorted = [...items].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
-  const idToIndex: Record<number, number> = {};
-  sorted.forEach((item, i) => {
-    if (item.id != null) idToIndex[item.id] = i;
-  });
-  return sorted.map((item) => ({
-    product_id: item.product_id ?? undefined,
-    description: item.description,
-    quantity: Number(item.quantity),
-    unit_price: Math.round(Number(item.unit_price) * 100) / 100,
-    is_custom: item.is_custom ?? false,
-    sort_order: item.sort_order ?? 0,
-    parent_index: item.parent_quote_item_id != null ? idToIndex[item.parent_quote_item_id] : undefined,
-    line_type: item.line_type ?? undefined,
-    include_in_building_discount: item.include_in_building_discount ?? true,
-  }));
-}
-
-/** Full product details (incl. optional_extras) for quote lines; list API omits nested extras. */
-async function prefetchProductDetailsForQuoteItems(
-  formItems: QuoteItemCreate[]
-): Promise<Record<number, Product>> {
-  const ids = [
-    ...new Set(
-      formItems
-        .map((it) => it.product_id)
-        .filter((id): id is number => id != null)
-    ),
-  ];
-  if (ids.length === 0) return {};
-
-  let catalog: Product[] = [];
-  try {
-    catalog = await getProducts();
-  } catch {
-    catalog = [];
-  }
-
-  const out: Record<number, Product> = {};
-  await Promise.all(
-    ids.map(async (id) => {
-      try {
-        out[id] = await getProduct(id);
-      } catch {
-        const stub = catalog.find((p) => p.id === id);
-        if (stub) out[id] = stub;
-      }
-    })
-  );
-  return out;
-}
 
 function EditQuoteContent() {
   const router = useRouter();
@@ -457,8 +407,120 @@ function EditQuoteContent() {
     depositAmount === '' ? calculateDefaultDeposit() : Number(depositAmount);
   const getBalanceAmount = () => Math.max(0, calculateTotalIncVat() - getDepositAmount());
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const buildDraftPayload = useCallback(
+    () =>
+      buildUpdateDraftPayload({
+        items,
+        validUntil,
+        termsAndConditions,
+        notes,
+        temperature,
+        includeSpecSheets,
+        includeAvailableOptionalExtras,
+        includeDeliveryInstallationContactNote,
+        depositAmount,
+        selectedDiscountIds,
+      }),
+    [
+      items,
+      validUntil,
+      termsAndConditions,
+      notes,
+      temperature,
+      includeSpecSheets,
+      includeAvailableOptionalExtras,
+      includeDeliveryInstallationContactNote,
+      depositAmount,
+      selectedDiscountIds,
+    ]
+  );
+
+  const formSignature = useMemo(
+    () =>
+      JSON.stringify({
+        items,
+        validUntil,
+        termsAndConditions,
+        notes,
+        temperature,
+        includeSpecSheets,
+        includeAvailableOptionalExtras,
+        includeDeliveryInstallationContactNote,
+        depositAmount,
+        selectedDiscountIds,
+      }),
+    [
+      items,
+      validUntil,
+      termsAndConditions,
+      notes,
+      temperature,
+      includeSpecSheets,
+      includeAvailableOptionalExtras,
+      includeDeliveryInstallationContactNote,
+      depositAmount,
+      selectedDiscountIds,
+    ]
+  );
+
+  const { saveStatus, flushDraft, markClean, isDirty } = useDraftAutosave({
+    quoteId,
+    enabled: Boolean(quoteId && quote && quote.status === 'DRAFT' && !pageLoading),
+    debounceMs: 1500,
+    buildPayload: buildDraftPayload,
+    formSignature,
+  });
+
+  const prevPageLoadingRef = useRef(true);
+  useEffect(() => {
+    if (pageLoading) {
+      prevPageLoadingRef.current = true;
+      return;
+    }
+    if (prevPageLoadingRef.current) {
+      prevPageLoadingRef.current = false;
+      if (quote?.status === 'DRAFT' && quoteId) {
+        window.setTimeout(() => markClean(), 0);
+      }
+    }
+  }, [pageLoading, quote?.status, quoteId, markClean]);
+
+  const navigateBackToQuote = async () => {
+    if (!quoteId) return;
+    try {
+      if (isDirty()) await flushDraft();
+    } catch {
+      toast.error('Could not save draft');
+      return;
+    }
+    router.push(`/quotes/${quoteId}`);
+  };
+
+  const handleManualSaveDraft = async () => {
+    if (!quoteId) return;
+    setLoading(true);
+    try {
+      await updateDraftQuote(quoteId, buildDraftPayload());
+      markClean();
+      toast.success('Draft quote updated');
+    } catch (error: any) {
+      const detail = error.response?.data?.detail;
+      const msg =
+        typeof detail === 'string'
+          ? detail
+          : Array.isArray(detail)
+            ? detail.map((e: { msg?: string }) => e?.msg || JSON.stringify(e)).join('; ')
+            : detail
+              ? String(detail)
+              : error.message || 'Failed to update draft quote';
+      toast.error(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     if (!quoteId || !quote) return;
 
     const validItems = items.filter(
@@ -469,46 +531,9 @@ function EditQuoteContent() {
       return;
     }
 
-    const originalIndices = items
-      .map((_, i) => i)
-      .filter((i) => {
-        const it = items[i];
-        return it.description.trim() && (it.quantity ?? 0) > 0 && (it.unit_price ?? 0) >= 0;
-      });
-
     setLoading(true);
     try {
-      const payload = {
-        items: validItems.map((item, index) => {
-          const parentInItems = item.parent_index;
-          const parentIndexInPayload =
-            parentInItems != null ? originalIndices.indexOf(parentInItems) : -1;
-          return {
-            product_id: item.product_id ?? null,
-            description: item.description,
-            quantity: Number(item.quantity),
-            unit_price: Number(item.unit_price),
-            is_custom: item.is_custom !== undefined ? item.is_custom : (item.product_id == null),
-            sort_order: index,
-            parent_index: parentIndexInPayload >= 0 ? parentIndexInPayload : undefined,
-            line_type: item.line_type ?? undefined,
-            include_in_building_discount: item.include_in_building_discount !== false,
-          };
-        }),
-        discount_template_ids:
-          selectedDiscountIds.length > 0 ? selectedDiscountIds : undefined,
-      } as Parameters<typeof updateDraftQuote>[1];
-
-      if (validUntil) payload.valid_until = new Date(validUntil).toISOString();
-      if (termsAndConditions?.trim()) payload.terms_and_conditions = termsAndConditions.trim();
-      if (notes?.trim()) payload.notes = notes.trim();
-      if (temperature) payload.temperature = temperature;
-      payload.include_spec_sheets = includeSpecSheets;
-      payload.include_available_optional_extras = includeAvailableOptionalExtras;
-      payload.include_delivery_installation_contact_note = includeDeliveryInstallationContactNote;
-      if (depositAmount !== '') payload.deposit_amount = Number(depositAmount);
-
-      await updateDraftQuote(quoteId, payload);
+      await flushDraft();
       toast.success('Draft quote updated');
       router.push(`/quotes/${quoteId}`);
     } catch (error: any) {
@@ -590,10 +615,7 @@ function EditQuoteContent() {
       <main className="container mx-auto px-4 sm:px-6 py-8">
         <div className="mb-6">
           <div className="flex items-center gap-2 mb-4">
-            <Button
-              variant="ghost"
-              onClick={() => router.push(`/quotes/${quoteId}`)}
-            >
+            <Button variant="ghost" type="button" onClick={() => void navigateBackToQuote()}>
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back to Quote
             </Button>
@@ -609,6 +631,15 @@ function EditQuoteContent() {
             <h1 className="text-3xl font-semibold">Edit Draft: {quote.quote_number}</h1>
             <p className="text-muted-foreground mt-1 flex items-center gap-2 flex-wrap">
               {customer && `For ${customer.name}`}
+              {saveStatus === 'saving' && (
+                <span className="text-xs text-muted-foreground">Saving draft…</span>
+              )}
+              {saveStatus === 'saved' && (
+                <span className="text-xs text-emerald-600">Draft saved</span>
+              )}
+              {saveStatus === 'error' && (
+                <span className="text-xs text-destructive">Could not autosave</span>
+              )}
               {quote.lead_id && (
                 <Button variant="outline" size="sm" asChild className="ml-2">
                   <Link href={`/leads/${quote.lead_id}`} target="_blank" rel="noopener noreferrer">
@@ -1154,13 +1185,21 @@ function EditQuoteContent() {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => router.push(`/quotes/${quoteId}`)}
+                onClick={() => void navigateBackToQuote()}
                 disabled={loading}
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={loading}>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={loading}
+                onClick={() => void handleManualSaveDraft()}
+              >
                 {loading ? 'Saving...' : 'Save Draft'}
+              </Button>
+              <Button type="submit" disabled={loading}>
+                {loading ? 'Saving...' : 'View quote'}
               </Button>
             </div>
           </div>

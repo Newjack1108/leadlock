@@ -230,7 +230,11 @@ function QuotesPageContent() {
                   {filteredQuotes.map((quote) => (
                     <tr
                       key={quote.id}
-                      className="border-b last:border-0 hover:bg-muted/30 cursor-pointer transition-colors"
+                      className={
+                        quote.status === 'DRAFT'
+                          ? 'border-b last:border-0 border-l-4 border-l-violet-500 bg-violet-50/50 dark:bg-violet-950/20 hover:bg-violet-100/60 dark:hover:bg-violet-950/30 cursor-pointer transition-colors'
+                          : 'border-b last:border-0 hover:bg-muted/30 cursor-pointer transition-colors'
+                      }
                       onClick={() => router.push(`/quotes/${quote.id}`)}
                     >
                       <td className="p-3">
@@ -318,7 +322,14 @@ function QuotesPageContent() {
         ) : (
           <div className="space-y-4">
             {filteredQuotes.map((quote) => (
-              <Card key={quote.id} className="hover:shadow-md transition-shadow">
+              <Card
+                key={quote.id}
+                className={
+                  quote.status === 'DRAFT'
+                    ? 'border-l-4 border-l-violet-500 bg-violet-50/50 dark:bg-violet-950/20 hover:shadow-md transition-shadow'
+                    : 'hover:shadow-md transition-shadow'
+                }
+              >
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div className="flex-1">

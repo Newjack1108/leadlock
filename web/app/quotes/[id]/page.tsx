@@ -6,7 +6,7 @@ import Header from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import api, { getQuote, previewQuotePdf, getDiscountRequestsForQuote, getQuoteViewLink, acceptQuote, cancelDraftQuote } from '@/lib/api';
+import api, { getQuote, previewQuotePdf, getDiscountRequestsForQuote, getQuoteViewLink, acceptQuote, cancelDraftQuote, duplicateQuoteToDraft } from '@/lib/api';
 import { Quote, QuoteItem, Customer, QuoteDiscount, DiscountRequest, DiscountRequestStatus, QuoteTemperature, LossCategory } from '@/lib/types';
 import { QUOTE_BALANCE_BEFORE_DELIVERY_NOTE } from '@/lib/quoteCopy';
 import SendQuoteEmailDialog from '@/components/SendQuoteEmailDialog';
@@ -14,7 +14,7 @@ import CallNotesDialog from '@/components/CallNotesDialog';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { formatDateTime } from '@/lib/utils';
-import { ArrowLeft, Mail, Eye, Tag, Pencil, ChevronDown, ChevronUp, Send, ExternalLink, CheckCircle, ShoppingBag, XCircle, MinusCircle, FileSearch, Trash2 } from 'lucide-react';
+import { ArrowLeft, Mail, Eye, Tag, Pencil, ChevronDown, ChevronUp, Send, ExternalLink, CheckCircle, ShoppingBag, XCircle, MinusCircle, FileSearch, Trash2, Copy } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -62,6 +62,7 @@ export default function QuoteDetailPage() {
   const [markingClose, setMarkingClose] = useState(false);
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [duplicating, setDuplicating] = useState(false);
 
   useEffect(() => {
     if (quoteId) {
@@ -157,6 +158,20 @@ export default function QuoteDetailPage() {
     }
   };
 
+  const handleDuplicateAsDraft = async () => {
+    try {
+      setDuplicating(true);
+      const newQuote = await duplicateQuoteToDraft(quoteId);
+      toast.success(`New draft ${newQuote.quote_number} created`);
+      router.push(`/quotes/${newQuote.id}/edit`);
+    } catch (error: any) {
+      const d = error.response?.data?.detail;
+      toast.error(typeof d === 'string' ? d : error.message || 'Failed to duplicate quote');
+    } finally {
+      setDuplicating(false);
+    }
+  };
+
   const isClosable = quote && ['SENT', 'VIEWED'].includes(quote.status);
 
   if (loading) {
@@ -238,6 +253,16 @@ export default function QuoteDetailPage() {
                     Cancel Draft
                   </Button>
                 </>
+              )}
+              {quote.status !== 'DRAFT' && (
+                <Button
+                  variant="outline"
+                  onClick={() => void handleDuplicateAsDraft()}
+                  disabled={duplicating}
+                >
+                  <Copy className="h-4 w-4 mr-2" />
+                  {duplicating ? 'Duplicating…' : 'Duplicate as draft'}
+                </Button>
               )}
               <Button
                 variant="outline"

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense, useMemo, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Header from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,8 +9,24 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { createQuote, getProducts, getProduct, getCompanySettings, getDiscountTemplates, estimateDeliveryInstall } from '@/lib/api';
+import {
+  createQuote,
+  getProducts,
+  getProduct,
+  getCompanySettings,
+  getDiscountTemplates,
+  estimateDeliveryInstall,
+  getQuote,
+  applyQualifiedToQuotedTransition,
+} from '@/lib/api';
 import api from '@/lib/api';
+import {
+  buildUpdateDraftPayload,
+  quoteItemsToFormItems,
+  DRAFT_PLACEHOLDER_LINE_DESCRIPTION,
+} from '@/lib/quoteDraftPayload';
+import { prefetchProductDetailsForQuoteItems } from '@/lib/prefetchQuoteProductDetails';
+import { useDraftAutosave } from '@/hooks/useDraftAutosave';
 import {
   Customer,
   Product,
@@ -19,6 +35,7 @@ import {
   QuoteTemperature,
   DeliveryInstallEstimateResponse,
   isDiscountTemplateExpired,
+  QuoteDiscount,
 } from '@/lib/types';
 import Link from 'next/link';
 import { toast } from 'sonner';
@@ -84,8 +101,12 @@ function CreateQuoteContent() {
   const searchParams = useSearchParams();
   const customerId = searchParams.get('customer_id') ? parseInt(searchParams.get('customer_id')!) : null;
   const leadId = searchParams.get('lead_id') ? parseInt(searchParams.get('lead_id')!) : null;
+  const draftIdParsed = searchParams.get('draft_id') ? parseInt(searchParams.get('draft_id')!, 10) : NaN;
+  const draftIdFromUrl = Number.isFinite(draftIdParsed) ? draftIdParsed : null;
 
   const [loading, setLoading] = useState(false);
+  const [draftQuoteId, setDraftQuoteId] = useState<number | null>(null);
+  const syncedDraftBaselineRef = useRef<string | null>(null);
   const [pageLoading, setPageLoading] = useState(true);
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
@@ -399,6 +420,253 @@ function CreateQuoteContent() {
     return Math.max(0, totalIncVat - deposit);
   };
 
+  const buildDraftPayload = useCallback(
+    () =>
+      buildUpdateDraftPayload({
+        items,
+        validUntil,
+        termsAndConditions,
+        notes,
+        temperature,
+        includeSpecSheets,
+        includeAvailableOptionalExtras,
+        includeDeliveryInstallationContactNote,
+        depositAmount,
+        selectedDiscountIds,
+      }),
+    [
+      items,
+      validUntil,
+      termsAndConditions,
+      notes,
+      temperature,
+      includeSpecSheets,
+      includeAvailableOptionalExtras,
+      includeDeliveryInstallationContactNote,
+      depositAmount,
+      selectedDiscountIds,
+    ]
+  );
+
+  const formSignature = useMemo(
+    () =>
+      JSON.stringify({
+        items,
+        validUntil,
+        termsAndConditions,
+        notes,
+        temperature,
+        includeSpecSheets,
+        includeAvailableOptionalExtras,
+        includeDeliveryInstallationContactNote,
+        depositAmount,
+        selectedDiscountIds,
+      }),
+    [
+      items,
+      validUntil,
+      termsAndConditions,
+      notes,
+      temperature,
+      includeSpecSheets,
+      includeAvailableOptionalExtras,
+      includeDeliveryInstallationContactNote,
+      depositAmount,
+      selectedDiscountIds,
+    ]
+  );
+
+  const { saveStatus, flushDraft, markClean, isDirty } = useDraftAutosave({
+    quoteId: draftQuoteId,
+    enabled: !!draftQuoteId && !!customer,
+    debounceMs: 1500,
+    buildPayload: buildDraftPayload,
+    formSignature,
+  });
+
+  const draftStorageKey =
+    customerId != null && leadId != null ? `ll-quote-create-${customerId}-${leadId}` : null;
+
+  useEffect(() => {
+    if (!customer || !leadId || !customerId || !draftStorageKey) return;
+
+    if (draftIdFromUrl != null) {
+      try {
+        sessionStorage.setItem(draftStorageKey, String(draftIdFromUrl));
+      } catch {
+        /* ignore */
+      }
+    }
+
+    if (draftIdFromUrl != null && draftQuoteId === draftIdFromUrl) {
+      const syncKey = `${draftIdFromUrl}:${draftQuoteId}`;
+      if (syncedDraftBaselineRef.current !== syncKey) {
+        syncedDraftBaselineRef.current = syncKey;
+        const t = window.setTimeout(() => markClean(), 0);
+        return () => window.clearTimeout(t);
+      }
+      return;
+    }
+
+    if (draftIdFromUrl != null && draftQuoteId == null) {
+      let cancelled = false;
+      (async () => {
+        try {
+          const q = await getQuote(draftIdFromUrl);
+          if (cancelled) return;
+          if (q.status !== 'DRAFT' || q.customer_id !== customer.id || q.lead_id !== leadId) {
+            toast.error("This draft doesn't match this customer or enquiry.");
+            try {
+              sessionStorage.removeItem(draftStorageKey);
+            } catch {
+              /* ignore */
+            }
+            router.replace(`/quotes/create?customer_id=${customerId}&lead_id=${leadId}`);
+            return;
+          }
+          setDraftQuoteId(q.id);
+          const formItems =
+            q.items && q.items.length > 0
+              ? quoteItemsToFormItems(q.items)
+              : [
+                  {
+                    description: '',
+                    quantity: 1,
+                    unit_price: 0,
+                    is_custom: false,
+                    sort_order: 0,
+                  },
+                ];
+          setItems(formItems);
+          const details = await prefetchProductDetailsForQuoteItems(formItems);
+          if (Object.keys(details).length > 0) {
+            setProductDetails((prev) => ({ ...prev, ...details }));
+          }
+          if (q.valid_until) {
+            setValidUntil(new Date(q.valid_until).toISOString().split('T')[0]);
+          } else {
+            const d = new Date();
+            d.setDate(d.getDate() + 30);
+            setValidUntil(d.toISOString().split('T')[0]);
+          }
+          setTermsAndConditions(q.terms_and_conditions ?? '');
+          setNotes(q.notes ?? '');
+          setTemperature(q.temperature ?? QuoteTemperature.WARM);
+          setIncludeSpecSheets(q.include_spec_sheets ?? true);
+          setIncludeAvailableOptionalExtras(q.include_available_optional_extras ?? false);
+          setIncludeDeliveryInstallationContactNote(
+            q.include_delivery_installation_contact_note ?? false
+          );
+          setDepositAmount(q.deposit_amount != null ? Number(q.deposit_amount) : '');
+          setSelectedDiscountIds(
+            (q.discounts ?? [])
+              .filter((d: QuoteDiscount) => d.template_id != null)
+              .map((d: QuoteDiscount) => d.template_id!)
+          );
+          window.setTimeout(() => markClean(), 0);
+        } catch {
+          if (!cancelled) toast.error('Failed to load draft');
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    if (draftQuoteId != null && draftIdFromUrl == null) {
+      return;
+    }
+
+    if (draftIdFromUrl == null && draftQuoteId == null) {
+      try {
+        const stored = sessionStorage.getItem(draftStorageKey);
+        if (stored && !Number.isNaN(parseInt(stored, 10))) {
+          const sid = parseInt(stored, 10);
+          router.replace(`/quotes/create?customer_id=${customerId}&lead_id=${leadId}&draft_id=${sid}`);
+          return;
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+
+    if (draftIdFromUrl != null || draftQuoteId != null) {
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const d = new Date();
+        d.setDate(d.getDate() + 30);
+        const vu = d.toISOString().split('T')[0];
+        const newQuote = await createQuote({
+          customer_id: customer.id,
+          lead_id: leadId,
+          defer_qualified_to_quoted_transition: true,
+          items: [
+            {
+              description: DRAFT_PLACEHOLDER_LINE_DESCRIPTION,
+              quantity: 1,
+              unit_price: 0,
+              is_custom: true,
+              sort_order: 0,
+            },
+          ],
+          valid_until: new Date(vu).toISOString(),
+          terms_and_conditions: termsAndConditions.trim() || undefined,
+          notes: notes.trim() || undefined,
+          deposit_amount: depositAmount !== '' ? Number(depositAmount) : undefined,
+          temperature: temperature ? temperature : undefined,
+          discount_template_ids: selectedDiscountIds.length > 0 ? selectedDiscountIds : undefined,
+          include_spec_sheets: includeSpecSheets,
+          include_available_optional_extras: includeAvailableOptionalExtras,
+          include_delivery_installation_contact_note: includeDeliveryInstallationContactNote,
+        });
+        if (cancelled) return;
+        try {
+          sessionStorage.setItem(draftStorageKey, String(newQuote.id));
+        } catch {
+          /* ignore */
+        }
+        setDraftQuoteId(newQuote.id);
+        if (newQuote.items?.length) {
+          const fi = quoteItemsToFormItems(newQuote.items);
+          setItems(fi);
+          const det = await prefetchProductDetailsForQuoteItems(fi);
+          if (Object.keys(det).length > 0) {
+            setProductDetails((prev) => ({ ...prev, ...det }));
+          }
+        }
+        router.replace(
+          `/quotes/create?customer_id=${customerId}&lead_id=${leadId}&draft_id=${newQuote.id}`
+        );
+        window.setTimeout(() => markClean(), 0);
+      } catch (error: any) {
+        const errorMessage =
+          error.response?.data?.detail || error.message || 'Failed to start quote draft';
+        toast.error(errorMessage);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // Intentionally omit form fields: only bootstrap when URL / ids / customer change
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customer, leadId, customerId, draftIdFromUrl, draftQuoteId, draftStorageKey, router, markClean]);
+
+  const navigateAway = async (path: string) => {
+    try {
+      if (draftQuoteId && isDirty()) {
+        await flushDraft();
+      }
+    } catch {
+      toast.error('Could not save draft. Try again.');
+      return;
+    }
+    router.push(path);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -407,7 +675,11 @@ function CreateQuoteContent() {
       return;
     }
 
-    // Validate items
+    if (!draftQuoteId) {
+      toast.error('Quote draft is still initializing. Please wait.');
+      return;
+    }
+
     const validItems = items.filter(
       (item) => item.description.trim() && item.quantity > 0 && item.unit_price >= 0
     );
@@ -417,67 +689,31 @@ function CreateQuoteContent() {
       return;
     }
 
-    const originalIndices = items
-      .map((_, i) => i)
-      .filter((i) => {
-        const it = items[i];
-        return it.description.trim() && (it.quantity ?? 0) > 0 && (it.unit_price ?? 0) >= 0;
-      });
+    const onlyPlaceholder =
+      validItems.length === 1 && validItems[0].description.trim() === DRAFT_PLACEHOLDER_LINE_DESCRIPTION;
+    if (onlyPlaceholder) {
+      toast.error('Please add real quote lines before finishing');
+      return;
+    }
 
     setLoading(true);
     try {
-      const quoteData: any = {
-        customer_id: customer.id,
-        lead_id: leadId!,
-        items: validItems.map((item, index) => {
-          const parentInItems = item.parent_index;
-          const parentIndexInPayload =
-            parentInItems != null ? originalIndices.indexOf(parentInItems) : -1;
-          return {
-            product_id: item.product_id ?? null,
-            description: item.description,
-            quantity: Number(item.quantity),
-            unit_price: Number(item.unit_price),
-            is_custom: item.is_custom !== undefined ? item.is_custom : (item.product_id === undefined || item.product_id === null),
-            sort_order: index,
-            parent_index: parentIndexInPayload >= 0 ? parentIndexInPayload : undefined,
-            line_type: item.line_type ?? undefined,
-            include_in_building_discount: item.include_in_building_discount !== false,
-          };
-        }),
-        discount_template_ids: selectedDiscountIds.length > 0 ? selectedDiscountIds : undefined,
-      };
-
-      // Only include optional fields if they have values
-      if (validUntil) {
-        quoteData.valid_until = new Date(validUntil).toISOString();
+      await flushDraft();
+      await applyQualifiedToQuotedTransition(draftQuoteId);
+      if (draftStorageKey) {
+        try {
+          sessionStorage.removeItem(draftStorageKey);
+        } catch {
+          /* ignore */
+        }
       }
-      if (termsAndConditions && termsAndConditions.trim()) {
-        quoteData.terms_and_conditions = termsAndConditions.trim();
-      }
-      if (notes && notes.trim()) {
-        quoteData.notes = notes.trim();
-      }
-      // Include deposit_amount if explicitly set, otherwise let backend default to 50%
-      if (depositAmount !== '') {
-        quoteData.deposit_amount = Number(depositAmount);
-      }
-      if (temperature) {
-        quoteData.temperature = temperature;
-      }
-      quoteData.include_spec_sheets = includeSpecSheets;
-      quoteData.include_available_optional_extras = includeAvailableOptionalExtras;
-      quoteData.include_delivery_installation_contact_note = includeDeliveryInstallationContactNote;
-
-      const newQuote = await createQuote(quoteData);
-      toast.success('Quote created successfully');
-      
-      // Redirect to the newly created quote detail page
-      router.push(`/quotes/${newQuote.id}`);
+      syncedDraftBaselineRef.current = null;
+      toast.success('Quote saved');
+      router.push(`/quotes/${draftQuoteId}`);
     } catch (error: any) {
-      const errorMessage = error.response?.data?.detail || error.message || 'Failed to create quote';
+      const errorMessage = error.response?.data?.detail || error.message || 'Failed to save quote';
       toast.error(errorMessage);
-      console.error('Quote creation error:', error);
+      console.error('Quote save error:', error);
     } finally {
       setLoading(false);
     }
@@ -515,7 +751,12 @@ function CreateQuoteContent() {
       <Header />
       <main className="container mx-auto px-4 sm:px-6 py-8">
         <div className="mb-6">
-          <Button variant="ghost" onClick={() => router.push(`/customers/${customer.id}`)} className="mb-4">
+          <Button
+            variant="ghost"
+            type="button"
+            onClick={() => navigateAway(`/customers/${customer.id}`)}
+            className="mb-4"
+          >
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Customer
           </Button>
@@ -523,6 +764,15 @@ function CreateQuoteContent() {
             <h1 className="text-3xl font-semibold">Create New Quote</h1>
             <p className="text-muted-foreground mt-1 flex items-center gap-2 flex-wrap">
               For {customer.name}
+              {saveStatus === 'saving' && (
+                <span className="text-xs text-muted-foreground">Saving draft…</span>
+              )}
+              {saveStatus === 'saved' && (
+                <span className="text-xs text-emerald-600">Draft saved</span>
+              )}
+              {saveStatus === 'error' && (
+                <span className="text-xs text-destructive">Could not autosave</span>
+              )}
               {leadId && (
                 <Button variant="outline" size="sm" asChild className="ml-2">
                   <Link href={`/leads/${leadId}`} target="_blank" rel="noopener noreferrer">
@@ -1018,13 +1268,13 @@ function CreateQuoteContent() {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => router.push(`/customers/${customer.id}`)}
+                onClick={() => navigateAway(`/customers/${customer.id}`)}
                 disabled={loading}
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={loading}>
-                {loading ? 'Creating...' : 'Create Quote'}
+              <Button type="submit" disabled={loading || !draftQuoteId}>
+                {loading ? 'Saving...' : 'Create Quote'}
               </Button>
             </div>
           </div>

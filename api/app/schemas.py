@@ -1051,6 +1051,8 @@ class QuoteCreate(BaseModel):
     include_spec_sheets: bool = True  # Include product spec sheets when generating quote PDF
     include_available_optional_extras: bool = False  # Show extras not on quote in customer view/PDF
     include_delivery_installation_contact_note: bool = False  # Footer re delivery/install contact
+    # When True, skip QUALIFIED→QUOTED until POST /quotes/{id}/apply-qualified-to-quoted (e.g. placeholder bootstrap draft)
+    defer_qualified_to_quoted_transition: bool = False
 
 
 class QuoteDraftUpdate(BaseModel):

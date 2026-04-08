@@ -551,6 +551,8 @@ export const createQuote = async (quoteData: {
   terms_and_conditions?: string;
   notes?: string;
   deposit_amount?: number;
+  /** When true, lead stays QUALIFIED until applyQualifiedToQuotedTransition is called */
+  defer_qualified_to_quoted_transition?: boolean;
   items: Array<{
     product_id?: number;
     description: string;
@@ -569,6 +571,17 @@ export const createQuote = async (quoteData: {
   include_delivery_installation_contact_note?: boolean;
 }) => {
   const response = await api.post('/api/quotes', quoteData);
+  return response.data;
+};
+
+/** Run deferred QUALIFIED→QUOTED after finalizing a bootstrapped draft */
+export const applyQualifiedToQuotedTransition = async (quoteId: number) => {
+  await api.post(`/api/quotes/${quoteId}/apply-qualified-to-quoted`);
+};
+
+/** Clone a non-draft quote into a new DRAFT (new id / quote_number). */
+export const duplicateQuoteToDraft = async (quoteId: number) => {
+  const response = await api.post(`/api/quotes/${quoteId}/duplicate-to-draft`);
   return response.data;
 };
 
