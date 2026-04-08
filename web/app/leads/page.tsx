@@ -319,6 +319,64 @@ function LeadsPageContent() {
           <div className="text-center py-12 text-muted-foreground">Loading...</div>
         ) : leads.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground">No leads found</div>
+        ) : statusFilter === 'ALL' ? (
+          <Card>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b bg-muted/50">
+                    <th className="text-left p-3 font-medium">Name</th>
+                    <th className="text-left p-3 font-medium">Contact</th>
+                    <th className="text-left p-3 font-medium">Postcode</th>
+                    <th className="text-left p-3 font-medium">Status</th>
+                    <th className="text-left p-3 font-medium">Lead type</th>
+                    <th className="text-left p-3 font-medium">Source</th>
+                    <th className="text-left p-3 font-medium">Created</th>
+                    <th className="text-right p-3 font-medium w-[120px]">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {leads.map((lead) => (
+                    <tr
+                      key={lead.id}
+                      className="border-b last:border-0 hover:bg-muted/30 cursor-pointer transition-colors"
+                      onClick={() => router.push(`/leads/${lead.id}`)}
+                    >
+                      <td className="p-3 font-semibold">{lead.name}</td>
+                      <td className="p-3 text-muted-foreground">
+                        {[lead.phone, lead.email].filter(Boolean).join(' · ') || '—'}
+                      </td>
+                      <td className="p-3 text-muted-foreground">{lead.postcode || '—'}</td>
+                      <td className="p-3">
+                        <Badge className={statusColors[lead.status]}>
+                          {lead.status.replace('_', ' ')}
+                        </Badge>
+                      </td>
+                      <td className="p-3 text-muted-foreground">{lead.lead_type}</td>
+                      <td className="p-3 text-muted-foreground">
+                        {lead.lead_source.replace('_', ' ')}
+                      </td>
+                      <td
+                        className="p-3 text-muted-foreground"
+                        title={formatDateTime(lead.created_at)}
+                      >
+                        {new Date(lead.created_at).toLocaleDateString()}
+                      </td>
+                      <td className="p-3 text-right" onClick={(e) => e.stopPropagation()}>
+                        <Button
+                          variant="default"
+                          size="sm"
+                          onClick={() => router.push(`/leads/${lead.id}`)}
+                        >
+                          View
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
         ) : (
           <div className="grid gap-4">
             {leads.map((lead) => (
