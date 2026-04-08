@@ -16,6 +16,13 @@ import {
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
+/** Latest “cleared” time for done-mode sort (Mark Done vs Dismiss). */
+function doneClearTimestampMs(r: Reminder): number {
+  const acted = r.acted_upon_at ? new Date(r.acted_upon_at).getTime() : 0;
+  const dismissed = r.dismissed_at ? new Date(r.dismissed_at).getTime() : 0;
+  return Math.max(acted, dismissed);
+}
+
 interface ReminderListProps {
   limit?: number;
   showActions?: boolean;
@@ -58,9 +65,7 @@ export default function ReminderList({
       const data = await getReminders(params);
       const sorted = mode === 'done'
         ? data.sort((a: Reminder, b: Reminder) => {
-            const aDate = a.acted_upon_at ? new Date(a.acted_upon_at).getTime() : 0;
-            const bDate = b.acted_upon_at ? new Date(b.acted_upon_at).getTime() : 0;
-            return bDate - aDate;
+            return doneClearTimestampMs(b) - doneClearTimestampMs(a);
           })
         : data.sort((a: Reminder, b: Reminder) => {
             const priorityOrder = {
@@ -362,6 +367,11 @@ export default function ReminderList({
                       {isDoneMode && reminder.acted_upon_at && (
                         <span>
                           Completed on {new Date(reminder.acted_upon_at).toLocaleDateString()}
+                        </span>
+                      )}
+                      {isDoneMode && !reminder.acted_upon_at && reminder.dismissed_at && (
+                        <span>
+                          Dismissed on {new Date(reminder.dismissed_at).toLocaleDateString()}
                         </span>
                       )}
                     </div>

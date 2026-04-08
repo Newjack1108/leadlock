@@ -287,8 +287,12 @@ async def get_reminders(
         statement = statement.where(Reminder.assigned_to_id == current_user.id)
 
     if done is True:
-        statement = statement.where(Reminder.acted_upon_at.isnot(None))
-        statement = statement.where(Reminder.dismissed_at.is_(None))
+        statement = statement.where(
+            or_(
+                Reminder.acted_upon_at.isnot(None),
+                Reminder.dismissed_at.isnot(None),
+            )
+        )
     elif dismissed is False:
         statement = statement.where(Reminder.dismissed_at.is_(None))
         statement = statement.where(Reminder.acted_upon_at.is_(None))
