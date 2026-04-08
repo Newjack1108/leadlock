@@ -655,6 +655,13 @@ export interface EmailTemplatePreviewResponse {
   body_html: string;
 }
 
+export interface QuoteTemplateAttachedDocument {
+  id: number;
+  name: string;
+  filename: string;
+  sort_order: number;
+}
+
 export interface QuoteTemplate {
   id: number;
   name: string;
@@ -665,6 +672,7 @@ export interface QuoteTemplate {
   created_by_id: number;
   created_at: string;
   created_by_name?: string;
+  attached_documents?: QuoteTemplateAttachedDocument[];
 }
 
 export interface QuoteTemplateCreate {
@@ -673,6 +681,7 @@ export interface QuoteTemplateCreate {
   email_subject_template: string;
   email_body_template: string;
   is_default?: boolean;
+  sales_document_ids?: number[];
 }
 
 export interface QuoteTemplateUpdate {
@@ -681,6 +690,7 @@ export interface QuoteTemplateUpdate {
   email_subject_template?: string;
   email_body_template?: string;
   is_default?: boolean;
+  sales_document_ids?: number[];
 }
 
 export enum QuoteStatus {

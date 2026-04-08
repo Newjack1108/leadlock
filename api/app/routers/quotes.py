@@ -1,11 +1,12 @@
 import json
+from pathlib import Path
 from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import Response
 from sqlmodel import Session, select, or_, and_
 from sqlalchemy import func
 from typing import List, Optional, Union
 from app.database import get_session
-from app.models import Quote, QuoteItem, QuoteTemplate, Customer, User, QuoteEmail, Email, EmailDirection, Activity, ActivityType, CompanySettings, Lead, LeadStatus, QuoteStatus, QuoteTemperature, OpportunityStage, LossCategory, DiscountTemplate, QuoteDiscount, DiscountType, DiscountScope, Order, OrderItem, QuoteItemLineType, DiscountRequest, SmsMessage, SmsDirection
+from app.models import Quote, QuoteItem, QuoteTemplate, QuoteTemplateSalesDocument, SalesDocument, Customer, User, QuoteEmail, Email, EmailDirection, Activity, ActivityType, CompanySettings, Lead, LeadStatus, QuoteStatus, QuoteTemperature, OpportunityStage, LossCategory, DiscountTemplate, QuoteDiscount, DiscountType, DiscountScope, Order, OrderItem, QuoteItemLineType, DiscountRequest, SmsMessage, SmsDirection
 from app.auth import get_current_user
 from app.schemas import (
     QuoteCreate, QuoteUpdate, QuoteDraftUpdate, QuoteResponse, QuoteItemCreate, QuoteItemResponse,
@@ -1421,6 +1422,42 @@ async def send_quote_email_endpoint(
         attachment_list: List[dict] = []
         attachment_metadata: List[dict] = []
         total_size = 0
+
+        template_docs_statement = (
+            select(QuoteTemplateSalesDocument, SalesDocument)
+            .join(SalesDocument, QuoteTemplateSalesDocument.sales_document_id == SalesDocument.id)
+            .where(QuoteTemplateSalesDocument.quote_template_id == req.template_id)
+            .order_by(QuoteTemplateSalesDocument.sort_order)
+        )
+        for _link, sales_doc in session.exec(template_docs_statement).all():
+            path = Path(sales_doc.file_path)
+            if not path.is_file():
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"Quote template attachment file is missing on disk: "
+                        f"{sales_doc.name} ({sales_doc.filename}). Re-upload the document in Sales Documents or remove it from the template."
+                    ),
+                )
+            content = path.read_bytes()
+            size = len(content)
+            if size > MAX_ATTACHMENT_SIZE:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"Template-linked document '{sales_doc.filename}' exceeds 10MB limit"
+                    ),
+                )
+            total_size += size
+            if total_size > MAX_TOTAL_ATTACHMENTS:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Total attachments (template + uploads) exceed 25MB limit",
+                )
+            safe_name = _sanitize_filename(sales_doc.filename)
+            attachment_list.append({"filename": safe_name, "content": content})
+            attachment_metadata.append({"filename": safe_name, "from_template": True})
+
         for f in _normalize_upload_files(attachments):
             if not f.filename:
                 continue

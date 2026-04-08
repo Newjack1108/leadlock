@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import {
   Dialog,
@@ -23,17 +23,9 @@ import {
   sendQuoteSms,
   getQuote,
 } from '@/lib/api';
-import { QuoteEmailSendRequest, QuoteEmailSendResponse, Customer } from '@/lib/types';
+import { QuoteEmailSendRequest, QuoteEmailSendResponse, Customer, QuoteTemplate as QuoteTemplateType } from '@/lib/types';
 import { toast } from 'sonner';
 import { Eye, ExternalLink, Copy, Mail, MessageSquare } from 'lucide-react';
-
-interface QuoteTemplate {
-  id: number;
-  name: string;
-  description?: string;
-  email_subject_template: string;
-  email_body_template: string;
-}
 
 interface SendQuoteEmailDialogProps {
   open: boolean;
@@ -66,7 +58,7 @@ export default function SendQuoteEmailDialog({
   const [copyLinkLoading, setCopyLinkLoading] = useState(false);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [successState, setSuccessState] = useState<SuccessState | null>(null);
-  const [templates, setTemplates] = useState<QuoteTemplate[]>([]);
+  const [templates, setTemplates] = useState<QuoteTemplateType[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | undefined>(undefined);
   const [formData, setFormData] = useState<Omit<QuoteEmailSendRequest, 'template_id'>>({
     to_email: customer.email || '',
@@ -100,7 +92,7 @@ export default function SendQuoteEmailDialog({
           const data = await getQuoteTemplates();
           setTemplates(data);
           const preferred = preferredQuoteTemplateName(variant);
-          const match = data.find((t: QuoteTemplate) => t.name === preferred);
+          const match = data.find((t: QuoteTemplateType) => t.name === preferred);
           setSelectedTemplateId(match?.id);
         } catch (error) {
           setTemplates([]);
@@ -125,6 +117,12 @@ export default function SendQuoteEmailDialog({
       })();
     }
   }, [open, customer, variant, quoteId]);
+
+  const templateLibraryAttachments = useMemo(() => {
+    const t = templates.find((x) => x.id === selectedTemplateId);
+    if (!t?.attached_documents?.length) return [];
+    return [...t.attached_documents].sort((a, b) => a.sort_order - b.sort_order);
+  }, [templates, selectedTemplateId]);
 
   const handleEmailAttachmentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const list = e.target.files;
@@ -401,6 +399,12 @@ export default function SendQuoteEmailDialog({
                     Quote Templates settings
                   </Link>{' '}
                   to customize quote emails.
+                </p>
+              )}
+              {templateLibraryAttachments.length > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  This template also attaches from the library:{' '}
+                  {templateLibraryAttachments.map((d) => d.name).join(', ')}
                 </p>
               )}
             </div>

@@ -339,12 +339,20 @@ class EmailTemplatePreviewResponse(BaseModel):
     body_html: str
 
 
+class QuoteTemplateAttachedDocument(BaseModel):
+    id: int
+    name: str
+    filename: str
+    sort_order: int
+
+
 class QuoteTemplateCreate(BaseModel):
     name: str
     description: Optional[str] = None
     email_subject_template: str
     email_body_template: str
     is_default: Optional[bool] = False
+    sales_document_ids: Optional[List[int]] = None
 
 
 class QuoteTemplateUpdate(BaseModel):
@@ -353,6 +361,7 @@ class QuoteTemplateUpdate(BaseModel):
     email_subject_template: Optional[str] = None
     email_body_template: Optional[str] = None
     is_default: Optional[bool] = None
+    sales_document_ids: Optional[List[int]] = None
 
 
 class QuoteTemplateResponse(BaseModel):
@@ -365,6 +374,7 @@ class QuoteTemplateResponse(BaseModel):
     created_by_id: int
     created_at: datetime
     created_by_name: Optional[str] = None
+    attached_documents: List[QuoteTemplateAttachedDocument] = []
 
 
 class QuoteTemplatePreviewRequest(BaseModel):

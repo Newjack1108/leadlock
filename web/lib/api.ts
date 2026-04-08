@@ -465,6 +465,7 @@ export const createQuoteTemplate = async (templateData: {
   email_subject_template: string;
   email_body_template: string;
   is_default?: boolean;
+  sales_document_ids?: number[];
 }) => {
   const response = await api.post('/api/quote-templates', templateData);
   return response.data;
@@ -476,6 +477,7 @@ export const updateQuoteTemplate = async (templateId: number, templateData: {
   email_subject_template?: string;
   email_body_template?: string;
   is_default?: boolean;
+  sales_document_ids?: number[];
 }) => {
   const response = await api.put(`/api/quote-templates/${templateId}`, templateData);
   return response.data;

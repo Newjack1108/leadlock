@@ -565,6 +565,42 @@ class QuoteTemplate(SQLModel, table=True):
     
     # Relationships
     created_by: User = Relationship()
+    sales_document_links: List["QuoteTemplateSalesDocument"] = Relationship(
+        back_populates="quote_template"
+    )
+
+
+class QuoteTemplateSalesDocument(SQLModel, table=True):
+    """Links quote email templates to library sales documents (attached when sending quote email)."""
+
+    __tablename__ = "quote_template_sales_document"
+    __table_args__ = (
+        UniqueConstraint(
+            "quote_template_id",
+            "sales_document_id",
+            name="uq_quote_template_sales_document",
+        ),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    quote_template_id: int = Field(
+        sa_column=Column(
+            Integer,
+            ForeignKey("quotetemplate.id", ondelete="CASCADE"),
+            nullable=False,
+        )
+    )
+    sales_document_id: int = Field(
+        sa_column=Column(
+            Integer,
+            ForeignKey("salesdocument.id", ondelete="CASCADE"),
+            nullable=False,
+        )
+    )
+    sort_order: int = Field(default=0)
+
+    quote_template: "QuoteTemplate" = Relationship(back_populates="sales_document_links")
+    sales_document: "SalesDocument" = Relationship()
 
 
 class EmailTemplate(SQLModel, table=True):

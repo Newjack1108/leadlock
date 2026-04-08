@@ -17,15 +17,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { FileText, Plus, Edit, Trash2, Eye, Check } from 'lucide-react';
+import { FileText, Plus, Edit, Trash2, Eye, Check, Paperclip } from 'lucide-react';
 import {
   getQuoteTemplates,
   createQuoteTemplate,
   updateQuoteTemplate,
   deleteQuoteTemplate,
   previewQuoteTemplate,
+  getSalesDocuments,
 } from '@/lib/api';
-import { QuoteTemplate, QuoteTemplateCreate, QuoteTemplateUpdate } from '@/lib/types';
+import { QuoteTemplate, QuoteTemplateCreate, QuoteTemplateUpdate, SalesDocument } from '@/lib/types';
 import { toast } from 'sonner';
 
 export default function QuoteTemplatesPage() {
@@ -42,10 +43,22 @@ export default function QuoteTemplatesPage() {
     email_subject_template: '',
     email_body_template: '',
     is_default: false,
+    sales_document_ids: [] as number[],
   });
+  const [allSalesDocs, setAllSalesDocs] = useState<SalesDocument[]>([]);
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [libraryDocs, setLibraryDocs] = useState<SalesDocument[]>([]);
+  const [libraryLoading, setLibraryLoading] = useState(false);
+  const [librarySelected, setLibrarySelected] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     fetchTemplates();
+  }, []);
+
+  useEffect(() => {
+    getSalesDocuments()
+      .then(setAllSalesDocs)
+      .catch(() => setAllSalesDocs([]));
   }, []);
 
   const fetchTemplates = async () => {
@@ -72,20 +85,76 @@ export default function QuoteTemplatesPage() {
       email_subject_template: 'Quote {{ quote.quote_number }}',
       email_body_template: '<p>Dear {{ customer.name }},</p>\n\n<p>Thank you for your interest. We have prepared quote {{ quote.quote_number }} for you.</p>\n\n<p>Please use the secure link below to view the full quote. If you have any questions, we would be happy to help.</p>\n\n{% if custom_message %}\n<p>{{ custom_message }}</p>\n{% endif %}\n\n<p>Best regards,<br>\n{{ company_settings.company_name if company_settings else \'LeadLock CRM\' }}</p>',
       is_default: false,
+      sales_document_ids: [],
     });
     setDialogOpen(true);
   };
 
   const handleEdit = (template: QuoteTemplate) => {
     setEditingTemplate(template);
+    const ordered =
+      template.attached_documents?.slice().sort((a, b) => a.sort_order - b.sort_order) ?? [];
     setFormData({
       name: template.name,
       description: template.description || '',
       email_subject_template: template.email_subject_template,
       email_body_template: template.email_body_template,
       is_default: template.is_default,
+      sales_document_ids: ordered.map((d) => d.id),
     });
     setDialogOpen(true);
+  };
+
+  const openLibraryDialog = async () => {
+    setLibraryOpen(true);
+    setLibrarySelected(new Set());
+    try {
+      setLibraryLoading(true);
+      const docs = await getSalesDocuments();
+      setLibraryDocs(docs);
+    } catch {
+      toast.error('Failed to load documents');
+      setLibraryDocs([]);
+    } finally {
+      setLibraryLoading(false);
+    }
+  };
+
+  const toggleLibrarySelected = (id: number) => {
+    setLibrarySelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const addFromLibrary = () => {
+    if (librarySelected.size === 0) {
+      toast.error('Select at least one document');
+      return;
+    }
+    setFormData((prev) => {
+      const next = [...prev.sales_document_ids];
+      for (const id of librarySelected) {
+        if (!next.includes(id)) next.push(id);
+      }
+      return { ...prev, sales_document_ids: next };
+    });
+    setLibraryOpen(false);
+  };
+
+  const removeAttachedId = (id: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      sales_document_ids: prev.sales_document_ids.filter((i) => i !== id),
+    }));
+  };
+
+  const docLabelForId = (id: number) => {
+    const fromList = allSalesDocs.find((d) => d.id === id);
+    if (fromList) return fromList.name;
+    return `Document #${id}`;
   };
 
   const handleDelete = async (templateId: number) => {
@@ -127,11 +196,18 @@ export default function QuoteTemplatesPage() {
     }
 
     try {
+      const { sales_document_ids, ...rest } = formData;
       if (editingTemplate) {
-        await updateQuoteTemplate(editingTemplate.id, formData as QuoteTemplateUpdate);
+        await updateQuoteTemplate(editingTemplate.id, {
+          ...(rest as QuoteTemplateUpdate),
+          sales_document_ids,
+        });
         toast.success('Template updated successfully');
       } else {
-        await createQuoteTemplate(formData as QuoteTemplateCreate);
+        await createQuoteTemplate({
+          ...(rest as Omit<QuoteTemplateCreate, 'sales_document_ids'>),
+          sales_document_ids,
+        });
         toast.success('Template created successfully');
       }
       setDialogOpen(false);
@@ -221,6 +297,22 @@ export default function QuoteTemplatesPage() {
                     <div>
                       <p className="text-xs text-muted-foreground">Subject:</p>
                       <p className="text-sm truncate">{template.email_subject_template}</p>
+                    </div>
+                    <div className="flex items-start gap-2 text-sm text-muted-foreground">
+                      <Paperclip className="h-4 w-4 shrink-0 mt-0.5" />
+                      <span>
+                        {template.attached_documents?.length
+                          ? (() => {
+                              const sorted =
+                                template.attached_documents.slice().sort((a, b) => a.sort_order - b.sort_order);
+                              const first = sorted[0].name;
+                              const more = sorted.length - 1;
+                              return more > 0
+                                ? `${first} +${more} more`
+                                : first;
+                            })()
+                          : 'No library attachments'}
+                      </span>
                     </div>
                     <div className="flex gap-2 mt-4">
                       <Button
@@ -316,6 +408,32 @@ export default function QuoteTemplatesPage() {
                 />
               </div>
 
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Label>Email attachments (library)</Label>
+                  <Button type="button" variant="outline" size="sm" onClick={openLibraryDialog}>
+                    <Paperclip className="h-3.5 w-3.5 mr-1" />
+                    Add from library
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  These files are sent automatically with every quote email that uses this template (in addition to any
+                  per-send uploads).
+                </p>
+                {formData.sales_document_ids.length > 0 ? (
+                  <ul className="text-sm space-y-1 border rounded-md p-2 max-h-[160px] overflow-y-auto">
+                    {formData.sales_document_ids.map((id) => (
+                      <li key={id} className="flex items-center justify-between gap-2">
+                        <span className="truncate text-muted-foreground">{docLabelForId(id)}</span>
+                        <Button type="button" variant="ghost" size="sm" className="shrink-0" onClick={() => removeAttachedId(id)}>
+                          Remove
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+
               <div className="flex items-center space-x-2">
                 <input
                   type="checkbox"
@@ -336,6 +454,56 @@ export default function QuoteTemplatesPage() {
                 {editingTemplate ? 'Update' : 'Create'} Template
               </Button>
             </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={libraryOpen} onOpenChange={setLibraryOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Add from library</DialogTitle>
+              <DialogDescription>Select sales documents to attach to this template when sending quote emails.</DialogDescription>
+            </DialogHeader>
+            {libraryLoading ? (
+              <div className="py-8 text-center text-muted-foreground">Loading...</div>
+            ) : libraryDocs.length === 0 ? (
+              <div className="py-8 text-center text-muted-foreground">
+                No documents in the library. Upload documents from Sales Documents.
+              </div>
+            ) : (
+              <div className="max-h-[300px] overflow-y-auto space-y-2 py-2">
+                {libraryDocs.map((doc) => (
+                  <label
+                    key={doc.id}
+                    className="flex items-center gap-3 p-2 rounded-md border cursor-pointer hover:bg-muted/50"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={librarySelected.has(doc.id)}
+                      onChange={() => toggleLibrarySelected(doc.id)}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium truncate">{doc.name}</p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {doc.filename}
+                        {doc.file_size != null ? ` · ${(doc.file_size / 1024).toFixed(1)} KB` : ''}
+                      </p>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            )}
+            <div className="flex justify-end gap-2 pt-4">
+              <Button type="button" variant="outline" onClick={() => setLibraryOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={addFromLibrary}
+                disabled={libraryLoading || libraryDocs.length === 0 || librarySelected.size === 0}
+              >
+                Add selected
+              </Button>
+            </div>
           </DialogContent>
         </Dialog>
 

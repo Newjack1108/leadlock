@@ -3,21 +3,109 @@ Quote template router for managing quote email templates.
 """
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
-from typing import List
+from typing import List, Optional
 from jinja2 import Template
 from app.database import get_session
-from app.models import QuoteTemplate, Quote, Customer, CompanySettings, User
+from app.models import (
+    QuoteTemplate,
+    QuoteTemplateSalesDocument,
+    SalesDocument,
+    Quote,
+    Customer,
+    CompanySettings,
+    User,
+)
 from app.auth import get_current_user
 from app.schemas import (
     QuoteTemplateCreate,
     QuoteTemplateUpdate,
     QuoteTemplateResponse,
+    QuoteTemplateAttachedDocument,
     QuoteTemplatePreviewRequest,
     QuoteTemplatePreviewResponse,
 )
 from app.quote_email_service import get_sample_quote_preview_data
 
 router = APIRouter(prefix="/api/quote-templates", tags=["quote-templates"])
+
+
+def _dedupe_sales_document_ids(ids: List[int]) -> List[int]:
+    seen = set()
+    out: List[int] = []
+    for i in ids:
+        if i not in seen:
+            seen.add(i)
+            out.append(i)
+    return out
+
+
+def _fetch_attached_documents(
+    session: Session, template_id: int
+) -> List[QuoteTemplateAttachedDocument]:
+    statement = (
+        select(QuoteTemplateSalesDocument, SalesDocument)
+        .join(SalesDocument, QuoteTemplateSalesDocument.sales_document_id == SalesDocument.id)
+        .where(QuoteTemplateSalesDocument.quote_template_id == template_id)
+        .order_by(QuoteTemplateSalesDocument.sort_order)
+    )
+    rows = session.exec(statement).all()
+    return [
+        QuoteTemplateAttachedDocument(
+            id=doc.id,
+            name=doc.name,
+            filename=doc.filename,
+            sort_order=link.sort_order,
+        )
+        for link, doc in rows
+    ]
+
+
+def _set_template_sales_documents(
+    session: Session,
+    template_id: int,
+    sales_document_ids: List[int],
+) -> None:
+    ids = _dedupe_sales_document_ids(sales_document_ids)
+    for sid in ids:
+        if session.get(SalesDocument, sid) is None:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Sales document not found (id={sid})",
+            )
+    existing = session.exec(
+        select(QuoteTemplateSalesDocument).where(
+            QuoteTemplateSalesDocument.quote_template_id == template_id
+        )
+    ).all()
+    for row in existing:
+        session.delete(row)
+    for order, sid in enumerate(ids):
+        session.add(
+            QuoteTemplateSalesDocument(
+                quote_template_id=template_id,
+                sales_document_id=sid,
+                sort_order=order,
+            )
+        )
+
+
+def _quote_template_response(
+    session: Session,
+    template: QuoteTemplate,
+    created_by_name: Optional[str],
+) -> QuoteTemplateResponse:
+    return QuoteTemplateResponse(
+        id=template.id,
+        name=template.name,
+        description=template.description,
+        email_subject_template=template.email_subject_template,
+        email_body_template=template.email_body_template,
+        is_default=template.is_default,
+        created_by_id=template.created_by_id,
+        created_at=template.created_at,
+        created_by_name=created_by_name,
+        attached_documents=_fetch_attached_documents(session, template.id),
+    )
 
 
 @router.get("", response_model=List[QuoteTemplateResponse])
@@ -34,17 +122,13 @@ async def get_quote_templates(
     templates = []
 
     for template, user in results:
-        templates.append(QuoteTemplateResponse(
-            id=template.id,
-            name=template.name,
-            description=template.description,
-            email_subject_template=template.email_subject_template,
-            email_body_template=template.email_body_template,
-            is_default=template.is_default,
-            created_by_id=template.created_by_id,
-            created_at=template.created_at,
-            created_by_name=user.full_name if user else None
-        ))
+        templates.append(
+            _quote_template_response(
+                session,
+                template,
+                user.full_name if user else None,
+            )
+        )
 
     return templates
 
@@ -67,16 +151,10 @@ async def get_quote_template(
 
     template, user = result
 
-    return QuoteTemplateResponse(
-        id=template.id,
-        name=template.name,
-        description=template.description,
-        email_subject_template=template.email_subject_template,
-        email_body_template=template.email_body_template,
-        is_default=template.is_default,
-        created_by_id=template.created_by_id,
-        created_at=template.created_at,
-        created_by_name=user.full_name if user else None
+    return _quote_template_response(
+        session,
+        template,
+        user.full_name if user else None,
     )
 
 
@@ -104,20 +182,13 @@ async def create_quote_template(
     )
 
     session.add(template)
+    session.flush()
+    if template_data.sales_document_ids is not None:
+        _set_template_sales_documents(session, template.id, template_data.sales_document_ids)
     session.commit()
     session.refresh(template)
 
-    return QuoteTemplateResponse(
-        id=template.id,
-        name=template.name,
-        description=template.description,
-        email_subject_template=template.email_subject_template,
-        email_body_template=template.email_body_template,
-        is_default=template.is_default,
-        created_by_id=template.created_by_id,
-        created_at=template.created_at,
-        created_by_name=current_user.full_name
-    )
+    return _quote_template_response(session, template, current_user.full_name)
 
 
 @router.put("/{template_id}", response_model=QuoteTemplateResponse)
@@ -154,6 +225,9 @@ async def update_quote_template(
                 session.add(default_template)
         template.is_default = template_data.is_default
 
+    if template_data.sales_document_ids is not None:
+        _set_template_sales_documents(session, template.id, template_data.sales_document_ids)
+
     session.add(template)
     session.commit()
     session.refresh(template)
@@ -161,16 +235,10 @@ async def update_quote_template(
     statement = select(User).where(User.id == template.created_by_id)
     user = session.exec(statement).first()
 
-    return QuoteTemplateResponse(
-        id=template.id,
-        name=template.name,
-        description=template.description,
-        email_subject_template=template.email_subject_template,
-        email_body_template=template.email_body_template,
-        is_default=template.is_default,
-        created_by_id=template.created_by_id,
-        created_at=template.created_at,
-        created_by_name=user.full_name if user else None
+    return _quote_template_response(
+        session,
+        template,
+        user.full_name if user else None,
     )
 
 
