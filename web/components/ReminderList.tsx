@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type KeyboardEvent } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -170,6 +170,24 @@ export default function ReminderList({
     }
   };
 
+  const getReminderDetailHref = (reminder: Reminder): string | null => {
+    if (reminder.customer_id) return `/customers/${reminder.customer_id}`;
+    if (reminder.quote_id) return `/quotes/${reminder.quote_id}`;
+    if (reminder.lead_id) return `/leads/${reminder.lead_id}`;
+    return null;
+  };
+
+  const openReminderDetail = (reminder: Reminder) => {
+    const href = getReminderDetailHref(reminder);
+    if (href) router.push(href);
+  };
+
+  const onReminderBodyKeyDown = (e: KeyboardEvent<HTMLDivElement>, reminder: Reminder) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    e.preventDefault();
+    openReminderDetail(reminder);
+  };
+
   const getPriorityColor = (priority: ReminderPriority) => {
     switch (priority) {
       case ReminderPriority.URGENT:
@@ -296,52 +314,62 @@ export default function ReminderList({
       </CardHeader>
       <CardContent className={compact ? 'px-4 pb-4 pt-0' : ''}>
         <div className={compact ? 'max-h-[280px] overflow-y-auto space-y-2' : 'space-y-3'}>
-          {reminders.map((reminder) => (
+          {reminders.map((reminder) => {
+            const detailHref = getReminderDetailHref(reminder);
+            return (
             <div
               key={reminder.id}
-              className={`border rounded-lg ${isDoneMode ? 'bg-muted/50 border-muted-foreground/20 text-muted-foreground' : getPriorityColor(reminder.priority)} ${!isDoneMode && isTaskOverdue(reminder) ? 'ring-2 ring-destructive/40' : ''} ${compact ? 'p-3' : 'p-4'}`}
+              className={`border rounded-lg overflow-hidden ${isDoneMode ? 'bg-muted/50 border-muted-foreground/20 text-muted-foreground' : getPriorityColor(reminder.priority)} ${!isDoneMode && isTaskOverdue(reminder) ? 'ring-2 ring-destructive/40' : ''}`}
             >
-              <div className="flex items-start justify-between mb-2">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    <Badge variant={reminder.priority === ReminderPriority.URGENT ? 'destructive' : 'secondary'}>
-                      {reminder.priority}
-                    </Badge>
-                    {reminder.reminder_type === ReminderType.USER_TASK && (
-                      <Badge variant="outline">Task</Badge>
-                    )}
-                    <span className="font-semibold">{reminder.title}</span>
-                  </div>
-                  <p className="text-sm text-muted-foreground mb-2">{reminder.message}</p>
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                    {reminder.lead_name && (
-                      <span>Lead: {reminder.lead_name}</span>
-                    )}
-                    {reminder.quote_number && (
-                      <span>Quote: {reminder.quote_number}</span>
-                    )}
-                    {reminder.customer_name && (
-                      <span>Customer: {reminder.customer_name}</span>
-                    )}
-                    {reminder.reminder_type === ReminderType.USER_TASK && reminder.assigned_to_name && (
-                      <span>Assignee: {reminder.assigned_to_name}</span>
-                    )}
-                    {reminder.reminder_type === ReminderType.USER_TASK && reminder.created_by_name && (
-                      <span>Created by: {reminder.created_by_name}</span>
-                    )}
-                    <span className={isTaskOverdue(reminder) ? 'font-medium text-destructive' : ''}>
-                      {staleLabel(reminder)}
-                    </span>
-                    {isDoneMode && reminder.acted_upon_at && (
-                      <span>
-                        Completed on {new Date(reminder.acted_upon_at).toLocaleDateString()}
+              <div
+                className={`${compact ? 'p-3' : 'p-4'} ${detailHref ? 'cursor-pointer hover:bg-black/[0.04] dark:hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-none' : ''}`}
+                role={detailHref ? 'link' : undefined}
+                tabIndex={detailHref ? 0 : undefined}
+                onClick={detailHref ? () => openReminderDetail(reminder) : undefined}
+                onKeyDown={detailHref ? (e) => onReminderBodyKeyDown(e, reminder) : undefined}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <Badge variant={reminder.priority === ReminderPriority.URGENT ? 'destructive' : 'secondary'}>
+                        {reminder.priority}
+                      </Badge>
+                      {reminder.reminder_type === ReminderType.USER_TASK && (
+                        <Badge variant="outline">Task</Badge>
+                      )}
+                      <span className="font-semibold">{reminder.title}</span>
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-2">{reminder.message}</p>
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                      {reminder.lead_name && (
+                        <span>Lead: {reminder.lead_name}</span>
+                      )}
+                      {reminder.quote_number && (
+                        <span>Quote: {reminder.quote_number}</span>
+                      )}
+                      {reminder.customer_name && (
+                        <span>Customer: {reminder.customer_name}</span>
+                      )}
+                      {reminder.reminder_type === ReminderType.USER_TASK && reminder.assigned_to_name && (
+                        <span>Assignee: {reminder.assigned_to_name}</span>
+                      )}
+                      {reminder.reminder_type === ReminderType.USER_TASK && reminder.created_by_name && (
+                        <span>Created by: {reminder.created_by_name}</span>
+                      )}
+                      <span className={isTaskOverdue(reminder) ? 'font-medium text-destructive' : ''}>
+                        {staleLabel(reminder)}
                       </span>
-                    )}
+                      {isDoneMode && reminder.acted_upon_at && (
+                        <span>
+                          Completed on {new Date(reminder.acted_upon_at).toLocaleDateString()}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
               {showActions && !isDoneMode && (
-                <div className={`flex items-center gap-2 border-t ${compact ? 'mt-2 pt-2' : 'mt-3 pt-3'}`}>
+                <div className={`flex items-center gap-2 border-t ${compact ? 'px-3 py-2' : 'px-4 py-3'}`}>
                   <Button
                     size="sm"
                     variant="default"
@@ -375,7 +403,8 @@ export default function ReminderList({
                 </div>
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
         {limit && reminders.length >= limit && (
           <div className="mt-4 text-center">

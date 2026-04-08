@@ -375,14 +375,15 @@ export default function SendQuoteEmailDialog({
                 Email template <span className="text-destructive">*</span>
               </Label>
               <Select
-                value={selectedTemplateId !== undefined ? String(selectedTemplateId) : undefined}
-                onValueChange={(value) => setSelectedTemplateId(parseInt(value, 10))}
+                value={selectedTemplateId !== undefined ? String(selectedTemplateId) : 'none'}
+                onValueChange={(value) => setSelectedTemplateId(value === 'none' ? undefined : parseInt(value, 10))}
                 disabled={loadingTemplates}
               >
                 <SelectTrigger id="template">
                   <SelectValue placeholder="Select a template" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="none">Select a template</SelectItem>
                   {templates.map((template) => (
                     <SelectItem key={template.id} value={template.id.toString()}>
                       {template.name}
