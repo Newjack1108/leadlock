@@ -142,6 +142,15 @@ function LeadsPageContent() {
     }
   }, [userRole, statusFilter, searchParams, router]);
 
+  // Directors / sales managers: default to NEW when opening /leads without an explicit status
+  useEffect(() => {
+    if (!userRole || (userRole !== 'DIRECTOR' && userRole !== 'SALES_MANAGER')) return;
+    if (searchParams.get('status')) return;
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('status', LeadStatus.NEW);
+    router.replace(`/leads?${params.toString()}`);
+  }, [userRole, searchParams, router]);
+
   // Debounce search input
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -177,10 +186,16 @@ function LeadsPageContent() {
       }
 
       const response = await api.get('/api/leads', { params });
-      // When viewing QUOTED/WON/LOST, show them; otherwise filter out terminal statuses
-      const filteredLeads = TERMINAL_STATUSES.includes(statusFilter as LeadStatus)
-        ? response.data
-        : response.data.filter((lead: Lead) => !TERMINAL_STATUSES.includes(lead.status as LeadStatus));
+      // ALL and terminal-status tabs use the API result as-is; pipeline tabs hide terminal rows
+      let filteredLeads: Lead[] = response.data;
+      if (
+        statusFilter !== 'ALL' &&
+        !TERMINAL_STATUSES.includes(statusFilter as LeadStatus)
+      ) {
+        filteredLeads = response.data.filter(
+          (lead: Lead) => !TERMINAL_STATUSES.includes(lead.status as LeadStatus),
+        );
+      }
       setLeads(filteredLeads);
     } catch (error: any) {
       if (error.response?.status === 401) {
