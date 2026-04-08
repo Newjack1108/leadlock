@@ -20,7 +20,7 @@ export default function RemindersPage() {
   const [generating, setGenerating] = useState(false);
   const [filterPriority, setFilterPriority] = useState<string>('all');
   const [filterType, setFilterType] = useState<string>('all');
-  const [assignedScope, setAssignedScope] = useState<'mine' | 'all'>('mine');
+  const [assignedScope, setAssignedScope] = useState<'mine' | 'all'>('all');
   const [createTaskOpen, setCreateTaskOpen] = useState(false);
   const [doneExpanded, setDoneExpanded] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
