@@ -184,6 +184,7 @@ def build_quote_response(quote: Quote, quote_items: List[QuoteItem], session: Se
     customer_name = None
     customer_last_interacted_at = None
     lead_name = None
+    lead_type = None
     if quote.customer_id:
         customer = session.exec(select(Customer).where(Customer.id == quote.customer_id)).first()
         customer_name = customer.name if customer else None
@@ -191,6 +192,7 @@ def build_quote_response(quote: Quote, quote_items: List[QuoteItem], session: Se
     if quote.lead_id:
         lead = session.exec(select(Lead).where(Lead.id == quote.lead_id)).first()
         lead_name = lead.name if lead else None
+        lead_type = lead.lead_type if lead else None
 
     # Computed VAT (total_amount is Ex VAT @ 20%; deposit/balance stored as inc VAT)
     vat_amount = quote.total_amount * VAT_RATE_DECIMAL
@@ -216,6 +218,7 @@ def build_quote_response(quote: Quote, quote_items: List[QuoteItem], session: Se
         customer_name=customer_name,
         lead_id=quote.lead_id,
         lead_name=lead_name,
+        lead_type=lead_type,
         quote_number=quote.quote_number,
         version=quote.version,
         status=quote.status,

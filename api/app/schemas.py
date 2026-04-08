@@ -1094,6 +1094,7 @@ class QuoteResponse(BaseModel):
     customer_name: Optional[str] = None
     lead_id: Optional[int] = None
     lead_name: Optional[str] = None
+    lead_type: Optional[LeadType] = None
     quote_number: str
     version: int
     status: QuoteStatus

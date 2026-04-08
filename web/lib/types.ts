@@ -825,6 +825,7 @@ export interface Quote {
   customer_name?: string;
   lead_id?: number | null;
   lead_name?: string | null;
+  lead_type?: LeadType | null;
   quote_number: string;
   version: number;
   status: QuoteStatus;

@@ -99,7 +99,8 @@ function QuotesPageContent() {
       result = result.filter(
         (quote) =>
           quote.quote_number?.toLowerCase().includes(q) ||
-          quote.customer_name?.toLowerCase().includes(q)
+          quote.customer_name?.toLowerCase().includes(q) ||
+          (quote.lead_type && quote.lead_type.toLowerCase().includes(q))
       );
     }
     return result;
@@ -173,7 +174,7 @@ function QuotesPageContent() {
               </SelectContent>
             </Select>
             <Input
-              placeholder="Search by quote # or customer..."
+              placeholder="Search by quote #, customer, or lead type..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full md:w-[260px]"
@@ -218,6 +219,7 @@ function QuotesPageContent() {
                   <tr className="border-b bg-muted/50">
                     <th className="text-left p-3 font-medium">Quote #</th>
                     <th className="text-left p-3 font-medium">Customer</th>
+                    <th className="text-left p-3 font-medium">Lead type</th>
                     <th className="text-left p-3 font-medium">Last contacted</th>
                     <th className="text-left p-3 font-medium">Status</th>
                     <th className="text-left p-3 font-medium">Total</th>
@@ -246,6 +248,7 @@ function QuotesPageContent() {
                         </div>
                       </td>
                       <td className="p-3 text-muted-foreground">{quote.customer_name || '—'}</td>
+                      <td className="p-3 text-muted-foreground">{quote.lead_type ?? '—'}</td>
                       <td className="p-3 text-muted-foreground">
                         {quote.customer_last_interacted_at
                           ? new Date(quote.customer_last_interacted_at).toLocaleDateString()
@@ -342,6 +345,9 @@ function QuotesPageContent() {
                         </Link>
                         {quote.customer_name && (
                           <span className="text-muted-foreground">— {quote.customer_name}</span>
+                        )}
+                        {quote.lead_type && (
+                          <span className="text-muted-foreground text-sm">({quote.lead_type})</span>
                         )}
                         <Badge className={statusColors[quote.status]}>
                           {quote.status}
