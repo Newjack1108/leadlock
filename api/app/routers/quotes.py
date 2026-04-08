@@ -27,7 +27,7 @@ from app.email_service import is_email_configured
 from app.sms_service import send_sms, normalize_phone
 from app.quote_pdf_service import generate_quote_pdf
 from app.available_optional_extras import get_available_optional_extras_for_quote
-from app.reminder_service import get_last_activity_date
+from app.reminder_service import get_last_activity_date, dismiss_open_reminders_for_quote
 from app.constants import QUOTE_LIST_EXCLUDED_STATUSES, VAT_RATE_DECIMAL
 from app.quote_delete import delete_quote_cascade
 from app.discount_limits import assert_templates_not_expired_for_apply, validate_and_record_redemptions_on_accept
@@ -900,6 +900,8 @@ async def mark_opportunity_won(
     quote.accepted_at = datetime.utcnow()
     quote.updated_at = datetime.utcnow()
     session.add(quote)
+    if old_status != QuoteStatus.ACCEPTED:
+        dismiss_open_reminders_for_quote(session, quote.id)
     session.commit()
     session.refresh(quote)
     if quote.customer_id and old_status != QuoteStatus.ACCEPTED:
@@ -1810,6 +1812,7 @@ async def update_quote(
             quote.accepted_at = datetime.utcnow()
         validate_and_record_redemptions_on_accept(session, quote.id)
         create_order_from_quote(quote, session, current_user.id)
+        dismiss_open_reminders_for_quote(session, quote.id)
     
     # Mandatory next action validation (for open opportunities)
     if quote.opportunity_stage and quote.opportunity_stage not in [OpportunityStage.WON, OpportunityStage.LOST]:

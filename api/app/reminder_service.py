@@ -11,6 +11,32 @@ from app.models import (
 from app.constants import QUOTE_LIST_EXCLUDED_STATUSES
 
 
+def quote_excluded_from_stale_reminders(quote: Quote) -> bool:
+    """Won/accepted quotes should not trigger stale follow-up or customer outreach."""
+    if quote.status == QuoteStatus.ACCEPTED:
+        return True
+    if quote.accepted_at is not None:
+        return True
+    return False
+
+
+def dismiss_open_reminders_for_quote(session: Session, quote_id: int) -> int:
+    """Set dismissed_at on open (not dismissed, not acted) reminders tied to this quote."""
+    now = datetime.utcnow()
+    statement = select(Reminder).where(
+        and_(
+            Reminder.quote_id == quote_id,
+            Reminder.dismissed_at.is_(None),
+            Reminder.acted_upon_at.is_(None),
+        )
+    )
+    rows = list(session.exec(statement).all())
+    for reminder in rows:
+        reminder.dismissed_at = now
+        session.add(reminder)
+    return len(rows)
+
+
 def get_last_activity_date(customer_id: Optional[int], session: Session) -> Optional[datetime]:
     """Get the most recent activity date for a customer."""
     if not customer_id:
@@ -154,12 +180,17 @@ def detect_stale_quotes(session: Session) -> List[Tuple[Quote, ReminderRule, int
             except ValueError:
                 continue
         else:
-            # No status filter - check all quotes
-            quote_statement = select(Quote)
+            # No status filter - check all quotes (non-accepted only)
+            quote_statement = select(Quote).where(
+                Quote.status != QuoteStatus.ACCEPTED,
+                Quote.accepted_at.is_(None),
+            )
         
         quotes = session.exec(quote_statement).all()
         
         for quote in quotes:
+            if quote_excluded_from_stale_reminders(quote):
+                continue
             days_stale = 0
             
             if rule.check_type == "SENT_DATE":
@@ -220,6 +251,8 @@ def detect_stale_opportunities(session: Session) -> List[Tuple[Quote, str, int]]
             Quote.opportunity_stage.isnot(None),
             Quote.opportunity_stage.notin_([OpportunityStage.WON, OpportunityStage.LOST]),
             Quote.status.notin_(QUOTE_LIST_EXCLUDED_STATUSES),
+            Quote.status != QuoteStatus.ACCEPTED,
+            Quote.accepted_at.is_(None),
         )
     )
     opportunities = session.exec(statement).all()
