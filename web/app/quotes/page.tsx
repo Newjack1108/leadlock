@@ -15,7 +15,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import api, { getQuotes, previewQuotePdf } from '@/lib/api';
-import { Quote, QuoteStatus, QuoteTemperature } from '@/lib/types';
+import { Quote, QuoteStatus, QuoteTemperature, OpportunityStage } from '@/lib/types';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { FileText, Eye, Pencil, List, LayoutGrid, ShoppingCart } from 'lucide-react';
@@ -34,6 +34,16 @@ const temperatureColors: Record<QuoteTemperature, string> = {
   WARM: 'bg-amber-100 text-amber-700',
   COLD: 'bg-slate-100 text-slate-600',
 };
+
+/** Hide deal temperature on list rows once the quote is ordered / won. */
+function showQuoteTemperatureBadge(quote: Quote): boolean {
+  if (!quote.temperature) return false;
+  if (quote.order_id) return false;
+  if (quote.status === QuoteStatus.ACCEPTED) return false;
+  if (quote.opportunity_stage === OpportunityStage.WON) return false;
+  if (quote.accepted_at) return false;
+  return true;
+}
 
 const VALID_QUOTE_STATUSES = Object.values(QuoteStatus);
 
@@ -302,8 +312,8 @@ function QuotesPageContent() {
                               Ordered
                             </Badge>
                           )}
-                          {quote.temperature && (
-                            <Badge className={temperatureColors[quote.temperature]}>
+                          {showQuoteTemperatureBadge(quote) && (
+                            <Badge className={temperatureColors[quote.temperature!]}>
                               {quote.temperature}
                             </Badge>
                           )}
@@ -395,8 +405,8 @@ function QuotesPageContent() {
                             Ordered
                           </Badge>
                         )}
-                        {quote.temperature && (
-                          <Badge className={temperatureColors[quote.temperature]}>
+                        {showQuoteTemperatureBadge(quote) && (
+                          <Badge className={temperatureColors[quote.temperature!]}>
                             {quote.temperature}
                           </Badge>
                         )}

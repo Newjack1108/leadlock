@@ -16,6 +16,8 @@ from app.models import (
     Quote,
     QuoteItem,
     QuoteStatus,
+    Order,
+    OpportunityStage,
     Email,
     EmailDirection,
     SmsMessage,
@@ -177,6 +179,7 @@ def compute_lead_quote_list_stats(
 ) -> Dict[int, Tuple[Optional[QuoteTemperature], int]]:
     """
     Per lead: (latest_quote_temperature from most recently updated quote, quotes_sent_count).
+    Temperature is omitted when that quote is ordered or accepted (no longer an open deal).
     """
     if not leads:
         return {}
@@ -195,24 +198,52 @@ def compute_lead_quote_list_stats(
 
     temp_by_lead: Dict[int, Optional[QuoteTemperature]] = {}
     stmt_temp = (
-        select(Quote.lead_id, Quote.temperature)
+        select(
+            Quote.id,
+            Quote.lead_id,
+            Quote.temperature,
+            Quote.status,
+            Quote.opportunity_stage,
+            Quote.accepted_at,
+        )
         .where(Quote.lead_id.in_(lead_ids))
         .distinct(Quote.lead_id)
         .order_by(Quote.lead_id, Quote.updated_at.desc(), Quote.id.desc())
     )
-    for row in session.exec(stmt_temp).all():
-        lid, temp = row[0], row[1]
-        if lid is not None:
-            tid = int(lid)
-            if isinstance(temp, QuoteTemperature):
-                temp_by_lead[tid] = temp
-            elif temp is None:
+    temp_rows = list(session.exec(stmt_temp).all())
+    quote_ids_for_order = [row[0] for row in temp_rows if row[0] is not None]
+    ordered_quote_ids: set[int] = set()
+    if quote_ids_for_order:
+        stmt_ord = select(Order.quote_id).where(Order.quote_id.in_(quote_ids_for_order))
+        ordered_quote_ids = {int(qid) for qid in session.exec(stmt_ord).all() if qid is not None}
+
+    for row in temp_rows:
+        qid, lid, temp, q_status, opp_stage, accepted_at = (
+            row[0],
+            row[1],
+            row[2],
+            row[3],
+            row[4],
+            row[5],
+        )
+        if lid is None:
+            continue
+        tid = int(lid)
+        if qid is not None and int(qid) in ordered_quote_ids:
+            temp_by_lead[tid] = None
+            continue
+        if q_status == QuoteStatus.ACCEPTED or opp_stage == OpportunityStage.WON or accepted_at is not None:
+            temp_by_lead[tid] = None
+            continue
+        if isinstance(temp, QuoteTemperature):
+            temp_by_lead[tid] = temp
+        elif temp is None:
+            temp_by_lead[tid] = None
+        else:
+            try:
+                temp_by_lead[tid] = QuoteTemperature(str(temp))
+            except ValueError:
                 temp_by_lead[tid] = None
-            else:
-                try:
-                    temp_by_lead[tid] = QuoteTemperature(str(temp))
-                except ValueError:
-                    temp_by_lead[tid] = None
 
     out: Dict[int, Tuple[Optional[QuoteTemperature], int]] = {}
     for lead in leads:

@@ -7,7 +7,18 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import api, { getQuote, previewQuotePdf, getDiscountRequestsForQuote, getQuoteViewLink, acceptQuote, cancelDraftQuote, duplicateQuoteToDraft } from '@/lib/api';
-import { Quote, QuoteItem, Customer, QuoteDiscount, DiscountRequest, DiscountRequestStatus, QuoteTemperature, LossCategory } from '@/lib/types';
+import {
+  Quote,
+  QuoteItem,
+  Customer,
+  QuoteDiscount,
+  DiscountRequest,
+  DiscountRequestStatus,
+  QuoteTemperature,
+  LossCategory,
+  OpportunityStage,
+  QuoteStatus,
+} from '@/lib/types';
 import { QUOTE_BALANCE_BEFORE_DELIVERY_NOTE } from '@/lib/quoteCopy';
 import SendQuoteEmailDialog from '@/components/SendQuoteEmailDialog';
 import CallNotesDialog from '@/components/CallNotesDialog';
@@ -197,6 +208,12 @@ export default function QuoteDetailPage() {
     );
   }
 
+  const isAccepted =
+    quote.status === QuoteStatus.ACCEPTED ||
+    quote.opportunity_stage === OpportunityStage.WON ||
+    Boolean(quote.accepted_at) ||
+    Boolean(quote.order_id);
+
   return (
     <div className="min-h-screen">
       <Header />
@@ -303,7 +320,7 @@ export default function QuoteDetailPage() {
                   Open customer view
                 </Button>
               )}
-              {['DRAFT', 'SENT', 'VIEWED'].includes(quote.status) && (
+              {!isAccepted && ['DRAFT', 'SENT', 'VIEWED'].includes(quote.status) && (
                 <Button
                   onClick={async () => {
                     try {
