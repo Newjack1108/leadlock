@@ -37,6 +37,19 @@ const temperatureColors: Record<QuoteTemperature, string> = {
 
 const VALID_QUOTE_STATUSES = Object.values(QuoteStatus);
 
+type QuotesSortBy = 'last_contacted' | 'created';
+
+function sortKeyLastContactedMs(q: Quote): number {
+  if (!q.customer_last_interacted_at) return Number.NEGATIVE_INFINITY;
+  const t = new Date(q.customer_last_interacted_at).getTime();
+  return Number.isNaN(t) ? Number.NEGATIVE_INFINITY : t;
+}
+
+function sortKeyCreatedMs(q: Quote): number {
+  const t = new Date(q.created_at).getTime();
+  return Number.isNaN(t) ? Number.NEGATIVE_INFINITY : t;
+}
+
 function QuotesPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -50,6 +63,7 @@ function QuotesPageContent() {
   const [statusFilter, setStatusFilter] = useState<QuoteStatus | 'ALL'>(initialStatus);
   const [temperatureFilter, setTemperatureFilter] = useState<QuoteTemperature | 'ALL'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState<QuotesSortBy>('last_contacted');
 
   // Sync status filter from URL when search params change (e.g. navigation from dashboard)
   useEffect(() => {
@@ -103,8 +117,22 @@ function QuotesPageContent() {
           (quote.lead_type && quote.lead_type.toLowerCase().includes(q))
       );
     }
-    return result;
-  }, [quotes, temperatureFilter, searchQuery]);
+    const sorted = [...result];
+    if (sortBy === 'last_contacted') {
+      sorted.sort((a, b) => {
+        const diff = sortKeyLastContactedMs(b) - sortKeyLastContactedMs(a);
+        if (diff !== 0) return diff;
+        return b.id - a.id;
+      });
+    } else {
+      sorted.sort((a, b) => {
+        const diff = sortKeyCreatedMs(b) - sortKeyCreatedMs(a);
+        if (diff !== 0) return diff;
+        return b.id - a.id;
+      });
+    }
+    return sorted;
+  }, [quotes, temperatureFilter, searchQuery, sortBy]);
 
   if (loading) {
     return (
@@ -171,6 +199,15 @@ function QuotesPageContent() {
                     {t}
                   </SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+            <Select value={sortBy} onValueChange={(v) => setSortBy(v as QuotesSortBy)}>
+              <SelectTrigger className="w-full md:w-[220px]">
+                <SelectValue placeholder="Sort" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="last_contacted">Last contacted (newest)</SelectItem>
+                <SelectItem value="created">Created (newest)</SelectItem>
               </SelectContent>
             </Select>
             <Input
