@@ -758,7 +758,18 @@ async def get_all_quotes(
     try:
         statement = select(Quote)
         if status is not None:
-            statement = statement.where(Quote.status == status)
+            if status == QuoteStatus.VIEWED:
+                statement = statement.where(
+                    or_(
+                        Quote.status == QuoteStatus.VIEWED,
+                        and_(
+                            Quote.status == QuoteStatus.SENT,
+                            Quote.viewed_at.isnot(None),
+                        ),
+                    )
+                )
+            else:
+                statement = statement.where(Quote.status == status)
         else:
             statement = statement.where(Quote.status.notin_(QUOTE_LIST_EXCLUDED_STATUSES))
         statement = statement.order_by(Quote.created_at.desc())
