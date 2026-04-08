@@ -33,6 +33,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import RequestDiscountDialog from '@/components/RequestDiscountDialog';
+import { celebrateQuoteAccept } from '@/lib/celebrate';
 
 const temperatureColors: Record<QuoteTemperature, string> = {
   HOT: 'bg-red-100 text-red-700',
@@ -308,9 +309,12 @@ export default function QuoteDetailPage() {
                     try {
                       setAccepting(true);
                       const updated = await acceptQuote(quoteId);
+                      void celebrateQuoteAccept();
                       if (updated?.order_id) {
                         toast.success('Quote accepted. Order created.');
-                        router.push(`/orders/${updated.order_id}`);
+                        setTimeout(() => {
+                          router.push(`/orders/${updated.order_id}`);
+                        }, 520);
                       } else {
                         await fetchQuote();
                         toast.success('Quote accepted. Order created.');
