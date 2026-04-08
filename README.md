@@ -286,7 +286,10 @@ Colors are defined in `web/app/globals.css`.
    - `ALGORITHM` - `HS256` (default)
    - `ACCESS_TOKEN_EXPIRE_MINUTES` - `1440` (default, 24 hours)
 5. Railway will auto-detect Python via Nixpacks and deploy using the root-level `Procfile`
-6. After deployment, run the seed script to create initial users:
+6. For enum/schema updates, deploy order must be: **database migration first, app deploy second**.
+   - This app runs compatibility migrations in `api/app/database.py` at startup (for example adding `leadstatus` values like `CLOSED`).
+   - If app code references a new enum value before the DB type is updated, endpoints can return `500`.
+7. After deployment, run the seed script to create initial users:
    ```bash
    railway run cd api && python seed.py
    ```
@@ -294,7 +297,7 @@ Colors are defined in `web/app/globals.css`.
    ```bash
    railway run --service <your-service-name> sh -c "cd api && python seed.py"
    ```
-7. The API will be available at your Railway-provided URL
+8. The API will be available at your Railway-provided URL
 
 ### Frontend (Vercel/Netlify)
 

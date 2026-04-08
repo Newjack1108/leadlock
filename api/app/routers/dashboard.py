@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session, select, func, or_
+from sqlalchemy.exc import DataError
 from app.database import get_session
 from app.models import (
     Lead,
@@ -91,7 +92,16 @@ async def get_dashboard_stats(
     quoted_count = count_leads(Lead.status == LeadStatus.QUOTED)
     won_count = count_leads(Lead.status == LeadStatus.WON)
     lost_count = count_leads(Lead.status == LeadStatus.LOST)
-    closed_count = count_leads(Lead.status == LeadStatus.CLOSED)
+    try:
+        closed_count = count_leads(Lead.status == LeadStatus.CLOSED)
+    except DataError as exc:
+        # Temporary compatibility guard for production enum drift.
+        # Some DBs may not yet include CLOSED in leadstatus; treat as 0 until migrated.
+        error_text = str(exc).lower()
+        if "invalid input value for enum leadstatus" in error_text and "closed" in error_text:
+            closed_count = 0
+        else:
+            raise
 
     # Count quotes sent (Quote records with status beyond DRAFT; one lead can have multiple)
     quotes_sent_stmt = select(func.count(Quote.id)).where(

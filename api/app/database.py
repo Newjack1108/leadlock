@@ -45,6 +45,17 @@ def create_db_and_tables():
         has_quote_table = inspector.has_table("quote")
         has_customer_order_table = inspector.has_table("customer_order")
         has_orderitem_table = inspector.has_table("orderitem")
+
+        # Ensure leadstatus enum contains CLOSED before any queries rely on it.
+        if has_lead_table:
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text("ALTER TYPE leadstatus ADD VALUE IF NOT EXISTS 'CLOSED'"))
+                print("Ensured leadstatus enum value: CLOSED", file=sys.stderr, flush=True)
+            except Exception as e:
+                error_str = str(e).lower()
+                if "already exists" not in error_str:
+                    print(f"Warning: could not add leadstatus value CLOSED: {e}", file=sys.stderr, flush=True)
         
         # Step 0a: Create order tables (customer_order, orderitem) if missing - order-from-quote feature
         if has_quote_table and (not has_customer_order_table or not has_orderitem_table):
