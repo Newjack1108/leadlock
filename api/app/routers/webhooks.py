@@ -92,6 +92,20 @@ def resolve_product_category_from_product_type(product_type: Optional[str]) -> O
     return None
 
 
+def resolve_product_category_from_payload_category(category: Optional[str]) -> Optional[ProductCategory]:
+    """Resolve payload category (stables|sheds|cabins) to ProductCategory enum."""
+    if category is None:
+        return None
+    key = category.strip().lower()
+    if key == "stables":
+        return ProductCategory.STABLES
+    if key == "sheds":
+        return ProductCategory.SHEDS
+    if key == "cabins":
+        return ProductCategory.CABINS
+    return None
+
+
 @router.post("/leads", response_model=LeadResponse)
 async def create_lead_webhook(
     lead_data: LeadCreate,
@@ -248,11 +262,17 @@ async def import_product_webhook(
     Requires Bearer token in Authorization header.
     Upsert: if product_id (Production's ID) provided, match by production_product_id; else match by name.
     Products from production send cost ex VAT; RRP (base_price) is derived using company gross margin % if set.
-    Optional product_type maps to is_extra and category (e.g. Stable / optional_extra); omitted on update preserves existing is_extra and category.
+    Optional product_type maps to is_extra (e.g. extra / product).
+    Optional category maps to Product.category and takes precedence over product_type-derived category.
+    If category is omitted, category falls back to product_type-derived mapping.
+    If both are omitted, update preserves existing category and create defaults to STABLES.
     For optional extras, parent_product_id (production id of the main product) creates ProductOptionalExtra when set.
     """
     resolved_is_extra = resolve_is_extra_from_product_type(payload.product_type)
-    resolved_category = resolve_product_category_from_product_type(payload.product_type)
+    resolved_category = (
+        resolve_product_category_from_payload_category(payload.category)
+        or resolve_product_category_from_product_type(payload.product_type)
+    )
 
     # Map payload to Product fields: cost ex VAT from production
     cost_ex_vat = payload.price_ex_vat

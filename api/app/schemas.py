@@ -836,6 +836,7 @@ class ProductImportPayload(BaseModel):
     install_hours: Decimal
     number_of_boxes: Decimal  # Accepted as number; validated and stored as int
     product_type: Optional[str] = None  # e.g. "extra" vs "product"; maps to Product.is_extra
+    category: Optional[str] = None  # Optional explicit LeadLock category: stables|sheds|cabins
     parent_product_id: Optional[int] = None  # Production main product id when this row is an optional extra; links via ProductOptionalExtra
 
     @field_validator("product_type", mode="before")
@@ -847,6 +848,20 @@ class ProductImportPayload(BaseModel):
             s = v.strip()
             return s if s else None
         return v
+
+    @field_validator("category", mode="before")
+    @classmethod
+    def normalize_category(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        if not isinstance(v, str):
+            raise ValueError("category must be a string")
+        normalized = v.strip().lower()
+        if not normalized:
+            return None
+        if normalized in {"stables", "sheds", "cabins"}:
+            return normalized
+        raise ValueError("category must be one of: stables, sheds, cabins")
 
     @field_validator("price_ex_vat")
     @classmethod
