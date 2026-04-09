@@ -159,6 +159,8 @@ export interface Lead {
   product_interest?: string;
   lead_type: LeadType;
   lead_source: LeadSource;
+  facebook_advert_profile_id?: number | null;
+  facebook_advert_profile?: FacebookAdvertProfile | null;
   assigned_to_id?: number;
   customer_id?: number;
   created_at: string;
@@ -179,6 +181,16 @@ export interface Lead {
   latest_quote_temperature?: QuoteTemperature | null;
   /** Number of quotes linked to this lead with sent_at set. */
   quotes_sent_count?: number;
+}
+
+export interface FacebookAdvertProfile {
+  id: number;
+  name: string;
+  offer_type?: string;
+  image_url?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Activity {

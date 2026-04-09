@@ -25,11 +25,13 @@ from app.models import (
     MessengerMessage,
     MessengerDirection,
     QuoteTemperature,
+    FacebookAdvertProfile,
 )
 from app.auth import get_current_user
 from app.schemas import (
     LeadCreate, LeadUpdate, LeadResponse, StatusTransitionRequest,
-    ActivityCreate, ActivityResponse, StatusHistoryResponse, CustomerResponse, QuoteResponse
+    ActivityCreate, ActivityResponse, StatusHistoryResponse, CustomerResponse, QuoteResponse,
+    FacebookAdvertProfileResponse,
 )
 from app.workflow import can_transition, check_sla_overdue, check_quote_prerequisites
 from app.quote_delete import delete_quote_cascade
@@ -315,6 +317,23 @@ def enrich_lead_response(
             messenger_psid=customer.messenger_psid,
             source_system=customer.source_system,
         )
+
+    advert_profile_response = None
+    if lead.facebook_advert_profile_id:
+        advert_statement = select(FacebookAdvertProfile).where(
+            FacebookAdvertProfile.id == lead.facebook_advert_profile_id
+        )
+        advert_profile = session.exec(advert_statement).first()
+        if advert_profile:
+            advert_profile_response = FacebookAdvertProfileResponse(
+                id=advert_profile.id,
+                name=advert_profile.name,
+                offer_type=advert_profile.offer_type,
+                image_url=advert_profile.image_url,
+                is_active=advert_profile.is_active,
+                created_at=advert_profile.created_at,
+                updated_at=advert_profile.updated_at,
+            )
     
     return LeadResponse(
         id=lead.id,
@@ -329,6 +348,8 @@ def enrich_lead_response(
         product_interest=lead.product_interest,
         lead_type=_safe_enum(getattr(lead, 'lead_type', None), LeadType, LeadType.UNKNOWN),
         lead_source=_safe_enum(getattr(lead, 'lead_source', None), LeadSource, LeadSource.UNKNOWN),
+        facebook_advert_profile_id=lead.facebook_advert_profile_id,
+        facebook_advert_profile=advert_profile_response,
         assigned_to_id=lead.assigned_to_id,
         customer_id=lead.customer_id,
         created_at=lead.created_at,
@@ -479,6 +500,15 @@ async def update_lead(
         raise HTTPException(status_code=404, detail="Lead not found")
     
     update_data = lead_data.dict(exclude_unset=True)
+    advert_profile_id = update_data.get("facebook_advert_profile_id")
+    if advert_profile_id is not None:
+        advert_statement = select(FacebookAdvertProfile).where(
+            FacebookAdvertProfile.id == advert_profile_id
+        )
+        advert_profile = session.exec(advert_statement).first()
+        if not advert_profile:
+            raise HTTPException(status_code=400, detail="Facebook advert profile not found")
+
     for field, value in update_data.items():
         setattr(lead, field, value)
     

@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { ActivityType, type QuoteTemperature, type QuoteStatus } from '@/lib/types';
+import { ActivityType, type FacebookAdvertProfile, type QuoteTemperature, type QuoteStatus } from '@/lib/types';
 import { getTelUrl } from '@/lib/utils';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -524,6 +524,34 @@ export const updateUserEmailSettings = async (settingsData: {
 // Company Settings API functions
 export const getCompanySettings = async () => {
   const response = await api.get('/api/settings/company');
+  return response.data;
+};
+
+export const listFacebookAdverts = async (): Promise<FacebookAdvertProfile[]> => {
+  const response = await api.get('/api/settings/facebook-adverts');
+  return response.data;
+};
+
+export const createFacebookAdvert = async (payload: {
+  name: string;
+  offer_type?: string;
+  image_url?: string;
+  is_active?: boolean;
+}): Promise<FacebookAdvertProfile> => {
+  const response = await api.post('/api/settings/facebook-adverts', payload);
+  return response.data;
+};
+
+export const updateFacebookAdvert = async (
+  advertId: number,
+  payload: {
+    name?: string;
+    offer_type?: string;
+    image_url?: string;
+    is_active?: boolean;
+  }
+): Promise<FacebookAdvertProfile> => {
+  const response = await api.patch(`/api/settings/facebook-adverts/${advertId}`, payload);
   return response.data;
 };
 

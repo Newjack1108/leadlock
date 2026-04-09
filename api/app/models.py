@@ -166,6 +166,7 @@ class Lead(SQLModel, table=True):
     product_interest: Optional[str] = None
     lead_type: LeadType = Field(default=LeadType.UNKNOWN)
     lead_source: LeadSource = Field(default=LeadSource.UNKNOWN)
+    facebook_advert_profile_id: Optional[int] = Field(default=None, foreign_key="facebookadvertprofile.id")
     assigned_to_id: Optional[int] = Field(default=None, foreign_key="user.id")
     customer_id: Optional[int] = Field(default=None, foreign_key="customer.id")  # Link to Customer when qualified
     messenger_psid: Optional[str] = Field(default=None, index=True)  # Facebook Page-Scoped ID for Messenger
@@ -175,8 +176,21 @@ class Lead(SQLModel, table=True):
     # Relationships
     assigned_to_user: Optional[User] = Relationship(back_populates="assigned_leads")
     customer: Optional["Customer"] = Relationship(back_populates="leads")
+    facebook_advert_profile: Optional["FacebookAdvertProfile"] = Relationship(back_populates="leads")
     quotes: List["Quote"] = Relationship(back_populates="lead")
     status_history: List["StatusHistory"] = Relationship(back_populates="lead")
+
+
+class FacebookAdvertProfile(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str
+    offer_type: Optional[str] = None
+    image_url: Optional[str] = None
+    is_active: bool = Field(default=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+    leads: List["Lead"] = Relationship(back_populates="facebook_advert_profile")
 
 
 class Activity(SQLModel, table=True):

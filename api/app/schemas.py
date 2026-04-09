@@ -493,7 +493,32 @@ class LeadUpdate(BaseModel):
     product_interest: Optional[str] = None
     lead_type: Optional[LeadType] = None
     lead_source: Optional[LeadSource] = None
+    facebook_advert_profile_id: Optional[int] = None
     assigned_to_id: Optional[int] = None
+
+
+class FacebookAdvertProfileCreate(BaseModel):
+    name: str
+    offer_type: Optional[str] = None
+    image_url: Optional[str] = None
+    is_active: bool = True
+
+
+class FacebookAdvertProfileUpdate(BaseModel):
+    name: Optional[str] = None
+    offer_type: Optional[str] = None
+    image_url: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class FacebookAdvertProfileResponse(BaseModel):
+    id: int
+    name: str
+    offer_type: Optional[str] = None
+    image_url: Optional[str] = None
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
 
 
 class LeadResponse(BaseModel):
@@ -509,6 +534,8 @@ class LeadResponse(BaseModel):
     product_interest: Optional[str]
     lead_type: LeadType
     lead_source: LeadSource
+    facebook_advert_profile_id: Optional[int] = None
+    facebook_advert_profile: Optional[FacebookAdvertProfileResponse] = None
     assigned_to_id: Optional[int]
     customer_id: Optional[int] = None
     created_at: datetime

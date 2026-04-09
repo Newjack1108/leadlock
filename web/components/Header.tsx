@@ -22,6 +22,7 @@ import {
   FolderOpen,
   LayoutDashboard,
   Menu,
+  ImageIcon,
 } from 'lucide-react';
 import api from '@/lib/api';
 import {
@@ -386,6 +387,12 @@ export default function Header() {
                       Company Settings
                     </DropdownMenuItem>
                   </Link>
+                  <Link href="/settings/facebook-adverts">
+                    <DropdownMenuItem className="cursor-pointer">
+                      <ImageIcon className="h-4 w-4 mr-2" />
+                      Facebook Adverts
+                    </DropdownMenuItem>
+                  </Link>
                   <Link href="/settings/email-templates">
                     <DropdownMenuItem className="cursor-pointer">
                       <Mail className="h-4 w-4 mr-2" />
@@ -652,6 +659,19 @@ export default function Header() {
                       <span className="flex items-center gap-2">
                         <Settings className="h-4 w-4 shrink-0" />
                         Company Settings
+                      </span>
+                    </Link>
+                    <Link
+                      href="/settings/facebook-adverts"
+                      onClick={closeMobile}
+                      className={cn(
+                        mobileNavLinkClass,
+                        pathname?.startsWith('/settings/facebook-adverts') && 'bg-accent'
+                      )}
+                    >
+                      <span className="flex items-center gap-2">
+                        <ImageIcon className="h-4 w-4 shrink-0" />
+                        Facebook Adverts
                       </span>
                     </Link>
                     <Link

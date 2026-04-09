@@ -39,9 +39,9 @@ import {
   FileText,
   DoorClosed,
 } from 'lucide-react';
-import api, { getLeadQuotes } from '@/lib/api';
+import api, { getLeadQuotes, listFacebookAdverts } from '@/lib/api';
 import { formatDateTime, formatActivityTypeLabel } from '@/lib/utils';
-import { Lead, Activity, ActivityType, LeadStatus, Timeframe, LeadType, LeadSource } from '@/lib/types';
+import { Lead, Activity, ActivityType, LeadStatus, Timeframe, LeadType, LeadSource, FacebookAdvertProfile } from '@/lib/types';
 import { toast } from 'sonner';
 
 const activityIcons: Record<ActivityType, any> = {
@@ -92,12 +92,15 @@ export default function LeadDetailPage() {
   const [ensureCustomerLoading, setEnsureCustomerLoading] = useState(false);
   const [quotesFromLead, setQuotesFromLead] = useState<any[]>([]);
   const [quotesLoading, setQuotesLoading] = useState(false);
+  const [advertProfiles, setAdvertProfiles] = useState<FacebookAdvertProfile[]>([]);
+  const [advertPreviewOpen, setAdvertPreviewOpen] = useState(false);
 
   useEffect(() => {
     if (leadId) {
       fetchLead();
       fetchActivities();
       fetchQuotesFromLead();
+      fetchAdvertProfiles();
     }
   }, [leadId]);
 
@@ -139,6 +142,15 @@ export default function LeadDetailPage() {
       setQuotesFromLead([]);
     } finally {
       setQuotesLoading(false);
+    }
+  };
+
+  const fetchAdvertProfiles = async () => {
+    try {
+      const data = await listFacebookAdverts();
+      setAdvertProfiles(data);
+    } catch {
+      setAdvertProfiles([]);
     }
   };
 
@@ -251,9 +263,10 @@ export default function LeadDetailPage() {
 
   const handleUpdateLead = async (field: string, value: any) => {
     try {
-      await api.patch(`/api/leads/${leadId}`, {
+      const response = await api.patch(`/api/leads/${leadId}`, {
         [field]: value,
       });
+      setLead(response.data);
     } catch (error: any) {
       toast.error('Failed to update');
     }
@@ -456,7 +469,63 @@ export default function LeadDetailPage() {
                       </SelectContent>
                     </Select>
                   </div>
+                  <div>
+                    <Label>Facebook Advert</Label>
+                    <Select
+                      value={lead.facebook_advert_profile_id ? String(lead.facebook_advert_profile_id) : 'none'}
+                      onValueChange={(value) => {
+                        const advertId = value === 'none' ? null : Number(value);
+                        handleFieldChange('facebook_advert_profile_id', advertId);
+                        handleUpdateLead('facebook_advert_profile_id', advertId);
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select advert profile" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">None</SelectItem>
+                        {advertProfiles.map((profile) => (
+                          <SelectItem key={profile.id} value={String(profile.id)}>
+                            {profile.name}
+                            {!profile.is_active ? ' (archived)' : ''}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
+                {lead.facebook_advert_profile && (
+                  <div className="rounded-md border p-3">
+                    <p className="text-sm font-medium mb-2">Advert visual</p>
+                    <div className="flex items-center gap-3">
+                      {lead.facebook_advert_profile.image_url ? (
+                        <button
+                          type="button"
+                          onClick={() => setAdvertPreviewOpen(true)}
+                          className="shrink-0"
+                          title="Click to enlarge"
+                        >
+                          <img
+                            src={lead.facebook_advert_profile.image_url}
+                            alt={lead.facebook_advert_profile.name}
+                            className="h-16 w-16 rounded-md border object-cover"
+                          />
+                        </button>
+                      ) : (
+                        <div className="h-16 w-16 rounded-md border bg-muted/40 flex items-center justify-center text-[10px] text-muted-foreground">
+                          No image
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <p className="font-medium">{lead.facebook_advert_profile.name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {lead.facebook_advert_profile.offer_type || 'No offer type'}
+                          {!lead.facebook_advert_profile.is_active ? ' - Archived' : ''}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
                 <div>
                   <Label>Description</Label>
                   <Textarea
@@ -686,6 +755,24 @@ export default function LeadDetailPage() {
               </CardContent>
             </Card>
           </div>
+
+        <Dialog open={advertPreviewOpen} onOpenChange={setAdvertPreviewOpen}>
+          <DialogContent className="sm:max-w-3xl">
+            <DialogHeader>
+              <DialogTitle>{lead.facebook_advert_profile?.name || 'Advert visual'}</DialogTitle>
+              <DialogDescription>
+                {lead.facebook_advert_profile?.offer_type || 'Facebook advert image'}
+              </DialogDescription>
+            </DialogHeader>
+            {lead.facebook_advert_profile?.image_url && (
+              <img
+                src={lead.facebook_advert_profile.image_url}
+                alt={lead.facebook_advert_profile.name}
+                className="w-full max-h-[70vh] rounded-md border object-contain"
+              />
+            )}
+          </DialogContent>
+        </Dialog>
 
         <Dialog open={closeDialogOpen} onOpenChange={setCloseDialogOpen}>
           <DialogContent>

@@ -11,7 +11,7 @@ from app.json_datetime import json_dumps_utf8, normalize_json_datetimes
 from app.database import create_db_and_tables, engine
 from sqlmodel import Session, select
 from sqlalchemy import func
-from app.routers import auth, leads, dashboard, reports, webhooks, products, settings, quotes, customers, emails, email_templates, quote_templates, sms_templates, reminders, discounts, discount_requests, sms, messenger, public, delivery_install, orders, users, sales_documents
+from app.routers import auth, leads, dashboard, reports, webhooks, products, settings, quotes, customers, emails, email_templates, quote_templates, sms_templates, reminders, discounts, discount_requests, sms, messenger, public, delivery_install, orders, users, sales_documents, facebook_adverts
 from app.models import User
 import os
 import traceback
@@ -151,6 +151,7 @@ app.include_router(reports.router)
 app.include_router(webhooks.router)
 app.include_router(products.router)
 app.include_router(settings.router)
+app.include_router(facebook_adverts.router)
 app.include_router(quotes.router)
 app.include_router(customers.router)
 app.include_router(emails.router)
