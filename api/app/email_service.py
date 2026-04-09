@@ -28,6 +28,9 @@ load_dotenv()
 # Shown in the recipient's mail client as the From display name when env/user fields do not override it.
 DEFAULT_OUTBOUND_FROM_NAME = "Cheshire Stables CSGB Group"
 
+# Green email header bar (left). Override with EMAIL_HEADER_BRAND in the environment.
+DEFAULT_EMAIL_HEADER_BRAND = "Cheshire Stables - part of the CSGB Group"
+
 # Green pill style for tracked links (quote/order view + website tracking) — matches branded quote sends.
 EMAIL_TRACKED_LINK_STYLE = (
     "color:#15803d;font-weight:bold;background-color:#dcfce7;"
@@ -261,7 +264,8 @@ def _website_href_for_email(url: str) -> str:
 
 def _wrap_outbound_email_html(
     inner_html: str,
-    company_name: str,
+    header_brand: str,
+    footer_company: str,
     header_tagline: str,
     phone: str,
     website: str,
@@ -269,8 +273,11 @@ def _wrap_outbound_email_html(
 ) -> str:
     """
     System-wide HTML email shell: card layout, branded header/footer (table-based for clients).
+    header_brand: main line in the green header (and HTML title).
+    footer_company: bold company line in the footer (registered / trading from settings).
     """
-    comp = html_module.escape(company_name)
+    header_esc = html_module.escape(header_brand.strip()) if header_brand and header_brand.strip() else ""
+    footer_esc = html_module.escape(footer_company.strip()) if footer_company and footer_company.strip() else ""
     prim = html_module.escape(primary)
     tag_html = html_module.escape(header_tagline.strip()) if header_tagline and header_tagline.strip() else ""
     phone_html = html_module.escape(phone.strip()) if phone and phone.strip() else ""
@@ -284,7 +291,7 @@ def _wrap_outbound_email_html(
         )
 
     footer_bits: List[str] = [
-        f'<span style="color:{prim};font-weight:700;">{comp}</span>',
+        f'<span style="color:{prim};font-weight:700;">{footer_esc}</span>',
     ]
     sep = '<span style="color:#9aa7a0;">&nbsp;&nbsp;|&nbsp;&nbsp;</span>'
     if phone_html:
@@ -305,7 +312,7 @@ def _wrap_outbound_email_html(
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>{comp}</title>
+    <title>{header_esc}</title>
   </head>
   <body style="margin:0; padding:0; background-color:#f4f6f4; font-family: Arial, Helvetica, sans-serif; color:#111;">
     <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color:#f4f6f4;">
@@ -316,7 +323,7 @@ def _wrap_outbound_email_html(
               <td style="background-color:{prim}; padding:18px 22px;">
                 <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
                   <tr>
-                    <td style="color:#ffffff; font-size:16px; font-weight:700; letter-spacing:0.2px; text-transform:uppercase;">{comp}</td>
+                    <td style="color:#ffffff; font-size:16px; font-weight:700; letter-spacing:0.2px; text-transform:uppercase;">{header_esc}</td>
                     {right_header}
                   </tr>
                 </table>
@@ -358,14 +365,18 @@ def _apply_system_email_layout(
             company = session.exec(select(CompanySettings).limit(1)).first()
         if not company:
             return body_html
-        company_name = (company.trading_name or company.company_name or DEFAULT_OUTBOUND_FROM_NAME).strip()
+        header_brand = (os.getenv("EMAIL_HEADER_BRAND") or DEFAULT_EMAIL_HEADER_BRAND).strip()
+        footer_company = (
+            company.company_name or company.trading_name or DEFAULT_OUTBOUND_FROM_NAME
+        ).strip()
         phone = (company.phone or "").strip()
         website = (company.website or "").strip()
         primary = _get_email_brand_primary()
         tag = (header_tagline or "").strip()
         return _wrap_outbound_email_html(
             body_html,
-            company_name=company_name,
+            header_brand=header_brand,
+            footer_company=footer_company,
             header_tagline=tag,
             phone=phone,
             website=website,
