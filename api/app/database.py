@@ -1330,65 +1330,87 @@ def create_db_and_tables():
                 if "already exists" not in error_str and "duplicate" not in error_str:
                     print(f"Error creating customeroutreachsend: {e}", file=sys.stderr, flush=True)
 
-        # Step 15: Facebook advert profiles and optional lead linkage
-        has_facebook_advert_profile_table = inspector.has_table("facebookadvertprofile")
-        if not has_facebook_advert_profile_table:
-            print("Creating facebookadvertprofile table...", file=sys.stderr, flush=True)
+        # Step 15: Facebook advert profiles and optional lead linkage (Postgres).
+        # Run column/FK/index in separate transactions: one failed FK must not roll back ADD COLUMN;
+        # otherwise ORM expects facebook_advert_profile_id but the DB column is missing → 500 on any lead load.
+        try:
+            with engine.begin() as conn:
+                conn.execute(
+                    text(
+                        """
+                        CREATE TABLE IF NOT EXISTS facebookadvertprofile (
+                            id SERIAL PRIMARY KEY,
+                            name VARCHAR(255) NOT NULL,
+                            offer_type VARCHAR(255),
+                            image_url TEXT,
+                            is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                        )
+                        """
+                    )
+                )
+                conn.execute(
+                    text(
+                        "CREATE INDEX IF NOT EXISTS ix_facebookadvertprofile_is_active ON facebookadvertprofile (is_active)"
+                    )
+                )
+            print("Ensured facebookadvertprofile table", file=sys.stderr, flush=True)
+        except Exception as e:
+            error_str = str(e).lower()
+            if "already exists" not in error_str and "duplicate" not in error_str:
+                print(f"Error ensuring facebookadvertprofile: {e}", file=sys.stderr, flush=True)
+
+        if has_lead_table:
+            try:
+                with engine.begin() as conn:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE lead ADD COLUMN IF NOT EXISTS facebook_advert_profile_id INTEGER"
+                        )
+                    )
+                print("Ensured lead.facebook_advert_profile_id column", file=sys.stderr, flush=True)
+            except Exception as e:
+                error_str = str(e).lower()
+                if "already exists" not in error_str and "duplicate" not in error_str:
+                    print(f"Error adding facebook_advert_profile_id column: {e}", file=sys.stderr, flush=True)
+
             try:
                 with engine.begin() as conn:
                     conn.execute(
                         text(
                             """
-                            CREATE TABLE facebookadvertprofile (
-                                id SERIAL PRIMARY KEY,
-                                name VARCHAR(255) NOT NULL,
-                                offer_type VARCHAR(255),
-                                image_url TEXT,
-                                is_active BOOLEAN NOT NULL DEFAULT TRUE,
-                                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-                            )
+                            DO $fbadvertfk$
+                            BEGIN
+                                IF NOT EXISTS (
+                                    SELECT 1 FROM pg_constraint WHERE conname = 'fk_lead_facebook_advert_profile'
+                                ) THEN
+                                    ALTER TABLE lead ADD CONSTRAINT fk_lead_facebook_advert_profile
+                                    FOREIGN KEY (facebook_advert_profile_id) REFERENCES facebookadvertprofile(id)
+                                    ON DELETE SET NULL;
+                                END IF;
+                            END
+                            $fbadvertfk$;
                             """
                         )
                     )
-                    conn.execute(
-                        text(
-                            "CREATE INDEX ix_facebookadvertprofile_is_active ON facebookadvertprofile (is_active)"
-                        )
-                    )
-                print("Created facebookadvertprofile table", file=sys.stderr, flush=True)
+                print("Ensured fk_lead_facebook_advert_profile", file=sys.stderr, flush=True)
             except Exception as e:
                 error_str = str(e).lower()
                 if "already exists" not in error_str and "duplicate" not in error_str:
-                    print(f"Error creating facebookadvertprofile: {e}", file=sys.stderr, flush=True)
+                    print(f"Error adding fk_lead_facebook_advert_profile: {e}", file=sys.stderr, flush=True)
 
-        if has_lead_table:
-            lead_columns = [col["name"] for col in inspector.get_columns("lead")]
-            if "facebook_advert_profile_id" not in lead_columns:
-                print("Adding facebook_advert_profile_id to lead table...", file=sys.stderr, flush=True)
-                try:
-                    with engine.begin() as conn:
-                        conn.execute(
-                            text("ALTER TABLE lead ADD COLUMN facebook_advert_profile_id INTEGER")
+            try:
+                with engine.begin() as conn:
+                    conn.execute(
+                        text(
+                            "CREATE INDEX IF NOT EXISTS ix_lead_facebook_advert_profile_id ON lead (facebook_advert_profile_id)"
                         )
-                        conn.execute(
-                            text(
-                                "ALTER TABLE lead ADD CONSTRAINT fk_lead_facebook_advert_profile "
-                                "FOREIGN KEY (facebook_advert_profile_id) REFERENCES facebookadvertprofile(id) "
-                                "ON DELETE SET NULL"
-                            )
-                        )
-                        conn.execute(
-                            text(
-                                "CREATE INDEX ix_lead_facebook_advert_profile_id "
-                                "ON lead (facebook_advert_profile_id)"
-                            )
-                        )
-                    print("Added facebook_advert_profile_id to lead table", file=sys.stderr, flush=True)
-                except Exception as e:
-                    error_str = str(e).lower()
-                    if "already exists" not in error_str and "duplicate" not in error_str:
-                        print(f"Error adding facebook_advert_profile_id to lead: {e}", file=sys.stderr, flush=True)
+                    )
+            except Exception as e:
+                error_str = str(e).lower()
+                if "already exists" not in error_str and "duplicate" not in error_str:
+                    print(f"Error adding ix_lead_facebook_advert_profile_id: {e}", file=sys.stderr, flush=True)
 
         # messenger_message table is created by SQLModel.metadata.create_all() when MessengerMessage model is imported
         
