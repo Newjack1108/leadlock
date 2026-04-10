@@ -4,6 +4,13 @@ import { useState, useEffect, Suspense, useMemo, useCallback, useRef } from 'rea
 import { useRouter, useSearchParams } from 'next/navigation';
 import Header from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,6 +20,7 @@ import {
   createQuote,
   getProducts,
   getProduct,
+  getOptionalExtras,
   getCompanySettings,
   getDiscountTemplates,
   estimateDeliveryInstall,
@@ -25,6 +33,12 @@ import {
   quoteItemsToFormItems,
   DRAFT_PLACEHOLDER_LINE_DESCRIPTION,
 } from '@/lib/quoteDraftPayload';
+import {
+  optionalExtraIdSetFromList,
+  isRootQuoteLevelOptionalExtraLine,
+  buildQuoteLevelOptionalExtraLine,
+  rootBuildingProductNumberAtIndex,
+} from '@/lib/quoteFormOptionalExtra';
 import { prefetchProductDetailsForQuoteItems } from '@/lib/prefetchQuoteProductDetails';
 import { useDraftAutosave } from '@/hooks/useDraftAutosave';
 import {
@@ -132,10 +146,25 @@ function CreateQuoteContent() {
   const [availableDiscounts, setAvailableDiscounts] = useState<DiscountTemplate[]>([]);
   const [selectedDiscountIds, setSelectedDiscountIds] = useState<number[]>([]);
   const [productDetails, setProductDetails] = useState<Record<number, Product>>({});
+  const [allOptionalExtras, setAllOptionalExtras] = useState<Product[]>([]);
+  const [extraPickerOpen, setExtraPickerOpen] = useState(false);
+  const [extraPickerFilter, setExtraPickerFilter] = useState('');
   const [termsExpanded, setTermsExpanded] = useState(false);
   const [deliveryEstimate, setDeliveryEstimate] = useState<DeliveryInstallEstimateResponse | null>(null);
   const [deliveryEstimateLoading, setDeliveryEstimateLoading] = useState(false);
   const [deliveryEstimateError, setDeliveryEstimateError] = useState<string | null>(null);
+
+  const optionalExtraIds = useMemo(
+    () => optionalExtraIdSetFromList(allOptionalExtras),
+    [allOptionalExtras]
+  );
+
+  const filteredPickerExtras = useMemo(() => {
+    const q = extraPickerFilter.trim().toLowerCase();
+    const sorted = [...allOptionalExtras].sort((a, b) => a.name.localeCompare(b.name));
+    if (!q) return sorted;
+    return sorted.filter((e) => e.name.toLowerCase().includes(q));
+  }, [allOptionalExtras, extraPickerFilter]);
 
   useEffect(() => {
     if (customerId) {
@@ -147,6 +176,7 @@ function CreateQuoteContent() {
       }
       fetchCustomer();
       fetchProducts();
+      fetchOptionalExtras();
       fetchDefaultTerms();
       fetchCompanySettings();
       fetchDiscounts();
@@ -185,6 +215,15 @@ function CreateQuoteContent() {
       setProducts(response.filter((p: Product) => p.is_active && !p.is_extra));
     } catch (error) {
       console.error('Failed to load products');
+    }
+  };
+
+  const fetchOptionalExtras = async () => {
+    try {
+      const list = await getOptionalExtras();
+      setAllOptionalExtras(list);
+    } catch {
+      console.error('Failed to load optional extras');
     }
   };
 
@@ -307,6 +346,17 @@ function CreateQuoteContent() {
     setItems(newItems.map((it, i) => ({ ...it, sort_order: i })));
   };
 
+  const addQuoteLevelOptionalExtra = (extra: Product) => {
+    const newLine = buildQuoteLevelOptionalExtraLine(extra);
+    setProductDetails((prev) => ({ ...prev, [extra.id]: extra }));
+    setItems((prev) => {
+      const next = [...prev, { ...newLine, sort_order: prev.length }];
+      return next.map((it, i) => ({ ...it, sort_order: i }));
+    });
+    setExtraPickerOpen(false);
+    setExtraPickerFilter('');
+  };
+
   const getSelectedProduct = (item: QuoteItemCreate) => {
     if (!item.product_id) return null;
     return productDetails[item.product_id] ?? products.find((p) => p.id === item.product_id) ?? null;
@@ -314,6 +364,7 @@ function CreateQuoteContent() {
 
   const calculateTotalInstallationHours = (): number => {
     return items.reduce((total, item) => {
+      if (isRootQuoteLevelOptionalExtraLine(item, optionalExtraIds, productDetails)) return total;
       const product = getSelectedProduct(item);
       if (!product?.installation_hours) return total;
       const qty = Number(item.quantity) || 0;
@@ -790,17 +841,24 @@ function CreateQuoteContent() {
             {/* Quote Items */}
             <Card>
               <CardHeader>
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-4 flex-wrap">
                   <div>
                     <CardTitle>Quote Items</CardTitle>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Add a product, then add optional extras to it. You can add multiple products, each with their own extras.
+                      Add a product, then add optional extras linked to it, or use Add optional extra to pick from the full extras list.
+                      Quote-level extras are not included in &apos;building items only&apos; discounts.
                     </p>
                   </div>
-                  <Button type="button" variant="outline" size="sm" onClick={addItem}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Product
-                  </Button>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Button type="button" variant="outline" size="sm" onClick={addItem}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Product
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" onClick={() => setExtraPickerOpen(true)}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add optional extra
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -812,9 +870,22 @@ function CreateQuoteContent() {
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm font-medium">
                         {item.parent_index != null ? (
-                          <>Optional extra for Product {items.filter((_, i) => i <= (item.parent_index ?? -1) && items[i].parent_index == null).length}</>
+                          <>
+                            Optional extra for Product{' '}
+                            {rootBuildingProductNumberAtIndex(
+                              items,
+                              item.parent_index ?? 0,
+                              optionalExtraIds,
+                              productDetails
+                            )}
+                          </>
+                        ) : isRootQuoteLevelOptionalExtraLine(item, optionalExtraIds, productDetails) ? (
+                          <>Optional extra</>
                         ) : (
-                          <>Product {items.filter((_, i) => i <= index && items[i].parent_index == null).length}</>
+                          <>
+                            Product{' '}
+                            {rootBuildingProductNumberAtIndex(items, index, optionalExtraIds, productDetails)}
+                          </>
                         )}
                       </span>
                       {items.length > 1 && (
@@ -845,6 +916,14 @@ function CreateQuoteContent() {
                                 {product.name} - £{Number(product.base_price).toFixed(2)}
                               </SelectItem>
                             ))}
+                            {item.product_id &&
+                              productDetails[item.product_id]?.is_extra &&
+                              !products.some((p) => p.id === item.product_id) && (
+                                <SelectItem key={`extra-line-${item.product_id}`} value={item.product_id.toString()}>
+                                  {productDetails[item.product_id].name} - £
+                                  {Number(productDetails[item.product_id].base_price).toFixed(2)}
+                                </SelectItem>
+                              )}
                           </SelectContent>
                         </Select>
                       </div>
@@ -893,7 +972,8 @@ function CreateQuoteContent() {
                         (Math.max(0, Number(item.unit_price)) || 0)
                       ).toFixed(2)}
                     </div>
-                    {item.parent_index == null && (
+                    {item.parent_index == null &&
+                      !isRootQuoteLevelOptionalExtraLine(item, optionalExtraIds, productDetails) && (
                       <div className="flex items-center gap-2 pt-1">
                         <input
                           type="checkbox"
@@ -915,6 +995,7 @@ function CreateQuoteContent() {
                     {(() => {
                       const selectedProduct = getSelectedProduct(item);
                       if (!selectedProduct) return null;
+                      if (selectedProduct.is_extra && item.parent_index == null) return null;
                       
                       const installCost = calculateInstallCost(selectedProduct);
                       const hasExtras = selectedProduct.optional_extras && selectedProduct.optional_extras.length > 0;
@@ -997,6 +1078,52 @@ function CreateQuoteContent() {
                 </div>
               </CardContent>
             </Card>
+
+            <Dialog open={extraPickerOpen} onOpenChange={setExtraPickerOpen}>
+              <DialogContent className="max-w-lg max-h-[min(80vh,520px)] flex flex-col">
+                <DialogHeader>
+                  <DialogTitle>Add optional extra</DialogTitle>
+                  <DialogDescription>
+                    Choose from the full optional extras list. These lines are not included in &apos;building items
+                    only&apos; discounts.
+                  </DialogDescription>
+                </DialogHeader>
+                <Input
+                  placeholder="Search…"
+                  value={extraPickerFilter}
+                  onChange={(e) => setExtraPickerFilter(e.target.value)}
+                  className="mb-2"
+                />
+                <div className="overflow-y-auto flex-1 space-y-2 min-h-0 pr-1">
+                  {filteredPickerExtras.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No matching optional extras.</p>
+                  ) : (
+                    filteredPickerExtras.map((extra) => (
+                      <div
+                        key={extra.id}
+                        className="flex items-center justify-between gap-2 p-2 border rounded-md"
+                      >
+                        <div>
+                          <p className="text-sm font-medium">{extra.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            £{Number(extra.base_price).toFixed(2)}
+                          </p>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => addQuoteLevelOptionalExtra(extra)}
+                        >
+                          <Plus className="h-3 w-3 mr-1" />
+                          Add
+                        </Button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </DialogContent>
+            </Dialog>
 
             {/* Delivery & installation estimate */}
             {(customer?.postcode?.trim() && calculateTotalInstallationHours() > 0) && (
