@@ -118,21 +118,6 @@ def _effective_priority(reminder: Reminder, today: date_type) -> ReminderPriorit
     return calculate_priority(d, base)
 
 
-def _can_modify_reminder(reminder: Reminder, current_user: User, session: Session) -> bool:
-    if current_user.role == UserRole.DIRECTOR:
-        return True
-    if reminder.reminder_type == ReminderType.USER_TASK:
-        if current_user.id == reminder.assigned_to_id:
-            return True
-        if reminder.created_by_id is not None and current_user.id == reminder.created_by_id:
-            return True
-        return False
-    assigned_user = session.exec(select(User).where(User.id == reminder.assigned_to_id)).first()
-    if not assigned_user or assigned_user.role != current_user.role:
-        return False
-    return True
-
-
 def _reminder_to_response(
     session: Session,
     reminder: Reminder,
@@ -401,16 +386,13 @@ async def dismiss_reminder(
     reminder_id: int,
     request: ReminderDismissRequest,
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user)
+    _current_user: User = Depends(get_current_user),
 ):
-    """Dismiss a reminder."""
+    """Dismiss a reminder. Any authenticated user may dismiss any reminder."""
     reminder = session.exec(select(Reminder).where(Reminder.id == reminder_id)).first()
     
     if not reminder:
         raise HTTPException(status_code=404, detail="Reminder not found")
-
-    if not _can_modify_reminder(reminder, current_user, session):
-        raise HTTPException(status_code=403, detail="Not authorized to dismiss this reminder")
 
     reminder.dismissed_at = datetime.utcnow()
     session.add(reminder)
@@ -424,16 +406,13 @@ async def act_on_reminder(
     reminder_id: int,
     request: ReminderActRequest,
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user)
+    _current_user: User = Depends(get_current_user),
 ):
-    """Mark a reminder as acted upon."""
+    """Mark a reminder as acted upon. Any authenticated user may complete any reminder."""
     reminder = session.exec(select(Reminder).where(Reminder.id == reminder_id)).first()
     
     if not reminder:
         raise HTTPException(status_code=404, detail="Reminder not found")
-
-    if not _can_modify_reminder(reminder, current_user, session):
-        raise HTTPException(status_code=403, detail="Not authorized to act on this reminder")
 
     reminder.acted_upon_at = datetime.utcnow()
     session.add(reminder)
