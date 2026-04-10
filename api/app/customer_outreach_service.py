@@ -198,8 +198,8 @@ def _send_outreach_email(
     success, message_id, err, sent_html, sent_text = send_email(
         to_email=to_email,
         subject=subject,
-        body_html=sent_html or body_html,
-        body_text=sent_text if sent_text is not None else body_text,
+        body_html=body_html,
+        body_text=body_text,
         user_id=actor.id,
         customer_number=customer.customer_number,
     )

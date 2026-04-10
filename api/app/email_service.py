@@ -87,6 +87,19 @@ def _build_website_tracking_link_text(customer_number: Optional[str]) -> str:
     return "\n\nVisit us: " + " | ".join(urls)
 
 
+def _build_fallback_user_signature_html(user) -> str:
+    """Minimal HTML block when the user has not configured email_signature (name + email link)."""
+    name = (getattr(user, "full_name", None) or "").strip()
+    email = (getattr(user, "email", None) or "").strip()
+    parts: List[str] = []
+    if name:
+        parts.append(f'<p style="margin:0 0 0.35em 0;">{html_module.escape(name)}</p>')
+    if email:
+        e = html_module.escape(email)
+        parts.append(f'<p style="margin:0;"><a href="mailto:{e}">{e}</a></p>')
+    return "".join(parts) if parts else ""
+
+
 def _append_signature_and_disclaimer(
     body_html: Optional[str],
     body_text: Optional[str],
@@ -96,7 +109,8 @@ def _append_signature_and_disclaimer(
     Append signature and company disclaimer to email body.
     Order: [body] -> [signature] -> [disclaimer]
 
-    With user_id: uses that user's email_signature plus company email_disclaimer.
+    With user_id: uses that user's email_signature if set; otherwise a fallback from full_name + email;
+    then company email_disclaimer.
     Without user_id: uses company default_email_signature plus email_disclaimer.
     """
     try:
@@ -111,6 +125,8 @@ def _append_signature_and_disclaimer(
             if user_id:
                 user = session.exec(select(User).where(User.id == user_id)).first()
                 signature = (user.email_signature or "").strip() if user else ""
+                if not signature and user:
+                    signature = _build_fallback_user_signature_html(user)
             else:
                 signature = (getattr(company, "default_email_signature", None) or "").strip() if company else ""
 
