@@ -870,11 +870,12 @@ export const updateProduct = async (productId: number, productData: {
   base_price?: number;
   unit?: string;
   sku?: string;
-  image_url?: string;
+  /** Use `null` to clear; `undefined` omits the field from the PATCH body. */
+  image_url?: string | null;
   specifications?: string;
   size?: string;
   height?: string;
-  floor_plan_url?: string;
+  floor_plan_url?: string | null;
   width?: number;
   length?: number;
   installation_hours?: number;

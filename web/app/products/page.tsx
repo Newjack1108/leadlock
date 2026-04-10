@@ -113,7 +113,7 @@ export default function ProductsPage() {
         description: newProduct.description.trim() || undefined,
         subcategory: newProduct.subcategory.trim() || undefined,
         sku: newProduct.sku.trim() || undefined,
-        image_url: newProduct.image_url.trim() || undefined,
+        image_url: newProduct.image_url.trim() || null,
         specifications: newProduct.specifications.trim() || undefined,
       });
       

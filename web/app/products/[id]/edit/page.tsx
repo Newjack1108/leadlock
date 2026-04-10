@@ -133,15 +133,15 @@ export default function EditProductPage() {
         specifications: formData.specifications.trim() || undefined,
         size: formData.size.trim() || undefined,
         height: formData.height.trim() || undefined,
-        floor_plan_url: formData.floor_plan_url.trim() || undefined,
+        floor_plan_url: formData.floor_plan_url.trim() || null,
         width: formData.width ? parseFloat(formData.width) : undefined,
         length: formData.length ? parseFloat(formData.length) : undefined,
       };
       if (formData.is_extra) {
-        productData.image_url = undefined;
+        productData.image_url = null;
         // Extras cannot link other extras; omit optional_extras
       } else {
-        productData.image_url = formData.image_url?.trim() || undefined;
+        productData.image_url = formData.image_url?.trim() || null;
         productData.optional_extras = selectedExtras.length > 0 ? selectedExtras : undefined;
       }
 
