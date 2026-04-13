@@ -25,6 +25,7 @@ import {
   getDiscountTemplates,
   estimateDeliveryInstall,
   getQuote,
+  getLeadQuotes,
   applyQualifiedToQuotedTransition,
 } from '@/lib/api';
 import api from '@/lib/api';
@@ -44,6 +45,7 @@ import { useDraftAutosave } from '@/hooks/useDraftAutosave';
 import {
   Customer,
   Product,
+  Quote,
   QuoteItemCreate,
   DiscountTemplate,
   QuoteTemperature,
@@ -631,6 +633,9 @@ function CreateQuoteContent() {
     }
 
     if (draftQuoteId != null && draftIdFromUrl == null) {
+      router.replace(
+        `/quotes/create?customer_id=${customerId}&lead_id=${leadId}&draft_id=${draftQuoteId}`
+      );
       return;
     }
 
@@ -654,6 +659,24 @@ function CreateQuoteContent() {
     let cancelled = false;
     (async () => {
       try {
+        const leadQuotes = await getLeadQuotes(leadId);
+        if (cancelled) return;
+        const drafts = leadQuotes.filter(
+          (q: Quote) => q.status === 'DRAFT' && q.customer_id === customer.id
+        );
+        if (drafts.length > 0) {
+          const latestDraft = drafts.reduce((a: Quote, b: Quote) => (a.id > b.id ? a : b));
+          try {
+            sessionStorage.setItem(draftStorageKey, String(latestDraft.id));
+          } catch {
+            /* ignore */
+          }
+          router.replace(
+            `/quotes/create?customer_id=${customerId}&lead_id=${leadId}&draft_id=${latestDraft.id}`
+          );
+          return;
+        }
+
         const d = new Date();
         d.setDate(d.getDate() + 30);
         const vu = d.toISOString().split('T')[0];
