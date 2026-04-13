@@ -23,9 +23,11 @@ import {
   sendQuoteSms,
   getQuote,
 } from '@/lib/api';
+import { MAX_ATTACHMENT_BYTES_PER_FILE, MAX_ATTACHMENTS_TOTAL_BYTES } from '@/lib/attachmentLimits';
+import SalesDocumentAttachDialog from '@/components/SalesDocumentAttachDialog';
 import { QuoteEmailSendRequest, QuoteEmailSendResponse, Customer, QuoteTemplate as QuoteTemplateType } from '@/lib/types';
 import { toast } from 'sonner';
-import { Eye, ExternalLink, Copy, Mail, MessageSquare } from 'lucide-react';
+import { Eye, ExternalLink, Copy, Mail, MessageSquare, FolderOpen } from 'lucide-react';
 
 interface SendQuoteEmailDialogProps {
   open: boolean;
@@ -70,6 +72,7 @@ export default function SendQuoteEmailDialog({
   const [smsPhone, setSmsPhone] = useState(customer.phone || '');
   const [smsBody, setSmsBody] = useState('');
   const [emailAttachments, setEmailAttachments] = useState<File[]>([]);
+  const [salesDocAttachOpen, setSalesDocAttachOpen] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -127,7 +130,21 @@ export default function SendQuoteEmailDialog({
   const handleEmailAttachmentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const list = e.target.files;
     if (!list?.length) return;
-    setEmailAttachments((prev) => [...prev, ...Array.from(list)]);
+    const newFiles = Array.from(list);
+    for (const f of newFiles) {
+      if (f.size > MAX_ATTACHMENT_BYTES_PER_FILE) {
+        toast.error(`"${f.name}" exceeds 10MB per-file limit`);
+        e.target.value = '';
+        return;
+      }
+    }
+    const totalSize = [...emailAttachments, ...newFiles].reduce((sum, f) => sum + f.size, 0);
+    if (totalSize > MAX_ATTACHMENTS_TOTAL_BYTES) {
+      toast.error('Total attachment size exceeds 25MB limit');
+      e.target.value = '';
+      return;
+    }
+    setEmailAttachments((prev) => [...prev, ...newFiles]);
     e.target.value = '';
   };
 
@@ -172,6 +189,18 @@ export default function SendQuoteEmailDialog({
 
     if (selectedTemplateId === undefined) {
       toast.error('Please select an email template');
+      return;
+    }
+
+    for (const f of emailAttachments) {
+      if (f.size > MAX_ATTACHMENT_BYTES_PER_FILE) {
+        toast.error(`"${f.name}" exceeds 10MB per-file limit`);
+        return;
+      }
+    }
+    const attachmentTotal = emailAttachments.reduce((sum, f) => sum + f.size, 0);
+    if (attachmentTotal > MAX_ATTACHMENTS_TOTAL_BYTES) {
+      toast.error('Total attachment size exceeds 25MB limit');
       return;
     }
 
@@ -302,6 +331,7 @@ export default function SendQuoteEmailDialog({
   }
 
   return (
+    <>
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -403,7 +433,7 @@ export default function SendQuoteEmailDialog({
               )}
               {templateLibraryAttachments.length > 0 && (
                 <p className="text-xs text-muted-foreground">
-                  This template also attaches from the library:{' '}
+                  This template also attaches sales documents:{' '}
                   {templateLibraryAttachments.map((d) => d.name).join(', ')}
                 </p>
               )}
@@ -458,14 +488,26 @@ export default function SendQuoteEmailDialog({
 
             <div className="space-y-2">
               <Label htmlFor="quote_email_attachments">Attachments (optional)</Label>
-              <Input
-                id="quote_email_attachments"
-                type="file"
-                multiple
-                onChange={handleEmailAttachmentChange}
-                disabled={loading}
-                className="cursor-pointer"
-              />
+              <div className="flex flex-wrap items-center gap-2">
+                <Input
+                  id="quote_email_attachments"
+                  type="file"
+                  multiple
+                  onChange={handleEmailAttachmentChange}
+                  disabled={loading}
+                  className="cursor-pointer max-w-[min(100%,280px)]"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={loading}
+                  onClick={() => setSalesDocAttachOpen(true)}
+                >
+                  <FolderOpen className="h-4 w-4 mr-1" />
+                  Sales documents
+                </Button>
+              </div>
               {emailAttachments.length > 0 && (
                 <ul className="text-sm space-y-1">
                   {emailAttachments.map((f, i) => (
@@ -547,5 +589,12 @@ export default function SendQuoteEmailDialog({
         )}
       </DialogContent>
     </Dialog>
+    <SalesDocumentAttachDialog
+      open={salesDocAttachOpen}
+      onOpenChange={setSalesDocAttachOpen}
+      getExistingTotalBytes={() => emailAttachments.reduce((s, f) => s + f.size, 0)}
+      onAdded={(newFiles) => setEmailAttachments((prev) => [...prev, ...newFiles])}
+    />
+    </>
   );
 }

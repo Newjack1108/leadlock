@@ -4,7 +4,7 @@ from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Query, 
 from fastapi.responses import Response
 from sqlmodel import Session, select, or_, and_
 from sqlalchemy import func
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional
 from app.database import get_session
 from app.models import Quote, QuoteItem, QuoteTemplate, QuoteTemplateSalesDocument, SalesDocument, Customer, User, QuoteEmail, Email, EmailDirection, Activity, ActivityType, CompanySettings, Lead, LeadStatus, QuoteStatus, QuoteTemperature, OpportunityStage, LossCategory, DiscountTemplate, QuoteDiscount, DiscountType, DiscountScope, Order, OrderItem, QuoteItemLineType, DiscountRequest, SmsMessage, SmsDirection
 from app.auth import get_current_user
@@ -1546,7 +1546,7 @@ async def post_quote_send_sms(
 async def send_quote_email_endpoint(
     quote_id: int,
     email_data: str = Form(..., description="JSON string matching QuoteEmailSendRequest"),
-    attachments: Optional[Union[UploadFile, List[UploadFile]]] = File(None),
+    attachments: Optional[List[UploadFile]] = File(None),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):

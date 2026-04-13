@@ -15,13 +15,13 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import EmailBodyEditor from '@/components/EmailBodyEditor';
-import { sendEmail, getEmailTemplates, previewEmailTemplate, previewComposeEmail, getUserEmailSettings, getSalesDocuments, downloadSalesDocument } from '@/lib/api';
+import { sendEmail, getEmailTemplates, previewEmailTemplate, previewComposeEmail, getUserEmailSettings } from '@/lib/api';
+import { MAX_ATTACHMENT_BYTES_PER_FILE, MAX_ATTACHMENTS_TOTAL_BYTES } from '@/lib/attachmentLimits';
 import { htmlToPlainText, isHtmlEffectivelyEmpty } from '@/lib/htmlEmail';
-import { Customer, EmailTemplate, SalesDocument } from '@/lib/types';
+import { Customer, EmailTemplate } from '@/lib/types';
 import { toast } from 'sonner';
 import { Paperclip, X, FolderOpen } from 'lucide-react';
-
-const MAX_TOTAL_ATTACHMENTS_BYTES = 20 * 1024 * 1024; // 20MB
+import SalesDocumentAttachDialog from '@/components/SalesDocumentAttachDialog';
 
 interface ComposeEmailDialogProps {
   open: boolean;
@@ -46,11 +46,7 @@ export default function ComposeEmailDialog({
   const [loadingTemplate, setLoadingTemplate] = useState(false);
   const [signature, setSignature] = useState('');
   const [attachments, setAttachments] = useState<File[]>([]);
-  const [libraryDialogOpen, setLibraryDialogOpen] = useState(false);
-  const [libraryDocs, setLibraryDocs] = useState<SalesDocument[]>([]);
-  const [libraryLoading, setLibraryLoading] = useState(false);
-  const [librarySelected, setLibrarySelected] = useState<Set<number>>(new Set());
-  const [libraryAdding, setLibraryAdding] = useState(false);
+  const [salesDocAttachOpen, setSalesDocAttachOpen] = useState(false);
   const [bodyEditMode, setBodyEditMode] = useState<'visual' | 'source'>('visual');
   const [signaturePreviewOpen, setSignaturePreviewOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -183,9 +179,17 @@ export default function ComposeEmailDialog({
     const files = e.target.files;
     if (!files?.length) return;
     const newFiles = Array.from(files);
+    for (const f of newFiles) {
+      if (f.size > MAX_ATTACHMENT_BYTES_PER_FILE) {
+        toast.error(`"${f.name}" exceeds 10MB per-file limit`);
+        e.target.value = '';
+        return;
+      }
+    }
     const totalSize = [...attachments, ...newFiles].reduce((sum, f) => sum + f.size, 0);
-    if (totalSize > MAX_TOTAL_ATTACHMENTS_BYTES) {
-      toast.error('Total attachment size exceeds 20MB limit');
+    if (totalSize > MAX_ATTACHMENTS_TOTAL_BYTES) {
+      toast.error('Total attachment size exceeds 25MB limit');
+      e.target.value = '';
       return;
     }
     setAttachments((prev) => [...prev, ...newFiles]);
@@ -194,61 +198,6 @@ export default function ComposeEmailDialog({
 
   const removeAttachment = (index: number) => {
     setAttachments((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const openLibraryDialog = async () => {
-    setLibraryDialogOpen(true);
-    setLibrarySelected(new Set());
-    try {
-      setLibraryLoading(true);
-      const docs = await getSalesDocuments();
-      setLibraryDocs(docs);
-    } catch {
-      toast.error('Failed to load documents');
-      setLibraryDocs([]);
-    } finally {
-      setLibraryLoading(false);
-    }
-  };
-
-  const toggleLibrarySelected = (id: number) => {
-    setLibrarySelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const addFromLibrary = async () => {
-    if (librarySelected.size === 0) {
-      toast.error('Select at least one document');
-      return;
-    }
-    const totalSize = attachments.reduce((sum, f) => sum + f.size, 0);
-    const ids = Array.from(librarySelected);
-    try {
-      setLibraryAdding(true);
-      const newFiles: File[] = [];
-      for (const id of ids) {
-        const doc = libraryDocs.find((d) => d.id === id);
-        if (!doc) continue;
-        const blob = await downloadSalesDocument(id);
-        const totalWithNew = totalSize + newFiles.reduce((s, f) => s + f.size, 0) + blob.size;
-        if (totalWithNew > MAX_TOTAL_ATTACHMENTS_BYTES) {
-          toast.error('Total attachments would exceed 20MB limit');
-          break;
-        }
-        const file = new File([blob], doc.filename, { type: doc.content_type || 'application/octet-stream' });
-        newFiles.push(file);
-      }
-      setAttachments((prev) => [...prev, ...newFiles]);
-      setLibraryDialogOpen(false);
-    } catch {
-      toast.error('Failed to add documents');
-    } finally {
-      setLibraryAdding(false);
-    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -281,9 +230,15 @@ export default function ComposeEmailDialog({
       return;
     }
 
+    for (const f of attachments) {
+      if (f.size > MAX_ATTACHMENT_BYTES_PER_FILE) {
+        toast.error(`"${f.name}" exceeds 10MB per-file limit`);
+        return;
+      }
+    }
     const totalAttachmentSize = attachments.reduce((sum, f) => sum + f.size, 0);
-    if (totalAttachmentSize > MAX_TOTAL_ATTACHMENTS_BYTES) {
-      toast.error('Total attachment size exceeds 20MB limit');
+    if (totalAttachmentSize > MAX_ATTACHMENTS_TOTAL_BYTES) {
+      toast.error('Total attachment size exceeds 25MB limit');
       return;
     }
 
@@ -500,13 +455,13 @@ export default function ComposeEmailDialog({
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={openLibraryDialog}
+                  onClick={() => setSalesDocAttachOpen(true)}
                 >
                   <FolderOpen className="h-4 w-4 mr-1" />
-                  Attach from library
+                  Sales documents
                 </Button>
                 <span className="text-xs text-muted-foreground">
-                  Max 20MB total
+                  Up to 10MB per file, 25MB total
                 </span>
               </div>
               {attachments.length > 0 && (
@@ -730,57 +685,12 @@ export default function ComposeEmailDialog({
       </DialogContent>
     </Dialog>
 
-    {/* Attach from library dialog */}
-    <Dialog open={libraryDialogOpen} onOpenChange={setLibraryDialogOpen}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Attach from library</DialogTitle>
-          <DialogDescription>
-            Select documents to attach from the sales library
-          </DialogDescription>
-        </DialogHeader>
-        {libraryLoading ? (
-          <div className="py-8 text-center text-muted-foreground">Loading...</div>
-        ) : libraryDocs.length === 0 ? (
-          <div className="py-8 text-center text-muted-foreground">
-            No documents in the library. Upload documents from the Documents page.
-          </div>
-        ) : (
-          <div className="max-h-[300px] overflow-y-auto space-y-2 py-2">
-            {libraryDocs.map((doc) => (
-              <label
-                key={doc.id}
-                className="flex items-center gap-3 p-2 rounded-md border cursor-pointer hover:bg-muted/50"
-              >
-                <input
-                  type="checkbox"
-                  checked={librarySelected.has(doc.id)}
-                  onChange={() => toggleLibrarySelected(doc.id)}
-                />
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium truncate">{doc.name}</p>
-                  <p className="text-xs text-muted-foreground truncate">
-                    {doc.filename}
-                    {doc.file_size != null ? ` · ${(doc.file_size / 1024).toFixed(1)} KB` : ''}
-                  </p>
-                </div>
-              </label>
-            ))}
-          </div>
-        )}
-        <div className="flex justify-end gap-2 pt-4">
-          <Button variant="outline" onClick={() => setLibraryDialogOpen(false)}>
-            Cancel
-          </Button>
-          <Button
-            onClick={addFromLibrary}
-            disabled={libraryLoading || libraryDocs.length === 0 || librarySelected.size === 0 || libraryAdding}
-          >
-            {libraryAdding ? 'Adding...' : `Add ${librarySelected.size} selected`}
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+    <SalesDocumentAttachDialog
+      open={salesDocAttachOpen}
+      onOpenChange={setSalesDocAttachOpen}
+      getExistingTotalBytes={() => attachments.reduce((s, f) => s + f.size, 0)}
+      onAdded={(newFiles) => setAttachments((prev) => [...prev, ...newFiles])}
+    />
     </>
   );
 }

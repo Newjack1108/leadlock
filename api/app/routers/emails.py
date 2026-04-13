@@ -5,7 +5,7 @@ import json
 import os
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlmodel import Session, select
-from typing import List, Optional, Union
+from typing import List, Optional
 from datetime import datetime
 import uuid
 from app.database import get_session
@@ -52,15 +52,9 @@ def _sanitize_filename(filename: Optional[str]) -> str:
     return os.path.basename(filename.strip())
 
 
-def _normalize_upload_files(
-    files: Optional[Union[UploadFile, List[UploadFile]]],
-) -> List[UploadFile]:
-    """Single-file uploads are passed as UploadFile; multiple files as a list. Normalize to a list."""
-    if files is None:
-        return []
-    if isinstance(files, list):
-        return files
-    return [files]
+def _normalize_upload_files(files: Optional[List[UploadFile]]) -> List[UploadFile]:
+    """Multipart field `attachments` must be declared as List[UploadFile] so all parts are bound."""
+    return list(files) if files else []
 
 
 @router.post("/preview", response_model=EmailComposePreviewResponse)
@@ -104,7 +98,7 @@ async def preview_compose_email(
 @router.post("", response_model=EmailResponse)
 async def send_email_to_customer(
     email_data: str = Form(..., description="JSON string of email payload"),
-    attachments: Optional[Union[UploadFile, List[UploadFile]]] = File(None),
+    attachments: Optional[List[UploadFile]] = File(None),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
@@ -406,7 +400,7 @@ async def get_email(
 async def reply_to_email(
     email_id: int,
     reply_data: str = Form(..., description="JSON string of reply payload (body_html, body_text, cc, bcc)"),
-    attachments: Optional[Union[UploadFile, List[UploadFile]]] = File(None),
+    attachments: Optional[List[UploadFile]] = File(None),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
