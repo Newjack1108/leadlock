@@ -803,7 +803,7 @@ export default function CompanySettingsPage() {
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Example columns: First Name, Surname, Email, Phone, First of Postcode, Last modified, First of Product Type (Stables, Cabins, Sheds). Download the example to see the format.
+              Example columns: First Name, Surname, Email, Phone, First of Postcode, Last modified, First of Product Type (Stables, Cabins, Sheds), optional Lead Status (Quoted, Ordered, or Qualified — blank defaults to Qualified). Older 7-column files still import.
             </p>
             {importResult && (
               <div className="rounded-md border p-3 bg-muted/30 text-sm">

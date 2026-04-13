@@ -1,6 +1,7 @@
 """
 Customer CSV import/export logic for legacy data migration.
-Format: First Name, Surname, Email, Phone, First of Postcode, Last modified, First of Product Type
+Format: First Name, Surname, Email, Phone, First of Postcode, Last modified,
+First of Product Type, optional Lead Status (Quoted, Ordered, or Qualified / blank).
 """
 import csv
 import io
@@ -29,6 +30,9 @@ HEADER_MAP = {
     "first of product type": "product_type",
     "product type": "product_type",
     "producttype": "product_type",
+    "lead status": "lead_status",
+    "leadstatus": "lead_status",
+    "status": "lead_status",
 }
 
 EXPECTED_HEADERS = [
@@ -39,6 +43,7 @@ EXPECTED_HEADERS = [
     "First of Postcode",
     "Last modified",
     "First of Product Type",
+    "Lead Status",
 ]
 
 PRODUCT_TYPE_MAP = {
@@ -75,6 +80,33 @@ def parse_product_type(value: str) -> LeadType:
         return LeadType.UNKNOWN
     key = value.strip().lower()
     return PRODUCT_TYPE_MAP.get(key, LeadType.UNKNOWN)
+
+
+def parse_migration_lead_status(value: str) -> LeadStatus:
+    """Map CSV Lead Status to pipeline status. Blank defaults to QUALIFIED (legacy imports)."""
+    if not value or not value.strip():
+        return LeadStatus.QUALIFIED
+    key = value.strip().lower().replace(" ", "_")
+    if key in ("quoted", "quote"):
+        return LeadStatus.QUOTED
+    if key in ("ordered", "order", "won"):
+        return LeadStatus.WON
+    if key in ("qualified",):
+        return LeadStatus.QUALIFIED
+    raise ValueError(
+        "Lead Status must be Quoted, Ordered, or Qualified (or leave blank)"
+    )
+
+
+def lead_status_to_export_label(status: LeadStatus) -> str:
+    """Round-trip labels for the Lead Status column."""
+    if status == LeadStatus.QUOTED:
+        return "Quoted"
+    if status == LeadStatus.WON:
+        return "Ordered"
+    if status == LeadStatus.QUALIFIED:
+        return "Qualified"
+    return ""
 
 
 def parse_date(value: str) -> Optional[datetime]:
@@ -114,6 +146,7 @@ def generate_example_csv() -> str:
         "RH1 4NA",
         "12/02/2026 12:38",
         "Stables",
+        "Qualified",
     ])
     writer.writerow([
         "Jessica",
@@ -123,6 +156,7 @@ def generate_example_csv() -> str:
         "CV61FY",
         "11/02/2026 16:35",
         "Cabins",
+        "Quoted",
     ])
     return output.getvalue()
 
@@ -163,6 +197,7 @@ def import_customers_from_csv(
             postcode = data.get("postcode", "").strip() or None
             product_type = parse_product_type(data.get("product_type", ""))
             last_modified = parse_date(data.get("last_modified", ""))
+            lead_status = parse_migration_lead_status(data.get("lead_status", ""))
 
             if skip_duplicates:
                 if email:
@@ -193,7 +228,7 @@ def import_customers_from_csv(
                 email=email,
                 phone=phone,
                 postcode=postcode,
-                status=LeadStatus.QUALIFIED,
+                status=lead_status,
                 lead_type=product_type,
                 lead_source=LeadSource.NINOX,
                 customer_id=customer.id,
@@ -236,6 +271,11 @@ def export_customers_to_csv(session: Session) -> str:
         if lead and lead.lead_type != LeadType.UNKNOWN:
             product_type = lead.lead_type.value.title()
 
+        if lead:
+            status_cell = lead_status_to_export_label(lead.status)
+        else:
+            status_cell = "Qualified"
+
         last_modified = customer.updated_at.strftime("%d/%m/%Y %H:%M") if customer.updated_at else ""
 
         writer.writerow([
@@ -246,6 +286,7 @@ def export_customers_to_csv(session: Session) -> str:
             customer.postcode or "",
             last_modified,
             product_type or "Stables",
+            status_cell,
         ])
 
     return output.getvalue()
