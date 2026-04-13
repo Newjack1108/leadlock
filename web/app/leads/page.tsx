@@ -348,15 +348,17 @@ function LeadsPageContent() {
         ) : statusFilter === 'ALL' ? (
           <Card>
             <div className="overflow-x-auto">
-              <table className="w-full">
+              <table className="w-full min-w-[960px]">
                 <thead>
                   <tr className="border-b bg-muted/50">
                     <th className="text-left p-3 font-medium">Name</th>
-                    <th className="text-left p-3 font-medium">Contact</th>
+                    <th className="text-left p-3 font-medium min-w-0 max-w-[240px]">Contact</th>
                     <th className="text-left p-3 font-medium">Postcode</th>
                     <th className="text-left p-3 font-medium">Status</th>
                     <th className="text-left p-3 font-medium">Lead type</th>
-                    <th className="text-left p-3 font-medium">Source</th>
+                    <th className="text-left p-3 font-medium whitespace-normal break-words min-w-[9rem] max-w-[14rem]">
+                      Source
+                    </th>
                     <th className="text-left p-3 font-medium">Created</th>
                     <th className="text-right p-3 font-medium w-[120px]">Actions</th>
                   </tr>
@@ -369,7 +371,7 @@ function LeadsPageContent() {
                       onClick={() => router.push(`/leads/${lead.id}`)}
                     >
                       <td className="p-3 font-semibold">{lead.name}</td>
-                      <td className="p-3 text-muted-foreground">
+                      <td className="p-3 text-muted-foreground min-w-0 max-w-[240px] break-words">
                         {[lead.phone, lead.email].filter(Boolean).join(' · ') || '—'}
                       </td>
                       <td className="p-3 text-muted-foreground">{lead.postcode || '—'}</td>
@@ -379,14 +381,14 @@ function LeadsPageContent() {
                         </Badge>
                       </td>
                       <td className="p-3 text-muted-foreground">{lead.lead_type}</td>
-                      <td className="p-3 text-muted-foreground">
+                      <td className="p-3 text-muted-foreground whitespace-normal break-words min-w-[9rem] max-w-[14rem]">
                         {lead.lead_source.replace('_', ' ')}
                       </td>
-                      <td
-                        className="p-3 text-muted-foreground"
-                        title={formatDateTime(lead.created_at)}
-                      >
-                        {new Date(lead.created_at).toLocaleDateString()}
+                      <td className="p-3 text-muted-foreground align-top">
+                        <div className="flex flex-col gap-0.5">
+                          <span>{formatDateTime(lead.created_at)}</span>
+                          <span className="text-xs text-muted-foreground/80">{formatTimeAgo(lead.created_at)}</span>
+                        </div>
                       </td>
                       <td className="p-3 text-right" onClick={(e) => e.stopPropagation()}>
                         <Button
