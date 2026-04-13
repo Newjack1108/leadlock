@@ -63,17 +63,51 @@ def _html_to_plain(html: str) -> str:
     return text.strip()
 
 
+def _html_to_plain_activity_preview(html: str) -> str:
+    """Like _html_to_plain but preserves line breaks from block/br tags for timeline snippets."""
+    if not html or not html.strip():
+        return ""
+    text = html
+    text = re.sub(r"<br\s*/?>", "\n", text, flags=re.I)
+    text = re.sub(r"</p\s*>", "\n", text, flags=re.I)
+    text = re.sub(r"</div\s*>", "\n", text, flags=re.I)
+    text = re.sub(r"<[^>]+>", " ", text)
+    lines = []
+    for line in text.split("\n"):
+        line = re.sub(r"[ \t]+", " ", line).strip()
+        if line:
+            lines.append(line)
+    return "\n".join(lines)
+
+
+def _activity_email_body_preview(preview: str, *, max_lines: int = 4, max_line_chars: int = 320) -> str:
+    """First few lines of body text for the activity timeline (SMS uses full text elsewhere)."""
+    preview = preview.strip()
+    if not preview:
+        return ""
+    raw = preview.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    more_lines = len(raw) > max_lines
+    out: List[str] = []
+    for line in raw[:max_lines]:
+        line = line.strip()
+        if len(line) > max_line_chars:
+            line = line[:max_line_chars].rstrip() + "…"
+        out.append(line)
+    body = "\n".join(out)
+    if more_lines:
+        body = body + "\n…"
+    return body
+
+
 def build_activity_email_notes(
     header_line: str,
     subject: Optional[str],
     body_text: Optional[str],
     body_html: Optional[str],
-    *,
-    max_body_chars: int = 4000,
 ) -> str:
     """
-    Plain-text activity timeline notes: one header line, optional subject, then body preview.
-    Prefer body_text; fall back to stripped body_html. Truncates very long bodies for storage/UI.
+    Plain-text activity timeline notes: header, optional subject, then first few lines of body.
+    Prefer body_text; fall back to stripped body_html.
     """
     lines = [header_line.strip()]
     sub = (subject or "").strip()
@@ -81,11 +115,11 @@ def build_activity_email_notes(
         lines.append(f"Subject: {sub}")
     preview = (body_text or "").strip()
     if not preview and body_html:
-        preview = _html_to_plain(body_html).strip()
+        preview = _html_to_plain_activity_preview(body_html).strip()
     if preview:
-        if len(preview) > max_body_chars:
-            preview = preview[:max_body_chars].rstrip() + "…"
-        lines.append(preview)
+        snippet = _activity_email_body_preview(preview)
+        if snippet:
+            lines.append(snippet)
     return "\n".join(lines)
 
 
