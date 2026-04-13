@@ -1546,7 +1546,7 @@ async def post_quote_send_sms(
 async def send_quote_email_endpoint(
     quote_id: int,
     email_data: str = Form(..., description="JSON string matching QuoteEmailSendRequest"),
-    attachments: Optional[List[UploadFile]] = File(None),
+    attachments: List[UploadFile] = File(default=[]),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):

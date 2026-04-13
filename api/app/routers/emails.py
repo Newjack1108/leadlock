@@ -52,9 +52,9 @@ def _sanitize_filename(filename: Optional[str]) -> str:
     return os.path.basename(filename.strip())
 
 
-def _normalize_upload_files(files: Optional[List[UploadFile]]) -> List[UploadFile]:
-    """Multipart field `attachments` must be declared as List[UploadFile] so all parts are bound."""
-    return list(files) if files else []
+def _normalize_upload_files(files: List[UploadFile]) -> List[UploadFile]:
+    """Multipart field `attachments` must be List[UploadFile] so all parts bind; use File(default=[]) when omitted."""
+    return list(files)
 
 
 @router.post("/preview", response_model=EmailComposePreviewResponse)
@@ -98,7 +98,7 @@ async def preview_compose_email(
 @router.post("", response_model=EmailResponse)
 async def send_email_to_customer(
     email_data: str = Form(..., description="JSON string of email payload"),
-    attachments: Optional[List[UploadFile]] = File(None),
+    attachments: List[UploadFile] = File(default=[]),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
@@ -400,7 +400,7 @@ async def get_email(
 async def reply_to_email(
     email_id: int,
     reply_data: str = Form(..., description="JSON string of reply payload (body_html, body_text, cc, bcc)"),
-    attachments: Optional[List[UploadFile]] = File(None),
+    attachments: List[UploadFile] = File(default=[]),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
