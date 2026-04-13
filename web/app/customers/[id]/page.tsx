@@ -376,7 +376,12 @@ export default function CustomerDetailPage() {
               </Button>
             )}
             {customer.source_system === 'Ninox' && (
-              <Badge variant="secondary" className="font-normal">Ninox</Badge>
+              <Badge
+                variant="secondary"
+                className="font-normal border-transparent bg-blue-500 text-white hover:bg-blue-500 dark:bg-sky-400 dark:text-slate-950"
+              >
+                Ninox
+              </Badge>
             )}
             <Button
               type="button"

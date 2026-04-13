@@ -151,7 +151,7 @@ function CustomersPageContent() {
                         <span className="inline-flex items-center gap-1.5">
                           {customer.name}
                           {customer.source_system === 'Ninox' && (
-                            <span className="inline-flex px-1.5 py-0.5 rounded text-xs font-medium bg-muted text-muted-foreground">
+                            <span className="inline-flex px-1.5 py-0.5 rounded text-xs font-medium bg-blue-500 text-white dark:bg-sky-400 dark:text-slate-950">
                               Ninox
                             </span>
                           )}
