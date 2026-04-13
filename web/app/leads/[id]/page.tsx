@@ -38,6 +38,7 @@ import {
   XCircle,
   FileText,
   DoorClosed,
+  Trash2,
 } from 'lucide-react';
 import api, { getLeadQuotes, listFacebookAdverts } from '@/lib/api';
 import { formatDateTime, formatActivityTypeLabel } from '@/lib/utils';
@@ -94,6 +95,23 @@ export default function LeadDetailPage() {
   const [quotesLoading, setQuotesLoading] = useState(false);
   const [advertProfiles, setAdvertProfiles] = useState<FacebookAdvertProfile[]>([]);
   const [advertPreviewOpen, setAdvertPreviewOpen] = useState(false);
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [removeSpamLoading, setRemoveSpamLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api.get('/api/auth/me');
+        if (!cancelled) setUserRole(res.data?.role ?? null);
+      } catch {
+        if (!cancelled) setUserRole(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (leadId) {
@@ -221,6 +239,33 @@ export default function LeadDetailPage() {
       toast.error(error.response?.data?.detail?.message || error.response?.data?.detail || 'Failed to reject lead');
     } finally {
       setRejectLoading(false);
+    }
+  };
+
+  const canRemoveSpamLead =
+    (userRole === 'DIRECTOR' || userRole === 'SALES_MANAGER') &&
+    lead != null &&
+    !lead.customer_id;
+
+  const handleRemoveSpamLead = async () => {
+    if (!canRemoveSpamLead) return;
+    if (
+      !window.confirm(
+        'Permanently remove this lead as spam or junk? It will be deleted (not marked as lost), so reports and dashboards will not count it. This cannot be undone.'
+      )
+    ) {
+      return;
+    }
+    setRemoveSpamLoading(true);
+    try {
+      await api.delete(`/api/leads/${leadId}`);
+      toast.success('Lead removed');
+      router.push('/leads');
+    } catch (error: any) {
+      const d = error.response?.data?.detail;
+      toast.error(typeof d === 'string' ? d : d?.message || 'Failed to remove lead');
+    } finally {
+      setRemoveSpamLoading(false);
     }
   };
 
@@ -356,6 +401,19 @@ export default function LeadDetailPage() {
                       >
                         <XCircle className="h-4 w-4" />
                         {rejectLoading ? 'Rejecting...' : 'Reject'}
+                      </Button>
+                    )}
+                    {canRemoveSpamLead && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleRemoveSpamLead}
+                        disabled={removeSpamLoading}
+                        className="gap-1 border-destructive/50 text-destructive hover:bg-destructive/10"
+                        title="Delete junk/spam without counting as lost"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        {removeSpamLoading ? 'Removing...' : 'Remove spam'}
                       </Button>
                     )}
                     <Badge className="bg-primary/20 text-primary">

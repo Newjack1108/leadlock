@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi.responses import Response
 from sqlmodel import Session, select, or_
 from sqlalchemy import func
 from typing import Optional, List, Dict, Tuple
@@ -26,8 +27,9 @@ from app.models import (
     MessengerDirection,
     QuoteTemperature,
     FacebookAdvertProfile,
+    UserRole,
 )
-from app.auth import get_current_user
+from app.auth import get_current_user, require_role
 from app.schemas import (
     LeadCreate, LeadUpdate, LeadResponse, StatusTransitionRequest,
     ActivityCreate, ActivityResponse, StatusHistoryResponse, CustomerResponse, QuoteResponse,
@@ -35,6 +37,7 @@ from app.schemas import (
 )
 from app.workflow import can_transition, check_sla_overdue, check_quote_prerequisites
 from app.quote_delete import delete_quote_cascade
+from app.lead_delete import delete_lead_cascade
 from app.constants import QUOTE_LIST_EXCLUDED_STATUSES
 from datetime import datetime
 
@@ -437,6 +440,44 @@ async def get_lead(
         raise HTTPException(status_code=404, detail="Lead not found")
     
     return enrich_lead_response(lead, session, current_user)
+
+
+@router.delete("/{lead_id}", status_code=204)
+async def delete_spam_lead(
+    lead_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_role([UserRole.DIRECTOR, UserRole.SALES_MANAGER])),
+):
+    """Permanently remove a junk/spam lead (no customer, draft quotes only). Does not count as LOST."""
+    statement = select(Lead).where(Lead.id == lead_id)
+    lead = session.exec(statement).first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    if lead.customer_id is not None:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot delete: lead is linked to a customer. Use the normal workflow or delete the customer record.",
+        )
+
+    quotes = list(session.exec(select(Quote).where(Quote.lead_id == lead_id)).all())
+    for q in quotes:
+        if q.status != QuoteStatus.DRAFT:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot delete: lead has quotes that are not draft. Remove or resolve quotes first.",
+            )
+        if q.id is not None:
+            order = session.exec(select(Order).where(Order.quote_id == q.id)).first()
+            if order:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Cannot delete: a quote on this lead has an order. Remove the order first.",
+                )
+
+    delete_lead_cascade(session, lead_id)
+    session.commit()
+    return Response(status_code=204)
 
 
 @router.post("", response_model=LeadResponse)
