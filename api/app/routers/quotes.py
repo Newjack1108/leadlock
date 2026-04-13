@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from pydantic import ValidationError
 from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import Response
 from sqlmodel import Session, select, or_, and_
@@ -1556,8 +1557,22 @@ async def send_quote_email_endpoint(
             req = QuoteEmailSendRequest.model_validate(json.loads(email_data))
         except json.JSONDecodeError as e:
             raise HTTPException(status_code=400, detail=f"Invalid email_data JSON: {e}")
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=str(e))
+        except ValidationError as e:
+            for err in e.errors():
+                loc = err.get("loc") or ()
+                if "template_id" in loc:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Choose an email template before sending.",
+                    )
+            errs = e.errors()
+            if errs:
+                err0 = errs[0]
+                loc = err0.get("loc") or ()
+                field = str(loc[-1]) if loc else "request"
+                msg = err0.get("msg", "Invalid value")
+                raise HTTPException(status_code=400, detail=f"{field}: {msg}")
+            raise HTTPException(status_code=400, detail="Invalid email data.")
 
         # Check email configured: Microsoft Graph, Resend, or SMTP
         if not is_email_configured(current_user.id):
@@ -1592,7 +1607,13 @@ async def send_quote_email_endpoint(
 
         qt_statement = select(QuoteTemplate).where(QuoteTemplate.id == req.template_id)
         if not session.exec(qt_statement).first():
-            raise HTTPException(status_code=404, detail="Quote template not found")
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "That email template no longer exists or was removed. "
+                    "Select another template in Quote Templates settings."
+                ),
+            )
 
         attachment_list: List[dict] = []
         attachment_metadata: List[dict] = []

@@ -187,8 +187,8 @@ export default function SendQuoteEmailDialog({
       return;
     }
 
-    if (selectedTemplateId === undefined) {
-      toast.error('Please select an email template');
+    if (selectedTemplateId === undefined || Number.isNaN(selectedTemplateId)) {
+      toast.error('Choose an email template before sending.');
       return;
     }
 
@@ -226,7 +226,7 @@ export default function SendQuoteEmailDialog({
       const detail = error.response?.data?.detail;
       let errorMessage = `Failed to send ${docLabel} email`;
       if (typeof detail === 'string') {
-        errorMessage = detail;
+        errorMessage = detail.includes('\n') ? detail.split('\n')[0].trim() : detail;
       } else if (Array.isArray(detail) && detail.length > 0) {
         errorMessage = detail.map((e: { msg?: string }) => e.msg || JSON.stringify(e)).join('; ');
       } else if (error.message) {
@@ -273,6 +273,25 @@ export default function SendQuoteEmailDialog({
       toast.success('Link copied to clipboard');
     }
   };
+
+  const sendEmailDisabled =
+    loading ||
+    !formData.to_email ||
+    loadingTemplates ||
+    selectedTemplateId === undefined ||
+    Number.isNaN(selectedTemplateId);
+
+  const sendEmailDisabledTitle = sendEmailDisabled
+    ? loading
+      ? 'Sending…'
+      : !formData.to_email
+        ? 'Add a recipient email address'
+        : loadingTemplates
+          ? 'Loading templates…'
+          : selectedTemplateId === undefined || Number.isNaN(selectedTemplateId)
+            ? 'Choose an email template before sending'
+            : undefined
+    : undefined;
 
   if (successViewUrl && successState) {
     const testMode = successState.type === 'email' ? successState.data.test_mode : undefined;
@@ -541,12 +560,8 @@ export default function SendQuoteEmailDialog({
               </Button>
               <Button
                 type="submit"
-                disabled={
-                  loading ||
-                  !formData.to_email ||
-                  loadingTemplates ||
-                  selectedTemplateId === undefined
-                }
+                title={sendEmailDisabledTitle}
+                disabled={sendEmailDisabled}
               >
                 {loading ? 'Sending…' : `Send ${docLabel.charAt(0).toUpperCase() + docLabel.slice(1)} email`}
               </Button>
