@@ -361,6 +361,14 @@ def _build_customer_address(customer: Customer) -> str:
     return ", ".join(parts) if parts else ""
 
 
+def _customer_has_full_address(customer: Customer) -> bool:
+    """True when line 1, city, and postcode are all non-empty after strip."""
+    line1 = (customer.address_line1 or "").strip()
+    city = (customer.city or "").strip()
+    postcode = (customer.postcode or "").strip()
+    return bool(line1 and city and postcode)
+
+
 @router.post("/{order_id}/send-to-production")
 async def send_to_production(
     order_id: int,
@@ -384,6 +392,17 @@ async def send_to_production(
     customer = session.get(Customer, order.customer_id)
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
+
+    if not order.deposit_paid and not order.paid_in_full:
+        raise HTTPException(
+            status_code=400,
+            detail="Mark deposit paid or paid in full on the order before sending to production.",
+        )
+    if not _customer_has_full_address(customer):
+        raise HTTPException(
+            status_code=400,
+            detail="Customer must have address line 1, city, and postcode before sending to production.",
+        )
 
     order_items = list(
         session.exec(

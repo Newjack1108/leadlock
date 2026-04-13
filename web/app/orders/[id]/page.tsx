@@ -43,6 +43,15 @@ function formatCurrency(amount: number, currency: string = 'GBP'): string {
   }).format(amount);
 }
 
+/** Matches API send-to-production address check (line 1, city, postcode). */
+function customerHasFullAddressForProduction(customer: Customer | null): boolean {
+  if (!customer) return false;
+  const line1 = (customer.address_line1 ?? '').trim();
+  const city = (customer.city ?? '').trim();
+  const postcode = (customer.postcode ?? '').trim();
+  return !!(line1 && city && postcode);
+}
+
 type StatusKey = 'deposit_paid' | 'balance_paid' | 'paid_in_full' | 'installation_booked' | 'installation_completed';
 
 export default function OrderDetailPage() {
@@ -315,6 +324,10 @@ export default function OrderDetailPage() {
     );
   }
 
+  const depositSatisfied = !!(order.deposit_paid || order.paid_in_full);
+  const addressComplete = customerHasFullAddressForProduction(customer);
+  const canSendToProduction = depositSatisfied && addressComplete;
+
   return (
     <div className="min-h-screen">
       <Header />
@@ -519,12 +532,35 @@ export default function OrderDetailPage() {
                     {savingNotes ? 'Saving...' : 'Save notes'}
                   </Button>
                 </div>
-                <div className="mt-4 pt-4 border-t">
+                <div className="mt-4 pt-4 border-t space-y-2">
+                  {!canSendToProduction && (
+                    <p className="text-sm text-muted-foreground">
+                      {!depositSatisfied && (
+                        <span>Mark deposit paid or paid in full before sending to production. </span>
+                      )}
+                      {!addressComplete && (
+                        <span>
+                          Customer must have address line 1, city, and postcode.
+                          {order.customer_id ? (
+                            <>
+                              {' '}
+                              <Link
+                                href={`/customers/${order.customer_id}`}
+                                className="text-primary underline underline-offset-2"
+                              >
+                                Edit customer
+                              </Link>
+                            </>
+                          ) : null}
+                        </span>
+                      )}
+                    </p>
+                  )}
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={handleSendToProduction}
-                    disabled={sendingToProduction}
+                    disabled={sendingToProduction || !canSendToProduction}
                   >
                     <Send className="h-4 w-4 mr-1" />
                     {sendingToProduction ? 'Sending...' : 'Send to production'}
