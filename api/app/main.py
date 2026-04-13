@@ -199,7 +199,7 @@ def on_startup():
 
     def poll_imap():
         """Background task to poll inbox for new emails (Graph or IMAP)."""
-        from app.email_service import receive_emails
+        from app.email_service import receive_emails, build_activity_email_notes
         from app.email_threading import find_thread_id_for_inbound
         from app.models import Email, Customer, Activity, ActivityType, EmailDirection
         from sqlmodel import select
@@ -288,7 +288,12 @@ def on_startup():
                                 activity = Activity(
                                     customer_id=customer.id,
                                     activity_type=ActivityType.EMAIL_RECEIVED,
-                                    notes=f"Email received from {email_address}: {email_data['subject']}",
+                                    notes=build_activity_email_notes(
+                                        f"Email received from {email_address}",
+                                        email_data.get("subject"),
+                                        email_data.get("body_text"),
+                                        email_data.get("body_html"),
+                                    ),
                                     created_by_id=1  # System user (will need to handle this better)
                                 )
                                 session.add(activity)
@@ -360,7 +365,7 @@ def on_startup():
                                     activity = Activity(
                                         customer_id=scheduled.customer_id,
                                         activity_type=ActivityType.SMS_SENT,
-                                        notes=f"Scheduled SMS sent to {scheduled.to_phone}",
+                                        notes=f"Scheduled SMS sent to {scheduled.to_phone}\n{scheduled.body}",
                                         created_by_id=scheduled.created_by_id,
                                     )
                                     session.add(activity)

@@ -63,6 +63,32 @@ def _html_to_plain(html: str) -> str:
     return text.strip()
 
 
+def build_activity_email_notes(
+    header_line: str,
+    subject: Optional[str],
+    body_text: Optional[str],
+    body_html: Optional[str],
+    *,
+    max_body_chars: int = 4000,
+) -> str:
+    """
+    Plain-text activity timeline notes: one header line, optional subject, then body preview.
+    Prefer body_text; fall back to stripped body_html. Truncates very long bodies for storage/UI.
+    """
+    lines = [header_line.strip()]
+    sub = (subject or "").strip()
+    if sub:
+        lines.append(f"Subject: {sub}")
+    preview = (body_text or "").strip()
+    if not preview and body_html:
+        preview = _html_to_plain(body_html).strip()
+    if preview:
+        if len(preview) > max_body_chars:
+            preview = preview[:max_body_chars].rstrip() + "…"
+        lines.append(preview)
+    return "\n".join(lines)
+
+
 def _build_website_tracking_link_html(customer_number: Optional[str]) -> str:
     """Return HTML with visit-tracking links, or empty string if no customer_number."""
     if not customer_number or not customer_number.strip():

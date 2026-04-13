@@ -12,7 +12,7 @@ from typing import Optional, Tuple
 from sqlalchemy import desc
 from sqlmodel import Session, select, col
 
-from app.email_service import send_email, is_email_configured, _html_to_plain
+from app.email_service import send_email, is_email_configured, _html_to_plain, build_activity_email_notes
 from app.email_template_service import render_email_template
 from app.models import (
     Activity,
@@ -160,7 +160,7 @@ def _send_outreach_sms(
         Activity(
             customer_id=customer.id,
             activity_type=ActivityType.SMS_SENT,
-            notes=f"Automated SMS (rule {rule.rule_name}) to {to_phone}",
+            notes=f"Automated SMS (rule {rule.rule_name}) to {to_phone}\n{body}",
             created_by_id=actor.id,
         )
     )
@@ -224,7 +224,12 @@ def _send_outreach_email(
         Activity(
             customer_id=customer.id,
             activity_type=ActivityType.EMAIL_SENT,
-            notes=f"Automated email (rule {rule.rule_name}) to {to_email}",
+            notes=build_activity_email_notes(
+                f"Automated email (rule {rule.rule_name}) to {to_email}",
+                subject,
+                sent_text if sent_text is not None else body_text,
+                sent_html or body_html,
+            ),
             created_by_id=actor.id,
         )
     )

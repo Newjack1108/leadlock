@@ -21,7 +21,13 @@ from app.schemas import (
     MessageIdsMarkUnread,
     MessagesMarkUnreadResult,
 )
-from app.email_service import send_email, receive_emails, assemble_outbound_email_html, _html_to_plain
+from app.email_service import (
+    send_email,
+    receive_emails,
+    assemble_outbound_email_html,
+    _html_to_plain,
+    build_activity_email_notes,
+)
 from app.email_template_service import render_email_template
 
 router = APIRouter(prefix="/api/emails", tags=["emails"])
@@ -217,7 +223,12 @@ async def send_email_to_customer(
     activity = Activity(
         customer_id=email_data_parsed.customer_id,
         activity_type=ActivityType.EMAIL_SENT,
-        notes=f"Email sent to {email_data_parsed.to_email}: {subject}",
+        notes=build_activity_email_notes(
+            f"Email sent to {email_data_parsed.to_email}",
+            subject,
+            sent_text if sent_text is not None else body_text,
+            sent_html or body_html,
+        ),
         created_by_id=current_user.id
     )
     session.add(activity)
@@ -500,7 +511,12 @@ async def reply_to_email(
     activity = Activity(
         customer_id=original_email.customer_id,
         activity_type=ActivityType.EMAIL_SENT,
-        notes=f"Reply sent to {to_email}: {subject}",
+        notes=build_activity_email_notes(
+            f"Reply sent to {to_email}",
+            subject,
+            sent_text if sent_text is not None else reply_data_parsed.body_text,
+            sent_html or reply_data_parsed.body_html,
+        ),
         created_by_id=current_user.id
     )
     session.add(activity)

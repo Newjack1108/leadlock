@@ -862,7 +862,7 @@ export default function CustomerDetailPage() {
                               </span>
                             </div>
                             {activity.notes && (
-                              <p className="text-sm text-muted-foreground mt-1">
+                              <p className="text-sm text-muted-foreground mt-1 whitespace-pre-wrap break-words">
                                 {activity.notes}
                               </p>
                             )}

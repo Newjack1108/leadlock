@@ -23,7 +23,7 @@ from app.routers.emails import (
     _sanitize_filename,
 )
 from app.customer_view_links import customer_view_path_segment
-from app.email_service import is_email_configured
+from app.email_service import is_email_configured, build_activity_email_notes
 from app.sms_service import send_sms, normalize_phone
 from app.quote_pdf_service import generate_quote_pdf
 from app.available_optional_extras import get_available_optional_extras_for_quote
@@ -1529,7 +1529,7 @@ async def post_quote_send_sms(
     activity = Activity(
         customer_id=quote.customer_id,
         activity_type=ActivityType.SMS_SENT,
-        notes=f"Quote {quote.quote_number} link sent by SMS to {to_phone}",
+        notes=f"Quote {quote.quote_number} link sent by SMS to {to_phone}\n{sms_body}",
         created_by_id=current_user.id,
     )
     session.add(activity)
@@ -1729,7 +1729,12 @@ async def send_quote_email_endpoint(
         activity = Activity(
             customer_id=quote.customer_id,
             activity_type=ActivityType.EMAIL_SENT,
-            notes=f"Quote {quote.quote_number} sent to {req.to_email}",
+            notes=build_activity_email_notes(
+                f"Quote {quote.quote_number} sent to {req.to_email}",
+                final_subject,
+                email_body_text,
+                final_body_html,
+            ),
             created_by_id=current_user.id
         )
         session.add(activity)

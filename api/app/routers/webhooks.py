@@ -457,7 +457,7 @@ async def twilio_inbound_sms(request: Request, session: Session = Depends(get_se
         activity = Activity(
             customer_id=customer.id,
             activity_type=ActivityType.SMS_RECEIVED,
-            notes=f"SMS received from {from_phone}: {body[:50]}...",
+            notes=f"SMS received from {from_phone}\n{(body or '').strip()}",
             created_by_id=activity_user_id,
         )
         session.add(activity)

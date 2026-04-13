@@ -100,7 +100,7 @@ async def send_sms_to_customer(
     activity = Activity(
         customer_id=data.customer_id,
         activity_type=ActivityType.SMS_SENT,
-        notes=f"SMS sent to {to_phone}: {data.body[:50]}...",
+        notes=f"SMS sent to {to_phone}\n{data.body}",
         created_by_id=current_user.id,
     )
     session.add(activity)
