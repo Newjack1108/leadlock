@@ -16,7 +16,13 @@ from app.models import (
     ActivityType,
 )
 from app.auth import get_current_user
-from app.schemas import MessengerCreate, MessengerResponse
+from app.schemas import (
+    MessengerCreate,
+    MessengerResponse,
+    MessagesMarkReadResult,
+    MessageIdsMarkUnread,
+    MessagesMarkUnreadResult,
+)
 from app.messenger_service import send_messenger_message
 
 router = APIRouter(prefix="/api/messenger", tags=["messenger"])
@@ -114,7 +120,7 @@ async def get_customer_messenger(
     return result
 
 
-@router.post("/customers/{customer_id}/mark-read")
+@router.post("/customers/{customer_id}/mark-read", response_model=MessagesMarkReadResult)
 async def mark_customer_messenger_read(
     customer_id: int,
     session: Session = Depends(get_session),
@@ -136,4 +142,32 @@ async def mark_customer_messenger_read(
         msg.read_at = now
         session.add(msg)
     session.commit()
-    return {"marked_count": len(messages)}
+    return MessagesMarkReadResult(
+        marked_count=len(messages),
+        marked_ids=[m.id for m in messages],
+    )
+
+
+@router.post("/mark-unread", response_model=MessagesMarkUnreadResult)
+async def mark_messenger_unread(
+    body: MessageIdsMarkUnread,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Clear read_at on received Messenger messages by id."""
+    ids = list(dict.fromkeys(body.message_ids))
+    if not ids:
+        return MessagesMarkUnreadResult(unmarked_count=0)
+    to_update: List[MessengerMessage] = []
+    for mid in ids:
+        msg = session.get(MessengerMessage, mid)
+        if not msg:
+            raise HTTPException(status_code=400, detail=f"Messenger message not found: {mid}")
+        if msg.direction != MessengerDirection.RECEIVED:
+            raise HTTPException(status_code=400, detail=f"Not a received Messenger message: {mid}")
+        to_update.append(msg)
+    for msg in to_update:
+        msg.read_at = None
+        session.add(msg)
+    session.commit()
+    return MessagesMarkUnreadResult(unmarked_count=len(to_update))

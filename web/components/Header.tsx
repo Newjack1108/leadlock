@@ -32,6 +32,7 @@ import {
   getUnreadMessenger,
   getUnreadEmails,
   getQualifiedForQuoting,
+  LEADLOCK_REFRESH_UNREAD_EVENT,
 } from '@/lib/api';
 import {
   DropdownMenu,
@@ -144,6 +145,14 @@ export default function Header() {
     }
   }, [pathname, userRole]);
   /* eslint-enable react-hooks/set-state-in-effect */
+
+  useEffect(() => {
+    const onRefreshUnread = () => {
+      fetchUnreadMessagesCount();
+    };
+    window.addEventListener(LEADLOCK_REFRESH_UNREAD_EVENT, onRefreshUnread);
+    return () => window.removeEventListener(LEADLOCK_REFRESH_UNREAD_EVENT, onRefreshUnread);
+  }, []);
 
   const closerQualifiedBadgeCount =
     userRole === 'CLOSER' ? newQualifiedDashboardCount : 0;

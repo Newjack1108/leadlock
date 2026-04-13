@@ -25,6 +25,9 @@ from app.schemas import (
     SmsScheduledCreate,
     SmsScheduledResponse,
     SmsScheduledUpdate,
+    MessagesMarkReadResult,
+    MessageIdsMarkUnread,
+    MessagesMarkUnreadResult,
 )
 from app.sms_service import send_sms, normalize_phone
 
@@ -134,7 +137,7 @@ async def get_customer_sms(
     return result
 
 
-@router.post("/customers/{customer_id}/mark-read")
+@router.post("/customers/{customer_id}/mark-read", response_model=MessagesMarkReadResult)
 async def mark_customer_sms_read(
     customer_id: int,
     session: Session = Depends(get_session),
@@ -157,7 +160,35 @@ async def mark_customer_sms_read(
         msg.read_at = now
         session.add(msg)
     session.commit()
-    return {"marked_count": len(messages)}
+    return MessagesMarkReadResult(
+        marked_count=len(messages),
+        marked_ids=[m.id for m in messages],
+    )
+
+
+@router.post("/mark-unread", response_model=MessagesMarkUnreadResult)
+async def mark_sms_unread(
+    body: MessageIdsMarkUnread,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Clear read_at on received SMS by id (restore unread indicators)."""
+    ids = list(dict.fromkeys(body.message_ids))
+    if not ids:
+        return MessagesMarkUnreadResult(unmarked_count=0)
+    to_update: List[SmsMessage] = []
+    for mid in ids:
+        msg = session.get(SmsMessage, mid)
+        if not msg:
+            raise HTTPException(status_code=400, detail=f"SMS message not found: {mid}")
+        if msg.direction != SmsDirection.RECEIVED:
+            raise HTTPException(status_code=400, detail=f"Not a received SMS: {mid}")
+        to_update.append(msg)
+    for msg in to_update:
+        msg.read_at = None
+        session.add(msg)
+    session.commit()
+    return MessagesMarkUnreadResult(unmarked_count=len(to_update))
 
 
 # Scheduled SMS (must be before /{sms_id} so /scheduled is not captured as sms_id)

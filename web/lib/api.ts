@@ -85,8 +85,16 @@ export const getCustomerEmails = async (customerId: number) => {
   return response.data;
 };
 
-export const markCustomerEmailsRead = async (customerId: number) => {
+export type MessagesMarkReadResult = { marked_count: number; marked_ids: number[] };
+export type MessagesMarkUnreadResult = { unmarked_count: number };
+
+export const markCustomerEmailsRead = async (customerId: number): Promise<MessagesMarkReadResult> => {
   const response = await api.post(`/api/emails/customers/${customerId}/mark-read`);
+  return response.data;
+};
+
+export const markEmailMessagesUnread = async (messageIds: number[]): Promise<MessagesMarkUnreadResult> => {
+  const response = await api.post('/api/emails/mark-unread', { message_ids: messageIds });
   return response.data;
 };
 
@@ -144,8 +152,13 @@ export const getUnreadSms = async () => {
   return response.data;
 };
 
-export const markCustomerSmsRead = async (customerId: number) => {
+export const markCustomerSmsRead = async (customerId: number): Promise<MessagesMarkReadResult> => {
   const response = await api.post(`/api/sms/customers/${customerId}/mark-read`);
+  return response.data;
+};
+
+export const markSmsMessagesUnread = async (messageIds: number[]): Promise<MessagesMarkUnreadResult> => {
+  const response = await api.post('/api/sms/mark-unread', { message_ids: messageIds });
   return response.data;
 };
 
@@ -194,10 +207,24 @@ export const getCustomerMessenger = async (customerId: number) => {
   return response.data;
 };
 
-export const markCustomerMessengerRead = async (customerId: number) => {
+export const markCustomerMessengerRead = async (customerId: number): Promise<MessagesMarkReadResult> => {
   const response = await api.post(`/api/messenger/customers/${customerId}/mark-read`);
   return response.data;
 };
+
+export const markMessengerMessagesUnread = async (messageIds: number[]): Promise<MessagesMarkUnreadResult> => {
+  const response = await api.post('/api/messenger/mark-unread', { message_ids: messageIds });
+  return response.data;
+};
+
+/** Dispatched after restoring unread so the header badge updates without a route change. */
+export const LEADLOCK_REFRESH_UNREAD_EVENT = 'leadlock:refreshUnreadCounts';
+
+export function dispatchRefreshUnreadCounts(): void {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(LEADLOCK_REFRESH_UNREAD_EVENT));
+  }
+}
 
 export const getUnreadMessenger = async () => {
   const response = await api.get('/api/dashboard/unread-messenger');

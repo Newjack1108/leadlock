@@ -1,13 +1,19 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Header from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Mail, ArrowLeft, Reply, Send } from 'lucide-react';
-import { getCustomerEmails, sendEmail, markCustomerEmailsRead } from '@/lib/api';
+import {
+  getCustomerEmails,
+  sendEmail,
+  markCustomerEmailsRead,
+  markEmailMessagesUnread,
+  dispatchRefreshUnreadCounts,
+} from '@/lib/api';
 import { formatDateTime } from '@/lib/utils';
 import { Email, EmailDirection, Customer } from '@/lib/types';
 import { toast } from 'sonner';
@@ -24,6 +30,10 @@ export default function CustomerEmailsPage() {
   const [loading, setLoading] = useState(true);
   const [selectedThread, setSelectedThread] = useState<string | null>(null);
   const [composeEmailDialogOpen, setComposeEmailDialogOpen] = useState(false);
+  const autoMarkedIdsRef = useRef<Set<number>>(new Set());
+  const preserveUnreadRef = useRef(false);
+  const [restoreUnreadCount, setRestoreUnreadCount] = useState(0);
+  const [keepingUnread, setKeepingUnread] = useState(false);
 
   useEffect(() => {
     if (customerId) {
@@ -45,7 +55,11 @@ export default function CustomerEmailsPage() {
     try {
       const data = await getCustomerEmails(customerId);
       setEmails(data);
-      markCustomerEmailsRead(customerId).catch(() => {});
+      if (!preserveUnreadRef.current) {
+        const readRes = await markCustomerEmailsRead(customerId);
+        (readRes.marked_ids ?? []).forEach((id) => autoMarkedIdsRef.current.add(id));
+        setRestoreUnreadCount(autoMarkedIdsRef.current.size);
+      }
     } catch (error: any) {
       toast.error('Failed to load emails');
       if (error.response?.status === 401) {
@@ -53,6 +67,31 @@ export default function CustomerEmailsPage() {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleKeepUnread = async () => {
+    const ids = [...autoMarkedIdsRef.current];
+    if (ids.length === 0) return;
+    setKeepingUnread(true);
+    try {
+      await markEmailMessagesUnread(ids);
+      autoMarkedIdsRef.current.clear();
+      setRestoreUnreadCount(0);
+      preserveUnreadRef.current = true;
+      setEmails((prev) =>
+        prev.map((e) => (ids.includes(e.id) ? { ...e, read_at: null } : e))
+      );
+      dispatchRefreshUnreadCounts();
+      toast.success('Kept as unread');
+    } catch (error: unknown) {
+      const msg =
+        error && typeof error === 'object' && 'response' in error
+          ? (error as { response?: { data?: { detail?: string } } }).response?.data?.detail
+          : 'Failed to update';
+      toast.error(String(msg));
+    } finally {
+      setKeepingUnread(false);
     }
   };
 
@@ -108,15 +147,26 @@ export default function CustomerEmailsPage() {
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back to Customer
             </Button>
-            {customer && (
-              <Button
-                variant="default"
-                onClick={() => setComposeEmailDialogOpen(true)}
-              >
-                <Send className="h-4 w-4 mr-2" />
-                Compose Email
-              </Button>
-            )}
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              {restoreUnreadCount > 0 && (
+                <Button
+                  variant="outline"
+                  onClick={() => void handleKeepUnread()}
+                  disabled={keepingUnread}
+                >
+                  {keepingUnread ? 'Updating…' : 'Keep as unread'}
+                </Button>
+              )}
+              {customer && (
+                <Button
+                  variant="default"
+                  onClick={() => setComposeEmailDialogOpen(true)}
+                >
+                  <Send className="h-4 w-4 mr-2" />
+                  Compose Email
+                </Button>
+              )}
+            </div>
           </div>
           <h1 className="text-3xl font-bold">
             {customer?.name ? `Emails - ${customer.name}` : 'Emails'}

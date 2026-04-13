@@ -257,6 +257,20 @@ class SmsScheduledUpdate(BaseModel):
     status: Optional[ScheduledSmsStatus] = None
 
 
+class MessagesMarkReadResult(BaseModel):
+    """IDs of received messages marked read in this request (read_at was null)."""
+    marked_count: int
+    marked_ids: List[int]
+
+
+class MessageIdsMarkUnread(BaseModel):
+    message_ids: List[int]
+
+
+class MessagesMarkUnreadResult(BaseModel):
+    unmarked_count: int
+
+
 class SmsTemplateCreate(BaseModel):
     name: str
     description: Optional[str] = None

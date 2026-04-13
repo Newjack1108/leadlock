@@ -17,6 +17,9 @@ from app.schemas import (
     EmailComposePreviewResponse,
     EmailResponse,
     EmailReplyRequest,
+    MessagesMarkReadResult,
+    MessageIdsMarkUnread,
+    MessagesMarkUnreadResult,
 )
 from app.email_service import send_email, receive_emails, assemble_outbound_email_html, _html_to_plain
 from app.email_template_service import render_email_template
@@ -293,7 +296,7 @@ async def get_customer_emails(
     return emails
 
 
-@router.post("/customers/{customer_id}/mark-read")
+@router.post("/customers/{customer_id}/mark-read", response_model=MessagesMarkReadResult)
 async def mark_customer_emails_read(
     customer_id: int,
     session: Session = Depends(get_session),
@@ -316,7 +319,35 @@ async def mark_customer_emails_read(
         em.read_at = now
         session.add(em)
     session.commit()
-    return {"marked_count": len(rows)}
+    return MessagesMarkReadResult(
+        marked_count=len(rows),
+        marked_ids=[em.id for em in rows],
+    )
+
+
+@router.post("/mark-unread", response_model=MessagesMarkUnreadResult)
+async def mark_emails_unread(
+    body: MessageIdsMarkUnread,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Clear read_at on received emails by id."""
+    ids = list(dict.fromkeys(body.message_ids))
+    if not ids:
+        return MessagesMarkUnreadResult(unmarked_count=0)
+    to_update: List[Email] = []
+    for eid in ids:
+        em = session.get(Email, eid)
+        if not em:
+            raise HTTPException(status_code=400, detail=f"Email not found: {eid}")
+        if em.direction != EmailDirection.RECEIVED:
+            raise HTTPException(status_code=400, detail=f"Not a received email: {eid}")
+        to_update.append(em)
+    for em in to_update:
+        em.read_at = None
+        session.add(em)
+    session.commit()
+    return MessagesMarkUnreadResult(unmarked_count=len(to_update))
 
 
 @router.get("/{email_id}", response_model=EmailResponse)
