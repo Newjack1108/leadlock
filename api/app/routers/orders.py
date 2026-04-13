@@ -420,6 +420,7 @@ async def send_to_production(
         "currency": order.currency,
         "installation_booked": order.installation_booked,
         "created_at": order.created_at.isoformat() if order.created_at else None,
+        "notes": order.notes or "",
     }
 
     url = f"{base_url}/api/webhooks/work-orders"

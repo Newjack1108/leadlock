@@ -397,6 +397,7 @@ export interface DeliveryInstallEstimateRequest {
   customer_postcode: string;
   installation_hours: number;
   number_of_boxes?: number;
+  delivery_only?: boolean;
 }
 
 export interface DeliveryInstallEstimateResponse {
@@ -411,6 +412,7 @@ export interface DeliveryInstallEstimateResponse {
   cost_meals?: number;
   cost_total: number;
   settings_incomplete: boolean;
+  delivery_only?: boolean;
 }
 
 export enum EmailDirection {

@@ -559,12 +559,13 @@ export const updateFacebookAdvert = async (
 export const estimateDeliveryInstall = async (
   customerPostcode: string,
   installationHours: number,
-  numberOfBoxes?: number
+  options?: { numberOfBoxes?: number; deliveryOnly?: boolean }
 ) => {
   const response = await api.post('/api/delivery-install/estimate', {
     customer_postcode: customerPostcode,
     installation_hours: installationHours,
-    number_of_boxes: numberOfBoxes,
+    number_of_boxes: options?.numberOfBoxes,
+    delivery_only: options?.deliveryOnly ?? false,
   });
   return response.data;
 };
@@ -669,6 +670,7 @@ export const updateOrder = async (
     paid_in_full?: boolean;
     installation_booked?: boolean;
     installation_completed?: boolean;
+    notes?: string | null;
   }
 ) => {
   const response = await api.patch(`/api/orders/${orderId}`, data);

@@ -1033,6 +1033,7 @@ class DeliveryInstallEstimateRequest(BaseModel):
     customer_postcode: str
     installation_hours: float
     number_of_boxes: Optional[int] = None  # For future use
+    delivery_only: bool = False  # True: 1 driver, 1hr unload, single round-trip mileage
 
 
 class DeliveryInstallEstimateResponse(BaseModel):
@@ -1047,6 +1048,7 @@ class DeliveryInstallEstimateResponse(BaseModel):
     cost_meals: Optional[Decimal] = None
     cost_total: Decimal
     settings_incomplete: bool = False  # True if some costs could not be calculated
+    delivery_only: bool = False
 
 
 class QuoteItemCreate(BaseModel):
@@ -1340,6 +1342,7 @@ class OrderUpdate(BaseModel):
     paid_in_full: Optional[bool] = None
     installation_booked: Optional[bool] = None
     installation_completed: Optional[bool] = None
+    notes: Optional[str] = None
 
 
 class AccessSheetResponse(BaseModel):

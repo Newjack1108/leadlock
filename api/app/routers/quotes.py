@@ -172,7 +172,7 @@ def _item_eligible_for_product_scope_discount(item: QuoteItem) -> bool:
     line_type = getattr(item, "line_type", None)
     if line_type in (QuoteItemLineType.DELIVERY, QuoteItemLineType.INSTALLATION):
         return False
-    if item.description == "Delivery & Installation":
+    if item.description in ("Delivery & Installation", "Delivery only"):
         return False
     return True
 

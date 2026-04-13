@@ -6,6 +6,8 @@ import Header from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import api, {
   getOrder,
   updateOrder,
@@ -55,6 +57,8 @@ export default function OrderDetailPage() {
   const [pushingXero, setPushingXero] = useState(false);
   const [sendingAccessSheet, setSendingAccessSheet] = useState(false);
   const [sendingToProduction, setSendingToProduction] = useState(false);
+  const [notesDraft, setNotesDraft] = useState('');
+  const [savingNotes, setSavingNotes] = useState(false);
   const [composeEmailOpen, setComposeEmailOpen] = useState(false);
   const [composeEmailInitialAttachments, setComposeEmailInitialAttachments] = useState<File[]>([]);
   const [composeEmailInitialSubject, setComposeEmailInitialSubject] = useState<string>('');
@@ -64,6 +68,10 @@ export default function OrderDetailPage() {
   useEffect(() => {
     if (orderId) fetchOrder();
   }, [orderId]);
+
+  useEffect(() => {
+    if (order) setNotesDraft(order.notes ?? '');
+  }, [order?.id, order?.notes]);
 
   const fetchOrder = async () => {
     try {
@@ -204,6 +212,19 @@ export default function OrderDetailPage() {
       toast.error(error.response?.data?.detail || 'Failed to send to production');
     } finally {
       setSendingToProduction(false);
+    }
+  };
+
+  const handleSaveOrderNotes = async () => {
+    try {
+      setSavingNotes(true);
+      const updated = await updateOrder(orderId, { notes: notesDraft });
+      setOrder(updated);
+      toast.success('Notes saved');
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || 'Failed to save notes');
+    } finally {
+      setSavingNotes(false);
     }
   };
 
@@ -473,6 +494,30 @@ export default function OrderDetailPage() {
                       {key.replace('installation_', '')}
                     </Button>
                   ))}
+                </div>
+                <div className="mt-4 pt-4 border-t space-y-2">
+                  <Label htmlFor="order-production-notes">Notes for production</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Copied from the quote when the order was created. Edit here before sending to production; these
+                    notes are included in the work order payload.
+                  </p>
+                  <Textarea
+                    id="order-production-notes"
+                    value={notesDraft}
+                    onChange={(e) => setNotesDraft(e.target.value)}
+                    placeholder="e.g. site constraints, colour choices, special instructions…"
+                    rows={4}
+                    className="resize-y min-h-[88px]"
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleSaveOrderNotes}
+                    disabled={savingNotes || notesDraft === (order.notes ?? '')}
+                  >
+                    {savingNotes ? 'Saving...' : 'Save notes'}
+                  </Button>
                 </div>
                 <div className="mt-4 pt-4 border-t">
                   <Button

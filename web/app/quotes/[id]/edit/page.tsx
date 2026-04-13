@@ -63,12 +63,14 @@ import {
 const DELIVERY_LINE_DESCRIPTION = 'Delivery';
 const INSTALLATION_LINE_DESCRIPTION = 'Installation';
 const DELIVERY_INSTALL_LEGACY_DESCRIPTION = 'Delivery & Installation';
+const DELIVERY_ONLY_DESCRIPTION = 'Delivery only';
 
 function isDeliveryOrInstallItem(item: QuoteItemCreate | QuoteItem): boolean {
   return (
     item.line_type === 'DELIVERY' ||
     item.line_type === 'INSTALLATION' ||
-    (item.description === DELIVERY_INSTALL_LEGACY_DESCRIPTION && !!item.is_custom)
+    (item.description === DELIVERY_INSTALL_LEGACY_DESCRIPTION && !!item.is_custom) ||
+    (item.description === DELIVERY_ONLY_DESCRIPTION && !!item.is_custom)
   );
 }
 
@@ -146,6 +148,7 @@ function EditQuoteContent() {
   const [deliveryEstimate, setDeliveryEstimate] = useState<DeliveryInstallEstimateResponse | null>(null);
   const [deliveryEstimateLoading, setDeliveryEstimateLoading] = useState(false);
   const [deliveryEstimateError, setDeliveryEstimateError] = useState<string | null>(null);
+  const [deliveryEstimateMode, setDeliveryEstimateMode] = useState<'full' | 'delivery_only'>('full');
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [cancelling, setCancelling] = useState(false);
 
@@ -386,7 +389,8 @@ function EditQuoteContent() {
   useEffect(() => {
     const postcode = customer?.postcode?.trim();
     const installHours = calculateTotalInstallationHours();
-    if (!postcode || installHours <= 0) {
+    const deliveryOnly = deliveryEstimateMode === 'delivery_only';
+    if (!postcode || (!deliveryOnly && installHours <= 0)) {
       setDeliveryEstimate(null);
       setDeliveryEstimateError(null);
       return;
@@ -394,7 +398,7 @@ function EditQuoteContent() {
     let cancelled = false;
     setDeliveryEstimateLoading(true);
     setDeliveryEstimateError(null);
-    estimateDeliveryInstall(postcode, installHours)
+    estimateDeliveryInstall(postcode, deliveryOnly ? 0 : installHours, { deliveryOnly })
       .then((data) => {
         if (!cancelled) {
           setDeliveryEstimate(data);
@@ -412,7 +416,7 @@ function EditQuoteContent() {
         if (!cancelled) setDeliveryEstimateLoading(false);
       });
     return () => { cancelled = true; };
-  }, [customer?.postcode, items, productDetails, products]);
+  }, [customer?.postcode, items, productDetails, products, deliveryEstimateMode]);
 
   const addDeliveryInstallToQuote = () => {
     if (!deliveryEstimate) return;
@@ -421,9 +425,10 @@ function EditQuoteContent() {
       toast.error('No delivery or installation costs to add');
       return;
     }
+    const deliveryOnly = deliveryEstimateMode === 'delivery_only';
     const newItems: QuoteItemCreate[] = [...items];
     newItems.push({
-      description: DELIVERY_INSTALL_LEGACY_DESCRIPTION,
+      description: deliveryOnly ? DELIVERY_ONLY_DESCRIPTION : DELIVERY_INSTALL_LEGACY_DESCRIPTION,
       quantity: 1,
       unit_price: Math.round(totalCost * 100) / 100,
       is_custom: true,
@@ -431,7 +436,7 @@ function EditQuoteContent() {
       line_type: 'DELIVERY',
     });
     setItems(newItems.map((it, i) => ({ ...it, sort_order: i })));
-    toast.success('Delivery & Installation added to quote');
+    toast.success(deliveryOnly ? 'Delivery only added to quote' : 'Delivery & Installation added to quote');
   };
 
   const removeDeliveryInstallFromQuote = () => {
@@ -439,7 +444,7 @@ function EditQuoteContent() {
       .filter((item) => !isDeliveryOrInstallItem(item))
       .map((it, i) => ({ ...it, sort_order: i }));
     setItems(newItems);
-    toast.success('Delivery & Installation removed from quote');
+    toast.success('Delivery line removed from quote');
   };
 
   const calculateInstallCost = (product: Product) => {
@@ -994,15 +999,40 @@ function EditQuoteContent() {
               </DialogContent>
             </Dialog>
 
-            {(customer?.postcode?.trim() && calculateTotalInstallationHours() > 0) && (
+            {customer?.postcode?.trim() && (
               <Card>
                 <CardHeader>
                   <CardTitle>Delivery & installation estimate</CardTitle>
                   <p className="text-sm text-muted-foreground font-normal">
-                    From factory to customer postcode; 8hr fitting days, 2-man team. Add below to include in quote total.
+                    From factory to customer postcode. Choose delivery only (1 driver, 1 hr unload) or full delivery
+                    & installation (8hr fitting days, 2-man team). Add below to include in quote total.
                   </p>
+                  <div className="flex flex-wrap gap-2 pt-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={deliveryEstimateMode === 'full' ? 'default' : 'outline'}
+                      onClick={() => setDeliveryEstimateMode('full')}
+                    >
+                      Delivery & installation
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={deliveryEstimateMode === 'delivery_only' ? 'default' : 'outline'}
+                      onClick={() => setDeliveryEstimateMode('delivery_only')}
+                    >
+                      Delivery only
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  {deliveryEstimateMode === 'full' && calculateTotalInstallationHours() <= 0 && (
+                    <p className="text-sm text-muted-foreground">
+                      Add building lines with installation hours to estimate delivery and installation, or switch to
+                      Delivery only.
+                    </p>
+                  )}
                   {deliveryEstimateLoading && (
                     <p className="text-sm text-muted-foreground">Loading estimate…</p>
                   )}
@@ -1026,7 +1056,14 @@ function EditQuoteContent() {
                       </div>
                       <div className="border-t pt-3 space-y-1 text-sm">
                         {deliveryEstimate.cost_mileage != null && <div className="flex justify-between"><span className="text-muted-foreground">Mileage:</span><span>£{Number(deliveryEstimate.cost_mileage).toFixed(2)}</span></div>}
-                        {deliveryEstimate.cost_labour != null && <div className="flex justify-between"><span className="text-muted-foreground">Labour (install):</span><span>£{Number(deliveryEstimate.cost_labour).toFixed(2)}</span></div>}
+                        {deliveryEstimate.cost_labour != null && (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">
+                              {deliveryEstimateMode === 'delivery_only' ? 'Labour (unload):' : 'Labour (install):'}
+                            </span>
+                            <span>£{Number(deliveryEstimate.cost_labour).toFixed(2)}</span>
+                          </div>
+                        )}
                         {deliveryEstimate.cost_hotel != null && <div className="flex justify-between"><span className="text-muted-foreground">Hotel:</span><span>£{Number(deliveryEstimate.cost_hotel).toFixed(2)}</span></div>}
                         {deliveryEstimate.cost_meals != null && <div className="flex justify-between"><span className="text-muted-foreground">Meals:</span><span>£{Number(deliveryEstimate.cost_meals).toFixed(2)}</span></div>}
                         <div className="flex justify-between font-semibold pt-1 border-t"><span>Total (Mileage + Labour + Hotel + Meals, Ex VAT):</span><span>£{Number(deliveryEstimate.cost_total).toFixed(2)}</span></div>
