@@ -758,6 +758,8 @@ class Order(SQLModel, table=True):
     installation_completed: bool = Field(default=False)
     invoice_number: Optional[str] = Field(default=None, unique=True, index=True)  # e.g. "INV-2025-001"
     xero_invoice_id: Optional[str] = Field(default=None)  # XERO invoice ID after push
+    # One-way drive time (hours); round-trip sent to production webhook is 2× this when set
+    travel_time_hours_one_way: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(10, 4)))
 
     # Relationships
     quote: "Quote" = Relationship(back_populates="order")

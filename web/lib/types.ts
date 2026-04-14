@@ -830,6 +830,8 @@ export interface Order {
   installation_completed?: boolean;
   invoice_number?: string | null;
   xero_invoice_id?: string | null;
+  /** Stored one-way drive time (hours); production webhook sends 2× as round-trip when set */
+  travel_time_hours_one_way?: number | null;
   is_ninox_origin?: boolean;
   items: OrderItem[];
   access_sheet?: AccessSheet | null;

@@ -234,6 +234,20 @@ def create_db_and_tables():
                     except Exception as e:
                         if "already exists" not in str(e).lower():
                             print(f"Warning adding {col_name}: {e}", file=sys.stderr, flush=True)
+            # One-way travel time (hours) for production sync; nullable
+            order_columns = [col["name"] for col in inspector.get_columns("customer_order")]
+            if "travel_time_hours_one_way" not in order_columns:
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(
+                            text(
+                                "ALTER TABLE customer_order ADD COLUMN travel_time_hours_one_way NUMERIC(10, 4)"
+                            )
+                        )
+                    print("Added travel_time_hours_one_way to customer_order", file=sys.stderr, flush=True)
+                except Exception as e:
+                    if "already exists" not in str(e).lower():
+                        print(f"Warning adding travel_time_hours_one_way: {e}", file=sys.stderr, flush=True)
 
         # Step 0a3: Create access_sheet_request table if missing
         has_access_sheet_table = inspector.has_table("accesssheetrequest")

@@ -15,7 +15,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import api, { getQuotes, previewQuotePdf } from '@/lib/api';
-import { Quote, QuoteStatus, QuoteTemperature, OpportunityStage } from '@/lib/types';
+import { LeadType, Quote, QuoteStatus, QuoteTemperature, OpportunityStage } from '@/lib/types';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { FileText, Eye, Pencil, List, LayoutGrid, ShoppingCart } from 'lucide-react';
@@ -58,6 +58,11 @@ function sortKeyLastContactedMs(q: Quote): number {
 function sortKeyCreatedMs(q: Quote): number {
   const t = new Date(q.created_at).getTime();
   return Number.isNaN(t) ? Number.NEGATIVE_INFINITY : t;
+}
+
+function getDisplayLeadType(leadType?: LeadType | null): LeadType | null {
+  if (!leadType || leadType === LeadType.UNKNOWN) return null;
+  return leadType;
 }
 
 function QuotesPageContent() {
@@ -295,7 +300,15 @@ function QuotesPageContent() {
                         </div>
                       </td>
                       <td className="p-3 text-muted-foreground">{quote.customer_name || '—'}</td>
-                      <td className="p-3 text-muted-foreground">{quote.lead_type ?? '—'}</td>
+                      <td className="p-3">
+                        {getDisplayLeadType(quote.lead_type) ? (
+                          <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
+                            {quote.lead_type}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">—</span>
+                        )}
+                      </td>
                       <td className="p-3 text-muted-foreground">
                         {quote.customer_last_interacted_at
                           ? new Date(quote.customer_last_interacted_at).toLocaleDateString()
@@ -393,8 +406,10 @@ function QuotesPageContent() {
                         {quote.customer_name && (
                           <span className="text-muted-foreground">— {quote.customer_name}</span>
                         )}
-                        {quote.lead_type && (
-                          <span className="text-muted-foreground text-sm">({quote.lead_type})</span>
+                        {getDisplayLeadType(quote.lead_type) && (
+                          <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
+                            {quote.lead_type}
+                          </Badge>
                         )}
                         <Badge className={statusColors[quote.status]}>
                           {quote.status}

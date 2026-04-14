@@ -1357,6 +1357,7 @@ class OrderUpdate(BaseModel):
     installation_booked: Optional[bool] = None
     installation_completed: Optional[bool] = None
     notes: Optional[str] = None
+    travel_time_hours_one_way: Optional[Decimal] = None
 
 
 class AccessSheetResponse(BaseModel):
@@ -1391,6 +1392,7 @@ class OrderResponse(BaseModel):
     installation_completed: bool = False
     invoice_number: Optional[str] = None
     xero_invoice_id: Optional[str] = None
+    travel_time_hours_one_way: Optional[Decimal] = None
     is_ninox_origin: bool = False
     items: List[OrderItemResponse] = []
     access_sheet: Optional[AccessSheetResponse] = None

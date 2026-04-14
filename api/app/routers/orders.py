@@ -121,6 +121,7 @@ def build_order_response(order: Order, order_items: List[OrderItem], session: Se
         installation_completed=order.installation_completed,
         invoice_number=order.invoice_number,
         xero_invoice_id=order.xero_invoice_id,
+        travel_time_hours_one_way=order.travel_time_hours_one_way,
         is_ninox_origin=is_ninox_origin,
         items=[
             OrderItemResponse(
@@ -465,6 +466,8 @@ async def send_to_production(
         "created_at": order.created_at.isoformat() if order.created_at else None,
         "notes": order.notes or "",
     }
+    if order.travel_time_hours_one_way is not None:
+        payload["travel_time_hours_round_trip"] = float(order.travel_time_hours_one_way) * 2.0
 
     url = f"{base_url}/api/webhooks/work-orders"
     headers = {

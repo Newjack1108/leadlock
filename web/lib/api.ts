@@ -698,6 +698,8 @@ export const updateOrder = async (
     installation_booked?: boolean;
     installation_completed?: boolean;
     notes?: string | null;
+    /** One-way drive time in hours; production send uses 2× for round-trip */
+    travel_time_hours_one_way?: number | null;
   }
 ) => {
   const response = await api.patch(`/api/orders/${orderId}`, data);
