@@ -53,7 +53,7 @@ export default function CreateQuoteDialog({
   const [termsAndConditions, setTermsAndConditions] = useState('');
   const [notes, setNotes] = useState('');
   const [depositAmount, setDepositAmount] = useState<number | ''>('');
-  const [includeSpecSheets, setIncludeSpecSheets] = useState(true);
+  const [includeSpecSheets, setIncludeSpecSheets] = useState(false);
   const [includeAvailableOptionalExtras, setIncludeAvailableOptionalExtras] = useState(false);
   const [includeDeliveryInstallationContactNote, setIncludeDeliveryInstallationContactNote] =
     useState(false);

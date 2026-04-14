@@ -130,7 +130,7 @@ function EditQuoteContent() {
   const [termsAndConditions, setTermsAndConditions] = useState('');
   const [notes, setNotes] = useState('');
   const [temperature, setTemperature] = useState<QuoteTemperature | ''>('');
-  const [includeSpecSheets, setIncludeSpecSheets] = useState(true);
+  const [includeSpecSheets, setIncludeSpecSheets] = useState(false);
   const [includeAvailableOptionalExtras, setIncludeAvailableOptionalExtras] = useState(false);
   const [includeDeliveryInstallationContactNote, setIncludeDeliveryInstallationContactNote] =
     useState(false);

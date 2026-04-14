@@ -142,7 +142,7 @@ function CreateQuoteContent() {
   const [termsAndConditions, setTermsAndConditions] = useState('');
   const [notes, setNotes] = useState('');
   const [temperature, setTemperature] = useState<QuoteTemperature | ''>(QuoteTemperature.WARM);
-  const [includeSpecSheets, setIncludeSpecSheets] = useState(true);
+  const [includeSpecSheets, setIncludeSpecSheets] = useState(false);
   const [includeAvailableOptionalExtras, setIncludeAvailableOptionalExtras] = useState(false);
   const [includeDeliveryInstallationContactNote, setIncludeDeliveryInstallationContactNote] =
     useState(false);
@@ -611,7 +611,7 @@ function CreateQuoteContent() {
           setTermsAndConditions(q.terms_and_conditions ?? '');
           setNotes(q.notes ?? '');
           setTemperature(q.temperature ?? QuoteTemperature.WARM);
-          setIncludeSpecSheets(q.include_spec_sheets ?? true);
+          setIncludeSpecSheets(q.include_spec_sheets ?? false);
           setIncludeAvailableOptionalExtras(q.include_available_optional_extras ?? false);
           setIncludeDeliveryInstallationContactNote(
             q.include_delivery_installation_contact_note ?? false
