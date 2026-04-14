@@ -193,38 +193,22 @@ export default function ReminderList({
     openReminderDetail(reminder);
   };
 
-  /** Left stripe by reminder source so lists are scannable (priority still drives row fill). */
-  const getReminderCategoryBorder = (reminderType: ReminderType) => {
+  const getReminderTypeColor = (reminderType: ReminderType) => {
     switch (reminderType) {
       case ReminderType.USER_TASK:
-        return 'border-l-sky-500 dark:border-l-sky-400';
+        return 'text-sky-700 dark:text-sky-200 bg-sky-50 dark:bg-sky-950/35 border-sky-200 dark:border-sky-900/80';
       case ReminderType.LEAD_STALE:
-        return 'border-l-emerald-500 dark:border-l-emerald-400';
+        return 'text-emerald-700 dark:text-emerald-200 bg-emerald-50 dark:bg-emerald-950/35 border-emerald-200 dark:border-emerald-900/80';
       case ReminderType.MANUAL:
-        return 'border-l-amber-500 dark:border-l-amber-400';
+        return 'text-amber-700 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/35 border-amber-200 dark:border-amber-900/80';
       case ReminderType.QUOTE_STALE:
       case ReminderType.QUOTE_EXPIRING:
       case ReminderType.QUOTE_EXPIRED:
       case ReminderType.QUOTE_NOT_OPENED:
       case ReminderType.QUOTE_OPENED_NO_REPLY:
-        return 'border-l-violet-500 dark:border-l-violet-400';
+        return 'text-violet-700 dark:text-violet-200 bg-violet-50 dark:bg-violet-950/35 border-violet-200 dark:border-violet-900/80';
       default:
-        return 'border-l-slate-400 dark:border-l-slate-500';
-    }
-  };
-
-  const getPriorityColor = (priority: ReminderPriority) => {
-    switch (priority) {
-      case ReminderPriority.URGENT:
-        return 'text-red-600 dark:text-red-300 bg-red-50 dark:bg-red-950/35 border-red-200 dark:border-red-900/80';
-      case ReminderPriority.HIGH:
-        return 'text-orange-600 dark:text-orange-300 bg-orange-50 dark:bg-orange-950/35 border-orange-200 dark:border-orange-900/80';
-      case ReminderPriority.MEDIUM:
-        return 'text-yellow-700 dark:text-yellow-300 bg-yellow-50 dark:bg-yellow-950/30 border-yellow-200 dark:border-yellow-900/70';
-      case ReminderPriority.LOW:
-        return 'text-blue-600 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/35 border-blue-200 dark:border-blue-900/80';
-      default:
-        return 'text-muted-foreground bg-muted/40 border-border';
+        return 'text-slate-700 dark:text-slate-200 bg-slate-50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800';
     }
   };
 
@@ -344,7 +328,7 @@ export default function ReminderList({
             return (
             <div
               key={reminder.id}
-              className={`border border-l-4 rounded-lg overflow-hidden ${getReminderCategoryBorder(reminder.reminder_type)} ${isDoneMode ? 'bg-muted/50 border-muted-foreground/20 text-muted-foreground' : getPriorityColor(reminder.priority)} ${!isDoneMode && isTaskOverdue(reminder) ? 'ring-2 ring-destructive/40' : ''}`}
+              className={`border rounded-lg overflow-hidden ${isDoneMode ? 'bg-muted/50 border-muted-foreground/20 text-muted-foreground' : getReminderTypeColor(reminder.reminder_type)} ${!isDoneMode && isTaskOverdue(reminder) ? 'ring-2 ring-destructive/40' : ''}`}
             >
               <div
                 className={`${compact ? 'p-3' : 'p-4'} ${detailHref ? 'cursor-pointer hover:bg-black/[0.04] dark:hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-none' : ''}`}
