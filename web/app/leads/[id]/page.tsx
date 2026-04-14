@@ -44,6 +44,7 @@ import api, { getLeadQuotes, listFacebookAdverts } from '@/lib/api';
 import { formatDateTime, formatActivityTypeLabel } from '@/lib/utils';
 import { Lead, Activity, ActivityType, LeadStatus, Timeframe, LeadType, LeadSource, FacebookAdvertProfile } from '@/lib/types';
 import { toast } from 'sonner';
+import NinoxBadge from '@/components/NinoxBadge';
 
 const activityIcons: Record<ActivityType, any> = {
   SMS_SENT: MessageSquare,
@@ -339,6 +340,8 @@ export default function LeadDetailPage() {
     );
   }
 
+  const isNinoxLead = lead.lead_source === LeadSource.NINOX || lead.customer?.source_system === 'Ninox';
+
   return (
     <div className="min-h-screen">
       <Header />
@@ -348,6 +351,7 @@ export default function LeadDetailPage() {
             ← Back to Leads
           </Button>
           <h1 className="text-3xl font-semibold">{lead.name}</h1>
+          {isNinoxLead && <NinoxBadge className="mt-2" />}
           <p className="mt-2 text-sm text-muted-foreground flex items-center gap-2">
             <Clock className="h-4 w-4 shrink-0" />
             <span>

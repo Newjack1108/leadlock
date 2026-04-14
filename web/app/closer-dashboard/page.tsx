@@ -18,6 +18,7 @@ import api, {
   downloadSalesDocument,
   getCompanySettings,
   getLeadLocations,
+  getDiscountTemplates,
 } from '@/lib/api';
 import type {
   QualifiedForQuotingSummary,
@@ -27,6 +28,7 @@ import type {
   DashboardStats,
   CompanySettings,
   LeadLocationItem,
+  DiscountTemplate,
 } from '@/lib/types';
 import { toast } from 'sonner';
 import {
@@ -79,6 +81,7 @@ export default function CloserDashboardPage() {
   const [user, setUser] = useState<{ full_name: string } | null>(null);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [companySettings, setCompanySettings] = useState<CompanySettings | null>(null);
+  const [activeDiscounts, setActiveDiscounts] = useState<DiscountTemplate[]>([]);
   const [leadLocations, setLeadLocations] = useState<LeadLocationItem[]>([]);
   const [datePeriod, setDatePeriod] = useState<DatePeriod>('week');
   const [loadingPhase1, setLoadingPhase1] = useState(true);
@@ -114,9 +117,11 @@ export default function CloserDashboardPage() {
     Promise.all([
       getCompanySettings().catch(() => null),
       api.get('/api/dashboard/stats', { params }).then((r) => r.data).catch(() => null),
-    ]).then(([companyRes, statsRes]) => {
+      getDiscountTemplates(true).catch(() => []),
+    ]).then(([companyRes, statsRes, discountsRes]) => {
       setCompanySettings(companyRes ?? null);
       setStats(statsRes);
+      setActiveDiscounts(Array.isArray(discountsRes) ? discountsRes : []);
     }).catch(() => toast.error('Failed to load dashboard stats')).finally(() => setLoadingPhase2(false));
 
     // Phase 3: Lead locations, unread messages
@@ -146,6 +151,8 @@ export default function CloserDashboardPage() {
   };
 
   const totalUnread = (unreadSms?.count ?? 0) + (unreadMessenger?.count ?? 0);
+  const liveGiveaways = activeDiscounts.filter((discount) => discount.is_giveaway).length;
+  const liveSpecialOffers = activeDiscounts.filter((discount) => !discount.is_giveaway).length;
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -170,13 +177,19 @@ export default function CloserDashboardPage() {
         {loadingPhase2 && !companySettings ? (
           <Card className="shrink-0 mb-4 border-primary/30 bg-primary/5">
             <CardContent className="py-3 px-4">
-              <div className="flex items-center gap-3">
-                <div className="h-8 w-8 animate-pulse rounded-lg bg-muted" />
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground">
-                    Current installation lead time
-                  </p>
-                  <div className="mt-1 h-6 w-24 animate-pulse rounded bg-muted" />
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="h-8 w-8 animate-pulse rounded-lg bg-muted" />
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground">
+                      Current installation lead time
+                    </p>
+                    <div className="mt-1 h-6 w-24 animate-pulse rounded bg-muted" />
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <div className="h-6 w-28 animate-pulse rounded-full bg-muted" />
+                  <div className="h-6 w-28 animate-pulse rounded-full bg-muted" />
                 </div>
               </div>
             </CardContent>
@@ -184,15 +197,25 @@ export default function CloserDashboardPage() {
         ) : companySettings?.installation_lead_time ? (
           <Card className="shrink-0 mb-4 border-primary/30 bg-primary/5">
             <CardContent className="py-3 px-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
-                  <Clock className="h-4 w-4 text-primary" />
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                    <Clock className="h-4 w-4 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground">
+                      Current installation lead time
+                    </p>
+                    <p className="text-lg font-bold">{companySettings.installation_lead_time}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground">
-                    Current installation lead time
-                  </p>
-                  <p className="text-lg font-bold">{companySettings.installation_lead_time}</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-full bg-background px-3 py-1 text-xs font-medium text-foreground border border-border">
+                    Live giveaways: {liveGiveaways}
+                  </span>
+                  <span className="rounded-full bg-background px-3 py-1 text-xs font-medium text-foreground border border-border">
+                    Special offers: {liveSpecialOffers}
+                  </span>
                 </div>
               </div>
             </CardContent>

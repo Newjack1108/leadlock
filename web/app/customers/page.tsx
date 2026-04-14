@@ -12,6 +12,7 @@ import { getTelUrl } from '@/lib/utils';
 import { toast } from 'sonner';
 import { Search, ChevronRight, X } from 'lucide-react';
 import CallNotesDialog from '@/components/CallNotesDialog';
+import NinoxBadge from '@/components/NinoxBadge';
 
 function CustomersPageContent() {
   const router = useRouter();
@@ -151,9 +152,7 @@ function CustomersPageContent() {
                         <span className="inline-flex items-center gap-1.5">
                           {customer.name}
                           {customer.source_system === 'Ninox' && (
-                            <span className="inline-flex px-1.5 py-0.5 rounded text-xs font-medium bg-blue-500 text-white dark:bg-sky-400 dark:text-slate-950">
-                              Ninox
-                            </span>
+                            <NinoxBadge className="h-auto px-1.5 py-0.5 text-xs" />
                           )}
                         </span>
                       </td>

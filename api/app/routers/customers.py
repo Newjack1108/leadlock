@@ -150,6 +150,7 @@ async def get_customer(
         created_at=customer.created_at,
         updated_at=customer.updated_at,
         messenger_psid=customer.messenger_psid,
+        source_system=customer.source_system,
     )
 
 

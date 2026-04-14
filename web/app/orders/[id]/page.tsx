@@ -34,6 +34,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import ComposeEmailDialog from '@/components/ComposeEmailDialog';
 import SendQuoteEmailDialog from '@/components/SendQuoteEmailDialog';
+import NinoxBadge from '@/components/NinoxBadge';
 
 function formatCurrency(amount: number, currency: string = 'GBP'): string {
   return new Intl.NumberFormat('en-GB', {
@@ -341,7 +342,10 @@ export default function OrderDetailPage() {
             <div>
               <h1 className="text-3xl font-semibold">{order.order_number}</h1>
               {customer && (
-                <p className="text-muted-foreground mt-1">For {customer.name}</p>
+                <p className="text-muted-foreground mt-1 inline-flex items-center gap-1.5">
+                  For {customer.name}
+                  {order.is_ninox_origin && <NinoxBadge className="h-auto px-1.5 py-0.5 text-xs" />}
+                </p>
               )}
             </div>
             <div className="flex items-center gap-3">
@@ -762,6 +766,7 @@ export default function OrderDetailPage() {
                     <div>
                       <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Name</div>
                       <div className="font-medium">{customer.name}</div>
+                      {order.is_ninox_origin && <NinoxBadge className="mt-2" />}
                     </div>
                     {customer.email && (
                       <div>

@@ -18,6 +18,7 @@ import { Order } from '@/lib/types';
 import { toast } from 'sonner';
 import { FileText, ExternalLink } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import NinoxBadge from '@/components/NinoxBadge';
 
 type OrderStatusFilter = 'new' | 'deposit_paid' | 'installation_booked' | 'installation_completed' | 'all';
 
@@ -186,7 +187,10 @@ export default function OrdersPage() {
                     >
                       <td className="p-3 font-semibold">{order.order_number}</td>
                       <td className="p-3 text-muted-foreground">
-                        {order.customer_name ?? '—'}
+                        <span className="inline-flex items-center gap-1.5">
+                          {order.customer_name ?? '—'}
+                          {order.is_ninox_origin && <NinoxBadge className="h-auto px-1.5 py-0.5 text-xs" />}
+                        </span>
                       </td>
                       <td className="p-3 font-semibold">
                         {formatCurrency(order.total_amount, order.currency)}

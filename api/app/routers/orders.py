@@ -8,7 +8,17 @@ from sqlmodel import Session, select
 from typing import List
 import httpx
 from app.database import get_session
-from app.models import Order, OrderItem, Customer, CompanySettings, AccessSheetRequest, Product
+from app.models import (
+    Order,
+    OrderItem,
+    Customer,
+    CompanySettings,
+    AccessSheetRequest,
+    Product,
+    Quote,
+    Lead,
+    LeadSource,
+)
 from app.auth import get_current_user
 from app.schemas import OrderResponse, OrderItemResponse, OrderUpdate, AccessSheetSendResponse, AccessSheetResponse
 from app.models import User
@@ -69,9 +79,19 @@ def _build_access_sheet_response(order_id: int, session: Session) -> AccessSheet
 def build_order_response(order: Order, order_items: List[OrderItem], session: Session) -> OrderResponse:
     """Build OrderResponse with items and optional customer_name."""
     customer_name = None
+    customer_source_system = None
     if order.customer_id:
         customer = session.exec(select(Customer).where(Customer.id == order.customer_id)).first()
-        customer_name = customer.name if customer else None
+        if customer:
+            customer_name = customer.name
+            customer_source_system = customer.source_system
+
+    quote = session.exec(select(Quote).where(Quote.id == order.quote_id)).first()
+    lead_source = None
+    if quote and quote.lead_id:
+        lead = session.exec(select(Lead).where(Lead.id == quote.lead_id)).first()
+        lead_source = lead.lead_source if lead else None
+    is_ninox_origin = lead_source == LeadSource.NINOX or customer_source_system == "Ninox"
 
     access_sheet = _build_access_sheet_response(order.id, session)
 
@@ -98,6 +118,7 @@ def build_order_response(order: Order, order_items: List[OrderItem], session: Se
         installation_completed=order.installation_completed,
         invoice_number=order.invoice_number,
         xero_invoice_id=order.xero_invoice_id,
+        is_ninox_origin=is_ninox_origin,
         items=[
             OrderItemResponse(
                 id=item.id,

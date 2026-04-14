@@ -1390,6 +1390,7 @@ class OrderResponse(BaseModel):
     installation_completed: bool = False
     invoice_number: Optional[str] = None
     xero_invoice_id: Optional[str] = None
+    is_ninox_origin: bool = False
     items: List[OrderItemResponse] = []
     access_sheet: Optional[AccessSheetResponse] = None
 

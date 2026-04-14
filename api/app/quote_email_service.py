@@ -6,6 +6,7 @@ from datetime import datetime
 from jinja2 import Template
 from sqlmodel import Session, select
 from app.models import Quote, QuoteTemplate, Customer, CompanySettings, Order
+from types import SimpleNamespace
 from app.customer_view_links import customer_view_path_segment
 from app.email_service import send_email, EMAIL_TRACKED_LINK_STYLE
 from app.constants import VAT_RATE_DECIMAL
@@ -55,10 +56,23 @@ def render_email_template(
     currency_symbol = "£" if quote.currency == "GBP" else quote.currency + " "
     vat_amount = (quote.total_amount or Decimal(0)) * VAT_RATE_DECIMAL
     total_amount_inc_vat = (quote.total_amount or Decimal(0)) + vat_amount
+    # Keep customer templates useful while preventing accidental source-system leakage.
+    customer_context = SimpleNamespace(
+        name=customer.name,
+        email=customer.email,
+        phone=customer.phone,
+        customer_number=customer.customer_number,
+        address_line1=customer.address_line1,
+        address_line2=customer.address_line2,
+        city=customer.city,
+        county=customer.county,
+        postcode=customer.postcode,
+        country=customer.country,
+    )
 
     return template.render(
         quote=quote,
-        customer=customer,
+        customer=customer_context,
         company_settings=company_settings,
         custom_message=custom_message,
         currency_symbol=currency_symbol,

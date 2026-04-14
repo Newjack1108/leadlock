@@ -11,6 +11,7 @@ import ReminderList from '@/components/ReminderList';
 import api, {
   getStaleSummary,
   getCompanySettings,
+  getDiscountTemplates,
   getUnreadSms,
   getUnreadMessenger,
   getLeadLocations,
@@ -20,7 +21,7 @@ import api, {
   downloadQuoteEngagementReportPdf,
   downloadWeeklySummaryReportPdf,
 } from '@/lib/api';
-import { DashboardStats, StaleSummary, CompanySettings, UnreadSmsSummary, UnreadMessengerSummary, LeadLocationItem } from '@/lib/types';
+import { DashboardStats, StaleSummary, CompanySettings, UnreadSmsSummary, UnreadMessengerSummary, LeadLocationItem, DiscountTemplate } from '@/lib/types';
 import { toast } from 'sonner';
 import { TrendingUp, Users, CheckCircle2, Trophy, Bell, ArrowRight, Clock, MessageSquare, FileDown, BarChart3, Target, MessageCircle, Calendar, DoorClosed } from 'lucide-react';
 import StatusPieChart from '@/components/StatusPieChart';
@@ -39,6 +40,7 @@ export default function DashboardPage() {
   const [unreadSms, setUnreadSms] = useState<UnreadSmsSummary | null>(null);
   const [unreadMessenger, setUnreadMessenger] = useState<UnreadMessengerSummary | null>(null);
   const [leadLocations, setLeadLocations] = useState<LeadLocationItem[]>([]);
+  const [activeDiscounts, setActiveDiscounts] = useState<DiscountTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [datePeriod, setDatePeriod] = useState<DatePeriod>('week');
 
@@ -48,7 +50,7 @@ export default function DashboardPage() {
 
   const fetchDashboard = async () => {
     try {
-      const [statsRes, stuckRes, staleRes, companyRes, unreadSmsRes, unreadMessengerRes, locationsRes] = await Promise.all([
+      const [statsRes, stuckRes, staleRes, companyRes, unreadSmsRes, unreadMessengerRes, locationsRes, discountsRes] = await Promise.all([
         api.get('/api/dashboard/stats', { params: datePeriod === 'all' ? {} : { period: datePeriod } }),
         api.get('/api/dashboard/stuck-leads'),
         getStaleSummary().catch(() => null), // Don't fail if reminders not available
@@ -56,6 +58,7 @@ export default function DashboardPage() {
         getUnreadSms().catch(() => ({ count: 0, messages: [] })),
         getUnreadMessenger().catch(() => ({ count: 0, messages: [] })),
         getLeadLocations(datePeriod === 'all' ? undefined : datePeriod).catch(() => []),
+        getDiscountTemplates(true).catch(() => []),
       ]);
       setStats(statsRes.data);
       setStuckLeads(stuckRes.data);
@@ -64,6 +67,7 @@ export default function DashboardPage() {
       setUnreadSms(unreadSmsRes ?? { count: 0, messages: [] });
       setUnreadMessenger(unreadMessengerRes ?? { count: 0, messages: [] });
       setLeadLocations(Array.isArray(locationsRes) ? locationsRes : []);
+      setActiveDiscounts(Array.isArray(discountsRes) ? discountsRes : []);
     } catch (error: any) {
       if (error.response?.status === 401) {
         router.push('/login');
@@ -89,6 +93,9 @@ export default function DashboardPage() {
   if (!stats) {
     return null;
   }
+
+  const liveGiveaways = activeDiscounts.filter((discount) => discount.is_giveaway).length;
+  const liveSpecialOffers = activeDiscounts.filter((discount) => !discount.is_giveaway).length;
 
   return (
     <div className="min-h-screen">
@@ -126,6 +133,14 @@ export default function DashboardPage() {
                     </p>
                     <p className="text-2xl font-bold">{companySettings.installation_lead_time}</p>
                   </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-full bg-background px-3 py-1 text-xs font-medium text-foreground border border-border">
+                    Live giveaways: {liveGiveaways}
+                  </span>
+                  <span className="rounded-full bg-background px-3 py-1 text-xs font-medium text-foreground border border-border">
+                    Special offers: {liveSpecialOffers}
+                  </span>
                 </div>
                 <Link href="/settings/company" className="shrink-0">
                   <Button variant="outline" size="sm" className="w-full sm:w-auto">

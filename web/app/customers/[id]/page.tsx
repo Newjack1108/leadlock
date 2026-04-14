@@ -50,6 +50,7 @@ import { Customer, Activity, ActivityType, Lead, CustomerHistoryEvent, CustomerH
 import SendQuoteEmailDialog from '@/components/SendQuoteEmailDialog';
 import ComposeEmailDialog from '@/components/ComposeEmailDialog';
 import CallNotesDialog from '@/components/CallNotesDialog';
+import NinoxBadge from '@/components/NinoxBadge';
 import { toast } from 'sonner';
 
 const activityIcons: Record<ActivityType, any> = {
@@ -376,12 +377,7 @@ export default function CustomerDetailPage() {
               </Button>
             )}
             {customer.source_system === 'Ninox' && (
-              <Badge
-                variant="secondary"
-                className="font-normal border-transparent bg-blue-500 text-white hover:bg-blue-500 dark:bg-sky-400 dark:text-slate-950"
-              >
-                Ninox
-              </Badge>
+              <NinoxBadge />
             )}
             <Button
               type="button"
@@ -743,7 +739,10 @@ export default function CustomerDetailPage() {
                             className="flex-1 cursor-pointer hover:text-primary"
                             onClick={() => router.push(`/orders/${order.id}`)}
                           >
-                            <span className="font-medium">{order.order_number}</span>
+                            <span className="inline-flex items-center gap-1.5">
+                              <span className="font-medium">{order.order_number}</span>
+                              {order.is_ninox_origin && <NinoxBadge className="h-auto px-1.5 py-0.5 text-xs" />}
+                            </span>
                           </div>
                           <div className="flex items-center gap-2">
                             {(order.deposit_paid ?? false) && (
@@ -827,7 +826,12 @@ export default function CustomerDetailPage() {
                         onClick={() => router.push(`/leads/${lead.id}`)}
                       >
                         <div className="flex items-center justify-between">
-                          <span className="font-medium">{lead.name}</span>
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className="font-medium">{lead.name}</span>
+                            {(lead.lead_source === 'NINOX' || lead.customer?.source_system === 'Ninox') && (
+                              <NinoxBadge className="h-auto px-1.5 py-0.5 text-xs" />
+                            )}
+                          </span>
                           <Badge>{lead.status.replace('_', ' ')}</Badge>
                         </div>
                         <div className="text-sm text-muted-foreground mt-1">

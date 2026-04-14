@@ -829,6 +829,7 @@ export interface Order {
   installation_completed?: boolean;
   invoice_number?: string | null;
   xero_invoice_id?: string | null;
+  is_ninox_origin?: boolean;
   items: OrderItem[];
   access_sheet?: AccessSheet | null;
 }

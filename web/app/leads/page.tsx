@@ -30,6 +30,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import NinoxBadge from '@/components/NinoxBadge';
 
 const temperatureColors: Record<QuoteTemperature, string> = {
   HOT: 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300',
@@ -109,6 +110,9 @@ function LeadsPageContent() {
     lead_type: LeadType.UNKNOWN,
     lead_source: LeadSource.MANUAL_ENTRY,
   });
+
+  const isNinoxLead = (lead: Lead) =>
+    lead.lead_source === LeadSource.NINOX || lead.customer?.source_system === 'Ninox';
 
   // Auth + role-based URL defaults, then sync filters — must complete before first /api/leads fetch.
   useEffect(() => {
@@ -382,7 +386,10 @@ function LeadsPageContent() {
                       </td>
                       <td className="p-3 text-muted-foreground">{lead.lead_type}</td>
                       <td className="p-3 text-muted-foreground whitespace-normal break-words min-w-[9rem] max-w-[14rem]">
-                        {lead.lead_source.replace('_', ' ')}
+                        <span className="inline-flex items-center gap-1.5">
+                          {lead.lead_source.replace('_', ' ')}
+                          {isNinoxLead(lead) && <NinoxBadge className="h-auto px-1.5 py-0.5 text-xs" />}
+                        </span>
                       </td>
                       <td className="p-3 text-muted-foreground align-top">
                         <div className="flex flex-col gap-0.5">
@@ -424,6 +431,7 @@ function LeadsPageContent() {
                           <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
                             {lead.lead_source.replace('_', ' ')}
                           </Badge>
+                          {isNinoxLead(lead) && <NinoxBadge />}
                           {lead.quote_locked && lead.status === LeadStatus.QUALIFIED && (
                             <Lock className="h-4 w-4 text-destructive" />
                           )}
