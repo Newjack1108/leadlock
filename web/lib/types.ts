@@ -811,6 +811,7 @@ export interface Order {
   quote_id: number;
   customer_id?: number | null;
   customer_name?: string | null;
+  lead_type?: LeadType | null;
   order_number: string;
   subtotal: number;
   discount_total: number;

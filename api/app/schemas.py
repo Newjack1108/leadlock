@@ -1372,6 +1372,7 @@ class OrderResponse(BaseModel):
     quote_id: int
     customer_id: Optional[int] = None
     customer_name: Optional[str] = None
+    lead_type: Optional[LeadType] = None
     order_number: str
     subtotal: Decimal
     discount_total: Decimal

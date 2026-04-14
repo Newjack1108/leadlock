@@ -62,6 +62,11 @@ function formatTimeAgo(dateString: string): string {
   return `${diffDays}d ago`;
 }
 
+function getDisplayLeadType(leadType?: LeadType | null): LeadType | null {
+  if (!leadType || leadType === LeadType.UNKNOWN) return null;
+  return leadType;
+}
+
 const TERMINAL_STATUSES: LeadStatus[] = [LeadStatus.QUOTED, LeadStatus.WON, LeadStatus.LOST, LeadStatus.CLOSED];
 
 // Exclude legacy WEBSITE from new-lead dropdown; prefer CSGB/CS/BLC WEBSITE
@@ -384,7 +389,15 @@ function LeadsPageContent() {
                           {lead.status.replace('_', ' ')}
                         </Badge>
                       </td>
-                      <td className="p-3 text-muted-foreground">{lead.lead_type}</td>
+                      <td className="p-3">
+                        {getDisplayLeadType(lead.lead_type) ? (
+                          <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
+                            {lead.lead_type}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">—</span>
+                        )}
+                      </td>
                       <td className="p-3 text-muted-foreground whitespace-normal break-words min-w-[9rem] max-w-[14rem]">
                         <span className="inline-flex items-center gap-1.5">
                           {lead.lead_source.replace('_', ' ')}

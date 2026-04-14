@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { getOrders } from '@/lib/api';
-import { Order } from '@/lib/types';
+import { LeadType, Order } from '@/lib/types';
 import { toast } from 'sonner';
 import { FileText, ExternalLink } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -48,6 +48,11 @@ function orderMatchesStatusFilter(order: Order, filter: OrderStatusFilter): bool
     default:
       return true;
   }
+}
+
+function getDisplayLeadType(leadType?: LeadType | null): LeadType | null {
+  if (!leadType || leadType === LeadType.UNKNOWN) return null;
+  return leadType;
 }
 
 export default function OrdersPage() {
@@ -172,6 +177,7 @@ export default function OrdersPage() {
                   <tr className="border-b bg-muted/50">
                     <th className="text-left p-3 font-medium">Order #</th>
                     <th className="text-left p-3 font-medium">Customer</th>
+                    <th className="text-left p-3 font-medium">Lead type</th>
                     <th className="text-left p-3 font-medium">Total</th>
                     <th className="text-left p-3 font-medium">Status</th>
                     <th className="text-left p-3 font-medium">Created</th>
@@ -191,6 +197,15 @@ export default function OrdersPage() {
                           {order.customer_name ?? '—'}
                           {order.is_ninox_origin && <NinoxBadge className="h-auto px-1.5 py-0.5 text-xs" />}
                         </span>
+                      </td>
+                      <td className="p-3">
+                        {getDisplayLeadType(order.lead_type) ? (
+                          <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
+                            {order.lead_type}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">—</span>
+                        )}
                       </td>
                       <td className="p-3 font-semibold">
                         {formatCurrency(order.total_amount, order.currency)}

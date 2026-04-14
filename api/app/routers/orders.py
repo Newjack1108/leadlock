@@ -80,6 +80,7 @@ def build_order_response(order: Order, order_items: List[OrderItem], session: Se
     """Build OrderResponse with items and optional customer_name."""
     customer_name = None
     customer_source_system = None
+    lead_type = None
     if order.customer_id:
         customer = session.exec(select(Customer).where(Customer.id == order.customer_id)).first()
         if customer:
@@ -91,6 +92,7 @@ def build_order_response(order: Order, order_items: List[OrderItem], session: Se
     if quote and quote.lead_id:
         lead = session.exec(select(Lead).where(Lead.id == quote.lead_id)).first()
         lead_source = lead.lead_source if lead else None
+        lead_type = lead.lead_type if lead else None
     is_ninox_origin = lead_source == LeadSource.NINOX or customer_source_system == "Ninox"
 
     access_sheet = _build_access_sheet_response(order.id, session)
@@ -100,6 +102,7 @@ def build_order_response(order: Order, order_items: List[OrderItem], session: Se
         quote_id=order.quote_id,
         customer_id=order.customer_id,
         customer_name=customer_name,
+        lead_type=lead_type,
         order_number=order.order_number,
         subtotal=order.subtotal,
         discount_total=order.discount_total,
