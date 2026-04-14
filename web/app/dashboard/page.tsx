@@ -120,9 +120,9 @@ export default function DashboardPage() {
 
         {/* Installation lead time – clear indicator for sales */}
         {companySettings?.installation_lead_time && (
-          <Card className="mb-8 border-primary/30 bg-primary/5">
-            <CardContent className="py-4">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="mb-8 grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <Card className="border-primary/30 bg-primary/5">
+              <CardContent className="py-4">
                 <div className="flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
                     <Clock className="h-5 w-5 text-primary" />
@@ -134,22 +134,31 @@ export default function DashboardPage() {
                     <p className="text-2xl font-bold">{companySettings.installation_lead_time}</p>
                   </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-full bg-background px-3 py-1 text-xs font-medium text-foreground border border-border">
-                    Live giveaways: {liveGiveaways}
-                  </span>
-                  <span className="rounded-full bg-background px-3 py-1 text-xs font-medium text-foreground border border-border">
-                    Special offers: {liveSpecialOffers}
-                  </span>
-                </div>
-                <Link href="/settings/company" className="shrink-0">
+                <Link href="/settings/company" className="mt-4 inline-block">
                   <Button variant="outline" size="sm" className="w-full sm:w-auto">
                     Edit in Company Settings
                   </Button>
                 </Link>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+            <Card className="border-emerald-500/30 bg-emerald-500/5">
+              <CardContent className="py-4">
+                <p className="text-sm font-medium text-muted-foreground mb-3">
+                  Live promotions available
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-lg border border-border/80 bg-background/80 px-3 py-2">
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Giveaways</p>
+                    <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">{liveGiveaways}</p>
+                  </div>
+                  <div className="rounded-lg border border-border/80 bg-background/80 px-3 py-2">
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Special offers</p>
+                    <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">{liveSpecialOffers}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         )}
 
         {/* Metrics Grid */}

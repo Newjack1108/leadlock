@@ -175,9 +175,9 @@ export default function CloserDashboardPage() {
 
         {/* Installation lead time */}
         {loadingPhase2 && !companySettings ? (
-          <Card className="shrink-0 mb-4 border-primary/30 bg-primary/5">
-            <CardContent className="py-3 px-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="shrink-0 mb-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
+            <Card className="border-primary/30 bg-primary/5">
+              <CardContent className="py-3 px-4">
                 <div className="flex items-center gap-3">
                   <div className="h-8 w-8 animate-pulse rounded-lg bg-muted" />
                   <div>
@@ -187,17 +187,22 @@ export default function CloserDashboardPage() {
                     <div className="mt-1 h-6 w-24 animate-pulse rounded bg-muted" />
                   </div>
                 </div>
-                <div className="flex gap-2">
-                  <div className="h-6 w-28 animate-pulse rounded-full bg-muted" />
-                  <div className="h-6 w-28 animate-pulse rounded-full bg-muted" />
+              </CardContent>
+            </Card>
+            <Card className="border-emerald-500/30 bg-emerald-500/5">
+              <CardContent className="py-3 px-4">
+                <p className="text-xs font-medium text-muted-foreground mb-2">Live promotions available</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="h-12 animate-pulse rounded-lg bg-muted" />
+                  <div className="h-12 animate-pulse rounded-lg bg-muted" />
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </div>
         ) : companySettings?.installation_lead_time ? (
-          <Card className="shrink-0 mb-4 border-primary/30 bg-primary/5">
-            <CardContent className="py-3 px-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="shrink-0 mb-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
+            <Card className="border-primary/30 bg-primary/5">
+              <CardContent className="py-3 px-4">
                 <div className="flex items-center gap-3">
                   <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
                     <Clock className="h-4 w-4 text-primary" />
@@ -209,17 +214,24 @@ export default function CloserDashboardPage() {
                     <p className="text-lg font-bold">{companySettings.installation_lead_time}</p>
                   </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-full bg-background px-3 py-1 text-xs font-medium text-foreground border border-border">
-                    Live giveaways: {liveGiveaways}
-                  </span>
-                  <span className="rounded-full bg-background px-3 py-1 text-xs font-medium text-foreground border border-border">
-                    Special offers: {liveSpecialOffers}
-                  </span>
+              </CardContent>
+            </Card>
+            <Card className="border-emerald-500/30 bg-emerald-500/5">
+              <CardContent className="py-3 px-4">
+                <p className="text-xs font-medium text-muted-foreground mb-2">Live promotions available</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="rounded-lg border border-border/80 bg-background/80 px-3 py-2">
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Giveaways</p>
+                    <p className="text-xl font-bold text-emerald-700 dark:text-emerald-400">{liveGiveaways}</p>
+                  </div>
+                  <div className="rounded-lg border border-border/80 bg-background/80 px-3 py-2">
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Special offers</p>
+                    <p className="text-xl font-bold text-emerald-700 dark:text-emerald-400">{liveSpecialOffers}</p>
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </div>
         ) : null}
 
         {/* Period filter */}
