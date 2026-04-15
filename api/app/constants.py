@@ -8,6 +8,13 @@ from app.models import QuoteStatus
 # Excluded from list UIs (quotes index, opportunities, customer/lead quote panels)
 QUOTE_LIST_EXCLUDED_STATUSES = (QuoteStatus.REJECTED, QuoteStatus.EXPIRED)
 
+# List endpoints: default page size and max per request
+LIST_PAGE_SIZE_DEFAULT = 50
+LIST_PAGE_SIZE_MAX = 200
+
+# Soft-archive eligible leads/quotes after this many days without update
+ARCHIVE_AFTER_DAYS = 200
+
 # VAT rate: all prices are Ex VAT @ 20%
 VAT_RATE_PERCENT = 20
 VAT_RATE_DECIMAL = Decimal("0.20")

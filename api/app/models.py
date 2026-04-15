@@ -172,7 +172,8 @@ class Lead(SQLModel, table=True):
     messenger_psid: Optional[str] = Field(default=None, index=True)  # Facebook Page-Scoped ID for Messenger
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
-    
+    archived_at: Optional[datetime] = Field(default=None, index=True)
+
     # Relationships
     assigned_to_user: Optional[User] = Relationship(back_populates="assigned_leads")
     customer: Optional["Customer"] = Relationship(back_populates="leads")
@@ -495,7 +496,8 @@ class Quote(SQLModel, table=True):
     accepted_at: Optional[datetime] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
-    
+    archived_at: Optional[datetime] = Field(default=None, index=True)
+
     temperature: Optional[QuoteTemperature] = Field(default=None)
     include_spec_sheets: bool = Field(default=True)  # Include product spec sheets when generating quote PDF
     include_available_optional_extras: bool = Field(default=False)  # Show extras not on quote in customer view/PDF

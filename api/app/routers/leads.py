@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import Response
 from sqlmodel import Session, select, or_
-from sqlalchemy import func
+from sqlalchemy import func, and_, true
 from typing import Optional, List, Dict, Tuple
 from app.database import get_session
 from app.models import (
@@ -31,14 +31,14 @@ from app.models import (
 )
 from app.auth import get_current_user, require_role
 from app.schemas import (
-    LeadCreate, LeadUpdate, LeadResponse, StatusTransitionRequest,
+    LeadCreate, LeadUpdate, LeadResponse, LeadListResponse, StatusTransitionRequest,
     ActivityCreate, ActivityResponse, StatusHistoryResponse, CustomerResponse, QuoteResponse,
     FacebookAdvertProfileResponse,
 )
 from app.workflow import can_transition, check_sla_overdue, check_quote_prerequisites
 from app.quote_delete import delete_quote_cascade
 from app.lead_delete import delete_lead_cascade
-from app.constants import QUOTE_LIST_EXCLUDED_STATUSES
+from app.constants import QUOTE_LIST_EXCLUDED_STATUSES, LIST_PAGE_SIZE_DEFAULT, LIST_PAGE_SIZE_MAX
 from datetime import datetime
 
 router = APIRouter(prefix="/api/leads", tags=["leads"])
@@ -365,51 +365,71 @@ def enrich_lead_response(
         has_inbound_reply=has_inbound_reply,
         latest_quote_temperature=latest_quote_temperature,
         quotes_sent_count=quotes_sent_count,
+        archived_at=getattr(lead, "archived_at", None),
     )
 
 
-@router.get("", response_model=List[LeadResponse])
+@router.get("", response_model=LeadListResponse)
 async def get_leads(
     status_filter: Optional[LeadStatus] = Query(None, alias="status"),
     lead_type: Optional[LeadType] = Query(None, alias="lead_type"),
     lead_source: Optional[LeadSource] = Query(None, alias="lead_source"),
     search: Optional[str] = Query(None),
     my_leads_only: bool = Query(False, alias="myLeads"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(LIST_PAGE_SIZE_DEFAULT, ge=1, le=LIST_PAGE_SIZE_MAX),
+    include_archived: bool = Query(False, alias="includeArchived"),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
     try:
-        statement = select(Lead)
+        effective_include_archived = include_archived or (bool(search and search.strip()))
+        conditions = []
 
         if status_filter:
-            statement = statement.where(Lead.status == status_filter)
+            conditions.append(Lead.status == status_filter)
 
         if lead_type:
-            statement = statement.where(Lead.lead_type == lead_type)
+            conditions.append(Lead.lead_type == lead_type)
 
         if lead_source:
-            statement = statement.where(Lead.lead_source == lead_source)
+            conditions.append(Lead.lead_source == lead_source)
 
         if my_leads_only:
-            statement = statement.where(Lead.assigned_to_id == current_user.id)
+            conditions.append(Lead.assigned_to_id == current_user.id)
 
         if search:
             search_term = f"%{search}%"
-            statement = statement.where(
+            conditions.append(
                 or_(
                     Lead.name.ilike(search_term),
                     Lead.email.ilike(search_term),
                     Lead.phone.ilike(search_term),
-                    Lead.postcode.ilike(search_term)
+                    Lead.postcode.ilike(search_term),
                 )
             )
-        
-        statement = statement.order_by(Lead.created_at.desc())
+
+        if not effective_include_archived:
+            conditions.append(Lead.archived_at.is_(None))
+
+        where_clause = and_(*conditions) if conditions else true()
+
+        count_stmt = select(func.count()).select_from(Lead).where(where_clause)
+        _total_row = session.exec(count_stmt).one()
+        total = int(_total_row[0]) if isinstance(_total_row, (tuple, list)) else int(_total_row)
+
+        statement = (
+            select(Lead)
+            .where(where_clause)
+            .order_by(Lead.created_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
         leads = session.exec(statement).all()
         lead_list = list(leads)
         engagement_by_lead = compute_lead_engagement_flags(session, lead_list)
         quote_stats_by_lead = compute_lead_quote_list_stats(session, lead_list)
-        return [
+        items = [
             enrich_lead_response(
                 lead,
                 session,
@@ -419,6 +439,12 @@ async def get_leads(
             )
             for lead in leads
         ]
+        return LeadListResponse(
+            items=items,
+            total=total,
+            page=page,
+            page_size=page_size,
+        )
     except Exception as e:
         import traceback
         error_msg = f"Error fetching leads: {str(e)}"
@@ -539,7 +565,9 @@ async def update_lead(
     
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
-    
+
+    lead.archived_at = None
+
     update_data = lead_data.dict(exclude_unset=True)
     advert_profile_id = update_data.get("facebook_advert_profile_id")
     if advert_profile_id is not None:
@@ -573,6 +601,8 @@ async def transition_lead_status(
     
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
+
+    lead.archived_at = None
 
     if transition.new_status == LeadStatus.CLOSED:
         reason = (transition.override_reason or "").strip()

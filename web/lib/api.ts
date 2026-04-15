@@ -1,5 +1,11 @@
 import axios from 'axios';
-import { ActivityType, type FacebookAdvertProfile, type QuoteTemperature, type QuoteStatus } from '@/lib/types';
+import {
+  ActivityType,
+  type FacebookAdvertProfile,
+  type QuoteTemperature,
+  type QuoteStatus,
+  type QuoteListPayload,
+} from '@/lib/types';
 import { getTelUrl } from '@/lib/utils';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -641,11 +647,23 @@ export const duplicateQuoteToDraft = async (quoteId: number) => {
   return response.data;
 };
 
-export const getQuotes = async (options?: { status?: QuoteStatus }) => {
-  const response = await api.get('/api/quotes', {
-    ...(options?.status ? { params: { status: options.status } } : {}),
-  });
-  return response.data;
+export const getQuotes = async (options?: {
+  status?: QuoteStatus;
+  search?: string;
+  temperature?: QuoteTemperature;
+  page?: number;
+  page_size?: number;
+  includeArchived?: boolean;
+}) => {
+  const params: Record<string, string | number | boolean> = {};
+  if (options?.status) params.status = options.status;
+  if (options?.search?.trim()) params.search = options.search.trim();
+  if (options?.temperature) params.temperature = options.temperature;
+  if (options?.page != null) params.page = options.page;
+  if (options?.page_size != null) params.page_size = options.page_size;
+  if (options?.includeArchived) params.includeArchived = true;
+  const response = await api.get('/api/quotes', { params: Object.keys(params).length ? params : undefined });
+  return response.data as QuoteListPayload;
 };
 
 export const getQuote = async (quoteId: number) => {

@@ -4,13 +4,13 @@ from pydantic import ValidationError
 from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import Response
 from sqlmodel import Session, select, or_, and_
-from sqlalchemy import func
+from sqlalchemy import func, true, String as SAString
 from typing import Dict, List, Optional
 from app.database import get_session
 from app.models import Quote, QuoteItem, QuoteTemplate, QuoteTemplateSalesDocument, SalesDocument, Customer, User, QuoteEmail, Email, EmailDirection, Activity, ActivityType, CompanySettings, Lead, LeadStatus, QuoteStatus, QuoteTemperature, OpportunityStage, LossCategory, DiscountTemplate, QuoteDiscount, DiscountType, DiscountScope, Order, OrderItem, QuoteItemLineType, DiscountRequest, SmsMessage, SmsDirection
 from app.auth import get_current_user
 from app.schemas import (
-    QuoteCreate, QuoteUpdate, QuoteDraftUpdate, QuoteResponse, QuoteItemCreate, QuoteItemResponse,
+    QuoteCreate, QuoteUpdate, QuoteDraftUpdate, QuoteResponse, QuoteListResponse, QuoteItemCreate, QuoteItemResponse,
     QuoteEmailSendRequest, QuoteEmailSendResponse, QuoteViewLinkResponse,
     QuoteShareLinkRequest, QuoteShareLinkResponse, QuoteSendSmsRequest, QuoteSendSmsResponse,
     OpportunityWonRequest, OpportunityLostRequest, OpportunityCloseRequest,
@@ -29,7 +29,7 @@ from app.sms_service import send_sms, normalize_phone
 from app.quote_pdf_service import generate_quote_pdf
 from app.available_optional_extras import get_available_optional_extras_for_quote
 from app.reminder_service import get_last_activity_date, dismiss_open_reminders_for_quote
-from app.constants import QUOTE_LIST_EXCLUDED_STATUSES, VAT_RATE_DECIMAL
+from app.constants import QUOTE_LIST_EXCLUDED_STATUSES, VAT_RATE_DECIMAL, LIST_PAGE_SIZE_DEFAULT, LIST_PAGE_SIZE_MAX
 from app.quote_delete import delete_quote_cascade
 from app.discount_limits import assert_templates_not_expired_for_apply, validate_and_record_redemptions_on_accept
 from datetime import datetime
@@ -260,6 +260,7 @@ def build_quote_response(quote: Quote, quote_items: List[QuoteItem], session: Se
         total_open_count=total_open_count,
         order_id=order_id,
         customer_last_interacted_at=customer_last_interacted_at,
+        archived_at=getattr(quote, "archived_at", None),
     )
 
 
@@ -749,18 +750,25 @@ async def create_quote(
         raise HTTPException(status_code=500, detail=f"Error creating quote: {error_detail}")
 
 
-@router.get("", response_model=List[QuoteResponse])
+@router.get("", response_model=QuoteListResponse)
 async def get_all_quotes(
     status: Optional[QuoteStatus] = Query(None),
+    search: Optional[str] = Query(None),
+    temperature: Optional[QuoteTemperature] = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(LIST_PAGE_SIZE_DEFAULT, ge=1, le=LIST_PAGE_SIZE_MAX),
+    include_archived: bool = Query(False, alias="includeArchived"),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
-    """Get all quotes. By default excludes REJECTED and EXPIRED; pass status= to list only that status."""
+    """Paginated quotes. By default excludes REJECTED and EXPIRED; pass status= to list only that status."""
     try:
-        statement = select(Quote)
+        effective_include_archived = include_archived or (bool(search and search.strip()))
+        conditions = []
+
         if status is not None:
             if status == QuoteStatus.VIEWED:
-                statement = statement.where(
+                conditions.append(
                     or_(
                         Quote.status == QuoteStatus.VIEWED,
                         and_(
@@ -770,19 +778,56 @@ async def get_all_quotes(
                     )
                 )
             else:
-                statement = statement.where(Quote.status == status)
+                conditions.append(Quote.status == status)
         else:
-            statement = statement.where(Quote.status.notin_(QUOTE_LIST_EXCLUDED_STATUSES))
-        statement = statement.order_by(Quote.created_at.desc())
+            conditions.append(Quote.status.notin_(QUOTE_LIST_EXCLUDED_STATUSES))
+
+        if not effective_include_archived:
+            conditions.append(Quote.archived_at.is_(None))
+
+        if temperature is not None:
+            conditions.append(Quote.temperature == temperature)
+
+        if search and search.strip():
+            term = f"%{search.strip()}%"
+            conditions.append(
+                or_(
+                    Quote.quote_number.ilike(term),
+                    Customer.name.ilike(term),
+                    func.cast(Lead.lead_type, SAString).ilike(term),
+                )
+            )
+
+        where_clause = and_(*conditions) if conditions else true()
+
+        count_stmt = (
+            select(func.count(Quote.id))
+            .select_from(Quote)
+            .outerjoin(Customer, Quote.customer_id == Customer.id)
+            .outerjoin(Lead, Quote.lead_id == Lead.id)
+            .where(where_clause)
+        )
+        _total_row = session.exec(count_stmt).one()
+        total = int(_total_row[0]) if isinstance(_total_row, (tuple, list)) else int(_total_row)
+
+        statement = (
+            select(Quote)
+            .outerjoin(Customer, Quote.customer_id == Customer.id)
+            .outerjoin(Lead, Quote.lead_id == Lead.id)
+            .where(where_clause)
+            .order_by(Quote.created_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
         quotes = session.exec(statement).all()
-        
+
         result = []
         for quote in quotes:
             item_statement = select(QuoteItem).where(QuoteItem.quote_id == quote.id).order_by(QuoteItem.sort_order)
             quote_items = session.exec(item_statement).all()
             result.append(build_quote_response(quote, quote_items, session))
-        
-        return result
+
+        return QuoteListResponse(items=result, total=total, page=page, page_size=page_size)
     except Exception as e:
         import traceback
         error_detail = str(e)
@@ -1803,7 +1848,9 @@ async def update_quote(
     
     if not quote:
         raise HTTPException(status_code=404, detail="Quote not found")
-    
+
+    quote.archived_at = None
+
     old_status = quote.status
     old_stage = quote.opportunity_stage
     

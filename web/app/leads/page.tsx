@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useLayoutEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Header from '@/components/Header';
 import { Card, CardContent } from '@/components/ui/card';
@@ -69,6 +69,8 @@ function getDisplayLeadType(leadType?: LeadType | null): LeadType | null {
 
 const TERMINAL_STATUSES: LeadStatus[] = [LeadStatus.QUOTED, LeadStatus.WON, LeadStatus.LOST, LeadStatus.CLOSED];
 
+const LEADS_PAGE_SIZE = 50;
+
 // Exclude legacy WEBSITE from new-lead dropdown; prefer CSGB/CS/BLC WEBSITE
 const LEAD_SOURCE_OPTIONS_FOR_NEW = Object.values(LeadSource).filter((s) => s !== LeadSource.WEBSITE);
 
@@ -104,6 +106,9 @@ function LeadsPageContent() {
   const [search, setSearch] = useState('');
   const [searchDebounced, setSearchDebounced] = useState('');
   const [myLeadsOnly, setMyLeadsOnly] = useState(false);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [includeArchived, setIncludeArchived] = useState(false);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [newLead, setNewLead] = useState({
@@ -194,16 +199,28 @@ function LeadsPageContent() {
     return () => clearTimeout(timer);
   }, [search]);
 
-  // Fetch leads when filters change (after auth + URL normalization)
+  // Reset to page 1 before fetch when filters change (layout runs before fetch effect)
+  useLayoutEffect(() => {
+    setPage(1);
+  }, [statusFilter, leadTypeFilter, leadSourceFilter, searchDebounced, myLeadsOnly, includeArchived]);
+
+  // Fetch leads when filters or page change (after auth + URL normalization)
   useEffect(() => {
     if (!authReady) return;
     fetchLeads();
-  }, [authReady, statusFilter, leadTypeFilter, leadSourceFilter, searchDebounced, myLeadsOnly]);
+  }, [authReady, statusFilter, leadTypeFilter, leadSourceFilter, searchDebounced, myLeadsOnly, page, includeArchived]);
 
-  const fetchLeads = async () => {
+  const fetchLeads = async (pageOverride?: number) => {
+    const effectivePage = pageOverride ?? page;
+    if (pageOverride !== undefined) {
+      setPage(pageOverride);
+    }
     try {
       setLoading(true);
-      const params: any = {};
+      const params: Record<string, string | number | boolean> = {
+        page: effectivePage,
+        page_size: LEADS_PAGE_SIZE,
+      };
       if (statusFilter !== 'ALL') {
         params.status = statusFilter;
       }
@@ -219,15 +236,26 @@ function LeadsPageContent() {
       if (myLeadsOnly) {
         params.myLeads = true;
       }
+      if (includeArchived) {
+        params.includeArchived = true;
+      }
 
       const response = await api.get('/api/leads', { params });
+      const payload = response.data as {
+        items: Lead[];
+        total: number;
+        page: number;
+        page_size: number;
+      };
+      const rows = payload.items ?? [];
+      setTotal(payload.total ?? 0);
       // ALL and terminal-status tabs use the API result as-is; pipeline tabs hide terminal rows
-      let filteredLeads: Lead[] = response.data;
+      let filteredLeads: Lead[] = rows;
       if (
         statusFilter !== 'ALL' &&
         !TERMINAL_STATUSES.includes(statusFilter as LeadStatus)
       ) {
-        filteredLeads = response.data.filter(
+        filteredLeads = rows.filter(
           (lead: Lead) => !TERMINAL_STATUSES.includes(lead.status as LeadStatus),
         );
       }
@@ -268,7 +296,7 @@ function LeadsPageContent() {
       toast.success('Lead created successfully');
       setCreateDialogOpen(false);
       setNewLead({ name: '', email: '', phone: '', postcode: '', description: '', lead_type: LeadType.UNKNOWN, lead_source: LeadSource.MANUAL_ENTRY });
-      fetchLeads();
+      await fetchLeads(1);
     } catch (error: any) {
       toast.error(error.response?.data?.detail || 'Failed to create lead');
     } finally {
@@ -278,6 +306,7 @@ function LeadsPageContent() {
 
   const isCloser = userRole === 'CLOSER';
   const statusTabs: (LeadStatus | 'ALL')[] = isCloser ? CLOSER_STATUS_TABS : ['ALL', ...Object.values(LeadStatus)];
+  const totalPages = Math.max(1, Math.ceil(total / LEADS_PAGE_SIZE));
 
   return (
     <div className="min-h-screen">
@@ -325,6 +354,15 @@ function LeadsPageContent() {
             >
               My Leads
             </Button>
+            <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
+              <input
+                type="checkbox"
+                className="rounded border-input"
+                checked={includeArchived}
+                onChange={(e) => setIncludeArchived(e.target.checked)}
+              />
+              Include archived
+            </label>
             <Button
               onClick={() => setCreateDialogOpen(true)}
               className="bg-primary hover:bg-primary/90"
@@ -352,7 +390,7 @@ function LeadsPageContent() {
         {/* Leads List */}
         {loading ? (
           <div className="text-center py-12 text-muted-foreground">Loading...</div>
-        ) : leads.length === 0 ? (
+        ) : total === 0 ? (
           <div className="text-center py-12 text-muted-foreground">No leads found</div>
         ) : statusFilter === 'ALL' ? (
           <Card>
@@ -379,7 +417,16 @@ function LeadsPageContent() {
                       className="border-b last:border-0 hover:bg-muted/30 cursor-pointer transition-colors"
                       onClick={() => router.push(`/leads/${lead.id}`)}
                     >
-                      <td className="p-3 font-semibold">{lead.name}</td>
+                      <td className="p-3 font-semibold">
+                        <span className="inline-flex items-center gap-2 flex-wrap">
+                          {lead.name}
+                          {lead.archived_at && (
+                            <Badge variant="outline" className="text-muted-foreground text-xs font-normal">
+                              Archived
+                            </Badge>
+                          )}
+                        </span>
+                      </td>
                       <td className="p-3 text-muted-foreground min-w-0 max-w-[240px] break-words">
                         {[lead.phone, lead.email].filter(Boolean).join(' · ') || '—'}
                       </td>
@@ -435,6 +482,11 @@ function LeadsPageContent() {
                       <div className="flex-1">
                         <div className="flex flex-wrap items-center gap-3 mb-2">
                           <h3 className="text-lg font-semibold">{lead.name}</h3>
+                          {lead.archived_at && (
+                            <Badge variant="outline" className="text-muted-foreground">
+                              Archived
+                            </Badge>
+                          )}
                           <Badge className={statusColors[lead.status]}>
                             {lead.status.replace('_', ' ')}
                           </Badge>
@@ -521,6 +573,33 @@ function LeadsPageContent() {
                 </Card>
               </Link>
             ))}
+          </div>
+        )}
+
+        {!loading && total > 0 && (
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 mt-6 py-4 border-t">
+            <p className="text-sm text-muted-foreground">
+              Showing {(page - 1) * LEADS_PAGE_SIZE + 1}–{Math.min(page * LEADS_PAGE_SIZE, total)} of {total}
+              {totalPages > 1 ? ` · Page ${page} of ${totalPages}` : ''}
+            </p>
+            <div className="flex gap-2 justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
+                Previous
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                Next
+              </Button>
+            </div>
           </div>
         )}
 

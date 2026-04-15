@@ -181,6 +181,14 @@ export interface Lead {
   latest_quote_temperature?: QuoteTemperature | null;
   /** Number of quotes linked to this lead with sent_at set. */
   quotes_sent_count?: number;
+  archived_at?: string | null;
+}
+
+export interface LeadListPayload {
+  items: Lead[];
+  total: number;
+  page: number;
+  page_size: number;
 }
 
 export interface FacebookAdvertProfile {
@@ -891,6 +899,14 @@ export interface Quote {
   total_open_count?: number;
   order_id?: number | null;
   customer_last_interacted_at?: string | null;
+  archived_at?: string | null;
+}
+
+export interface QuoteListPayload {
+  items: Quote[];
+  total: number;
+  page: number;
+  page_size: number;
 }
 
 /** Public quote view (no auth) - for customer view link. */

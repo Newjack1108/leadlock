@@ -122,6 +122,30 @@ def _ensure_facebook_advert_schema(engine) -> None:
         print(traceback.format_exc(), file=sys.stderr, flush=True)
 
 
+def _ensure_archive_columns(engine) -> None:
+    """Add archived_at to lead and quote for existing databases."""
+    import sys
+
+    try:
+        insp = inspect(engine)
+        if insp.has_table("lead"):
+            cols = [c["name"] for c in insp.get_columns("lead")]
+            if "archived_at" not in cols:
+                with engine.begin() as conn:
+                    conn.execute(text("ALTER TABLE lead ADD COLUMN archived_at TIMESTAMP"))
+                    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_lead_archived_at ON lead (archived_at)"))
+                print("Added archived_at to lead table", file=sys.stderr, flush=True)
+        if insp.has_table("quote"):
+            cols = [c["name"] for c in insp.get_columns("quote")]
+            if "archived_at" not in cols:
+                with engine.begin() as conn:
+                    conn.execute(text("ALTER TABLE quote ADD COLUMN archived_at TIMESTAMP"))
+                    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_quote_archived_at ON quote (archived_at)"))
+                print("Added archived_at to quote table", file=sys.stderr, flush=True)
+    except Exception as e:
+        print(f"Warning: could not ensure archive columns: {e}", file=sys.stderr, flush=True)
+
+
 def create_db_and_tables():
     """Create all tables and migrate existing data."""
     import sys
@@ -135,6 +159,7 @@ def create_db_and_tables():
     print("Tables created/verified", file=sys.stderr, flush=True)
     # Critical: run before the big migration try — that block catches broad exceptions and can skip later steps.
     _ensure_facebook_advert_schema(engine)
+    _ensure_archive_columns(engine)
 
     # Migration logic for Customer model separation
     try:
@@ -1456,6 +1481,16 @@ def create_db_and_tables():
         import traceback
         print(f"Migration error: {e}", file=sys.stderr, flush=True)
         print(traceback.format_exc(), file=sys.stderr, flush=True)
+
+    try:
+        with Session(engine) as session:
+            from app.archive_service import apply_auto_archive
+
+            r = apply_auto_archive(session)
+            if r["leads_archived"] or r["quotes_archived"]:
+                print(f"Auto-archive on startup: {r}", file=sys.stderr, flush=True)
+    except Exception as e:
+        print(f"Auto-archive pass skipped: {e}", file=sys.stderr, flush=True)
 
 
 def get_session() -> Generator[Session, None, None]:

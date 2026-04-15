@@ -562,6 +562,14 @@ class LeadResponse(BaseModel):
     has_inbound_reply: bool = False
     latest_quote_temperature: Optional[QuoteTemperature] = None
     quotes_sent_count: int = 0
+    archived_at: Optional[datetime] = None
+
+
+class LeadListResponse(BaseModel):
+    items: List[LeadResponse]
+    total: int
+    page: int
+    page_size: int
 
 
 class StatusTransitionRequest(BaseModel):
@@ -1195,6 +1203,14 @@ class QuoteResponse(BaseModel):
     total_open_count: int = 0  # Total times quote view link was opened (across all sends)
     order_id: Optional[int] = None  # Order ID when quote is accepted (for View order link)
     customer_last_interacted_at: Optional[datetime] = None  # Last Activity date for this customer
+    archived_at: Optional[datetime] = None
+
+
+class QuoteListResponse(BaseModel):
+    items: List[QuoteResponse]
+    total: int
+    page: int
+    page_size: int
 
 
 class QuoteEmailResponse(BaseModel):

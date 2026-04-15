@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useState, useMemo } from 'react';
+import { Suspense, useCallback, useEffect, useLayoutEffect, useState, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Header from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -47,6 +47,8 @@ function showQuoteTemperatureBadge(quote: Quote): boolean {
 
 const VALID_QUOTE_STATUSES = Object.values(QuoteStatus);
 
+const QUOTES_PAGE_SIZE = 50;
+
 type QuotesSortBy = 'last_contacted' | 'created';
 
 function sortKeyLastContactedMs(q: Quote): number {
@@ -78,7 +80,11 @@ function QuotesPageContent() {
   const [statusFilter, setStatusFilter] = useState<QuoteStatus | 'ALL'>(initialStatus);
   const [temperatureFilter, setTemperatureFilter] = useState<QuoteTemperature | 'ALL'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchDebounced, setSearchDebounced] = useState('');
   const [sortBy, setSortBy] = useState<QuotesSortBy>('last_contacted');
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [includeArchived, setIncludeArchived] = useState(false);
 
   // Sync status filter from URL when search params change (e.g. navigation from dashboard)
   useEffect(() => {
@@ -88,11 +94,28 @@ function QuotesPageContent() {
     }
   }, [searchParams]);
 
+  useEffect(() => {
+    const t = setTimeout(() => setSearchDebounced(searchQuery), 300);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
+
+  useLayoutEffect(() => {
+    setPage(1);
+  }, [statusFilter, temperatureFilter, searchDebounced, includeArchived]);
+
   const fetchQuotes = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await getQuotes(statusFilter === 'ALL' ? undefined : { status: statusFilter });
-      setQuotes(data);
+      const data = await getQuotes({
+        status: statusFilter === 'ALL' ? undefined : statusFilter,
+        search: searchDebounced.trim() || undefined,
+        temperature: temperatureFilter === 'ALL' ? undefined : temperatureFilter,
+        page,
+        page_size: QUOTES_PAGE_SIZE,
+        includeArchived: includeArchived || undefined,
+      });
+      setQuotes(data.items);
+      setTotal(data.total);
     } catch (error: any) {
       toast.error('Failed to load quotes');
       if (error.response?.status === 401) {
@@ -101,7 +124,7 @@ function QuotesPageContent() {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, router]);
+  }, [statusFilter, temperatureFilter, searchDebounced, page, includeArchived, router]);
 
   useEffect(() => {
     fetchQuotes();
@@ -119,20 +142,7 @@ function QuotesPageContent() {
   }, [fetchQuotes]);
 
   const filteredQuotes = useMemo(() => {
-    let result = quotes;
-    if (temperatureFilter !== 'ALL') {
-      result = result.filter((q) => q.temperature === temperatureFilter);
-    }
-    if (searchQuery.trim()) {
-      const q = searchQuery.trim().toLowerCase();
-      result = result.filter(
-        (quote) =>
-          quote.quote_number?.toLowerCase().includes(q) ||
-          quote.customer_name?.toLowerCase().includes(q) ||
-          (quote.lead_type && quote.lead_type.toLowerCase().includes(q))
-      );
-    }
-    const sorted = [...result];
+    const sorted = [...quotes];
     if (sortBy === 'last_contacted') {
       sorted.sort((a, b) => {
         const diff = sortKeyLastContactedMs(b) - sortKeyLastContactedMs(a);
@@ -147,7 +157,9 @@ function QuotesPageContent() {
       });
     }
     return sorted;
-  }, [quotes, temperatureFilter, searchQuery, sortBy]);
+  }, [quotes, sortBy]);
+
+  const totalPages = Math.max(1, Math.ceil(total / QUOTES_PAGE_SIZE));
 
   if (loading) {
     return (
@@ -166,7 +178,7 @@ function QuotesPageContent() {
       <main className="container mx-auto px-4 sm:px-6 py-8">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-3xl font-semibold">Quotes</h1>
-          {quotes.length > 0 && (
+          {total > 0 && (
             <div className="flex gap-1 border rounded-md p-1 bg-muted/30">
               <Button
                 variant={viewMode === 'list' ? 'secondary' : 'ghost'}
@@ -188,8 +200,7 @@ function QuotesPageContent() {
           )}
         </div>
 
-        {quotes.length > 0 && (
-          <div className="flex flex-col md:flex-row gap-4 mb-6">
+        <div className="flex flex-col lg:flex-row flex-wrap gap-4 mb-6 items-end">
             <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as QuoteStatus | 'ALL')}>
               <SelectTrigger className="w-full md:w-[200px]">
                 <SelectValue placeholder="Status" />
@@ -231,35 +242,23 @@ function QuotesPageContent() {
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full md:w-[260px]"
             />
+            <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none pb-2">
+              <input
+                type="checkbox"
+                className="rounded border-input"
+                checked={includeArchived}
+                onChange={(e) => setIncludeArchived(e.target.checked)}
+              />
+              Include archived
+            </label>
           </div>
-        )}
 
-        {quotes.length === 0 ? (
+        {total === 0 ? (
           <Card>
             <CardContent className="p-6">
               <div className="text-center text-muted-foreground py-12">
                 <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
                 <p>No quotes found</p>
-              </div>
-            </CardContent>
-          </Card>
-        ) : filteredQuotes.length === 0 ? (
-          <Card>
-            <CardContent className="p-6">
-              <div className="text-center text-muted-foreground py-12">
-                <p>No quotes match your filters</p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="mt-4"
-                  onClick={() => {
-                    setStatusFilter('ALL');
-                    setTemperatureFilter('ALL');
-                    setSearchQuery('');
-                  }}
-                >
-                  Clear filters
-                </Button>
               </div>
             </CardContent>
           </Card>
@@ -328,6 +327,11 @@ function QuotesPageContent() {
                           {showQuoteTemperatureBadge(quote) && (
                             <Badge className={temperatureColors[quote.temperature!]}>
                               {quote.temperature}
+                            </Badge>
+                          )}
+                          {quote.archived_at && (
+                            <Badge variant="outline" className="text-muted-foreground">
+                              Archived
                             </Badge>
                           )}
                         </div>
@@ -425,6 +429,11 @@ function QuotesPageContent() {
                             {quote.temperature}
                           </Badge>
                         )}
+                        {quote.archived_at && (
+                          <Badge variant="outline" className="text-muted-foreground">
+                            Archived
+                          </Badge>
+                        )}
                         {quote.version > 1 && (
                           <span className="text-sm text-muted-foreground">
                             v{quote.version}
@@ -483,6 +492,33 @@ function QuotesPageContent() {
                 </CardContent>
               </Card>
             ))}
+          </div>
+        )}
+
+        {total > 0 && (
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 mt-6 py-4 border-t">
+            <p className="text-sm text-muted-foreground">
+              Showing {(page - 1) * QUOTES_PAGE_SIZE + 1}–{Math.min(page * QUOTES_PAGE_SIZE, total)} of {total}
+              {totalPages > 1 ? ` · Page ${page} of ${totalPages}` : ''}
+            </p>
+            <div className="flex gap-2 justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
+                Previous
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                Next
+              </Button>
+            </div>
           </div>
         )}
       </main>
