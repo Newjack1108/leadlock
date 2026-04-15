@@ -1058,8 +1058,13 @@ def _build_duplicate_draft_payload_from_source(source: Quote, session: Session) 
     ).all()
     template_ids: List[int] = []
     seen: set[int] = set()
+    now = datetime.utcnow()
     for d in discount_rows:
         if d.template_id is not None and d.template_id not in seen:
+            template = session.get(DiscountTemplate, d.template_id)
+            # Duplication should succeed even if source template has since expired.
+            if template and template.expires_at is not None and template.expires_at < now:
+                continue
             seen.add(d.template_id)
             template_ids.append(d.template_id)
 
