@@ -1,6 +1,15 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  async redirects() {
+    return [
+      {
+        source: "/favicon.ico",
+        destination: "/icon.png",
+        permanent: false,
+      },
+    ];
+  },
   images: {
     unoptimized: false,
     // Increase image size limit for large logos

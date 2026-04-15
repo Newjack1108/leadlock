@@ -24,7 +24,16 @@ export const metadata: Metadata = {
     title: "LeadLock",
     statusBarStyle: "default",
   },
-  // Favicon + apple touch: app/icon.png and app/apple-icon.png (Next.js metadata file convention)
+  // Explicit links so tabs pick up favicon even if app/icon convention is cached oddly;
+  // app/icon.png + app/apple-icon.png still provide the assets.
+  icons: {
+    icon: [
+      { url: "/icon.png", type: "image/png", sizes: "32x32" },
+      { url: "/icon.png", type: "image/png", sizes: "16x16" },
+    ],
+    shortcut: "/icon.png",
+    apple: [{ url: "/apple-icon.png", sizes: "180x180", type: "image/png" }],
+  },
   formatDetection: {
     telephone: false,
   },
