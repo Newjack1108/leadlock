@@ -1,28 +1,45 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
 
 export default function Home() {
-  const router = useRouter();
-
   useEffect(() => {
+    let cancelled = false;
+
     const redirectByRole = async () => {
       try {
-        const response = await api.get('/api/auth/me');
-        const role = response.data?.role;
-        if (role === 'CLOSER') {
-          router.replace('/closer-dashboard');
-        } else {
-          router.replace('/leads');
+        // Treat 401 as success so the global axios error interceptor does not also
+        // fire window.location to /login while this effect runs router.replace — that
+        // double navigation can strand iOS Safari (e.g. opening from a bookmark).
+        const response = await api.get('/api/auth/me', {
+          validateStatus: (status) => status === 200 || status === 401,
+        });
+        if (cancelled) return;
+
+        if (response.status === 401) {
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem('token');
+          }
+          window.location.replace('/login');
+          return;
         }
+
+        const role = response.data?.role;
+        const path = role === 'CLOSER' ? '/closer-dashboard' : '/leads';
+        window.location.replace(path);
       } catch {
-        router.replace('/login');
+        if (!cancelled) {
+          window.location.replace('/login');
+        }
       }
     };
+
     redirectByRole();
-  }, [router]);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <div className="min-h-screen flex items-center justify-center">
