@@ -1046,6 +1046,17 @@ export const logCallActivity = async (
   });
 };
 
+/** Log a manual note on the customer activity timeline. */
+export const logCustomerNote = async (
+  customerId: number,
+  notes: string
+): Promise<void> => {
+  await api.post(`/api/customers/${customerId}/activities`, {
+    activity_type: ActivityType.NOTE,
+    notes: notes.trim(),
+  });
+};
+
 /** Log a call activity and open the tel: URL (dialer). */
 export const logCallAndOpenTel = async (
   customerId: number,

@@ -50,6 +50,7 @@ import { Customer, Activity, ActivityType, Lead, CustomerHistoryEvent, CustomerH
 import SendQuoteEmailDialog from '@/components/SendQuoteEmailDialog';
 import ComposeEmailDialog from '@/components/ComposeEmailDialog';
 import CallNotesDialog from '@/components/CallNotesDialog';
+import AddManualActivityDialog from '@/components/AddManualActivityDialog';
 import NinoxBadge from '@/components/NinoxBadge';
 import { toast } from 'sonner';
 
@@ -136,6 +137,7 @@ export default function CustomerDetailPage() {
   const [selectedQuoteId, setSelectedQuoteId] = useState<number | null>(null);
   const [composeEmailDialogOpen, setComposeEmailDialogOpen] = useState(false);
   const [callNotesDialogOpen, setCallNotesDialogOpen] = useState(false);
+  const [manualActivityDialogOpen, setManualActivityDialogOpen] = useState(false);
   const [historyExpanded, setHistoryExpanded] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [nameBeforeEdit, setNameBeforeEdit] = useState('');
@@ -847,7 +849,18 @@ export default function CustomerDetailPage() {
             {/* Activity Timeline */}
             <Card>
               <CardHeader>
-                <CardTitle>Activity Timeline</CardTitle>
+                <div className="flex items-center justify-between gap-2">
+                  <CardTitle>Activity Timeline</CardTitle>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setManualActivityDialogOpen(true)}
+                  >
+                    <Plus className="h-4 w-4 mr-1.5" />
+                    Add note
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4 max-h-[480px] overflow-y-auto">
@@ -1017,6 +1030,18 @@ export default function CustomerDetailPage() {
           onSuccess={() => {
             fetchHistory();
             fetchActivities();
+          }}
+        />
+      )}
+
+      {customer && (
+        <AddManualActivityDialog
+          open={manualActivityDialogOpen}
+          onOpenChange={setManualActivityDialogOpen}
+          customerId={customerId}
+          onSuccess={() => {
+            fetchActivities();
+            fetchHistory();
           }}
         />
       )}
