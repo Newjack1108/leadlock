@@ -18,11 +18,24 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "LeadLock - Cheshire Stables Sales Control",
   description: "Premium lead management system for Cheshire Stables",
+  applicationName: "LeadLock",
+  appleWebApp: {
+    capable: true,
+    title: "LeadLock",
+    statusBarStyle: "default",
+  },
+  // Favicon + apple touch: app/icon.png and app/apple-icon.png (Next.js metadata file convention)
+  formatDetection: {
+    telephone: false,
+  },
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  // Match :root --background on first paint (reduces iOS home-screen launch flash)
+  themeColor: "#FAFAFA",
+  colorScheme: "light",
 };
 
 export default function RootLayout({
@@ -31,9 +44,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" className="bg-background">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background`}
       >
         <AreaBackgroundWrapper>
           <div className="flex min-h-screen flex-col">
