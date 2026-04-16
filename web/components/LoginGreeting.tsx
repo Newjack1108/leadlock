@@ -19,7 +19,7 @@ import {
 const CONFETTI_Z = 5100;
 const CONFETTI_COLORS = ['#1F6B3A', '#2d8f52', '#3FA86B', '#5cb87e', '#10B981', '#a7f3d0', '#ecfdf5'];
 
-const FADE_OUT_MS = 500;
+const FADE_OUT_MS = 900;
 
 /** Returns delayed side-burst timeout id for cleanup. */
 function fireLoginConfetti(): number {
@@ -133,7 +133,7 @@ export default function LoginGreeting() {
   return (
     <div
       className={cn(
-        'fixed inset-0 z-[5000] flex items-center justify-center bg-primary/10 p-6 backdrop-blur-[2px] transition-opacity duration-500 ease-out',
+        'fixed inset-0 z-[5000] flex items-center justify-center bg-primary/10 p-6 backdrop-blur-[2px] transition-opacity duration-[900ms] ease-out',
         exiting ? 'pointer-events-none opacity-0' : 'opacity-100',
       )}
     >
@@ -141,7 +141,7 @@ export default function LoginGreeting() {
         role="status"
         aria-live="polite"
         className={cn(
-          'relative max-w-[min(36rem,calc(100vw-2rem))] rounded-3xl border-2 border-primary/20 bg-gradient-to-br from-emerald-50/95 via-green-50/95 to-teal-50/90 px-10 py-12 pr-14 text-center shadow-xl shadow-primary/10 ring-1 ring-primary/15 transition-all duration-500 ease-out',
+          'relative max-w-[min(36rem,calc(100vw-2rem))] rounded-3xl border-2 border-primary/20 bg-gradient-to-br from-emerald-50/95 via-green-50/95 to-teal-50/90 px-10 py-12 pr-14 text-center shadow-xl shadow-primary/10 ring-1 ring-primary/15 transition-all duration-[900ms] ease-out',
           exiting ? 'translate-y-1 scale-[0.98] opacity-0' : 'translate-y-0 scale-100 opacity-100',
         )}
       >
