@@ -977,6 +977,7 @@ class CompanySettingsCreate(BaseModel):
     sms_bot_fallback_message: Optional[str] = None
     sms_bot_max_replies_per_thread: Optional[int] = None
     sms_bot_pause_minutes_after_handover: Optional[int] = None
+    sms_bot_system_instructions: Optional[str] = None
     bank_name: Optional[str] = None
     bank_account_name: Optional[str] = None
     account_number: Optional[str] = None
@@ -1019,6 +1020,7 @@ class CompanySettingsUpdate(BaseModel):
     sms_bot_fallback_message: Optional[str] = None
     sms_bot_max_replies_per_thread: Optional[int] = None
     sms_bot_pause_minutes_after_handover: Optional[int] = None
+    sms_bot_system_instructions: Optional[str] = None
     bank_name: Optional[str] = None
     bank_account_name: Optional[str] = None
     account_number: Optional[str] = None
@@ -1062,6 +1064,7 @@ class CompanySettingsResponse(BaseModel):
     sms_bot_fallback_message: Optional[str] = None
     sms_bot_max_replies_per_thread: int = 3
     sms_bot_pause_minutes_after_handover: int = 720
+    sms_bot_system_instructions: Optional[str] = None
     bank_name: Optional[str] = None
     bank_account_name: Optional[str] = None
     account_number: Optional[str] = None

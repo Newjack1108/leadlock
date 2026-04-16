@@ -90,6 +90,7 @@ export default function CompanySettingsPage() {
     sms_bot_fallback_message: 'Thanks for your message. Our team is currently out of hours and will reply as soon as we are back.',
     sms_bot_max_replies_per_thread: '3',
     sms_bot_pause_minutes_after_handover: '720',
+    sms_bot_system_instructions: '',
     bank_name: '',
     bank_account_name: '',
     account_number: '',
@@ -149,6 +150,7 @@ export default function CompanySettingsPage() {
         sms_bot_fallback_message: response.data.sms_bot_fallback_message || 'Thanks for your message. Our team is currently out of hours and will reply as soon as we are back.',
         sms_bot_max_replies_per_thread: response.data.sms_bot_max_replies_per_thread != null ? String(response.data.sms_bot_max_replies_per_thread) : '3',
         sms_bot_pause_minutes_after_handover: response.data.sms_bot_pause_minutes_after_handover != null ? String(response.data.sms_bot_pause_minutes_after_handover) : '720',
+        sms_bot_system_instructions: response.data.sms_bot_system_instructions ?? '',
         bank_name: response.data.bank_name || '',
         bank_account_name: response.data.bank_account_name || '',
         account_number: response.data.account_number || '',
@@ -201,6 +203,8 @@ export default function CompanySettingsPage() {
         sms_bot_max_replies_per_thread: formData.sms_bot_max_replies_per_thread ? parseInt(formData.sms_bot_max_replies_per_thread, 10) : undefined,
         sms_bot_pause_minutes_after_handover: formData.sms_bot_pause_minutes_after_handover ? parseInt(formData.sms_bot_pause_minutes_after_handover, 10) : undefined,
         sms_bot_business_hours_json: JSON.stringify(botSchedule),
+        sms_bot_system_instructions:
+          formData.sms_bot_system_instructions.trim() === '' ? null : formData.sms_bot_system_instructions.trim(),
       };
       if (settings) {
         // Update existing: omit logo_filename so existing value is unchanged
@@ -701,6 +705,22 @@ export default function CompanySettingsPage() {
                   rows={3}
                   disabled={saving}
                 />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="sms_bot_system_instructions">SMS bot system instructions</Label>
+                <Textarea
+                  id="sms_bot_system_instructions"
+                  value={formData.sms_bot_system_instructions}
+                  onChange={(e) => setFormData({ ...formData, sms_bot_system_instructions: e.target.value })}
+                  rows={6}
+                  disabled={saving}
+                  placeholder="e.g. what you sell, tone, topics to hand off to a human…"
+                />
+                <p className="text-sm text-muted-foreground">
+                  Optional. When set, this is appended to the AI system prompt after built-in rules. Company name (trading
+                  name if set), phone, and website from this page are included automatically when filled in. Keep it
+                  concise. The bot still limits reply length and escalates pricing, complaints, and complex questions.
+                </p>
               </div>
               <div className="space-y-2">
                 <Label>Business hours by weekday (AUTO mode)</Label>

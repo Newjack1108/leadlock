@@ -46,6 +46,20 @@ Set these in your API environment (e.g. Railway):
 | `TWILIO_SMS_WEBHOOK_URL` | Full public URL of the webhook (e.g. `https://leadlock-production.up.railway.app/api/webhooks/twilio/sms`). Set this if the app is behind a proxy so signature validation uses the same URL Twilio uses instead of the internal request URL. |
 | `TWILIO_ACTIVITY_USER_ID` | User id to use for the "SMS received" activity (default `1`). Set if user id 1 does not exist. |
 
+### SMS bot (OpenAI Responses API)
+
+Out-of-hours auto-replies use **`POST https://api.openai.com/v1/responses`** (not the Assistants threads/runs API). Set these on the **same API service** as Twilio.
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `OPENAI_API_KEY` | **Yes** (for AI replies) | OpenAI API secret key. If unset, the bot uses the company fallback SMS text only. |
+| `OPENAI_PROMPT_ID` | No | Optional dashboard **Prompt** id for your own tracing; sent as `metadata.prompt_id` on the Responses request. Prefer this over legacy names. |
+| `OPENAI_RESPONSES_PROMPT_ID` | No | Same as `OPENAI_PROMPT_ID` if you prefer this name; read if `OPENAI_PROMPT_ID` is unset. |
+| `OPENAI_ASSISTANT_ID` | No | **Legacy:** optional tracing only; sent as `metadata.assistant_id`. Does **not** call `/v1/assistants`. You no longer need to set this for the bot to call OpenAI. |
+| `OPENAI_SMS_BOT_MODEL` | No | Model string for Responses (default `gpt-4.1-mini`). |
+
+After changing variables, **restart** the API so `os.getenv` picks them up.
+
 ## 4. Behaviour
 
 - **Signature:** Requests are validated with `X-Twilio-Signature` and `TWILIO_AUTH_TOKEN`. Invalid signature → 403.

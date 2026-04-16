@@ -136,6 +136,43 @@ def should_bot_reply(
     return True, None
 
 
+def _build_company_context_block(settings: Optional[CompanySettings]) -> Optional[str]:
+    if not settings:
+        return None
+    display = (settings.trading_name or "").strip() or (settings.company_name or "").strip()
+    phone = (settings.phone or "").strip()
+    website = (settings.website or "").strip()
+    lines: list[str] = []
+    if display:
+        lines.append(f"- Company name: {display}")
+    if phone:
+        lines.append(f"- Phone: {phone}")
+    if website:
+        lines.append(f"- Website: {website}")
+    if not lines:
+        return None
+    return "Company context (facts only; do not contradict):\n" + "\n".join(lines)
+
+
+def _build_sms_bot_system_prompt(settings: Optional[CompanySettings]) -> str:
+    """Guardrails first, then optional company facts, then company-specific instructions."""
+    guardrails = (
+        "You are LeadLock's out-of-hours SMS assistant. "
+        "Reply in plain text under 320 characters. "
+        "If the question is complex, pricing-specific, complaint-related, or unclear, politely hand over to a human for next business day. "
+        "Do not invent facts or promise specific installation dates."
+    )
+    parts: list[str] = [guardrails]
+    ctx = _build_company_context_block(settings)
+    if ctx:
+        parts.append(ctx)
+    custom = (settings.sms_bot_system_instructions if settings else None) or ""
+    custom = custom.strip()
+    if custom:
+        parts.append(custom)
+    return "\n\n".join(parts)
+
+
 async def generate_bot_reply(
     settings: Optional[CompanySettings],
     customer_name: str,
@@ -146,19 +183,28 @@ async def generate_bot_reply(
         or "Thanks for your message. Our team is currently out of hours and will reply as soon as we are back."
     )
     api_key = os.getenv("OPENAI_API_KEY", "").strip()
-    assistant_id = os.getenv("OPENAI_ASSISTANT_ID", "").strip()
-    if not api_key or not assistant_id:
+    if not api_key:
         return fallback, False
 
-    url = "https://api.openai.com/v1/responses"
-    instructions = (
-        "You are LeadLock's out-of-hours SMS assistant. "
-        "Reply in plain text under 320 characters. "
-        "If the question is complex, pricing-specific, complaint-related, or unclear, politely hand over to a human for next business day. "
-        "Do not invent facts or promise specific installation dates."
+    # Responses API: optional tracing IDs (not legacy Assistants API calls).
+    prompt_id = (
+        os.getenv("OPENAI_PROMPT_ID", "").strip()
+        or os.getenv("OPENAI_RESPONSES_PROMPT_ID", "").strip()
     )
+    legacy_assistant_id = os.getenv("OPENAI_ASSISTANT_ID", "").strip()
+
+    model = os.getenv("OPENAI_SMS_BOT_MODEL", "").strip() or "gpt-4.1-mini"
+
+    metadata: dict = {"channel": "sms"}
+    if prompt_id:
+        metadata["prompt_id"] = prompt_id
+    if legacy_assistant_id:
+        metadata["assistant_id"] = legacy_assistant_id
+
+    url = "https://api.openai.com/v1/responses"
+    instructions = _build_sms_bot_system_prompt(settings)
     payload = {
-        "model": "gpt-4.1-mini",
+        "model": model,
         "input": [
             {
                 "role": "system",
@@ -174,7 +220,7 @@ async def generate_bot_reply(
                 ],
             },
         ],
-        "metadata": {"assistant_id": assistant_id, "channel": "sms"},
+        "metadata": metadata,
     }
     headers = {
         "Authorization": f"Bearer {api_key}",

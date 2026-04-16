@@ -864,6 +864,7 @@ def create_db_and_tables():
                 ("sms_bot_fallback_message", "TEXT"),
                 ("sms_bot_max_replies_per_thread", "INTEGER DEFAULT 3"),
                 ("sms_bot_pause_minutes_after_handover", "INTEGER DEFAULT 720"),
+                ("sms_bot_system_instructions", "TEXT"),
             ]:
                 company_columns = [col['name'] for col in inspector.get_columns("companysettings")]
                 if col_name not in company_columns:

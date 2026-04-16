@@ -419,6 +419,7 @@ class CompanySettings(SQLModel, table=True):
     sms_bot_fallback_message: Optional[str] = None
     sms_bot_max_replies_per_thread: int = Field(default=3)
     sms_bot_pause_minutes_after_handover: int = Field(default=720)
+    sms_bot_system_instructions: Optional[str] = None  # Extra system prompt for out-of-hours SMS bot (Responses API)
     # Bank details (shown on quote and invoice PDFs)
     bank_name: Optional[str] = None
     bank_account_name: Optional[str] = None  # Name on the account (payee for BACS)

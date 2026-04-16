@@ -406,6 +406,7 @@ export interface CompanySettings {
   sms_bot_fallback_message?: string;
   sms_bot_max_replies_per_thread?: number;
   sms_bot_pause_minutes_after_handover?: number;
+  sms_bot_system_instructions?: string | null;
   bank_name?: string;
   bank_account_name?: string;
   account_number?: string;
