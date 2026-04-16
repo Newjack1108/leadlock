@@ -44,6 +44,7 @@ export default function CompanySettingsPage() {
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [settings, setSettings] = useState<CompanySettings | null>(null);
+  const [botAvatarMissing, setBotAvatarMissing] = useState(false);
   const [termsExpanded, setTermsExpanded] = useState(false);
   const defaultBotHours: BotWeekSchedule = {
     mon: { enabled: true, start: '09:00', end: '17:00' },
@@ -619,46 +620,82 @@ export default function CompanySettingsPage() {
               </div>
             </div>
 
-            <div className="rounded-lg p-4 bg-rose-50/40 dark:bg-rose-950/20 border-l-4 border-l-rose-300 dark:border-l-rose-700 mt-6 space-y-4">
-              <h3 className="text-lg font-semibold">Out-of-hours SMS bot</h3>
-              <p className="text-sm text-muted-foreground">
-                Configure automated SMS replies for out-of-hours support using Twilio + AI assistant.
-              </p>
-              <div className="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold bg-background border">
-                {formData.sms_bot_mode === SmsBotMode.ON
-                  ? 'Status: Live now (manual ON)'
-                  : formData.sms_bot_mode === SmsBotMode.AUTO
-                    ? 'Status: Auto schedule mode'
-                    : 'Status: Off'}
+            <div className="rounded-xl border border-rose-200/70 bg-gradient-to-br from-rose-50 via-rose-50/70 to-white p-5 shadow-sm dark:border-rose-900/80 dark:from-rose-950/20 dark:via-rose-950/10 dark:to-background mt-6 space-y-4">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div className="flex items-center gap-3">
+                  {botAvatarMissing ? (
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full border border-rose-200 bg-white text-xs font-semibold text-rose-700 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-200">
+                      BOT
+                    </div>
+                  ) : (
+                    <img
+                      src="/chat-bot.png"
+                      alt="SMS bot profile"
+                      className="h-12 w-12 rounded-full border border-rose-200 object-cover shadow-sm dark:border-rose-800"
+                      onError={() => setBotAvatarMissing(true)}
+                    />
+                  )}
+                  <div>
+                    <h3 className="text-lg font-semibold">Out-of-hours SMS bot</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Configure automated SMS replies for out-of-hours support using Twilio + AI assistant.
+                    </p>
+                  </div>
+                </div>
+                <div className="inline-flex items-center rounded-full border border-rose-200 bg-white px-3 py-1.5 text-xs font-semibold shadow-sm dark:border-rose-800 dark:bg-rose-950/40">
+                  {formData.sms_bot_mode === SmsBotMode.ON
+                    ? 'Live now (manual ON)'
+                    : formData.sms_bot_mode === SmsBotMode.AUTO
+                      ? 'Auto schedule mode'
+                      : 'Bot currently OFF'}
+                </div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <Button
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                <button
                   type="button"
-                  variant={formData.sms_bot_mode === SmsBotMode.OFF ? 'default' : 'outline'}
-                  className="font-bold text-base"
+                  className={`rounded-lg border p-3 text-left transition ${
+                    formData.sms_bot_mode === SmsBotMode.OFF
+                      ? 'border-slate-900 bg-slate-900 text-white shadow-md dark:border-slate-100 dark:bg-slate-100 dark:text-slate-900'
+                      : 'border-slate-200 bg-white hover:border-slate-300 dark:border-slate-800 dark:bg-background'
+                  }`}
                   onClick={() => setFormData({ ...formData, sms_bot_mode: SmsBotMode.OFF })}
                   disabled={saving}
                 >
-                  BOT OFF
-                </Button>
-                <Button
+                  <p className="text-sm font-semibold">Bot Off</p>
+                  <p className={`mt-1 text-xs ${formData.sms_bot_mode === SmsBotMode.OFF ? 'text-slate-100/90 dark:text-slate-800' : 'text-muted-foreground'}`}>
+                    Disable all automatic replies.
+                  </p>
+                </button>
+                <button
                   type="button"
-                  variant={formData.sms_bot_mode === SmsBotMode.AUTO ? 'default' : 'outline'}
-                  className="font-bold text-base"
+                  className={`rounded-lg border p-3 text-left transition ${
+                    formData.sms_bot_mode === SmsBotMode.AUTO
+                      ? 'border-amber-500 bg-amber-500 text-white shadow-md dark:border-amber-400 dark:bg-amber-400 dark:text-amber-950'
+                      : 'border-amber-200 bg-amber-50/40 hover:border-amber-300 dark:border-amber-900 dark:bg-amber-950/20'
+                  }`}
                   onClick={() => setFormData({ ...formData, sms_bot_mode: SmsBotMode.AUTO })}
                   disabled={saving}
                 >
-                  BOT AUTO
-                </Button>
-                <Button
+                  <p className="text-sm font-semibold">Bot Auto</p>
+                  <p className={`mt-1 text-xs ${formData.sms_bot_mode === SmsBotMode.AUTO ? 'text-amber-50 dark:text-amber-950/90' : 'text-muted-foreground'}`}>
+                    Follow business hours schedule.
+                  </p>
+                </button>
+                <button
                   type="button"
-                  variant={formData.sms_bot_mode === SmsBotMode.ON ? 'default' : 'outline'}
-                  className="font-bold text-base"
+                  className={`rounded-lg border p-3 text-left transition ${
+                    formData.sms_bot_mode === SmsBotMode.ON
+                      ? 'border-emerald-600 bg-emerald-600 text-white shadow-md dark:border-emerald-500 dark:bg-emerald-500 dark:text-emerald-950'
+                      : 'border-emerald-200 bg-emerald-50/50 hover:border-emerald-300 dark:border-emerald-900 dark:bg-emerald-950/20'
+                  }`}
                   onClick={() => setFormData({ ...formData, sms_bot_mode: SmsBotMode.ON })}
                   disabled={saving}
                 >
-                  BOT ON
-                </Button>
+                  <p className="text-sm font-semibold">Bot On</p>
+                  <p className={`mt-1 text-xs ${formData.sms_bot_mode === SmsBotMode.ON ? 'text-emerald-50 dark:text-emerald-950/90' : 'text-muted-foreground'}`}>
+                    Reply at all times (manual override).
+                  </p>
+                </button>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
