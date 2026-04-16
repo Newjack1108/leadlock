@@ -4,6 +4,7 @@ Out-of-hours SMS bot orchestration for Twilio inbound messages.
 import json
 import os
 import re
+import sys
 from datetime import datetime, timedelta
 from typing import Optional, Tuple
 from zoneinfo import ZoneInfo
@@ -173,6 +174,32 @@ def _build_sms_bot_system_prompt(settings: Optional[CompanySettings]) -> str:
     return "\n\n".join(parts)
 
 
+def _extract_text_from_responses_api(data: dict) -> str:
+    """Read assistant text from POST /v1/responses JSON (SDK adds output_text; raw HTTP may only nest under output)."""
+    direct = (data.get("output_text") or "").strip()
+    if direct:
+        return direct
+    out = data.get("output")
+    if not isinstance(out, list):
+        return ""
+    parts: list[str] = []
+    for item in out:
+        if not isinstance(item, dict):
+            continue
+        if item.get("type") != "message" or item.get("role") != "assistant":
+            continue
+        for block in item.get("content") or []:
+            if not isinstance(block, dict):
+                continue
+            btype = block.get("type")
+            txt = (block.get("text") or "").strip()
+            if not txt:
+                continue
+            if btype in ("output_text", "text", None):
+                parts.append(txt)
+    return "\n".join(parts).strip()
+
+
 async def generate_bot_reply(
     settings: Optional[CompanySettings],
     customer_name: str,
@@ -231,9 +258,27 @@ async def generate_bot_reply(
             resp = await client.post(url, headers=headers, json=payload)
             resp.raise_for_status()
             data = resp.json()
-            text = (data.get("output_text") or "").strip()
+            if not isinstance(data, dict):
+                print("OpenAI Responses: non-object JSON body", file=sys.stderr, flush=True)
+                return fallback, False
+            text = _extract_text_from_responses_api(data)
             if not text:
+                keys = sorted(data.keys()) if isinstance(data, dict) else []
+                print(
+                    f"OpenAI Responses: empty assistant text (top-level keys: {keys})",
+                    file=sys.stderr,
+                    flush=True,
+                )
                 return fallback, False
             return text[:640], True
-    except Exception:
+    except httpx.HTTPStatusError as e:
+        snippet = (e.response.text or "")[:800].replace("\n", " ")
+        print(
+            f"OpenAI Responses HTTP {e.response.status_code}: {snippet}",
+            file=sys.stderr,
+            flush=True,
+        )
+        return fallback, False
+    except Exception as ex:
+        print(f"OpenAI Responses error: {ex}", file=sys.stderr, flush=True)
         return fallback, False
