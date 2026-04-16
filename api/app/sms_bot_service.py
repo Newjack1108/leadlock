@@ -116,6 +116,7 @@ def should_bot_reply(
     settings: Optional[CompanySettings],
     customer: Optional[Customer],
     inbound_body: str,
+    inbound_received_at: Optional[datetime] = None,
 ) -> Tuple[bool, Optional[str]]:
     if not settings or not customer:
         return False, "no_settings_or_customer"
@@ -125,6 +126,11 @@ def should_bot_reply(
         return False, "opt_out_keyword"
     if not is_bot_active_now(settings):
         return False, "bot_inactive"
+    sup = customer.sms_bot_suppress_auto_reply_before_utc
+    if sup and inbound_received_at is not None:
+        if inbound_received_at < sup:
+            return False, "handover_inbound_before_resume"
+        customer.sms_bot_suppress_auto_reply_before_utc = None
     pause_minutes = max(0, int(settings.sms_bot_pause_minutes_after_handover or 0))
     last_handover = _last_handover_at(session, customer.id)
     if pause_minutes and last_handover and (datetime.utcnow() - last_handover) < timedelta(minutes=pause_minutes):

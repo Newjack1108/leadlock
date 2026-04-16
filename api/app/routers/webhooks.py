@@ -1,6 +1,6 @@
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
@@ -443,6 +443,21 @@ async def twilio_inbound_sms(request: Request, session: Session = Depends(get_se
         if first_user:
             activity_user_id = first_user.id
 
+    if message_sid:
+        dup_stmt = (
+            select(SmsMessage)
+            .where(SmsMessage.customer_id == customer.id)
+            .where(SmsMessage.direction == SmsDirection.RECEIVED)
+            .where(SmsMessage.twilio_sid == message_sid)
+        )
+        if session.exec(dup_stmt).first():
+            print(
+                f"Twilio SMS: duplicate MessageSid={message_sid} for customer_id={customer.id}, skipping",
+                file=sys.stderr,
+                flush=True,
+            )
+            return Response(content="<Response></Response>", media_type="application/xml")
+
     msg = SmsMessage(
         customer_id=customer.id,
         lead_id=lead.id if lead else None,
@@ -468,7 +483,15 @@ async def twilio_inbound_sms(request: Request, session: Session = Depends(get_se
     # Optional out-of-hours SMS bot reply.
     try:
         settings = get_company_settings(session)
-        should_reply, reason = should_bot_reply(session, settings, customer, body)
+        customer = session.get(Customer, customer.id)
+        if not customer:
+            return Response(content="<Response></Response>", media_type="application/xml")
+        should_reply, reason = should_bot_reply(
+            session, settings, customer, body, inbound_received_at=msg.received_at
+        )
+        if session.is_modified(customer, include_collections=False):
+            session.add(customer)
+            session.commit()
         if should_reply:
             bot_reply, _from_ai = await generate_bot_reply(settings, customer.name if customer else "Customer", body)
             if reason == "handover":
@@ -495,6 +518,15 @@ async def twilio_inbound_sms(request: Request, session: Session = Depends(get_se
                         created_by_id=activity_user_id,
                     )
                     session.add(bot_activity)
+                if bot_reply.startswith("[BOT_HANDOVER]"):
+                    pause_m = max(0, int(settings.sms_bot_pause_minutes_after_handover or 0))
+                    if pause_m > 0:
+                        cust = session.get(Customer, customer.id)
+                        if cust:
+                            cust.sms_bot_suppress_auto_reply_before_utc = datetime.utcnow() + timedelta(
+                                minutes=pause_m
+                            )
+                            session.add(cust)
                 session.commit()
             else:
                 print(f"Twilio SMS bot send failed: {sent_err}", file=sys.stderr, flush=True)

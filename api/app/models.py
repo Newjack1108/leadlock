@@ -127,6 +127,8 @@ class Customer(SQLModel, table=True):
     country: Optional[str] = Field(default="United Kingdom")
     customer_since: datetime = Field(default_factory=datetime.utcnow)  # When first qualified
     sms_bot_paused_until: Optional[datetime] = None
+    # After a [BOT_HANDOVER] outbound, suppress auto-replies to inbound received before this UTC time (Twilio retries / clock skew).
+    sms_bot_suppress_auto_reply_before_utc: Optional[datetime] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     messenger_psid: Optional[str] = Field(default=None, unique=True, index=True)  # Facebook Page-Scoped ID for Messenger

@@ -334,6 +334,33 @@ def create_db_and_tables():
                     error_str = str(e).lower()
                     if "already exists" not in error_str:
                         print(f"Error adding sms_bot_paused_until to customer: {e}", file=sys.stderr, flush=True)
+            customer_columns = [col["name"] for col in inspector.get_columns("customer")]
+            if "sms_bot_suppress_auto_reply_before_utc" not in customer_columns:
+                print(
+                    "Adding sms_bot_suppress_auto_reply_before_utc column to customer table...",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(
+                            text(
+                                "ALTER TABLE customer ADD COLUMN sms_bot_suppress_auto_reply_before_utc TIMESTAMP"
+                            )
+                        )
+                    print(
+                        "Added sms_bot_suppress_auto_reply_before_utc column to customer table",
+                        file=sys.stderr,
+                        flush=True,
+                    )
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str:
+                        print(
+                            f"Error adding sms_bot_suppress_auto_reply_before_utc to customer: {e}",
+                            file=sys.stderr,
+                            flush=True,
+                        )
         if has_lead_table:
             lead_columns = [col['name'] for col in inspector.get_columns("lead")]
             if "messenger_psid" not in lead_columns:
