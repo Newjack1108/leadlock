@@ -79,8 +79,8 @@ function QuotesPageContent() {
   const [viewMode, setViewMode] = useState<'list' | 'tile'>('list');
   const [statusFilter, setStatusFilter] = useState<QuoteStatus | 'ALL'>(initialStatus);
   const [temperatureFilter, setTemperatureFilter] = useState<QuoteTemperature | 'ALL'>('ALL');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchDebounced, setSearchDebounced] = useState('');
+  const [searchDraft, setSearchDraft] = useState('');
+  const [searchApplied, setSearchApplied] = useState('');
   const [sortBy, setSortBy] = useState<QuotesSortBy>('last_contacted');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
@@ -94,21 +94,17 @@ function QuotesPageContent() {
     }
   }, [searchParams]);
 
-  useEffect(() => {
-    const t = setTimeout(() => setSearchDebounced(searchQuery), 300);
-    return () => clearTimeout(t);
-  }, [searchQuery]);
-
   useLayoutEffect(() => {
     setPage(1);
-  }, [statusFilter, temperatureFilter, searchDebounced, includeArchived]);
+  }, [statusFilter, temperatureFilter, searchApplied, includeArchived]);
 
   const fetchQuotes = useCallback(async () => {
     try {
       setLoading(true);
+      const searchValue = searchApplied.trim() || undefined;
       const data = await getQuotes({
         status: statusFilter === 'ALL' ? undefined : statusFilter,
-        search: searchDebounced.trim() || undefined,
+        search: searchValue,
         temperature: temperatureFilter === 'ALL' ? undefined : temperatureFilter,
         page,
         page_size: QUOTES_PAGE_SIZE,
@@ -124,7 +120,7 @@ function QuotesPageContent() {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, temperatureFilter, searchDebounced, page, includeArchived, router]);
+  }, [statusFilter, temperatureFilter, searchApplied, page, includeArchived, router]);
 
   useEffect(() => {
     fetchQuotes();
@@ -238,8 +234,14 @@ function QuotesPageContent() {
             </Select>
             <Input
               placeholder="Search by quote #, customer, or lead type..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              value={searchDraft}
+              onChange={(e) => setSearchDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  setSearchApplied(searchDraft);
+                }
+              }}
               className="w-full md:w-[260px]"
             />
             <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none pb-2">

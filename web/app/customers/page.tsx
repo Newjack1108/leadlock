@@ -21,17 +21,16 @@ function CustomersPageContent() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [unreadByCustomer, setUnreadByCustomer] = useState<Record<number, number>>({});
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
+  const [searchDraft, setSearchDraft] = useState('');
+  const [searchApplied, setSearchApplied] = useState('');
   const [callNotesOpen, setCallNotesOpen] = useState(false);
   const [callNotesCustomer, setCallNotesCustomer] = useState<{ id: number; name: string; phone: string } | null>(null);
 
-  useEffect(() => {
-    fetchCustomers();
-  }, []);
-
   const fetchCustomers = async () => {
     try {
-      const params = search ? { search } : {};
+      setLoading(true);
+      const searchValue = searchApplied.trim();
+      const params = searchValue ? { search: searchValue } : {};
       const [customersRes, unreadRes] = await Promise.all([
         api.get('/api/customers', { params }),
         getUnreadCountsByCustomer().catch(() => []),
@@ -51,13 +50,8 @@ function CustomersPageContent() {
   };
 
   useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      if (search !== undefined) {
-        fetchCustomers();
-      }
-    }, 300);
-    return () => clearTimeout(timeoutId);
-  }, [search]);
+    void fetchCustomers();
+  }, [searchApplied]);
 
   function locationText(c: Customer): string {
     if (c.city && c.county) return `${c.city}, ${c.county}`;
@@ -92,8 +86,14 @@ function CustomersPageContent() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
               placeholder="Search by name, email, phone..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                value={searchDraft}
+                onChange={(e) => setSearchDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    setSearchApplied(searchDraft);
+                  }
+                }}
                 className="pl-9"
               />
             </div>

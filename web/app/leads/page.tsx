@@ -103,8 +103,8 @@ function LeadsPageContent() {
   const [statusFilter, setStatusFilter] = useState<LeadStatus | 'ALL'>(initialStatus);
   const [leadTypeFilter, setLeadTypeFilter] = useState<LeadType | 'ALL'>('ALL');
   const [leadSourceFilter, setLeadSourceFilter] = useState<LeadSource | 'ALL'>(initialLeadSource);
-  const [search, setSearch] = useState('');
-  const [searchDebounced, setSearchDebounced] = useState('');
+  const [searchDraft, setSearchDraft] = useState('');
+  const [searchApplied, setSearchApplied] = useState('');
   const [myLeadsOnly, setMyLeadsOnly] = useState(false);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
@@ -190,25 +190,16 @@ function LeadsPageContent() {
     };
   }, [searchParams, router]);
 
-  // Debounce search input
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setSearchDebounced(search);
-    }, 300);
-
-    return () => clearTimeout(timer);
-  }, [search]);
-
   // Reset to page 1 before fetch when filters change (layout runs before fetch effect)
   useLayoutEffect(() => {
     setPage(1);
-  }, [statusFilter, leadTypeFilter, leadSourceFilter, searchDebounced, myLeadsOnly, includeArchived]);
+  }, [statusFilter, leadTypeFilter, leadSourceFilter, searchApplied, myLeadsOnly, includeArchived]);
 
   // Fetch leads when filters or page change (after auth + URL normalization)
   useEffect(() => {
     if (!authReady) return;
     fetchLeads();
-  }, [authReady, statusFilter, leadTypeFilter, leadSourceFilter, searchDebounced, myLeadsOnly, page, includeArchived]);
+  }, [authReady, statusFilter, leadTypeFilter, leadSourceFilter, searchApplied, myLeadsOnly, page, includeArchived]);
 
   const fetchLeads = async (pageOverride?: number) => {
     const effectivePage = pageOverride ?? page;
@@ -230,8 +221,9 @@ function LeadsPageContent() {
       if (leadSourceFilter !== 'ALL') {
         params.lead_source = leadSourceFilter;
       }
-      if (searchDebounced) {
-        params.search = searchDebounced;
+      const searchValue = searchApplied.trim();
+      if (searchValue) {
+        params.search = searchValue;
       }
       if (myLeadsOnly) {
         params.myLeads = true;
@@ -321,8 +313,14 @@ function LeadsPageContent() {
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search by name, phone, email, postcode..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                value={searchDraft}
+                onChange={(e) => setSearchDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    setSearchApplied(searchDraft);
+                  }
+                }}
                 className="pl-10"
               />
             </div>
