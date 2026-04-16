@@ -74,6 +74,13 @@ export default function CustomerSmsPage() {
   const [keepingUnread, setKeepingUnread] = useState(false);
   const [botPauseMinutes, setBotPauseMinutes] = useState('720');
   const [botUpdating, setBotUpdating] = useState(false);
+  const [botAvatarMissing, setBotAvatarMissing] = useState(false);
+
+  const getMessageSource = (msg: SmsMessage): 'bot' | 'team' | 'customer' => {
+    if (msg.direction === SmsDirection.RECEIVED) return 'customer';
+    if (msg.created_by_id == null) return 'bot';
+    return 'team';
+  };
 
   useEffect(() => {
     if (!customerId) return;
@@ -484,36 +491,62 @@ export default function CustomerSmsPage() {
                   <p className="text-sm text-muted-foreground">No messages yet</p>
                 ) : (
                   <div className="space-y-3">
-                    {messages.map((msg) => (
-                      <div
-                        key={msg.id}
-                        className={`p-4 border rounded-md ${
-                          msg.direction === SmsDirection.SENT
-                            ? 'bg-blue-50 border-blue-200 ml-4'
-                            : 'bg-gray-50 border-gray-200 mr-4'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-1">
-                          <Badge
-                            variant={
-                              msg.direction === SmsDirection.SENT ? 'default' : 'secondary'
-                            }
-                          >
-                            <MessageSquare className="h-3 w-3 mr-1" />
-                            {msg.direction === SmsDirection.SENT ? 'Sent' : 'Received'}
-                          </Badge>
-                          <span className="text-xs text-muted-foreground">
-                            {formatDateTime(msg.created_at)}
-                          </span>
+                    {messages.map((msg) => {
+                      const source = getMessageSource(msg);
+                      const isBotMessage = source === 'bot';
+                      const isSent = msg.direction === SmsDirection.SENT;
+                      const statusText = isBotMessage
+                        ? 'Bot reply'
+                        : source === 'team'
+                          ? 'Sent by team'
+                          : 'Customer';
+
+                      return (
+                        <div
+                          key={msg.id}
+                          className={`p-4 border rounded-md ${
+                            isBotMessage
+                              ? 'bg-violet-50 border-violet-200 ml-4 dark:bg-violet-950/20 dark:border-violet-800'
+                              : isSent
+                                ? 'bg-blue-50 border-blue-200 ml-4 dark:bg-blue-950/20 dark:border-blue-800'
+                                : 'bg-gray-50 border-gray-200 mr-4 dark:bg-slate-900/50 dark:border-slate-700'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-2 gap-3">
+                            <div className="flex items-center gap-2">
+                              {isBotMessage && (
+                                botAvatarMissing ? (
+                                  <div className="flex h-6 w-6 items-center justify-center rounded-full border border-violet-300 bg-white text-[10px] font-semibold text-violet-700 dark:border-violet-700 dark:bg-violet-950/40 dark:text-violet-200">
+                                    BOT
+                                  </div>
+                                ) : (
+                                  <img
+                                    src="/chat-bot.png"
+                                    alt="Bot avatar"
+                                    className="h-6 w-6 rounded-full border border-violet-300 object-cover dark:border-violet-700"
+                                    onError={() => setBotAvatarMissing(true)}
+                                  />
+                                )
+                              )}
+                              <Badge
+                                variant={isSent ? 'default' : 'secondary'}
+                                className={isBotMessage ? 'bg-violet-600 hover:bg-violet-600 text-white' : ''}
+                              >
+                                <MessageSquare className="h-3 w-3 mr-1" />
+                                {statusText}
+                              </Badge>
+                            </div>
+                            <span className="text-xs text-muted-foreground">
+                              {formatDateTime(msg.created_at)}
+                            </span>
+                          </div>
+                          <div className="text-xs text-muted-foreground mb-1">
+                            {isSent ? `To: ${msg.to_phone}` : `From: ${msg.from_phone}`}
+                          </div>
+                          <p className="text-sm whitespace-pre-wrap">{msg.body}</p>
                         </div>
-                        <div className="text-xs text-muted-foreground mb-1">
-                          {msg.direction === SmsDirection.SENT
-                            ? `To: ${msg.to_phone}`
-                            : `From: ${msg.from_phone}`}
-                        </div>
-                        <p className="text-sm whitespace-pre-wrap">{msg.body}</p>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </CardContent>
