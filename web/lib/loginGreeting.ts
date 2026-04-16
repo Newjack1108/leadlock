@@ -2,7 +2,7 @@
 export const LEADLOCK_LOGIN_GREETING_SESSION_KEY = 'leadlock_login_greeting';
 
 /** Auto-dismiss duration (ms). */
-export const LOGIN_GREETING_AUTO_DISMISS_MS = 180_000;
+export const LOGIN_GREETING_AUTO_DISMISS_MS = 3_000;
 
 export function getGreetingLabelForHour(hour: number): string {
   if (hour < 12) return 'Good morning';
