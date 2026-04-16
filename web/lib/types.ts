@@ -140,6 +140,7 @@ export interface Customer {
   postcode?: string;
   country?: string;
   customer_since: string;
+  sms_bot_paused_until?: string | null;
   created_at: string;
   updated_at: string;
   messenger_psid?: string | null;
@@ -363,6 +364,12 @@ export enum InstallationLeadTime {
   FIVE_SIX_WEEKS = '5-6 weeks',
 }
 
+export enum SmsBotMode {
+  OFF = "OFF",
+  AUTO = "AUTO",
+  ON = "ON",
+}
+
 export interface CompanySettings {
   id: number;
   company_name: string;
@@ -393,6 +400,12 @@ export interface CompanySettings {
   average_speed_mph?: number;
   install_quote_margin_pct?: number;
   product_import_gross_margin_pct?: number;
+  sms_bot_mode?: SmsBotMode;
+  sms_bot_timezone?: string;
+  sms_bot_business_hours_json?: string;
+  sms_bot_fallback_message?: string;
+  sms_bot_max_replies_per_thread?: number;
+  sms_bot_pause_minutes_after_handover?: number;
   bank_name?: string;
   bank_account_name?: string;
   account_number?: string;

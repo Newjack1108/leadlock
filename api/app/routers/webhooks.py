@@ -45,7 +45,8 @@ from app.auth import get_webhook_api_key, get_product_import_api_key
 from app.routers.settings import get_company_settings
 from app.workflow import check_sla_overdue
 from app.routers.leads import enrich_lead_response
-from app.sms_service import validate_twilio_webhook, normalize_phone, get_twilio_config
+from app.sms_service import validate_twilio_webhook, normalize_phone, get_twilio_config, send_sms
+from app.sms_bot_service import should_bot_reply, generate_bot_reply
 from app.messenger_service import (
     parse_webhook_payload,
     get_user_profile,
@@ -463,6 +464,44 @@ async def twilio_inbound_sms(request: Request, session: Session = Depends(get_se
         session.add(activity)
     print(f"Twilio SMS: stored inbound message for customer_id={customer.id}", file=sys.stderr, flush=True)
     session.commit()
+
+    # Optional out-of-hours SMS bot reply.
+    try:
+        settings = get_company_settings(session)
+        should_reply, reason = should_bot_reply(session, settings, customer, body)
+        if should_reply:
+            bot_reply, _from_ai = await generate_bot_reply(settings, customer.name if customer else "Customer", body)
+            if reason == "handover":
+                bot_reply = "[BOT_HANDOVER] Thanks for your message. A team member will review this and get back to you on the next working day."
+
+            sent_ok, sent_sid, sent_err = send_sms(from_phone, bot_reply)
+            if sent_ok:
+                outbound = SmsMessage(
+                    customer_id=customer.id,
+                    lead_id=lead.id if lead else None,
+                    direction=SmsDirection.SENT,
+                    from_phone=to_phone,
+                    to_phone=from_phone,
+                    body=bot_reply,
+                    twilio_sid=sent_sid,
+                    sent_at=datetime.utcnow(),
+                )
+                session.add(outbound)
+                if activity_user_id is not None:
+                    bot_activity = Activity(
+                        customer_id=customer.id,
+                        activity_type=ActivityType.SMS_SENT,
+                        notes=f"SMS bot reply sent to {from_phone}\n{bot_reply}",
+                        created_by_id=activity_user_id,
+                    )
+                    session.add(bot_activity)
+                session.commit()
+            else:
+                print(f"Twilio SMS bot send failed: {sent_err}", file=sys.stderr, flush=True)
+        elif reason:
+            print(f"Twilio SMS bot skipped: {reason}", file=sys.stderr, flush=True)
+    except Exception as e:
+        print(f"Twilio SMS bot error: {e}", file=sys.stderr, flush=True)
 
     return Response(content="<Response></Response>", media_type="application/xml")
 

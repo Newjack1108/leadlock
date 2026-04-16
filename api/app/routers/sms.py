@@ -4,7 +4,7 @@ SMS router for sending, receiving, and scheduling SMS via Twilio.
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, select
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from app.database import get_session
 from app.models import (
@@ -189,6 +189,56 @@ async def mark_sms_unread(
         session.add(msg)
     session.commit()
     return MessagesMarkUnreadResult(unmarked_count=len(to_update))
+
+
+@router.post("/customers/{customer_id}/bot/pause")
+async def pause_customer_sms_bot(
+    customer_id: int,
+    minutes: int = Query(720, ge=1, le=10080),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Pause SMS bot replies for one customer for N minutes."""
+    customer = session.get(Customer, customer_id)
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    until = datetime.utcnow() + timedelta(minutes=minutes)
+    customer.sms_bot_paused_until = until
+    session.add(customer)
+    session.add(
+        Activity(
+            customer_id=customer.id,
+            activity_type=ActivityType.NOTE,
+            notes=f"SMS bot paused until {until.isoformat()}Z",
+            created_by_id=current_user.id,
+        )
+    )
+    session.commit()
+    return {"ok": True, "customer_id": customer.id, "paused_until": until}
+
+
+@router.post("/customers/{customer_id}/bot/resume")
+async def resume_customer_sms_bot(
+    customer_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Resume SMS bot replies for one customer immediately."""
+    customer = session.get(Customer, customer_id)
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    customer.sms_bot_paused_until = None
+    session.add(customer)
+    session.add(
+        Activity(
+            customer_id=customer.id,
+            activity_type=ActivityType.NOTE,
+            notes="SMS bot resumed for this customer",
+            created_by_id=current_user.id,
+        )
+    )
+    session.commit()
+    return {"ok": True, "customer_id": customer.id, "paused_until": None}
 
 
 # Scheduled SMS (must be before /{sms_id} so /scheduled is not captured as sms_id)

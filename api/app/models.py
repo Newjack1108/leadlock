@@ -126,6 +126,7 @@ class Customer(SQLModel, table=True):
     postcode: Optional[str] = None
     country: Optional[str] = Field(default="United Kingdom")
     customer_since: datetime = Field(default_factory=datetime.utcnow)  # When first qualified
+    sms_bot_paused_until: Optional[datetime] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     messenger_psid: Optional[str] = Field(default=None, unique=True, index=True)  # Facebook Page-Scoped ID for Messenger
@@ -374,6 +375,12 @@ class InstallationLeadTime(str, Enum):
     FIVE_SIX_WEEKS = "5-6 weeks"
 
 
+class SmsBotMode(str, Enum):
+    OFF = "OFF"
+    AUTO = "AUTO"
+    ON = "ON"
+
+
 class CompanySettings(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     company_name: str
@@ -405,6 +412,13 @@ class CompanySettings(SQLModel, table=True):
     average_speed_mph: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(5, 2)))  # For travel time calculation
     install_quote_margin_pct: Optional[Decimal] = Field(default=30, sa_column=Column(Numeric(5, 2)))  # Margin % added to install quote cost (e.g. 30 = 30%); defaults to 30
     product_import_gross_margin_pct: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(5, 2)))  # e.g. 30 for 30%; applied when products pushed from production to set RRP
+    # SMS bot settings (out-of-hours assistant)
+    sms_bot_mode: SmsBotMode = Field(default=SmsBotMode.OFF)
+    sms_bot_timezone: str = Field(default="Europe/London")
+    sms_bot_business_hours_json: Optional[str] = None  # JSON string: {"mon":{"enabled":true,"start":"09:00","end":"17:00"}, ...}
+    sms_bot_fallback_message: Optional[str] = None
+    sms_bot_max_replies_per_thread: int = Field(default=3)
+    sms_bot_pause_minutes_after_handover: int = Field(default=720)
     # Bank details (shown on quote and invoice PDFs)
     bank_name: Optional[str] = None
     bank_account_name: Optional[str] = None  # Name on the account (payee for BACS)

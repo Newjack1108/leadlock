@@ -16,8 +16,21 @@ import api, {
   importCustomersFromCsv,
   downloadCustomerExport,
 } from '@/lib/api';
-import { CompanySettings, InstallationLeadTime } from '@/lib/types';
+import { CompanySettings, InstallationLeadTime, SmsBotMode } from '@/lib/types';
 import { toast } from 'sonner';
+
+type WeekdayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
+type BotDaySchedule = { enabled: boolean; start: string; end: string };
+type BotWeekSchedule = Record<WeekdayKey, BotDaySchedule>;
+const WEEKDAYS: Array<{ key: WeekdayKey; label: string }> = [
+  { key: 'mon', label: 'Monday' },
+  { key: 'tue', label: 'Tuesday' },
+  { key: 'wed', label: 'Wednesday' },
+  { key: 'thu', label: 'Thursday' },
+  { key: 'fri', label: 'Friday' },
+  { key: 'sat', label: 'Saturday' },
+  { key: 'sun', label: 'Sunday' },
+];
 
 export default function CompanySettingsPage() {
   const router = useRouter();
@@ -32,6 +45,16 @@ export default function CompanySettingsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [settings, setSettings] = useState<CompanySettings | null>(null);
   const [termsExpanded, setTermsExpanded] = useState(false);
+  const defaultBotHours: BotWeekSchedule = {
+    mon: { enabled: true, start: '09:00', end: '17:00' },
+    tue: { enabled: true, start: '09:00', end: '17:00' },
+    wed: { enabled: true, start: '09:00', end: '17:00' },
+    thu: { enabled: true, start: '09:00', end: '17:00' },
+    fri: { enabled: true, start: '09:00', end: '17:00' },
+    sat: { enabled: false, start: '09:00', end: '17:00' },
+    sun: { enabled: false, start: '09:00', end: '17:00' },
+  };
+  const [botSchedule, setBotSchedule] = useState<BotWeekSchedule>(defaultBotHours);
   const [formData, setFormData] = useState({
     company_name: '',
     trading_name: '',
@@ -61,6 +84,12 @@ export default function CompanySettingsPage() {
     average_speed_mph: '',
     install_quote_margin_pct: '30',
     product_import_gross_margin_pct: '',
+    sms_bot_mode: SmsBotMode.OFF as SmsBotMode,
+    sms_bot_timezone: 'Europe/London',
+    sms_bot_business_hours_json: JSON.stringify(defaultBotHours),
+    sms_bot_fallback_message: 'Thanks for your message. Our team is currently out of hours and will reply as soon as we are back.',
+    sms_bot_max_replies_per_thread: '3',
+    sms_bot_pause_minutes_after_handover: '720',
     bank_name: '',
     bank_account_name: '',
     account_number: '',
@@ -77,6 +106,14 @@ export default function CompanySettingsPage() {
       setLoading(true);
       const response = await api.get('/api/settings/company');
       setSettings(response.data);
+      let parsedSchedule = defaultBotHours;
+      try {
+        const loaded = JSON.parse(response.data.sms_bot_business_hours_json || '{}');
+        parsedSchedule = { ...defaultBotHours, ...loaded };
+      } catch {
+        parsedSchedule = defaultBotHours;
+      }
+      setBotSchedule(parsedSchedule);
       setFormData({
         company_name: response.data.company_name || '',
         trading_name: response.data.trading_name || '',
@@ -106,6 +143,12 @@ export default function CompanySettingsPage() {
         average_speed_mph: response.data.average_speed_mph != null ? String(response.data.average_speed_mph) : '',
         install_quote_margin_pct: response.data.install_quote_margin_pct != null ? String(response.data.install_quote_margin_pct) : '30',
         product_import_gross_margin_pct: response.data.product_import_gross_margin_pct != null ? String(response.data.product_import_gross_margin_pct) : '',
+        sms_bot_mode: response.data.sms_bot_mode || SmsBotMode.OFF,
+        sms_bot_timezone: response.data.sms_bot_timezone || 'Europe/London',
+        sms_bot_business_hours_json: response.data.sms_bot_business_hours_json || JSON.stringify(parsedSchedule),
+        sms_bot_fallback_message: response.data.sms_bot_fallback_message || 'Thanks for your message. Our team is currently out of hours and will reply as soon as we are back.',
+        sms_bot_max_replies_per_thread: response.data.sms_bot_max_replies_per_thread != null ? String(response.data.sms_bot_max_replies_per_thread) : '3',
+        sms_bot_pause_minutes_after_handover: response.data.sms_bot_pause_minutes_after_handover != null ? String(response.data.sms_bot_pause_minutes_after_handover) : '720',
         bank_name: response.data.bank_name || '',
         bank_account_name: response.data.bank_account_name || '',
         account_number: response.data.account_number || '',
@@ -155,6 +198,9 @@ export default function CompanySettingsPage() {
         average_speed_mph: formData.average_speed_mph ? parseFloat(formData.average_speed_mph) : undefined,
         install_quote_margin_pct: formData.install_quote_margin_pct ? parseFloat(formData.install_quote_margin_pct) : undefined,
         product_import_gross_margin_pct: formData.product_import_gross_margin_pct ? parseFloat(formData.product_import_gross_margin_pct) : undefined,
+        sms_bot_max_replies_per_thread: formData.sms_bot_max_replies_per_thread ? parseInt(formData.sms_bot_max_replies_per_thread, 10) : undefined,
+        sms_bot_pause_minutes_after_handover: formData.sms_bot_pause_minutes_after_handover ? parseInt(formData.sms_bot_pause_minutes_after_handover, 10) : undefined,
+        sms_bot_business_hours_json: JSON.stringify(botSchedule),
       };
       if (settings) {
         // Update existing: omit logo_filename so existing value is unchanged
@@ -566,6 +612,141 @@ export default function CompanySettingsPage() {
                   placeholder="e.g. 30"
                   disabled={saving}
                 />
+              </div>
+            </div>
+
+            <div className="rounded-lg p-4 bg-rose-50/40 dark:bg-rose-950/20 border-l-4 border-l-rose-300 dark:border-l-rose-700 mt-6 space-y-4">
+              <h3 className="text-lg font-semibold">Out-of-hours SMS bot</h3>
+              <p className="text-sm text-muted-foreground">
+                Configure automated SMS replies for out-of-hours support using Twilio + AI assistant.
+              </p>
+              <div className="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold bg-background border">
+                {formData.sms_bot_mode === SmsBotMode.ON
+                  ? 'Status: Live now (manual ON)'
+                  : formData.sms_bot_mode === SmsBotMode.AUTO
+                    ? 'Status: Auto schedule mode'
+                    : 'Status: Off'}
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <Button
+                  type="button"
+                  variant={formData.sms_bot_mode === SmsBotMode.OFF ? 'default' : 'outline'}
+                  className="font-bold text-base"
+                  onClick={() => setFormData({ ...formData, sms_bot_mode: SmsBotMode.OFF })}
+                  disabled={saving}
+                >
+                  BOT OFF
+                </Button>
+                <Button
+                  type="button"
+                  variant={formData.sms_bot_mode === SmsBotMode.AUTO ? 'default' : 'outline'}
+                  className="font-bold text-base"
+                  onClick={() => setFormData({ ...formData, sms_bot_mode: SmsBotMode.AUTO })}
+                  disabled={saving}
+                >
+                  BOT AUTO
+                </Button>
+                <Button
+                  type="button"
+                  variant={formData.sms_bot_mode === SmsBotMode.ON ? 'default' : 'outline'}
+                  className="font-bold text-base"
+                  onClick={() => setFormData({ ...formData, sms_bot_mode: SmsBotMode.ON })}
+                  disabled={saving}
+                >
+                  BOT ON
+                </Button>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="sms_bot_timezone">Timezone</Label>
+                  <Input
+                    id="sms_bot_timezone"
+                    value={formData.sms_bot_timezone}
+                    onChange={(e) => setFormData({ ...formData, sms_bot_timezone: e.target.value })}
+                    placeholder="Europe/London"
+                    disabled={saving}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="sms_bot_max_replies_per_thread">Max replies per thread</Label>
+                  <Input
+                    id="sms_bot_max_replies_per_thread"
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={formData.sms_bot_max_replies_per_thread}
+                    onChange={(e) => setFormData({ ...formData, sms_bot_max_replies_per_thread: e.target.value })}
+                    disabled={saving}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="sms_bot_pause_minutes_after_handover">Pause after handover (minutes)</Label>
+                  <Input
+                    id="sms_bot_pause_minutes_after_handover"
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={formData.sms_bot_pause_minutes_after_handover}
+                    onChange={(e) => setFormData({ ...formData, sms_bot_pause_minutes_after_handover: e.target.value })}
+                    disabled={saving}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="sms_bot_fallback_message">Fallback message</Label>
+                <Textarea
+                  id="sms_bot_fallback_message"
+                  value={formData.sms_bot_fallback_message}
+                  onChange={(e) => setFormData({ ...formData, sms_bot_fallback_message: e.target.value })}
+                  rows={3}
+                  disabled={saving}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Business hours by weekday (AUTO mode)</Label>
+                <div className="space-y-2 rounded-md border p-3 bg-muted/20">
+                  {WEEKDAYS.map((day) => (
+                    <div key={day.key} className="grid grid-cols-1 md:grid-cols-4 gap-2 items-center">
+                      <div className="font-medium text-sm">{day.label}</div>
+                      <label className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={botSchedule[day.key].enabled}
+                          onChange={(e) =>
+                            setBotSchedule((prev) => ({
+                              ...prev,
+                              [day.key]: { ...prev[day.key], enabled: e.target.checked },
+                            }))
+                          }
+                          disabled={saving}
+                        />
+                        Open
+                      </label>
+                      <Input
+                        type="time"
+                        value={botSchedule[day.key].start}
+                        onChange={(e) =>
+                          setBotSchedule((prev) => ({
+                            ...prev,
+                            [day.key]: { ...prev[day.key], start: e.target.value },
+                          }))
+                        }
+                        disabled={saving || !botSchedule[day.key].enabled}
+                      />
+                      <Input
+                        type="time"
+                        value={botSchedule[day.key].end}
+                        onChange={(e) =>
+                          setBotSchedule((prev) => ({
+                            ...prev,
+                            [day.key]: { ...prev[day.key], end: e.target.value },
+                          }))
+                        }
+                        disabled={saving || !botSchedule[day.key].enabled}
+                      />
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
 

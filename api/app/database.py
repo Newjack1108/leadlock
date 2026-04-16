@@ -323,6 +323,17 @@ def create_db_and_tables():
                     error_str = str(e).lower()
                     if "already exists" not in error_str:
                         print(f"Error adding source_system to customer: {e}", file=sys.stderr, flush=True)
+            customer_columns = [col['name'] for col in inspector.get_columns("customer")]
+            if "sms_bot_paused_until" not in customer_columns:
+                print("Adding sms_bot_paused_until column to customer table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE customer ADD COLUMN sms_bot_paused_until TIMESTAMP"))
+                    print("Added sms_bot_paused_until column to customer table", file=sys.stderr, flush=True)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str:
+                        print(f"Error adding sms_bot_paused_until to customer: {e}", file=sys.stderr, flush=True)
         if has_lead_table:
             lead_columns = [col['name'] for col in inspector.get_columns("lead")]
             if "messenger_psid" not in lead_columns:
@@ -844,6 +855,27 @@ def create_db_and_tables():
                     error_str = str(e).lower()
                     if "already exists" not in error_str and "duplicate" not in error_str:
                         print(f"Error adding require_engagement_proof column: {e}", file=sys.stderr, flush=True)
+
+            # SMS bot settings for out-of-hours assistant
+            for col_name, col_sql in [
+                ("sms_bot_mode", "VARCHAR(10) DEFAULT 'OFF'"),
+                ("sms_bot_timezone", "VARCHAR(100) DEFAULT 'Europe/London'"),
+                ("sms_bot_business_hours_json", "TEXT"),
+                ("sms_bot_fallback_message", "TEXT"),
+                ("sms_bot_max_replies_per_thread", "INTEGER DEFAULT 3"),
+                ("sms_bot_pause_minutes_after_handover", "INTEGER DEFAULT 720"),
+            ]:
+                company_columns = [col['name'] for col in inspector.get_columns("companysettings")]
+                if col_name not in company_columns:
+                    print(f"Adding {col_name} column to companysettings table...", file=sys.stderr, flush=True)
+                    try:
+                        with engine.begin() as conn:
+                            conn.execute(text(f'ALTER TABLE companysettings ADD COLUMN {col_name} {col_sql}'))
+                        print(f"Added {col_name} column to companysettings table", file=sys.stderr, flush=True)
+                    except Exception as e:
+                        error_str = str(e).lower()
+                        if "already exists" not in error_str and "duplicate" not in error_str:
+                            print(f"Error adding {col_name} column: {e}", file=sys.stderr, flush=True)
 
         # Step 7: Add is_active and email settings columns to User table
         has_user_table = inspector.has_table("user")

@@ -22,6 +22,8 @@ import { formatDateTime } from '@/lib/utils';
 import {
   getCustomerSms,
   sendSms,
+  pauseCustomerSmsBot,
+  resumeCustomerSmsBot,
   createScheduledSms,
   getScheduledSms,
   cancelScheduledSms,
@@ -70,6 +72,8 @@ export default function CustomerSmsPage() {
   const preserveUnreadRef = useRef(false);
   const [restoreUnreadCount, setRestoreUnreadCount] = useState(0);
   const [keepingUnread, setKeepingUnread] = useState(false);
+  const [botPauseMinutes, setBotPauseMinutes] = useState('720');
+  const [botUpdating, setBotUpdating] = useState(false);
 
   useEffect(() => {
     if (!customerId) return;
@@ -102,6 +106,46 @@ export default function CustomerSmsPage() {
       setScheduleToPhone(response.data.phone || '');
     } catch (error: unknown) {
       toast.error('Failed to load customer');
+    }
+  };
+
+  const isBotPaused = !!(
+    customer?.sms_bot_paused_until &&
+    new Date(customer.sms_bot_paused_until).getTime() > Date.now()
+  );
+
+  const handlePauseBot = async () => {
+    const minutes = Math.max(1, parseInt(botPauseMinutes || '720', 10) || 720);
+    setBotUpdating(true);
+    try {
+      const res = await pauseCustomerSmsBot(customerId, minutes);
+      setCustomer((prev) =>
+        prev
+          ? { ...prev, sms_bot_paused_until: res.paused_until }
+          : prev
+      );
+      toast.success(`SMS bot paused for ${minutes} minute(s)`);
+    } catch {
+      toast.error('Failed to pause SMS bot');
+    } finally {
+      setBotUpdating(false);
+    }
+  };
+
+  const handleResumeBot = async () => {
+    setBotUpdating(true);
+    try {
+      await resumeCustomerSmsBot(customerId);
+      setCustomer((prev) =>
+        prev
+          ? { ...prev, sms_bot_paused_until: null }
+          : prev
+      );
+      toast.success('SMS bot resumed');
+    } catch {
+      toast.error('Failed to resume SMS bot');
+    } finally {
+      setBotUpdating(false);
     }
   };
 
@@ -312,6 +356,46 @@ export default function CustomerSmsPage() {
                 <CardTitle>Send message</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
+                <div className="rounded-md border p-3 bg-muted/20 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <Label>Customer bot handling</Label>
+                    <Badge variant={isBotPaused ? 'secondary' : 'default'}>
+                      {isBotPaused ? 'Bot Paused' : 'Bot Active'}
+                    </Badge>
+                  </div>
+                  {isBotPaused && customer?.sms_bot_paused_until && (
+                    <p className="text-xs text-muted-foreground">
+                      Paused until {formatDateTime(customer.sms_bot_paused_until)}
+                    </p>
+                  )}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Input
+                      type="number"
+                      min="1"
+                      step="1"
+                      className="w-36"
+                      value={botPauseMinutes}
+                      onChange={(e) => setBotPauseMinutes(e.target.value)}
+                      disabled={botUpdating}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handlePauseBot}
+                      disabled={botUpdating}
+                    >
+                      Pause bot
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleResumeBot}
+                      disabled={botUpdating}
+                    >
+                      Resume bot
+                    </Button>
+                  </div>
+                </div>
                 <div>
                   <Label htmlFor="to_phone">To (phone)</Label>
                   <Input

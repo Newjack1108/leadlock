@@ -8,7 +8,7 @@ from app.models import (
     QuoteStatus, QuoteTemperature, DiscountType, DiscountScope, DiscountRequestStatus,
     LeadType, LeadSource, EmailDirection, ReminderPriority, ReminderType,
     SuggestedAction, OpportunityStage, LossCategory, InstallationLeadTime,
-    SmsDirection, ScheduledSmsStatus, MessengerDirection, QuoteItemLineType,
+    SmsDirection, ScheduledSmsStatus, MessengerDirection, QuoteItemLineType, SmsBotMode,
 )
 
 
@@ -135,6 +135,7 @@ class CustomerResponse(BaseModel):
     postcode: Optional[str]
     country: Optional[str]
     customer_since: datetime
+    sms_bot_paused_until: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
     messenger_psid: Optional[str] = None
@@ -970,6 +971,12 @@ class CompanySettingsCreate(BaseModel):
     average_speed_mph: Optional[Decimal] = None
     install_quote_margin_pct: Optional[Decimal] = None  # Margin % added to install quote cost; default 30
     product_import_gross_margin_pct: Optional[Decimal] = None
+    sms_bot_mode: Optional[SmsBotMode] = None
+    sms_bot_timezone: Optional[str] = None
+    sms_bot_business_hours_json: Optional[str] = None
+    sms_bot_fallback_message: Optional[str] = None
+    sms_bot_max_replies_per_thread: Optional[int] = None
+    sms_bot_pause_minutes_after_handover: Optional[int] = None
     bank_name: Optional[str] = None
     bank_account_name: Optional[str] = None
     account_number: Optional[str] = None
@@ -1006,6 +1013,12 @@ class CompanySettingsUpdate(BaseModel):
     average_speed_mph: Optional[Decimal] = None
     install_quote_margin_pct: Optional[Decimal] = None  # Margin % added to install quote cost; default 30
     product_import_gross_margin_pct: Optional[Decimal] = None
+    sms_bot_mode: Optional[SmsBotMode] = None
+    sms_bot_timezone: Optional[str] = None
+    sms_bot_business_hours_json: Optional[str] = None
+    sms_bot_fallback_message: Optional[str] = None
+    sms_bot_max_replies_per_thread: Optional[int] = None
+    sms_bot_pause_minutes_after_handover: Optional[int] = None
     bank_name: Optional[str] = None
     bank_account_name: Optional[str] = None
     account_number: Optional[str] = None
@@ -1043,6 +1056,12 @@ class CompanySettingsResponse(BaseModel):
     average_speed_mph: Optional[Decimal] = None
     install_quote_margin_pct: Optional[Decimal] = None  # Margin % added to install quote cost; default 30
     product_import_gross_margin_pct: Optional[Decimal] = None
+    sms_bot_mode: SmsBotMode = SmsBotMode.OFF
+    sms_bot_timezone: str = "Europe/London"
+    sms_bot_business_hours_json: Optional[str] = None
+    sms_bot_fallback_message: Optional[str] = None
+    sms_bot_max_replies_per_thread: int = 3
+    sms_bot_pause_minutes_after_handover: int = 720
     bank_name: Optional[str] = None
     bank_account_name: Optional[str] = None
     account_number: Optional[str] = None
