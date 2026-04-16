@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import Logo from '@/components/Logo';
 import api from '@/lib/api';
+import { LEADLOCK_LOGIN_GREETING_SESSION_KEY } from '@/lib/loginGreeting';
 import { toast } from 'sonner';
 
 export default function LoginPage() {
@@ -29,6 +30,7 @@ export default function LoginPage() {
       localStorage.setItem('token', response.data.access_token);
       // Also set cookie for middleware
       document.cookie = `token=${response.data.access_token}; path=/; max-age=86400`;
+      sessionStorage.setItem(LEADLOCK_LOGIN_GREETING_SESSION_KEY, '1');
       router.push('/');
     } catch (error: any) {
       toast.error(error.response?.data?.detail || 'Login failed');

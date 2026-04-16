@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
+import LoginGreeting from "@/components/LoginGreeting";
 import AreaBackgroundWrapper from "@/components/AreaBackgroundWrapper";
 import Footer from "@/components/Footer";
 
@@ -63,6 +64,7 @@ export default function RootLayout({
             <Footer />
           </div>
           <Toaster />
+          <LoginGreeting />
         </AreaBackgroundWrapper>
       </body>
     </html>
