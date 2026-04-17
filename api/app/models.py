@@ -11,6 +11,8 @@ class UserRole(str, Enum):
     DIRECTOR = "DIRECTOR"
     SALES_MANAGER = "SALES_MANAGER"
     CLOSER = "CLOSER"
+    DEALER_ADMIN = "DEALER_ADMIN"
+    DEALER_USER = "DEALER_USER"
 
 
 class LeadStatus(str, Enum):
@@ -89,6 +91,8 @@ class User(SQLModel, table=True):
     hashed_password: str
     full_name: str
     role: UserRole
+    dealer_id: Optional[int] = Field(default=None, foreign_key="dealer.id", index=True)
+    dealer_commission_pct: Optional[int] = Field(default=None)
     is_active: bool = Field(default=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
@@ -111,6 +115,14 @@ class User(SQLModel, table=True):
     
     # Relationships
     assigned_leads: List["Lead"] = Relationship(back_populates="assigned_to_user")
+
+
+class Dealer(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str = Field(index=True, unique=True)
+    is_active: bool = Field(default=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
 
 
 class Customer(SQLModel, table=True):
@@ -478,6 +490,11 @@ class DiscountScope(str, Enum):
     QUOTE = "QUOTE"  # Applied to entire quote total
 
 
+class DealerDiscountMode(str, Enum):
+    TEMPLATE = "TEMPLATE"
+    CUSTOM = "CUSTOM"
+
+
 class QuoteItemLineType(str, Enum):
     """Line types excluded from PRODUCT-scope discounts. None = building product."""
     DELIVERY = "DELIVERY"
@@ -529,6 +546,8 @@ class Quote(SQLModel, table=True):
     loss_reason: Optional[str] = None
     loss_category: Optional["LossCategory"] = None
     owner_id: Optional[int] = Field(default=None, foreign_key="user.id")  # Opportunity owner (can differ from created_by)
+    dealer_id: Optional[int] = Field(default=None, foreign_key="dealer.id", index=True)
+    revision_hash: Optional[str] = Field(default=None, index=True)
     
     # Relationships
     customer: Optional["Customer"] = Relationship(back_populates="quotes")
@@ -922,3 +941,44 @@ class ProductOptionalExtra(SQLModel, table=True):
     optional_extra_id: int = Field(foreign_key="product.id")
     sort_order: int = Field(default=0)
     created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class DealerProductAccess(SQLModel, table=True):
+    __table_args__ = (
+        UniqueConstraint("dealer_id", "product_id", name="uq_dealer_product_access"),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    dealer_id: int = Field(foreign_key="dealer.id")
+    product_id: int = Field(foreign_key="product.id")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class DealerAllowedDiscount(SQLModel, table=True):
+    __table_args__ = (
+        UniqueConstraint(
+            "dealer_id",
+            "discount_template_id",
+            name="uq_dealer_allowed_discount_template",
+        ),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    dealer_id: int = Field(foreign_key="dealer.id")
+    discount_template_id: int = Field(foreign_key="discounttemplate.id")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class DealerDiscountPolicy(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    dealer_id: int = Field(foreign_key="dealer.id", unique=True, index=True)
+    mode: DealerDiscountMode = Field(default=DealerDiscountMode.TEMPLATE)
+    allow_fixed_amount: bool = Field(default=False)
+    allow_percentage: bool = Field(default=False)
+    max_discount_percentage: Optional[Decimal] = Field(
+        default=None, sa_column=Column(Numeric(10, 2))
+    )
+    max_discount_amount: Optional[Decimal] = Field(
+        default=None, sa_column=Column(Numeric(10, 2))
+    )
+    updated_at: datetime = Field(default_factory=datetime.utcnow)

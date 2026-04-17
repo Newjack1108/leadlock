@@ -73,6 +73,26 @@ def require_role(allowed_roles: list[UserRole]):
     return role_checker
 
 
+async def require_dealer_user(current_user: User = Depends(get_current_user)) -> User:
+    allowed = {UserRole.DEALER_ADMIN, UserRole.DEALER_USER}
+    if current_user.role not in allowed:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Dealer access only",
+        )
+    if current_user.dealer_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Dealer account is not linked to a dealer",
+        )
+    if current_user.dealer_commission_pct not in (10, 15):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Dealer commission must be 10 or 15",
+        )
+    return current_user
+
+
 def get_webhook_api_key(api_key: str = Header(None, alias="X-API-Key")) -> str:
     """Validate webhook API key from header."""
     expected_key = os.getenv("WEBHOOK_API_KEY")

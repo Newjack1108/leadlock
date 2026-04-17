@@ -8,7 +8,7 @@ from app.models import (
     QuoteStatus, QuoteTemperature, DiscountType, DiscountScope, DiscountRequestStatus,
     LeadType, LeadSource, EmailDirection, ReminderPriority, ReminderType,
     SuggestedAction, OpportunityStage, LossCategory, InstallationLeadTime,
-    SmsDirection, ScheduledSmsStatus, MessengerDirection, QuoteItemLineType, SmsBotMode,
+    SmsDirection, ScheduledSmsStatus, MessengerDirection, QuoteItemLineType, SmsBotMode, DealerDiscountMode,
 )
 
 
@@ -41,12 +41,16 @@ class UserCreate(BaseModel):
     full_name: str
     password: str
     role: UserRole
+    dealer_id: Optional[int] = None
+    dealer_commission_pct: Optional[int] = None
 
 
 class UserUpdate(BaseModel):
     full_name: Optional[str] = None
     role: Optional[UserRole] = None
     password: Optional[str] = None
+    dealer_id: Optional[int] = None
+    dealer_commission_pct: Optional[int] = None
 
 
 class UserListResponse(BaseModel):
@@ -54,6 +58,8 @@ class UserListResponse(BaseModel):
     email: str
     full_name: str
     role: UserRole
+    dealer_id: Optional[int] = None
+    dealer_commission_pct: Optional[int] = None
     is_active: bool
     created_at: datetime
 
@@ -1640,3 +1646,36 @@ class CustomerHistoryEvent(BaseModel):
 
 class CustomerHistoryResponse(BaseModel):
     events: List[CustomerHistoryEvent]
+
+
+class DealerWelcomeResponse(BaseModel):
+    dealer_id: int
+    dealer_name: str
+    user_id: int
+    user_name: str
+    commission_pct: int
+
+
+class DealerQuoteProductItem(BaseModel):
+    product_id: int
+    quantity: Decimal = Decimal("1")
+    selected_extra_ids: List[int] = Field(default_factory=list)
+
+
+class DealerQuoteCreate(BaseModel):
+    customer_name: str
+    customer_email: Optional[str] = None
+    customer_phone: Optional[str] = None
+    notes: Optional[str] = None
+    valid_until: Optional[datetime] = None
+    product_items: List[DealerQuoteProductItem]
+    discount_template_ids: List[int] = Field(default_factory=list)
+
+
+class DealerAllowedDiscountPolicyResponse(BaseModel):
+    mode: DealerDiscountMode
+    allow_fixed_amount: bool
+    allow_percentage: bool
+    max_discount_percentage: Optional[Decimal] = None
+    max_discount_amount: Optional[Decimal] = None
+    allowed_discount_template_ids: List[int] = Field(default_factory=list)

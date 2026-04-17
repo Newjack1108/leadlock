@@ -8,6 +8,17 @@ from app.schemas import UserCreate, UserUpdate, UserListResponse, AssignableUser
 router = APIRouter(prefix="/api/users", tags=["users"])
 
 
+def _validate_dealer_user_payload(data: UserCreate | UserUpdate) -> None:
+    role = getattr(data, "role", None)
+    dealer_id = getattr(data, "dealer_id", None)
+    commission = getattr(data, "dealer_commission_pct", None)
+    if role in (UserRole.DEALER_ADMIN, UserRole.DEALER_USER):
+        if dealer_id is None:
+            raise HTTPException(status_code=400, detail="dealer_id is required for dealer users")
+        if commission not in (10, 15):
+            raise HTTPException(status_code=400, detail="dealer_commission_pct must be 10 or 15")
+
+
 @router.get("", response_model=list[UserListResponse])
 async def list_users(
     session: Session = Depends(get_session),
@@ -21,6 +32,8 @@ async def list_users(
         email=u.email,
         full_name=u.full_name,
         role=u.role,
+        dealer_id=u.dealer_id,
+        dealer_commission_pct=u.dealer_commission_pct,
         is_active=u.is_active,
         created_at=u.created_at,
     ) for u in users]
@@ -53,11 +66,14 @@ async def create_user(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="A user with this email already exists",
         )
+    _validate_dealer_user_payload(data)
     user = User(
         email=data.email,
         full_name=data.full_name,
         hashed_password=get_password_hash(data.password),
         role=data.role,
+        dealer_id=data.dealer_id,
+        dealer_commission_pct=data.dealer_commission_pct,
     )
     session.add(user)
     session.commit()
@@ -67,6 +83,8 @@ async def create_user(
         email=user.email,
         full_name=user.full_name,
         role=user.role,
+        dealer_id=user.dealer_id,
+        dealer_commission_pct=user.dealer_commission_pct,
         is_active=user.is_active,
         created_at=user.created_at,
     )
@@ -87,6 +105,8 @@ async def get_user(
         email=user.email,
         full_name=user.full_name,
         role=user.role,
+        dealer_id=user.dealer_id,
+        dealer_commission_pct=user.dealer_commission_pct,
         is_active=user.is_active,
         created_at=user.created_at,
     )
@@ -103,6 +123,7 @@ async def update_user(
     user = session.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    _validate_dealer_user_payload(data)
     update_data = data.dict(exclude_unset=True)
     if "password" in update_data:
         update_data["hashed_password"] = get_password_hash(update_data.pop("password"))
@@ -116,6 +137,8 @@ async def update_user(
         email=user.email,
         full_name=user.full_name,
         role=user.role,
+        dealer_id=user.dealer_id,
+        dealer_commission_pct=user.dealer_commission_pct,
         is_active=user.is_active,
         created_at=user.created_at,
     )

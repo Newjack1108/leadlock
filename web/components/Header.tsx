@@ -168,6 +168,7 @@ export default function Header() {
 
   const isDirector = userRole === 'DIRECTOR';
   const isCloser = userRole === 'CLOSER';
+  const isDealer = userRole === 'DEALER_ADMIN' || userRole === 'DEALER_USER';
   const canApproveDiscounts = userRole === 'DIRECTOR' || userRole === 'SALES_MANAGER';
 
   const mobileNavLinkClass =
@@ -179,7 +180,22 @@ export default function Header() {
         <Logo disableLink={isCloser} size="header" />
         {/* Desktop nav */}
         <nav className="hidden lg:flex items-center gap-4">
-          {isCloser ? (
+          {isDealer ? (
+            <Link href="/dealer">
+              <Button
+                variant={pathname?.startsWith('/dealer') ? 'default' : 'ghost'}
+                size="sm"
+                className={
+                  pathname?.startsWith('/dealer')
+                    ? 'text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                }
+              >
+                <LayoutDashboard className="h-4 w-4 mr-2" />
+                Dealer Portal
+              </Button>
+            </Link>
+          ) : isCloser ? (
             <>
               <Link href="/leads" className="relative">
                 <Button
@@ -236,7 +252,7 @@ export default function Header() {
               )}
             </Link>
           )}
-          <div className="relative">
+          {!isDealer && <div className="relative">
             <Link href="/customers">
               <Button
                 variant={pathname?.startsWith('/customers') ? 'default' : 'ghost'}
@@ -264,8 +280,8 @@ export default function Header() {
                 {unreadMessagesCount > 99 ? '99+' : unreadMessagesCount}
               </button>
             )}
-          </div>
-          <Link href="/quotes">
+          </div>}
+          {!isDealer && <Link href="/quotes">
             <Button
               variant={pathname?.startsWith('/quotes') ? 'default' : 'ghost'}
               size="sm"
@@ -278,8 +294,8 @@ export default function Header() {
               <FileText className="h-4 w-4 mr-2" />
               Quotes
             </Button>
-          </Link>
-          <Link href="/orders">
+          </Link>}
+          {!isDealer && <Link href="/orders">
             <Button
               variant={pathname?.startsWith('/orders') ? 'default' : 'ghost'}
               size="sm"
@@ -292,8 +308,8 @@ export default function Header() {
               <ShoppingCart className="h-4 w-4 mr-2" />
               Orders
             </Button>
-          </Link>
-          {(isDirector || isCloser) && (
+          </Link>}
+          {!isDealer && (isDirector || isCloser) && (
             <Link href="/products">
               <Button
                 variant={pathname?.startsWith('/products') ? 'default' : 'ghost'}
@@ -309,7 +325,7 @@ export default function Header() {
               </Button>
             </Link>
           )}
-          <Link href="/reminders" className="relative">
+          {!isDealer && <Link href="/reminders" className="relative">
             <Button
               variant={pathname?.startsWith('/reminders') ? 'default' : 'ghost'}
               size="sm"
@@ -327,8 +343,8 @@ export default function Header() {
                 {reminderCount > 99 ? '99+' : reminderCount}
               </span>
             )}
-          </Link>
-          <Link href="/sales-documents">
+          </Link>}
+          {!isDealer && <Link href="/sales-documents">
             <Button
               variant={pathname?.startsWith('/sales-documents') ? 'default' : 'ghost'}
               size="sm"
@@ -341,8 +357,8 @@ export default function Header() {
               <FolderOpen className="h-4 w-4 mr-2" />
               Documents
             </Button>
-          </Link>
-          {!isCloser && (
+          </Link>}
+          {!isDealer && !isCloser && (
             <Link href="/discount-requests" className="relative">
               <Button
                 variant={pathname?.startsWith('/discount-requests') ? 'default' : 'ghost'}
@@ -463,7 +479,21 @@ export default function Header() {
             <SheetContent side="right" className="flex w-[min(100vw,20rem)] flex-col overflow-hidden sm:max-w-sm">
               <SheetTitle className="sr-only">Main navigation</SheetTitle>
               <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto pr-1">
-                {isCloser ? (
+                {isDealer ? (
+                  <Link
+                    href="/dealer"
+                    onClick={closeMobile}
+                    className={cn(
+                      mobileNavLinkClass,
+                      pathname?.startsWith('/dealer') && 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground'
+                    )}
+                  >
+                    <span className="flex items-center gap-2">
+                      <LayoutDashboard className="h-4 w-4 shrink-0" />
+                      Dealer Portal
+                    </span>
+                  </Link>
+                ) : isCloser ? (
                   <>
                     <Link
                       href="/leads"
@@ -510,7 +540,7 @@ export default function Header() {
                   </Link>
                 )}
 
-                <div className="flex flex-col gap-1">
+                {!isDealer && <div className="flex flex-col gap-1">
                   <Link
                     href="/customers"
                     onClick={closeMobile}
@@ -537,9 +567,9 @@ export default function Header() {
                       View unread only
                     </button>
                   )}
-                </div>
+                </div>}
 
-                <Link
+                {!isDealer && <Link
                   href="/quotes"
                   onClick={closeMobile}
                   className={cn(
@@ -551,8 +581,8 @@ export default function Header() {
                     <FileText className="h-4 w-4 shrink-0" />
                     Quotes
                   </span>
-                </Link>
-                <Link
+                </Link>}
+                {!isDealer && <Link
                   href="/orders"
                   onClick={closeMobile}
                   className={cn(
@@ -564,8 +594,8 @@ export default function Header() {
                     <ShoppingCart className="h-4 w-4 shrink-0" />
                     Orders
                   </span>
-                </Link>
-                {(isDirector || isCloser) && (
+                </Link>}
+                {!isDealer && (isDirector || isCloser) && (
                   <Link
                     href="/products"
                     onClick={closeMobile}
@@ -580,7 +610,7 @@ export default function Header() {
                     </span>
                   </Link>
                 )}
-                <Link
+                {!isDealer && <Link
                   href="/reminders"
                   onClick={closeMobile}
                   className={cn(
@@ -593,8 +623,8 @@ export default function Header() {
                     Reminders
                   </span>
                   <BadgePill count={reminderCount} />
-                </Link>
-                <Link
+                </Link>}
+                {!isDealer && <Link
                   href="/sales-documents"
                   onClick={closeMobile}
                   className={cn(
@@ -606,8 +636,8 @@ export default function Header() {
                     <FolderOpen className="h-4 w-4 shrink-0" />
                     Documents
                   </span>
-                </Link>
-                {!isCloser && (
+                </Link>}
+                {!isDealer && !isCloser && (
                   <Link
                     href="/discount-requests"
                     onClick={closeMobile}

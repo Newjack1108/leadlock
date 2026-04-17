@@ -22,6 +22,7 @@ from app.constants import (
 from sqlmodel import Session, select
 import os
 import sys
+import hashlib
 import tempfile
 import urllib.request
 from pathlib import Path
@@ -902,3 +903,41 @@ def generate_quote_pdf(
 
     buffer.seek(0)
     return buffer
+
+
+def generate_quote_pdf_cached(
+    cache_key: str,
+    quote: Quote,
+    customer: Customer,
+    quote_items: list[QuoteItem],
+    company_settings: Optional[CompanySettings] = None,
+    session: Optional[Session] = None,
+    include_spec_sheets: bool = True,
+    available_optional_extras: Optional[List[Any]] = None,
+) -> tuple[bytes, bool]:
+    """
+    Generate a quote PDF with filesystem cache.
+
+    Returns:
+        (pdf_bytes, cache_hit)
+    """
+    cache_root = Path(tempfile.gettempdir()) / "leadlock_quote_pdf_cache"
+    cache_root.mkdir(parents=True, exist_ok=True)
+    safe_name = hashlib.sha256(cache_key.encode("utf-8")).hexdigest() + ".pdf"
+    cache_path = cache_root / safe_name
+
+    if cache_path.exists():
+        return (cache_path.read_bytes(), True)
+
+    pdf_buffer = generate_quote_pdf(
+        quote=quote,
+        customer=customer,
+        quote_items=quote_items,
+        company_settings=company_settings,
+        session=session,
+        include_spec_sheets=include_spec_sheets,
+        available_optional_extras=available_optional_extras,
+    )
+    pdf_bytes = pdf_buffer.getvalue()
+    cache_path.write_bytes(pdf_bytes)
+    return (pdf_bytes, False)

@@ -26,7 +26,12 @@ export default function Home() {
         }
 
         const role = response.data?.role;
-        const path = role === 'CLOSER' ? '/closer-dashboard' : '/leads';
+        const path =
+          role === 'CLOSER'
+            ? '/closer-dashboard'
+            : role === 'DEALER_ADMIN' || role === 'DEALER_USER'
+              ? '/dealer'
+              : '/leads';
         window.location.replace(path);
       } catch {
         if (!cancelled) {

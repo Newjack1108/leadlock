@@ -1228,3 +1228,27 @@ export interface CustomerHistoryEvent {
 export interface CustomerHistoryResponse {
   events: CustomerHistoryEvent[];
 }
+
+export interface DealerWelcome {
+  dealer_id: number;
+  dealer_name: string;
+  user_id: number;
+  user_name: string;
+  commission_pct: number;
+}
+
+export interface DealerQuoteProductItem {
+  product_id: number;
+  quantity: number;
+  selected_extra_ids?: number[];
+}
+
+export interface DealerQuoteCreatePayload {
+  customer_name: string;
+  customer_email?: string;
+  customer_phone?: string;
+  notes?: string;
+  valid_until?: string;
+  product_items: DealerQuoteProductItem[];
+  discount_template_ids?: number[];
+}

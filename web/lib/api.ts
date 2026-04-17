@@ -1,6 +1,8 @@
 import axios from 'axios';
 import {
   ActivityType,
+  type DealerQuoteCreatePayload,
+  type DealerWelcome,
   type FacebookAdvertProfile,
   type QuoteTemperature,
   type QuoteStatus,
@@ -681,6 +683,50 @@ export const getQuotes = async (options?: {
 export const getQuote = async (quoteId: number) => {
   const response = await api.get(`/api/quotes/${quoteId}`);
   return response.data;
+};
+
+export const getDealerWelcome = async (): Promise<DealerWelcome> => {
+  const response = await api.get('/api/dealer-portal/welcome');
+  return response.data;
+};
+
+export const getDealerProducts = async () => {
+  const response = await api.get('/api/dealer-portal/products');
+  return response.data;
+};
+
+export const getDealerQuotes = async (): Promise<QuoteListPayload> => {
+  const response = await api.get('/api/dealer-portal/quotes');
+  return response.data;
+};
+
+export const createDealerQuote = async (payload: DealerQuoteCreatePayload) => {
+  const response = await api.post('/api/dealer-portal/quotes', payload);
+  return response.data;
+};
+
+export const getDealerQuote = async (quoteId: number) => {
+  const response = await api.get(`/api/dealer-portal/quotes/${quoteId}`);
+  return response.data;
+};
+
+export const downloadDealerQuotePdf = async (quoteId: number) => {
+  const response = await api.get(`/api/dealer-portal/quotes/${quoteId}/pdf`, {
+    responseType: 'blob',
+  });
+  const blob = new Blob([response.data], { type: 'application/pdf' });
+  const url = window.URL.createObjectURL(blob);
+  const disposition = response.headers['content-disposition'];
+  let filename = 'DealerQuote.pdf';
+  if (disposition) {
+    const match = /filename="?([^";\n]+)"?/.exec(disposition);
+    if (match) filename = match[1].trim();
+  }
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  setTimeout(() => window.URL.revokeObjectURL(url), 100);
 };
 
 export const acceptQuote = async (quoteId: number) => {

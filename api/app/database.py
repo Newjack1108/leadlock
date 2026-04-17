@@ -146,6 +146,111 @@ def _ensure_archive_columns(engine) -> None:
         print(f"Warning: could not ensure archive columns: {e}", file=sys.stderr, flush=True)
 
 
+def _ensure_dealer_portal_schema(engine) -> None:
+    """Add dealer portal tables/columns for strict isolation."""
+    import sys
+
+    try:
+        inspector = inspect(engine)
+        if not inspector.has_table("user"):
+            return
+
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE IF NOT EXISTS dealer (
+                        id SERIAL PRIMARY KEY,
+                        name VARCHAR(255) NOT NULL UNIQUE,
+                        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                    )
+                    """
+                )
+            )
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_dealer_name ON dealer (name)"))
+
+            conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS dealer_id INTEGER REFERENCES dealer(id)'))
+            conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS dealer_commission_pct INTEGER'))
+            conn.execute(text('CREATE INDEX IF NOT EXISTS ix_user_dealer_id ON "user" (dealer_id)'))
+            conn.execute(
+                text(
+                    'ALTER TABLE "user" DROP CONSTRAINT IF EXISTS ck_user_dealer_commission_pct'
+                )
+            )
+            conn.execute(
+                text(
+                    """
+                    ALTER TABLE "user"
+                    ADD CONSTRAINT ck_user_dealer_commission_pct
+                    CHECK (
+                        dealer_commission_pct IS NULL
+                        OR dealer_commission_pct IN (10, 15)
+                    )
+                    """
+                )
+            )
+
+            if inspector.has_table("quote"):
+                conn.execute(text("ALTER TABLE quote ADD COLUMN IF NOT EXISTS dealer_id INTEGER REFERENCES dealer(id)"))
+                conn.execute(text("ALTER TABLE quote ADD COLUMN IF NOT EXISTS revision_hash VARCHAR(128)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_quote_dealer_id ON quote (dealer_id)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_quote_revision_hash ON quote (revision_hash)"))
+
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE IF NOT EXISTS dealerproductaccess (
+                        id SERIAL PRIMARY KEY,
+                        dealer_id INTEGER NOT NULL REFERENCES dealer(id),
+                        product_id INTEGER NOT NULL REFERENCES product(id),
+                        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        CONSTRAINT uq_dealer_product_access UNIQUE (dealer_id, product_id)
+                    )
+                    """
+                )
+            )
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_dealerproductaccess_dealer_id ON dealerproductaccess (dealer_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_dealerproductaccess_product_id ON dealerproductaccess (product_id)"))
+
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE IF NOT EXISTS dealeralloweddiscount (
+                        id SERIAL PRIMARY KEY,
+                        dealer_id INTEGER NOT NULL REFERENCES dealer(id),
+                        discount_template_id INTEGER NOT NULL REFERENCES discounttemplate(id),
+                        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        CONSTRAINT uq_dealer_allowed_discount_template UNIQUE (dealer_id, discount_template_id)
+                    )
+                    """
+                )
+            )
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_dealeralloweddiscount_dealer_id ON dealeralloweddiscount (dealer_id)"))
+
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE IF NOT EXISTS dealerdiscountpolicy (
+                        id SERIAL PRIMARY KEY,
+                        dealer_id INTEGER NOT NULL UNIQUE REFERENCES dealer(id),
+                        mode VARCHAR(20) NOT NULL DEFAULT 'TEMPLATE',
+                        allow_fixed_amount BOOLEAN NOT NULL DEFAULT FALSE,
+                        allow_percentage BOOLEAN NOT NULL DEFAULT FALSE,
+                        max_discount_percentage NUMERIC(10, 2),
+                        max_discount_amount NUMERIC(10, 2),
+                        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                    )
+                    """
+                )
+            )
+
+        print("Dealer portal schema ensured", file=sys.stderr, flush=True)
+    except Exception as e:
+        print(f"Warning: could not ensure dealer schema: {e}", file=sys.stderr, flush=True)
+
+
 def create_db_and_tables():
     """Create all tables and migrate existing data."""
     import sys
@@ -160,6 +265,7 @@ def create_db_and_tables():
     # Critical: run before the big migration try — that block catches broad exceptions and can skip later steps.
     _ensure_facebook_advert_schema(engine)
     _ensure_archive_columns(engine)
+    _ensure_dealer_portal_schema(engine)
 
     # Migration logic for Customer model separation
     try:
