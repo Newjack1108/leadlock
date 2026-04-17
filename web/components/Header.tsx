@@ -181,12 +181,13 @@ export default function Header() {
         {/* Desktop nav */}
         <nav className="hidden lg:flex items-center gap-4">
           {isDealer ? (
+            <>
             <Link href="/dealer">
               <Button
-                variant={pathname?.startsWith('/dealer') ? 'default' : 'ghost'}
+                variant={pathname === '/dealer' ? 'default' : 'ghost'}
                 size="sm"
                 className={
-                  pathname?.startsWith('/dealer')
+                  pathname === '/dealer'
                     ? 'text-primary-foreground'
                     : 'text-muted-foreground hover:text-foreground'
                 }
@@ -195,6 +196,21 @@ export default function Header() {
                 Dealer Portal
               </Button>
             </Link>
+            <Link href="/dealer/profile">
+              <Button
+                variant={pathname?.startsWith('/dealer/profile') ? 'default' : 'ghost'}
+                size="sm"
+                className={
+                  pathname?.startsWith('/dealer/profile')
+                    ? 'text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                }
+              >
+                <Settings className="h-4 w-4 mr-2" />
+                Dealer Profile
+              </Button>
+            </Link>
+            </>
           ) : isCloser ? (
             <>
               <Link href="/leads" className="relative">
@@ -480,19 +496,34 @@ export default function Header() {
               <SheetTitle className="sr-only">Main navigation</SheetTitle>
               <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto pr-1">
                 {isDealer ? (
-                  <Link
-                    href="/dealer"
-                    onClick={closeMobile}
-                    className={cn(
-                      mobileNavLinkClass,
-                      pathname?.startsWith('/dealer') && 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground'
-                    )}
-                  >
-                    <span className="flex items-center gap-2">
-                      <LayoutDashboard className="h-4 w-4 shrink-0" />
-                      Dealer Portal
-                    </span>
-                  </Link>
+                  <>
+                    <Link
+                      href="/dealer"
+                      onClick={closeMobile}
+                      className={cn(
+                        mobileNavLinkClass,
+                        pathname === '/dealer' && 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground'
+                      )}
+                    >
+                      <span className="flex items-center gap-2">
+                        <LayoutDashboard className="h-4 w-4 shrink-0" />
+                        Dealer Portal
+                      </span>
+                    </Link>
+                    <Link
+                      href="/dealer/profile"
+                      onClick={closeMobile}
+                      className={cn(
+                        mobileNavLinkClass,
+                        pathname?.startsWith('/dealer/profile') && 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground'
+                      )}
+                    >
+                      <span className="flex items-center gap-2">
+                        <Settings className="h-4 w-4 shrink-0" />
+                        Dealer Profile
+                      </span>
+                    </Link>
+                  </>
                 ) : isCloser ? (
                   <>
                     <Link

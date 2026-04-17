@@ -1232,6 +1232,10 @@ class QuoteResponse(BaseModel):
     order_id: Optional[int] = None  # Order ID when quote is accepted (for View order link)
     customer_last_interacted_at: Optional[datetime] = None  # Last Activity date for this customer
     archived_at: Optional[datetime] = None
+    dealer_customer_name: Optional[str] = None
+    dealer_customer_email: Optional[str] = None
+    dealer_customer_phone: Optional[str] = None
+    dealer_customer_address: Optional[str] = None
 
 
 class QuoteListResponse(BaseModel):
@@ -1666,6 +1670,7 @@ class DealerQuoteCreate(BaseModel):
     customer_name: str
     customer_email: Optional[str] = None
     customer_phone: Optional[str] = None
+    customer_address: Optional[str] = None
     notes: Optional[str] = None
     valid_until: Optional[datetime] = None
     product_items: List[DealerQuoteProductItem]
@@ -1679,3 +1684,30 @@ class DealerAllowedDiscountPolicyResponse(BaseModel):
     max_discount_percentage: Optional[Decimal] = None
     max_discount_amount: Optional[Decimal] = None
     allowed_discount_template_ids: List[int] = Field(default_factory=list)
+
+
+class DealerProfileResponse(BaseModel):
+    id: int
+    name: str
+    company_name: Optional[str] = None
+    contact_name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
+    vat_number: Optional[str] = None
+    registration_number: Optional[str] = None
+    website: Optional[str] = None
+    logo_url: Optional[str] = None
+    is_active: bool
+
+
+class DealerProfileUpdate(BaseModel):
+    name: Optional[str] = None
+    company_name: Optional[str] = None
+    contact_name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
+    vat_number: Optional[str] = None
+    registration_number: Optional[str] = None
+    website: Optional[str] = None

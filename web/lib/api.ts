@@ -1,6 +1,8 @@
 import axios from 'axios';
 import {
   ActivityType,
+  type DealerProfile,
+  type DealerProfileUpdatePayload,
   type DealerQuoteCreatePayload,
   type DealerWelcome,
   type FacebookAdvertProfile,
@@ -692,6 +694,30 @@ export const getDealerWelcome = async (): Promise<DealerWelcome> => {
 
 export const getDealerProducts = async () => {
   const response = await api.get('/api/dealer-portal/products');
+  return response.data;
+};
+
+export const getDealerProfile = async (): Promise<DealerProfile> => {
+  const response = await api.get('/api/dealer-portal/profile');
+  return response.data;
+};
+
+export const updateDealerProfile = async (
+  payload: DealerProfileUpdatePayload
+): Promise<DealerProfile> => {
+  const response = await api.put('/api/dealer-portal/profile', payload);
+  return response.data;
+};
+
+export const uploadDealerLogo = async (file: File): Promise<DealerProfile> => {
+  const formData = new FormData();
+  formData.append('logo', file);
+  const response = await api.post('/api/dealer-portal/profile/logo', formData, {
+    transformRequest: [(data: unknown, headers?: Record<string, unknown>) => {
+      if (data instanceof FormData && headers) delete (headers as Record<string, unknown>)['Content-Type'];
+      return data;
+    }],
+  });
   return response.data;
 };
 

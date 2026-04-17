@@ -861,7 +861,7 @@ export interface Order {
 
 export interface Quote {
   id: number;
-  customer_id: number;
+  customer_id: number | null;
   customer_name?: string;
   lead_id?: number | null;
   lead_name?: string | null;
@@ -914,6 +914,10 @@ export interface Quote {
   order_id?: number | null;
   customer_last_interacted_at?: string | null;
   archived_at?: string | null;
+  dealer_customer_name?: string | null;
+  dealer_customer_email?: string | null;
+  dealer_customer_phone?: string | null;
+  dealer_customer_address?: string | null;
 }
 
 export interface QuoteListPayload {
@@ -1247,8 +1251,36 @@ export interface DealerQuoteCreatePayload {
   customer_name: string;
   customer_email?: string;
   customer_phone?: string;
+  customer_address?: string;
   notes?: string;
   valid_until?: string;
   product_items: DealerQuoteProductItem[];
   discount_template_ids?: number[];
+}
+
+export interface DealerProfile {
+  id: number;
+  name: string;
+  company_name?: string;
+  contact_name?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  vat_number?: string;
+  registration_number?: string;
+  website?: string;
+  logo_url?: string;
+  is_active: boolean;
+}
+
+export interface DealerProfileUpdatePayload {
+  name?: string;
+  company_name?: string;
+  contact_name?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  vat_number?: string;
+  registration_number?: string;
+  website?: string;
 }

@@ -8,7 +8,7 @@ from reportlab.lib.units import mm
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak, Image, KeepTogether
 from reportlab.pdfgen import canvas
 from collections import defaultdict
-from typing import Optional, Tuple, List, Any
+from typing import Optional, Tuple, List, Any, Dict
 from io import BytesIO
 from datetime import datetime
 from decimal import Decimal
@@ -482,6 +482,8 @@ def generate_quote_pdf(
     session: Optional[Session] = None,
     include_spec_sheets: bool = True,
     available_optional_extras: Optional[List[Any]] = None,
+    dealer_profile: Optional[Dict[str, str]] = None,
+    trader_logo_url: Optional[str] = None,
 ) -> BytesIO:
     """
     Generate a PDF document for a quote.
@@ -581,6 +583,24 @@ def generate_quote_pdf(
         logo_path, logo_bytes = _resolve_logo(company_settings)
         footer_logo_path, footer_logo_bytes = _resolve_footer_logo(company_settings)
         elements.extend(_build_header_flowables(company_settings, logo_path, logo_bytes, normal_style, company_name_style, customer.customer_number))
+    trader_logo_bytes: Optional[bytes] = None
+    if trader_logo_url:
+        try:
+            req = urllib.request.Request(
+                _force_cloudinary_format(trader_logo_url, fmt="png"),
+                headers={"User-Agent": "Mozilla/5.0"},
+            )
+            with urllib.request.urlopen(req, timeout=10) as response:
+                raw = response.read()
+                trader_logo_bytes = _ensure_png_or_jpeg_bytes(raw) or raw
+        except Exception:
+            trader_logo_bytes = None
+    if trader_logo_bytes:
+        trader_logo = _image_from_bytes(trader_logo_bytes, width=35 * mm, height=None, max_height=16 * mm)
+        if trader_logo:
+            elements.append(Paragraph("Dealer logo", normal_style))
+            elements.append(trader_logo)
+            elements.append(Spacer(1, 5))
 
     # Quote Title and Details Section
     quote_header_data = [
@@ -619,6 +639,27 @@ def generate_quote_pdf(
     ]))
     elements.append(quote_table)
     elements.append(Spacer(1, 8))
+
+    if dealer_profile:
+        elements.append(Paragraph("Dealer details:", heading_style))
+        dealer_lines = [
+            dealer_profile.get("company_name") or "",
+            dealer_profile.get("contact_name") or "",
+            dealer_profile.get("email") or "",
+            dealer_profile.get("phone") or "",
+            dealer_profile.get("address") or "",
+            f"VAT: {dealer_profile.get('vat_number')}" if dealer_profile.get("vat_number") else "",
+            (
+                f"Registration: {dealer_profile.get('registration_number')}"
+                if dealer_profile.get("registration_number")
+                else ""
+            ),
+            dealer_profile.get("website") or "",
+        ]
+        for info in dealer_lines:
+            if info:
+                elements.append(Paragraph(info, normal_style))
+        elements.append(Spacer(1, 8))
     
     # Customer Details
     elements.append(Paragraph("Bill To:", heading_style))
@@ -914,6 +955,8 @@ def generate_quote_pdf_cached(
     session: Optional[Session] = None,
     include_spec_sheets: bool = True,
     available_optional_extras: Optional[List[Any]] = None,
+    dealer_profile: Optional[Dict[str, str]] = None,
+    trader_logo_url: Optional[str] = None,
 ) -> tuple[bytes, bool]:
     """
     Generate a quote PDF with filesystem cache.
@@ -937,6 +980,8 @@ def generate_quote_pdf_cached(
         session=session,
         include_spec_sheets=include_spec_sheets,
         available_optional_extras=available_optional_extras,
+        dealer_profile=dealer_profile,
+        trader_logo_url=trader_logo_url,
     )
     pdf_bytes = pdf_buffer.getvalue()
     cache_path.write_bytes(pdf_bytes)

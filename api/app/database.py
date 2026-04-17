@@ -162,6 +162,15 @@ def _ensure_dealer_portal_schema(engine) -> None:
                     CREATE TABLE IF NOT EXISTS dealer (
                         id SERIAL PRIMARY KEY,
                         name VARCHAR(255) NOT NULL UNIQUE,
+                        company_name VARCHAR(255),
+                        contact_name VARCHAR(255),
+                        email VARCHAR(255),
+                        phone VARCHAR(255),
+                        address TEXT,
+                        vat_number VARCHAR(255),
+                        registration_number VARCHAR(255),
+                        website VARCHAR(2048),
+                        logo_url VARCHAR(2048),
                         is_active BOOLEAN NOT NULL DEFAULT TRUE,
                         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                         updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -170,6 +179,16 @@ def _ensure_dealer_portal_schema(engine) -> None:
                 )
             )
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_dealer_name ON dealer (name)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_dealer_email ON dealer (email)"))
+            conn.execute(text("ALTER TABLE dealer ADD COLUMN IF NOT EXISTS company_name VARCHAR(255)"))
+            conn.execute(text("ALTER TABLE dealer ADD COLUMN IF NOT EXISTS contact_name VARCHAR(255)"))
+            conn.execute(text("ALTER TABLE dealer ADD COLUMN IF NOT EXISTS email VARCHAR(255)"))
+            conn.execute(text("ALTER TABLE dealer ADD COLUMN IF NOT EXISTS phone VARCHAR(255)"))
+            conn.execute(text("ALTER TABLE dealer ADD COLUMN IF NOT EXISTS address TEXT"))
+            conn.execute(text("ALTER TABLE dealer ADD COLUMN IF NOT EXISTS vat_number VARCHAR(255)"))
+            conn.execute(text("ALTER TABLE dealer ADD COLUMN IF NOT EXISTS registration_number VARCHAR(255)"))
+            conn.execute(text("ALTER TABLE dealer ADD COLUMN IF NOT EXISTS website VARCHAR(2048)"))
+            conn.execute(text("ALTER TABLE dealer ADD COLUMN IF NOT EXISTS logo_url VARCHAR(2048)"))
 
             conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS dealer_id INTEGER REFERENCES dealer(id)'))
             conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS dealer_commission_pct INTEGER'))
@@ -194,6 +213,10 @@ def _ensure_dealer_portal_schema(engine) -> None:
 
             if inspector.has_table("quote"):
                 conn.execute(text("ALTER TABLE quote ADD COLUMN IF NOT EXISTS dealer_id INTEGER REFERENCES dealer(id)"))
+                conn.execute(text("ALTER TABLE quote ADD COLUMN IF NOT EXISTS dealer_customer_name VARCHAR(255)"))
+                conn.execute(text("ALTER TABLE quote ADD COLUMN IF NOT EXISTS dealer_customer_email VARCHAR(255)"))
+                conn.execute(text("ALTER TABLE quote ADD COLUMN IF NOT EXISTS dealer_customer_phone VARCHAR(255)"))
+                conn.execute(text("ALTER TABLE quote ADD COLUMN IF NOT EXISTS dealer_customer_address TEXT"))
                 conn.execute(text("ALTER TABLE quote ADD COLUMN IF NOT EXISTS revision_hash VARCHAR(128)"))
                 conn.execute(text("CREATE INDEX IF NOT EXISTS ix_quote_dealer_id ON quote (dealer_id)"))
                 conn.execute(text("CREATE INDEX IF NOT EXISTS ix_quote_revision_hash ON quote (revision_hash)"))

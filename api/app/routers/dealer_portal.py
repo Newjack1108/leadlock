@@ -3,13 +3,14 @@ from datetime import datetime
 from decimal import Decimal
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import Response
 from sqlmodel import Session, select
 
 from app.auth import require_dealer_user
 from app.constants import VAT_RATE_DECIMAL
 from app.database import get_session
+from app.image_upload_service import upload_product_image
 from app.models import (
     Customer,
     Dealer,
@@ -29,6 +30,8 @@ from app.quote_pdf_service import generate_quote_pdf_cached
 from app.routers.quotes import apply_discount_to_quote, build_quote_response, generate_quote_number
 from app.schemas import (
     DealerAllowedDiscountPolicyResponse,
+    DealerProfileResponse,
+    DealerProfileUpdate,
     DealerQuoteCreate,
     DealerWelcomeResponse,
     ProductResponse,
@@ -73,6 +76,23 @@ def _build_quote_revision_hash(quote: Quote, items: List[QuoteItem]) -> str:
     return hashlib.sha256("\n".join(payload).encode("utf-8")).hexdigest()
 
 
+def _dealer_to_profile_response(dealer: Dealer) -> DealerProfileResponse:
+    return DealerProfileResponse(
+        id=dealer.id,
+        name=dealer.name,
+        company_name=dealer.company_name,
+        contact_name=dealer.contact_name,
+        email=dealer.email,
+        phone=dealer.phone,
+        address=dealer.address,
+        vat_number=dealer.vat_number,
+        registration_number=dealer.registration_number,
+        website=dealer.website,
+        logo_url=dealer.logo_url,
+        is_active=dealer.is_active,
+    )
+
+
 @router.get("/welcome", response_model=DealerWelcomeResponse)
 async def dealer_welcome(
     session: Session = Depends(get_session),
@@ -113,6 +133,46 @@ async def get_discount_policy(
         max_discount_amount=policy.max_discount_amount,
         allowed_discount_template_ids=list(allowed_ids),
     )
+
+
+@router.get("/profile", response_model=DealerProfileResponse)
+async def get_dealer_profile(
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_dealer_user),
+):
+    dealer = _get_dealer_or_404(session, current_user.dealer_id)
+    return _dealer_to_profile_response(dealer)
+
+
+@router.put("/profile", response_model=DealerProfileResponse)
+async def update_dealer_profile(
+    payload: DealerProfileUpdate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_dealer_user),
+):
+    dealer = _get_dealer_or_404(session, current_user.dealer_id)
+    for field_name, value in payload.model_dump(exclude_unset=True).items():
+        setattr(dealer, field_name, value)
+    dealer.updated_at = datetime.utcnow()
+    session.add(dealer)
+    session.commit()
+    session.refresh(dealer)
+    return _dealer_to_profile_response(dealer)
+
+
+@router.post("/profile/logo", response_model=DealerProfileResponse)
+async def upload_dealer_logo(
+    logo: UploadFile = File(...),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_dealer_user),
+):
+    dealer = _get_dealer_or_404(session, current_user.dealer_id)
+    dealer.logo_url = await upload_product_image(logo)
+    dealer.updated_at = datetime.utcnow()
+    session.add(dealer)
+    session.commit()
+    session.refresh(dealer)
+    return _dealer_to_profile_response(dealer)
 
 
 @router.get("/products", response_model=List[ProductResponse])
@@ -192,19 +252,8 @@ async def create_dealer_quote(
     if any(template_id not in allowed_discount_ids for template_id in payload.discount_template_ids):
         raise HTTPException(status_code=403, detail="One or more discounts are not permitted")
 
-    customer = Customer(
-        customer_number=f"DEALER-{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}",
-        name=payload.customer_name.strip(),
-        email=payload.customer_email,
-        phone=payload.customer_phone,
-        customer_since=datetime.utcnow(),
-    )
-    session.add(customer)
-    session.commit()
-    session.refresh(customer)
-
     quote = Quote(
-        customer_id=customer.id,
+        customer_id=None,
         quote_number=generate_quote_number(session),
         version=1,
         status=QuoteStatus.DRAFT,
@@ -218,6 +267,10 @@ async def create_dealer_quote(
         notes=payload.notes,
         created_by_id=current_user.id,
         dealer_id=current_user.dealer_id,
+        dealer_customer_name=payload.customer_name.strip(),
+        dealer_customer_email=payload.customer_email,
+        dealer_customer_phone=payload.customer_phone,
+        dealer_customer_address=payload.customer_address,
     )
     session.add(quote)
     session.commit()
@@ -348,14 +401,17 @@ async def download_dealer_quote_pdf(
     if not quote:
         raise HTTPException(status_code=404, detail="Quote not found")
     _require_dealer_quote_access(quote, current_user)
-    if not quote.customer_id:
-        raise HTTPException(status_code=400, detail="Quote has no customer")
-    customer = session.get(Customer, quote.customer_id)
-    if not customer:
-        raise HTTPException(status_code=404, detail="Customer not found")
-
     quote_items = list(
         session.exec(select(QuoteItem).where(QuoteItem.quote_id == quote.id).order_by(QuoteItem.sort_order)).all()
+    )
+    dealer = _get_dealer_or_404(session, current_user.dealer_id)
+    customer_number = f"DEALER-{quote.id}"
+    customer = Customer(
+        customer_number=customer_number,
+        name=quote.dealer_customer_name or "Customer",
+        email=quote.dealer_customer_email,
+        phone=quote.dealer_customer_phone,
+        address_line1=quote.dealer_customer_address,
     )
     revision_hash = quote.revision_hash or _build_quote_revision_hash(quote, quote_items)
     if quote.revision_hash != revision_hash:
@@ -363,7 +419,23 @@ async def download_dealer_quote_pdf(
         session.add(quote)
         session.commit()
 
-    cache_key = f"{quote.id}:{revision_hash}:dealer:{current_user.dealer_id}"
+    dealer_profile_hash = hashlib.sha256(
+        "|".join(
+            [
+                str(dealer.updated_at.isoformat() if dealer.updated_at else ""),
+                str(dealer.company_name or ""),
+                str(dealer.contact_name or ""),
+                str(dealer.email or ""),
+                str(dealer.phone or ""),
+                str(dealer.address or ""),
+                str(dealer.vat_number or ""),
+                str(dealer.registration_number or ""),
+                str(dealer.website or ""),
+                str(dealer.logo_url or ""),
+            ]
+        ).encode("utf-8")
+    ).hexdigest()
+    cache_key = f"{quote.id}:{revision_hash}:dealer:{current_user.dealer_id}:profile:{dealer_profile_hash}"
     pdf_bytes, _ = generate_quote_pdf_cached(
         cache_key=cache_key,
         quote=quote,
@@ -371,6 +443,17 @@ async def download_dealer_quote_pdf(
         quote_items=quote_items,
         session=session,
         include_spec_sheets=getattr(quote, "include_spec_sheets", False),
+        dealer_profile={
+            "company_name": dealer.company_name or dealer.name,
+            "contact_name": dealer.contact_name or "",
+            "email": dealer.email or "",
+            "phone": dealer.phone or "",
+            "address": dealer.address or "",
+            "vat_number": dealer.vat_number or "",
+            "registration_number": dealer.registration_number or "",
+            "website": dealer.website or "",
+        },
+        trader_logo_url=dealer.logo_url,
     )
     filename = f"DealerQuote_{quote.quote_number}.pdf"
     return Response(

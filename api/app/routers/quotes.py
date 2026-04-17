@@ -190,6 +190,8 @@ def build_quote_response(quote: Quote, quote_items: List[QuoteItem], session: Se
         customer = session.exec(select(Customer).where(Customer.id == quote.customer_id)).first()
         customer_name = customer.name if customer else None
         customer_last_interacted_at = get_last_activity_date(quote.customer_id, session)
+    elif quote.dealer_customer_name:
+        customer_name = quote.dealer_customer_name
     if quote.lead_id:
         lead = session.exec(select(Lead).where(Lead.id == quote.lead_id)).first()
         lead_name = lead.name if lead else None
@@ -261,6 +263,10 @@ def build_quote_response(quote: Quote, quote_items: List[QuoteItem], session: Se
         order_id=order_id,
         customer_last_interacted_at=customer_last_interacted_at,
         archived_at=getattr(quote, "archived_at", None),
+        dealer_customer_name=getattr(quote, "dealer_customer_name", None),
+        dealer_customer_email=getattr(quote, "dealer_customer_email", None),
+        dealer_customer_phone=getattr(quote, "dealer_customer_phone", None),
+        dealer_customer_address=getattr(quote, "dealer_customer_address", None),
     )
 
 

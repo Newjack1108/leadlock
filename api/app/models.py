@@ -120,6 +120,15 @@ class User(SQLModel, table=True):
 class Dealer(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(index=True, unique=True)
+    company_name: Optional[str] = None
+    contact_name: Optional[str] = None
+    email: Optional[str] = Field(default=None, index=True)
+    phone: Optional[str] = None
+    address: Optional[str] = None
+    vat_number: Optional[str] = None
+    registration_number: Optional[str] = None
+    website: Optional[str] = None
+    logo_url: Optional[str] = None
     is_active: bool = Field(default=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
@@ -547,6 +556,10 @@ class Quote(SQLModel, table=True):
     loss_category: Optional["LossCategory"] = None
     owner_id: Optional[int] = Field(default=None, foreign_key="user.id")  # Opportunity owner (can differ from created_by)
     dealer_id: Optional[int] = Field(default=None, foreign_key="dealer.id", index=True)
+    dealer_customer_name: Optional[str] = None
+    dealer_customer_email: Optional[str] = None
+    dealer_customer_phone: Optional[str] = None
+    dealer_customer_address: Optional[str] = None
     revision_hash: Optional[str] = Field(default=None, index=True)
     
     # Relationships

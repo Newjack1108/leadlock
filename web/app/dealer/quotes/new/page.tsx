@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { createDealerQuote, getDealerProducts } from '@/lib/api';
 import type { Product } from '@/lib/types';
 
@@ -17,6 +18,7 @@ export default function NewDealerQuotePage() {
   const [customerName, setCustomerName] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
+  const [customerAddress, setCustomerAddress] = useState('');
   const [rows, setRows] = useState<ProductRow[]>([]);
   const [saving, setSaving] = useState(false);
 
@@ -56,6 +58,7 @@ export default function NewDealerQuotePage() {
         customer_name: customerName.trim(),
         customer_email: customerEmail.trim() || undefined,
         customer_phone: customerPhone.trim() || undefined,
+        customer_address: customerAddress.trim() || undefined,
         product_items: rows.map((r) => ({ product_id: r.product_id, quantity: r.quantity })),
       });
       router.push(`/dealer/quotes/${quote.id}`);
@@ -84,6 +87,15 @@ export default function NewDealerQuotePage() {
               <div>
                 <Label htmlFor="customer-phone">Customer phone</Label>
                 <Input id="customer-phone" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} />
+              </div>
+              <div className="sm:col-span-2">
+                <Label htmlFor="customer-address">Customer address</Label>
+                <Textarea
+                  id="customer-address"
+                  value={customerAddress}
+                  onChange={(e) => setCustomerAddress(e.target.value)}
+                  placeholder="For this PDF only (not saved as CRM customer)"
+                />
               </div>
             </div>
 
