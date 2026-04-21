@@ -122,6 +122,16 @@
     box-shadow: none;
     border: 1px solid #e5e7eb;
   }
+  .optional-extras-table thead {
+    display: table-header-group;
+  }
+  .optional-extras-table tfoot {
+    display: table-footer-group;
+  }
+  .optional-extras-table tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
   body {
     background: white;
   }

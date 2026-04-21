@@ -18,6 +18,7 @@ export default function PublicCustomerDocumentView() {
   const [data, setData] = useState<PublicQuoteView | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showTerms, setShowTerms] = useState(false);
 
   useEffect(() => {
     if (!token) return;
@@ -67,12 +68,14 @@ export default function PublicCustomerDocumentView() {
   const logoUrl = cd?.logo_url || '/logo1.jpg';
   const addressParts = [cd?.address_line1, cd?.address_line2, cd?.city, cd?.county, cd?.postcode].filter(Boolean);
   const address = addressParts.join(', ');
-  const bankDetails = [
+  const bankDetailsLine = [
     cd?.bank_name ? `Bank: ${cd.bank_name}` : null,
     cd?.bank_account_name ? `Account Name: ${cd.bank_account_name}` : null,
     cd?.sort_code ? `Sort Code: ${cd.sort_code}` : null,
     cd?.account_number ? `Account: ${cd.account_number}` : null,
-  ].filter(Boolean) as string[];
+  ]
+    .filter(Boolean)
+    .join(' | ');
   const hasOrder = Boolean(data.order_number);
 
   return (
@@ -98,13 +101,21 @@ export default function PublicCustomerDocumentView() {
                   <p className="text-muted-foreground text-sm mt-1">Quote {data.quote_number}</p>
                 )}
                 <p className="text-muted-foreground text-sm">Prepared for {data.customer_name}</p>
-                {(cd?.trading_name || address || cd?.phone || cd?.email || cd?.website) && (
+                {(cd?.trading_name ||
+                  address ||
+                  cd?.phone ||
+                  cd?.email ||
+                  cd?.website ||
+                  bankDetailsLine) && (
                   <div className="mt-3 text-sm text-muted-foreground space-y-0.5">
                     {cd?.trading_name && <p className="font-semibold text-foreground">{cd.trading_name}</p>}
                     {address && <p>{address}</p>}
                     {cd?.phone && <p>Phone: {cd.phone}</p>}
                     {cd?.email && <p>Email: {cd.email}</p>}
                     {cd?.website && <p>Website: {cd.website}</p>}
+                    {bankDetailsLine && (
+                      <p className="text-xs sm:text-sm text-foreground break-words">{bankDetailsLine}</p>
+                    )}
                   </div>
                 )}
               </div>
@@ -192,13 +203,6 @@ export default function PublicCustomerDocumentView() {
                   {QUOTE_BALANCE_BEFORE_DELIVERY_NOTE}
                 </p>
               )}
-              {!hasOrder && bankDetails.length > 0 && (
-                <div className="text-sm text-foreground space-y-1">
-                  {bankDetails.map((line) => (
-                    <p key={line}>{line}</p>
-                  ))}
-                </div>
-              )}
               {data.delivery_installation_contact_note && (
                 <p className="text-sm text-muted-foreground pt-3 mt-2 border-t border-border">
                   {data.delivery_installation_contact_note}
@@ -215,7 +219,10 @@ export default function PublicCustomerDocumentView() {
             {data.available_optional_extras && data.available_optional_extras.length > 0 && (
               <div className="pt-4 border-t">
                 <h3 className="font-medium mb-3">Other Available Options</h3>
-                <table className="w-full text-sm border-collapse">
+                <p className="hidden print:block text-xs text-muted-foreground mb-2">
+                  Additional options may continue on the next page.
+                </p>
+                <table className="w-full text-sm border-collapse optional-extras-table">
                   <thead>
                     <tr className="border-b text-left text-muted-foreground">
                       <th className="py-2 pr-2">Description</th>
@@ -230,6 +237,13 @@ export default function PublicCustomerDocumentView() {
                       </tr>
                     ))}
                   </tbody>
+                  <tfoot>
+                    <tr>
+                      <td colSpan={2} className="pt-2 text-xs text-muted-foreground">
+                        Continued on next page (if more options follow)
+                      </td>
+                    </tr>
+                  </tfoot>
                 </table>
                 <p className="text-xs text-muted-foreground mt-2">
                   Optional extras are priced per 12ft box
@@ -239,16 +253,24 @@ export default function PublicCustomerDocumentView() {
 
             {data.terms_and_conditions && (
               <div className="pt-2 print:hidden">
-                <a href="#terms" className="text-sm text-primary hover:underline">
-                  View terms and conditions
-                </a>
+                <button
+                  type="button"
+                  className="text-sm text-primary hover:underline"
+                  onClick={() => setShowTerms((prev) => !prev)}
+                >
+                  {showTerms ? 'Hide terms and conditions' : 'View terms and conditions'}
+                </button>
               </div>
             )}
           </CardContent>
         </Card>
 
         {data.terms_and_conditions && (
-          <div id="terms" className="quote-view-print mt-8" style={{ pageBreakBefore: 'always' }}>
+          <div
+            id="terms"
+            className={`quote-view-print mt-8 ${showTerms ? 'block' : 'hidden print:block'}`}
+            style={{ pageBreakBefore: 'always' }}
+          >
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-lg">Terms and Conditions</CardTitle>
