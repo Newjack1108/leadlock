@@ -5,9 +5,41 @@ from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Query, 
 from fastapi.responses import Response
 from sqlmodel import Session, select, or_, and_
 from sqlalchemy import func, true, String as SAString
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 from app.database import get_session
-from app.models import Quote, QuoteItem, QuoteTemplate, QuoteTemplateSalesDocument, SalesDocument, Customer, User, QuoteEmail, Email, EmailDirection, Activity, ActivityType, CompanySettings, Lead, LeadStatus, QuoteStatus, QuoteTemperature, OpportunityStage, LossCategory, DiscountTemplate, QuoteDiscount, DiscountType, DiscountScope, Order, OrderItem, QuoteItemLineType, DiscountRequest, SmsMessage, SmsDirection
+from app.models import (
+    Quote,
+    QuoteItem,
+    QuoteTemplate,
+    QuoteTemplateSalesDocument,
+    SalesDocument,
+    Customer,
+    User,
+    QuoteEmail,
+    Email,
+    EmailDirection,
+    Activity,
+    ActivityType,
+    CompanySettings,
+    Lead,
+    LeadStatus,
+    QuoteStatus,
+    QuoteTemperature,
+    OpportunityStage,
+    LossCategory,
+    DiscountTemplate,
+    QuoteDiscount,
+    DiscountType,
+    DiscountScope,
+    Order,
+    OrderItem,
+    QuoteItemLineType,
+    DiscountRequest,
+    SmsMessage,
+    SmsDirection,
+    MessengerMessage,
+    MessengerDirection,
+)
 from app.auth import get_current_user
 from app.schemas import (
     QuoteCreate, QuoteUpdate, QuoteDraftUpdate, QuoteResponse, QuoteListResponse, QuoteItemCreate, QuoteItemResponse,
@@ -178,7 +210,140 @@ def _item_eligible_for_product_scope_discount(item: QuoteItem) -> bool:
     return True
 
 
-def build_quote_response(quote: Quote, quote_items: List[QuoteItem], session: Session) -> QuoteResponse:
+def batch_lead_quotes_sent_counts(session: Session, lead_ids: List[int]) -> Dict[int, int]:
+    """Per lead_id: count of quotes with sent_at set (matches leads list `quotes_sent_count` idea)."""
+    if not lead_ids:
+        return {}
+    rows = session.exec(
+        select(Quote.lead_id, func.count(Quote.id))
+        .where(Quote.lead_id.in_(lead_ids), Quote.sent_at.isnot(None))
+        .group_by(Quote.lead_id)
+    ).all()
+    out: Dict[int, int] = {}
+    for row in rows:
+        lid, cnt = row[0], row[1]
+        if lid is not None:
+            out[int(lid)] = int(cnt)
+    return out
+
+
+def batch_reply_metrics_since_sent(session: Session, quotes: List[Quote]) -> Dict[int, Tuple[bool, int]]:
+    """
+    Per quote id: (customer_replied_since_quote_sent, inbound_count_since_quote_sent).
+    Inbound = Email/SMS/Messenger RECEIVED for the quote's customer and/or lead, timestamp strictly after quote.sent_at.
+    """
+    out: Dict[int, Tuple[bool, int]] = {}
+    dated = [q for q in quotes if q.sent_at and (q.customer_id or q.lead_id)]
+    if not dated:
+        for q in quotes:
+            out[q.id] = (False, 0)
+        return out
+
+    customer_ids = list({q.customer_id for q in dated if q.customer_id})
+    lead_ids = list({q.lead_id for q in dated if q.lead_id})
+    min_ts = min(q.sent_at for q in dated if q.sent_at)
+
+    email_events: List[Tuple[int, datetime]] = []
+    if customer_ids:
+        ts_col = func.coalesce(Email.received_at, Email.created_at)
+        rows = session.exec(
+            select(Email.customer_id, ts_col).where(
+                Email.direction == EmailDirection.RECEIVED,
+                Email.customer_id.in_(customer_ids),
+                ts_col >= min_ts,
+            )
+        ).all()
+        for row in rows:
+            cid, ts = row[0], row[1]
+            if ts is not None and cid is not None:
+                email_events.append((int(cid), ts))
+
+    sms_events: List[Tuple[Optional[int], Optional[int], datetime]] = []
+    if customer_ids or lead_ids:
+        ts_sms = func.coalesce(SmsMessage.received_at, SmsMessage.created_at)
+        parts = []
+        if customer_ids:
+            parts.append(SmsMessage.customer_id.in_(customer_ids))
+        if lead_ids:
+            parts.append(SmsMessage.lead_id.in_(lead_ids))
+        cond_or = or_(*parts) if len(parts) > 1 else parts[0]
+        rows = session.exec(
+            select(SmsMessage.customer_id, SmsMessage.lead_id, ts_sms).where(
+                SmsMessage.direction == SmsDirection.RECEIVED,
+                cond_or,
+                ts_sms >= min_ts,
+            )
+        ).all()
+        for row in rows:
+            scid, slid, ts = row[0], row[1], row[2]
+            if ts is not None:
+                sms_events.append((scid, slid, ts))
+
+    messenger_events: List[Tuple[Optional[int], Optional[int], datetime]] = []
+    if customer_ids or lead_ids:
+        ts_mm = func.coalesce(MessengerMessage.received_at, MessengerMessage.created_at)
+        parts_m = []
+        if customer_ids:
+            parts_m.append(MessengerMessage.customer_id.in_(customer_ids))
+        if lead_ids:
+            parts_m.append(MessengerMessage.lead_id.in_(lead_ids))
+        cond_m = or_(*parts_m) if len(parts_m) > 1 else parts_m[0]
+        rows = session.exec(
+            select(MessengerMessage.customer_id, MessengerMessage.lead_id, ts_mm).where(
+                MessengerMessage.direction == MessengerDirection.RECEIVED,
+                cond_m,
+                ts_mm >= min_ts,
+            )
+        ).all()
+        for row in rows:
+            mcid, mlid, ts = row[0], row[1], row[2]
+            if ts is not None:
+                messenger_events.append((mcid, mlid, ts))
+
+    for q in quotes:
+        if not q.sent_at or (not q.customer_id and not q.lead_id):
+            out[q.id] = (False, 0)
+            continue
+        st = q.sent_at
+        cid = q.customer_id
+        lid = q.lead_id
+        cnt = 0
+        for ecid, ts in email_events:
+            if cid and ecid == cid and ts > st:
+                cnt += 1
+        for scid, slid, ts in sms_events:
+            if ts <= st:
+                continue
+            matched = False
+            if cid and scid is not None and scid == cid:
+                matched = True
+            if lid and slid is not None and slid == lid:
+                matched = True
+            if matched:
+                cnt += 1
+        for mcid, mlid, ts in messenger_events:
+            if ts <= st:
+                continue
+            matched = False
+            if cid and mcid is not None and mcid == cid:
+                matched = True
+            if lid and mlid is not None and mlid == lid:
+                matched = True
+            if matched:
+                cnt += 1
+        out[q.id] = (cnt > 0, cnt)
+    return out
+
+
+def build_quote_response(
+    quote: Quote,
+    quote_items: List[QuoteItem],
+    session: Session,
+    *,
+    lead_quotes_sent_count: Optional[int] = None,
+    customer_replied_since_quote_sent: bool = False,
+    inbound_count_since_quote_sent: int = 0,
+) -> QuoteResponse:
     """Build a QuoteResponse with items and discounts."""
     discount_statement = select(QuoteDiscount).where(QuoteDiscount.quote_id == quote.id)
     quote_discounts = session.exec(discount_statement).all()
@@ -267,6 +432,9 @@ def build_quote_response(quote: Quote, quote_items: List[QuoteItem], session: Se
         dealer_customer_email=getattr(quote, "dealer_customer_email", None),
         dealer_customer_phone=getattr(quote, "dealer_customer_phone", None),
         dealer_customer_address=getattr(quote, "dealer_customer_address", None),
+        lead_quotes_sent_count=lead_quotes_sent_count,
+        customer_replied_since_quote_sent=customer_replied_since_quote_sent,
+        inbound_count_since_quote_sent=inbound_count_since_quote_sent,
     )
 
 
@@ -827,11 +995,26 @@ async def get_all_quotes(
         )
         quotes = session.exec(statement).all()
 
+        lead_ids_page = list({q.lead_id for q in quotes if q.lead_id})
+        lead_sent_map = batch_lead_quotes_sent_counts(session, lead_ids_page)
+        reply_map = batch_reply_metrics_since_sent(session, list(quotes))
+
         result = []
         for quote in quotes:
             item_statement = select(QuoteItem).where(QuoteItem.quote_id == quote.id).order_by(QuoteItem.sort_order)
             quote_items = session.exec(item_statement).all()
-            result.append(build_quote_response(quote, quote_items, session))
+            replied, inbound_n = reply_map.get(quote.id, (False, 0))
+            lead_n = lead_sent_map.get(int(quote.lead_id), 0) if quote.lead_id else None
+            result.append(
+                build_quote_response(
+                    quote,
+                    quote_items,
+                    session,
+                    lead_quotes_sent_count=lead_n,
+                    customer_replied_since_quote_sent=replied,
+                    inbound_count_since_quote_sent=inbound_n,
+                )
+            )
 
         return QuoteListResponse(items=result, total=total, page=page, page_size=page_size)
     except Exception as e:

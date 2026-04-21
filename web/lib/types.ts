@@ -918,6 +918,10 @@ export interface Quote {
   dealer_customer_email?: string | null;
   dealer_customer_phone?: string | null;
   dealer_customer_address?: string | null;
+  /** Quotes on this lead with sent_at (paginated list only). */
+  lead_quotes_sent_count?: number | null;
+  customer_replied_since_quote_sent?: boolean;
+  inbound_count_since_quote_sent?: number;
 }
 
 export interface QuoteListPayload {

@@ -1237,6 +1237,10 @@ class QuoteResponse(BaseModel):
     dealer_customer_email: Optional[str] = None
     dealer_customer_phone: Optional[str] = None
     dealer_customer_address: Optional[str] = None
+    # List / engagement (optional; set on paginated quote list)
+    lead_quotes_sent_count: Optional[int] = None
+    customer_replied_since_quote_sent: bool = False
+    inbound_count_since_quote_sent: int = 0
 
 
 class QuoteListResponse(BaseModel):

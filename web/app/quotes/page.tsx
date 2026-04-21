@@ -18,7 +18,7 @@ import api, { getQuotes, previewQuotePdf } from '@/lib/api';
 import { LeadType, Quote, QuoteStatus, QuoteTemperature, OpportunityStage } from '@/lib/types';
 import { toast } from 'sonner';
 import Link from 'next/link';
-import { FileText, Eye, Pencil, List, LayoutGrid, ShoppingCart } from 'lucide-react';
+import { FileText, Eye, Pencil, List, LayoutGrid, ShoppingCart, SendHorizontal, MessageCircle } from 'lucide-react';
 
 const statusColors: Record<QuoteStatus, string> = {
   DRAFT: 'bg-gray-100 text-gray-700',
@@ -43,6 +43,66 @@ function showQuoteTemperatureBadge(quote: Quote): boolean {
   if (quote.opportunity_stage === OpportunityStage.WON) return false;
   if (quote.accepted_at) return false;
   return true;
+}
+
+function quoteCustomerViewed(quote: Quote): boolean {
+  return Boolean(
+    quote.viewed_at ||
+      quote.last_viewed_at ||
+      (quote.total_open_count ?? 0) > 0,
+  );
+}
+
+/** Sent / viewed / replied — data populated on paginated quote list from API. */
+function QuoteListEngagementBadges({ quote }: { quote: Quote }) {
+  const leadCountKnown = quote.lead_id != null && quote.lead_quotes_sent_count != null;
+  const opens = quote.total_open_count ?? 0;
+  const viewed = quoteCustomerViewed(quote);
+  const replyCount = quote.inbound_count_since_quote_sent ?? 0;
+  const replied = quote.customer_replied_since_quote_sent === true || replyCount > 0;
+
+  if (!leadCountKnown && !viewed && !replied) return null;
+
+  return (
+    <>
+      {leadCountKnown && (
+        <Badge
+          variant="outline"
+          className="text-xs gap-1 font-normal border-sky-200 bg-sky-50 text-sky-900 dark:bg-sky-950/40 dark:text-sky-100 dark:border-sky-800"
+          title="Quotes on this lead that have been sent (have a sent date), including this one when applicable."
+        >
+          <SendHorizontal className="h-3 w-3 shrink-0" aria-hidden />
+          {quote.lead_quotes_sent_count} on lead
+        </Badge>
+      )}
+      {viewed && (
+        <Badge
+          variant="outline"
+          className="text-xs gap-1 font-normal border-amber-200 bg-amber-50 text-amber-950 dark:bg-amber-950/30 dark:text-amber-100 dark:border-amber-800"
+          title={
+            opens > 0
+              ? `Customer opened the quote link (${opens} open${opens === 1 ? '' : 's'} tracked).`
+              : 'Customer opened the quote view link.'
+          }
+        >
+          <Eye className="h-3 w-3 shrink-0" aria-hidden />
+          Viewed
+          {opens > 0 ? ` · ${opens} open${opens === 1 ? '' : 's'}` : ''}
+        </Badge>
+      )}
+      {replied && (
+        <Badge
+          variant="outline"
+          className="text-xs gap-1 font-normal border-violet-200 bg-violet-50 text-violet-950 dark:bg-violet-950/30 dark:text-violet-100 dark:border-violet-800"
+          title="Inbound email, SMS, or Messenger from the customer after this quote was sent."
+        >
+          <MessageCircle className="h-3 w-3 shrink-0" aria-hidden />
+          Replied
+          {replyCount > 1 ? ` ×${replyCount}` : ''}
+        </Badge>
+      )}
+    </>
+  );
 }
 
 const VALID_QUOTE_STATUSES = Object.values(QuoteStatus);
@@ -336,6 +396,7 @@ function QuotesPageContent() {
                               Archived
                             </Badge>
                           )}
+                          <QuoteListEngagementBadges quote={quote} />
                         </div>
                       </td>
                       <td className="p-3 font-semibold">£{Number(quote.total_amount).toFixed(2)}</td>
@@ -436,6 +497,7 @@ function QuotesPageContent() {
                             Archived
                           </Badge>
                         )}
+                        <QuoteListEngagementBadges quote={quote} />
                         {quote.version > 1 && (
                           <span className="text-sm text-muted-foreground">
                             v{quote.version}
