@@ -67,6 +67,12 @@ export default function PublicCustomerDocumentView() {
   const logoUrl = cd?.logo_url || '/logo1.jpg';
   const addressParts = [cd?.address_line1, cd?.address_line2, cd?.city, cd?.county, cd?.postcode].filter(Boolean);
   const address = addressParts.join(', ');
+  const bankDetails = [
+    cd?.bank_name ? `Bank: ${cd.bank_name}` : null,
+    cd?.bank_account_name ? `Account Name: ${cd.bank_account_name}` : null,
+    cd?.sort_code ? `Sort Code: ${cd.sort_code}` : null,
+    cd?.account_number ? `Account: ${cd.account_number}` : null,
+  ].filter(Boolean) as string[];
   const hasOrder = Boolean(data.order_number);
 
   return (
@@ -185,6 +191,13 @@ export default function PublicCustomerDocumentView() {
                 <p className="text-sm text-foreground pt-3 mt-2 border-t border-border">
                   {QUOTE_BALANCE_BEFORE_DELIVERY_NOTE}
                 </p>
+              )}
+              {!hasOrder && bankDetails.length > 0 && (
+                <div className="text-sm text-foreground space-y-1">
+                  {bankDetails.map((line) => (
+                    <p key={line}>{line}</p>
+                  ))}
+                </div>
               )}
               {data.delivery_installation_contact_note && (
                 <p className="text-sm text-muted-foreground pt-3 mt-2 border-t border-border">

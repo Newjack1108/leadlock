@@ -1291,6 +1291,10 @@ class PublicQuoteCompanyDisplay(BaseModel):
     phone: Optional[str] = None
     email: Optional[str] = None
     website: Optional[str] = None
+    bank_name: Optional[str] = None
+    bank_account_name: Optional[str] = None
+    sort_code: Optional[str] = None
+    account_number: Optional[str] = None
 
 
 class PublicQuoteViewResponse(BaseModel):

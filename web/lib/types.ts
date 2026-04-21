@@ -949,6 +949,10 @@ export interface PublicQuoteCompanyDisplay {
   phone?: string;
   email?: string;
   website?: string;
+  bank_name?: string;
+  bank_account_name?: string;
+  sort_code?: string;
+  account_number?: string;
 }
 
 export interface AvailableExtraResponse {

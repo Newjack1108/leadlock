@@ -191,6 +191,10 @@ def get_public_quote_view(
             phone=company_settings.phone,
             email=company_settings.email,
             website=company_settings.website,
+            bank_name=company_settings.bank_name,
+            bank_account_name=company_settings.bank_account_name,
+            sort_code=company_settings.sort_code,
+            account_number=company_settings.account_number,
         )
 
     return PublicQuoteViewResponse(

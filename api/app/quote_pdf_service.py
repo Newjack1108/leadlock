@@ -12,7 +12,18 @@ from typing import Optional, Tuple, List, Any, Dict
 from io import BytesIO
 from datetime import datetime
 from decimal import Decimal
-from app.models import Quote, Customer, QuoteItem, CompanySettings, Product, QuoteItemLineType, QuoteDiscount
+from app.models import (
+    Quote,
+    Customer,
+    QuoteItem,
+    CompanySettings,
+    Product,
+    QuoteItemLineType,
+    QuoteDiscount,
+    Lead,
+    LeadType,
+    ProductCategory,
+)
 from app.constants import (
     VAT_RATE_DECIMAL,
     TRACKING_WEBSITE_BASE_URLS,
@@ -93,6 +104,7 @@ def _build_header_flowables(
     normal_style: ParagraphStyle,
     company_name_style: ParagraphStyle,
     customer_number: Optional[str] = None,
+    trading_name_override: Optional[str] = None,
 ) -> List[Any]:
     """Build header flowables (logo + company info). Logo from company settings (logo_url) or local files."""
     result: List[Any] = []
@@ -112,7 +124,7 @@ def _build_header_flowables(
         logo = _image_from_bytes(logo_bytes, width=50*mm, height=None, max_height=18*mm)
     # Company info (used with or without logo)
     company_info_lines = []
-    trading_name = company_settings.trading_name or "Cheshire Stables"
+    trading_name = trading_name_override or company_settings.trading_name or "Cheshire Stables"
     company_info_lines.append(f"<font size='12'><b>{trading_name}</b></font>")
     if company_settings.address_line1:
         address_parts = [
@@ -209,26 +221,10 @@ def _make_footer_canvas_drawer(
 ):
     """Return (canvas, doc) -> None to draw footer at bottom of every page."""
     footer_lines = []
-    if company_settings.company_name:
-        footer_lines.append(company_settings.company_name)
-    if company_settings.address_line1:
-        address_parts = [
-            company_settings.address_line1,
-            company_settings.city,
-            company_settings.postcode,
-        ]
-        footer_lines.append(", ".join([p for p in address_parts if p]))
     if company_settings.company_registration_number:
         footer_lines.append(f"Company No: {company_settings.company_registration_number}")
     if company_settings.vat_number:
         footer_lines.append(f"VAT No: {company_settings.vat_number}")
-    if company_settings.phone or company_settings.email:
-        contact = []
-        if company_settings.phone:
-            contact.append(f"Tel: {company_settings.phone}")
-        if company_settings.email:
-            contact.append(f"Email: {company_settings.email}")
-        footer_lines.append(" | ".join(contact))
     bank_parts = []
     if company_settings.bank_name:
         bank_parts.append(f"Bank: {company_settings.bank_name}")
@@ -474,6 +470,49 @@ def _resolve_footer_logo(company_settings: CompanySettings) -> Tuple[Optional[st
     return _resolve_logo(company_settings)
 
 
+def _resolve_header_trading_name(
+    quote: Quote,
+    quote_items: List[QuoteItem],
+    company_settings: Optional[CompanySettings],
+    session: Optional[Session],
+) -> Optional[str]:
+    """
+    Resolve header trading name by product type.
+    Rules requested:
+    - STABLES => Cheshire Stables
+    - SHEDS => Cheshire Sheds
+    - CABINS => Beaver Log Cabins
+    - otherwise default company trading name behavior.
+    """
+    lead_type: Optional[LeadType] = None
+
+    if session and quote.lead_id:
+        lead = session.get(Lead, quote.lead_id)
+        if lead and lead.lead_type in (LeadType.STABLES, LeadType.SHEDS, LeadType.CABINS):
+            lead_type = lead.lead_type
+
+    if lead_type is None and session:
+        product_ids = [item.product_id for item in quote_items if item.product_id]
+        if product_ids:
+            product_stmt = select(Product).where(Product.id.in_(product_ids))
+            products = session.exec(product_stmt).all()
+            categories = {p.category for p in products if p and p.category}
+            if ProductCategory.CABINS in categories:
+                lead_type = LeadType.CABINS
+            elif ProductCategory.SHEDS in categories:
+                lead_type = LeadType.SHEDS
+            elif ProductCategory.STABLES in categories:
+                lead_type = LeadType.STABLES
+
+    if lead_type == LeadType.STABLES:
+        return "Cheshire Stables"
+    if lead_type == LeadType.SHEDS:
+        return "Cheshire Sheds"
+    if lead_type == LeadType.CABINS:
+        return "Beaver Log Cabins"
+    return company_settings.trading_name if company_settings else None
+
+
 def generate_quote_pdf(
     quote: Quote,
     customer: Customer,
@@ -579,10 +618,22 @@ def generate_quote_pdf(
     logo_bytes: Optional[bytes] = None
     footer_logo_path: Optional[str] = None
     footer_logo_bytes: Optional[bytes] = None
+    trading_name_override: Optional[str] = None
     if company_settings:
         logo_path, logo_bytes = _resolve_logo(company_settings)
         footer_logo_path, footer_logo_bytes = _resolve_footer_logo(company_settings)
-        elements.extend(_build_header_flowables(company_settings, logo_path, logo_bytes, normal_style, company_name_style, customer.customer_number))
+        trading_name_override = _resolve_header_trading_name(quote, quote_items, company_settings, session)
+        elements.extend(
+            _build_header_flowables(
+                company_settings,
+                logo_path,
+                logo_bytes,
+                normal_style,
+                company_name_style,
+                customer.customer_number,
+                trading_name_override=trading_name_override,
+            )
+        )
     trader_logo_bytes: Optional[bytes] = None
     if trader_logo_url:
         try:
@@ -882,7 +933,17 @@ def generate_quote_pdf(
     )
     if terms_text and company_settings:
         elements.append(PageBreak())
-        elements.extend(_build_header_flowables(company_settings, logo_path, logo_bytes, normal_style, company_name_style, customer.customer_number))
+        elements.extend(
+            _build_header_flowables(
+                company_settings,
+                logo_path,
+                logo_bytes,
+                normal_style,
+                company_name_style,
+                customer.customer_number,
+                trading_name_override=trading_name_override,
+            )
+        )
         elements.append(Paragraph("Terms and Conditions:", heading_style))
         for line in terms_text.split("\n"):
             if line.strip():

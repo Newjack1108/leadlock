@@ -196,20 +196,6 @@ export default function Header() {
                 Dealer Portal
               </Button>
             </Link>
-            <Link href="/dealer/profile">
-              <Button
-                variant={pathname?.startsWith('/dealer/profile') ? 'default' : 'ghost'}
-                size="sm"
-                className={
-                  pathname?.startsWith('/dealer/profile')
-                    ? 'text-primary-foreground'
-                    : 'text-muted-foreground hover:text-foreground'
-                }
-              >
-                <Settings className="h-4 w-4 mr-2" />
-                Dealer Profile
-              </Button>
-            </Link>
             </>
           ) : isCloser ? (
             <>
@@ -408,12 +394,14 @@ export default function Header() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-              <Link href="/settings/user">
-                <DropdownMenuItem className="cursor-pointer">
-                  <User className="h-4 w-4 mr-2" />
-                  My Settings
-                </DropdownMenuItem>
-              </Link>
+              {!isDealer && (
+                <Link href="/settings/user">
+                  <DropdownMenuItem className="cursor-pointer">
+                    <User className="h-4 w-4 mr-2" />
+                    My Settings
+                  </DropdownMenuItem>
+                </Link>
+              )}
               {isDirector && (
                 <>
                   <Link href="/settings/users">
@@ -508,19 +496,6 @@ export default function Header() {
                       <span className="flex items-center gap-2">
                         <LayoutDashboard className="h-4 w-4 shrink-0" />
                         Dealer Portal
-                      </span>
-                    </Link>
-                    <Link
-                      href="/dealer/profile"
-                      onClick={closeMobile}
-                      className={cn(
-                        mobileNavLinkClass,
-                        pathname?.startsWith('/dealer/profile') && 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground'
-                      )}
-                    >
-                      <span className="flex items-center gap-2">
-                        <Settings className="h-4 w-4 shrink-0" />
-                        Dealer Profile
                       </span>
                     </Link>
                   </>
@@ -690,19 +665,21 @@ export default function Header() {
                 <p className="px-3 pb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   Account
                 </p>
-                <Link
-                  href="/settings/user"
-                  onClick={closeMobile}
-                  className={cn(
-                    mobileNavLinkClass,
-                    pathname?.startsWith('/settings/user') && 'bg-accent'
-                  )}
-                >
-                  <span className="flex items-center gap-2">
-                    <User className="h-4 w-4 shrink-0" />
-                    My Settings
-                  </span>
-                </Link>
+                {!isDealer && (
+                  <Link
+                    href="/settings/user"
+                    onClick={closeMobile}
+                    className={cn(
+                      mobileNavLinkClass,
+                      pathname?.startsWith('/settings/user') && 'bg-accent'
+                    )}
+                  >
+                    <span className="flex items-center gap-2">
+                      <User className="h-4 w-4 shrink-0" />
+                      My Settings
+                    </span>
+                  </Link>
+                )}
                 {isDirector && (
                   <>
                     <Link
