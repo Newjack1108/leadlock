@@ -1592,6 +1592,32 @@ def create_db_and_tables():
                     if "already exists" not in error_str and "duplicate" not in error_str:
                         print(f"Error adding read_at to email: {e}", file=sys.stderr, flush=True)
 
+        # Step 13c: Scheduled SMS schema hardening (FAILED status + failure_reason)
+        has_scheduledsms_table = inspector.has_table("scheduledsms")
+        if has_scheduledsms_table:
+            # Ensure enum includes FAILED for one-shot failure finalization.
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text("ALTER TYPE scheduledsmsstatus ADD VALUE IF NOT EXISTS 'FAILED'"))
+                print("Ensured scheduledsmsstatus enum value: FAILED", file=sys.stderr, flush=True)
+            except Exception as e:
+                error_str = str(e).lower()
+                # Non-Postgres DBs or preexisting enum values can safely continue.
+                if "already exists" not in error_str and "duplicate" not in error_str:
+                    print(f"Warning: could not ensure scheduledsmsstatus value FAILED: {e}", file=sys.stderr, flush=True)
+
+            scheduledsms_columns = [col["name"] for col in inspector.get_columns("scheduledsms")]
+            if "failure_reason" not in scheduledsms_columns:
+                print("Adding failure_reason column to scheduledsms table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE scheduledsms ADD COLUMN failure_reason TEXT"))
+                    print("Added failure_reason column to scheduledsms table", file=sys.stderr, flush=True)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Error adding failure_reason to scheduledsms: {e}", file=sys.stderr, flush=True)
+
         # Step 14: ReminderRule customer outreach + CustomerOutreachSend audit table
         if has_reminder_rule_table:
             outreach_alters = [
