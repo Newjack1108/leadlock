@@ -376,6 +376,9 @@ def on_startup():
                                     session.add(scheduled)
                                 else:
                                     print(f"Scheduled SMS {scheduled.id} send failed: {err}", file=__import__("sys").stderr, flush=True)
+                                    scheduled.status = ScheduledSmsStatus.FAILED
+                                    scheduled.failure_reason = (err or "Twilio send failed")[:1000]
+                                    session.add(scheduled)
                                 session.commit()
                             except Exception as e:
                                 print(f"Error processing scheduled SMS {scheduled.id}: {e}", file=__import__("sys").stderr, flush=True)

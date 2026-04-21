@@ -29,7 +29,7 @@ from app.schemas import (
     MessageIdsMarkUnread,
     MessagesMarkUnreadResult,
 )
-from app.sms_service import send_sms, normalize_phone
+from app.sms_service import send_sms, normalize_phone, validate_outbound_phone
 
 router = APIRouter(prefix="/api/sms", tags=["sms"])
 
@@ -253,9 +253,13 @@ async def create_scheduled_sms(
     customer = session.exec(statement).first()
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
+    is_valid, normalized_to_phone, phone_error = validate_outbound_phone(data.to_phone)
+    if not is_valid:
+        raise HTTPException(status_code=400, detail=phone_error or "Invalid phone number")
+
     scheduled = ScheduledSms(
         customer_id=data.customer_id,
-        to_phone=data.to_phone,
+        to_phone=normalized_to_phone,
         body=data.body,
         scheduled_at=data.scheduled_at,
         status=ScheduledSmsStatus.PENDING,
@@ -275,6 +279,7 @@ async def create_scheduled_sms(
         created_at=scheduled.created_at,
         sent_at=scheduled.sent_at,
         twilio_sid=scheduled.twilio_sid,
+        failure_reason=scheduled.failure_reason,
     )
 
 
@@ -304,6 +309,7 @@ async def list_scheduled_sms(
             created_at=s.created_at,
             sent_at=s.sent_at,
             twilio_sid=s.twilio_sid,
+            failure_reason=s.failure_reason,
         )
         for s in items
     ]
@@ -340,6 +346,7 @@ async def update_scheduled_sms(
         created_at=scheduled.created_at,
         sent_at=scheduled.sent_at,
         twilio_sid=scheduled.twilio_sid,
+        failure_reason=scheduled.failure_reason,
     )
 
 

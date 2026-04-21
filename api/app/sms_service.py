@@ -28,6 +28,27 @@ def normalize_phone(phone: str) -> str:
     return s
 
 
+def validate_outbound_phone(phone: str) -> Tuple[bool, str, Optional[str]]:
+    """
+    Normalize and validate outbound phone numbers with UK-first defaults.
+    Returns (is_valid, normalized_phone, error_message).
+    """
+    normalized = normalize_phone(phone)
+    if not normalized:
+        return False, "", "Invalid phone number"
+    if not re.fullmatch(r"\+?\d+", normalized):
+        return False, normalized, "Phone number must contain only digits (and optional leading +)"
+
+    digits = normalized[1:] if normalized.startswith("+") else normalized
+    if len(digits) < 10 or len(digits) > 15:
+        return False, normalized, "Phone number must be between 10 and 15 digits"
+
+    if normalized.startswith("+") and digits.startswith("0"):
+        return False, normalized, "Phone number cannot include leading 0 after country code"
+
+    return True, normalized, None
+
+
 def get_twilio_config() -> Tuple[Optional[str], Optional[str], Optional[str]]:
     """Return (account_sid, auth_token, from_phone)."""
     sid = os.getenv("TWILIO_ACCOUNT_SID")
@@ -43,13 +64,13 @@ def send_sms(to_phone: str, body: str) -> Tuple[bool, Optional[str], Optional[st
     sid, token, from_phone = get_twilio_config()
     if not sid or not token or not from_phone:
         return False, None, "Twilio not configured (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER)"
-    to_phone = normalize_phone(to_phone)
-    if not to_phone:
-        return False, None, "Invalid phone number"
+    is_valid, normalized_phone, phone_error = validate_outbound_phone(to_phone)
+    if not is_valid:
+        return False, None, phone_error or "Invalid phone number"
     try:
         from twilio.rest import Client
         client = Client(sid, token)
-        message = client.messages.create(body=body, from_=from_phone, to=to_phone)
+        message = client.messages.create(body=body, from_=from_phone, to=normalized_phone)
         return True, message.sid, None
     except Exception as e:
         return False, None, str(e)

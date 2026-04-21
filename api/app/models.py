@@ -329,6 +329,7 @@ class ScheduledSmsStatus(str, Enum):
     PENDING = "PENDING"
     SENT = "SENT"
     CANCELLED = "CANCELLED"
+    FAILED = "FAILED"
 
 
 class ScheduledSms(SQLModel, table=True):
@@ -342,6 +343,7 @@ class ScheduledSms(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     sent_at: Optional[datetime] = None
     twilio_sid: Optional[str] = None
+    failure_reason: Optional[str] = None
 
     # Relationships
     created_by: "User" = Relationship()

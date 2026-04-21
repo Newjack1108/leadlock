@@ -257,6 +257,7 @@ class SmsScheduledResponse(BaseModel):
     created_at: datetime
     sent_at: Optional[datetime] = None
     twilio_sid: Optional[str] = None
+    failure_reason: Optional[str] = None
 
 
 class SmsScheduledUpdate(BaseModel):
