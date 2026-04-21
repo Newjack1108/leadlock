@@ -246,7 +246,7 @@ export default function PublicCustomerDocumentView() {
                   </tfoot>
                 </table>
                 <p className="text-xs text-muted-foreground mt-2">
-                  Optional extras are priced per 12ft box
+                  Some optional extras are priced per 12ft box
                 </p>
               </div>
             )}
