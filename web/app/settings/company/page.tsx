@@ -46,6 +46,7 @@ export default function CompanySettingsPage() {
   const [settings, setSettings] = useState<CompanySettings | null>(null);
   const [botAvatarMissing, setBotAvatarMissing] = useState(false);
   const [termsExpanded, setTermsExpanded] = useState(false);
+  const [smsBotInstructionsExpanded, setSmsBotInstructionsExpanded] = useState(false);
   const defaultBotHours: BotWeekSchedule = {
     mon: { enabled: true, start: '09:00', end: '17:00' },
     tue: { enabled: true, start: '09:00', end: '17:00' },
@@ -744,20 +745,37 @@ export default function CompanySettingsPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="sms_bot_system_instructions">SMS bot system instructions</Label>
-                <Textarea
-                  id="sms_bot_system_instructions"
-                  value={formData.sms_bot_system_instructions}
-                  onChange={(e) => setFormData({ ...formData, sms_bot_system_instructions: e.target.value })}
-                  rows={6}
-                  disabled={saving}
-                  placeholder="e.g. what you sell, tone, topics to hand off to a human…"
-                />
-                <p className="text-sm text-muted-foreground">
-                  Optional. When set, this is appended to the AI system prompt after built-in rules. Company name (trading
-                  name if set), phone, and website from this page are included automatically when filled in. Keep it
-                  concise. The bot still limits reply length and escalates pricing, complaints, and complex questions.
-                </p>
+                <button
+                  type="button"
+                  className="flex items-center justify-between w-full text-left font-medium leading-none hover:opacity-80 py-2 rounded-md -mx-1 px-1"
+                  onClick={() => setSmsBotInstructionsExpanded((prev) => !prev)}
+                >
+                  <Label htmlFor="sms_bot_system_instructions" className="cursor-pointer">
+                    SMS bot system instructions
+                  </Label>
+                  {smsBotInstructionsExpanded ? (
+                    <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+                  )}
+                </button>
+                {smsBotInstructionsExpanded && (
+                  <>
+                    <Textarea
+                      id="sms_bot_system_instructions"
+                      value={formData.sms_bot_system_instructions}
+                      onChange={(e) => setFormData({ ...formData, sms_bot_system_instructions: e.target.value })}
+                      rows={6}
+                      disabled={saving}
+                      placeholder="e.g. what you sell, tone, topics to hand off to a human…"
+                    />
+                    <p className="text-sm text-muted-foreground">
+                      Optional. When set, this is appended to the AI system prompt after built-in rules. Company name (trading
+                      name if set), phone, and website from this page are included automatically when filled in. Keep it
+                      concise. The bot still limits reply length and escalates pricing, complaints, and complex questions.
+                    </p>
+                  </>
+                )}
               </div>
               <div className="space-y-2">
                 <Label>Business hours by weekday (AUTO mode)</Label>
