@@ -147,6 +147,7 @@ export default function CustomerDetailPage() {
   const [composeEmailDialogOpen, setComposeEmailDialogOpen] = useState(false);
   const [callNotesDialogOpen, setCallNotesDialogOpen] = useState(false);
   const [manualActivityDialogOpen, setManualActivityDialogOpen] = useState(false);
+  const [expandedActivityNotes, setExpandedActivityNotes] = useState<Record<number, boolean>>({});
   const [historyExpanded, setHistoryExpanded] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [nameBeforeEdit, setNameBeforeEdit] = useState('');
@@ -909,33 +910,54 @@ export default function CustomerDetailPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4 max-h-[480px] overflow-y-auto">
+                <div className="space-y-2 max-h-[480px] overflow-y-auto">
                   {activities.length === 0 ? (
                     <p className="text-sm text-muted-foreground">No activities yet</p>
                   ) : (
                     activities.map((activity) => {
                       const Icon = activityIcons[activity.activity_type];
+                      const isNotesExpanded = !!expandedActivityNotes[activity.id];
                       return (
-                        <div key={activity.id} className="flex gap-4">
+                        <div key={activity.id} className="flex gap-3 items-start py-1">
                           <div className={`${activityColors[activity.activity_type]}`}>
-                            <Icon className="h-5 w-5" />
+                            <Icon className="h-4 w-4" />
                           </div>
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium">
+                          <div className="flex-1 min-w-0 space-y-1">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span
+                                className="font-medium text-sm truncate block min-w-0 flex-1"
+                                title={formatActivityTypeLabel(activity.activity_type)}
+                              >
                                 {formatActivityTypeLabel(activity.activity_type)}
                               </span>
-                              <span className="text-xs text-muted-foreground">
+                              <span className="text-xs text-muted-foreground shrink-0">
                                 {formatDateTime(activity.created_at)}
                               </span>
                             </div>
                             {activity.notes && (
-                              <p className="text-sm text-muted-foreground mt-1 whitespace-pre-wrap break-words">
-                                {activity.notes}
-                              </p>
+                              <div className="min-w-0">
+                                <p
+                                  className={`text-xs text-muted-foreground ${isNotesExpanded ? 'whitespace-pre-wrap break-words' : 'truncate'}`}
+                                  title={isNotesExpanded ? undefined : activity.notes}
+                                >
+                                  {activity.notes}
+                                </p>
+                                <button
+                                  type="button"
+                                  className="text-xs text-primary hover:underline mt-0.5"
+                                  onClick={() =>
+                                    setExpandedActivityNotes((prev) => ({
+                                      ...prev,
+                                      [activity.id]: !prev[activity.id],
+                                    }))
+                                  }
+                                >
+                                  {isNotesExpanded ? 'Show less' : 'Show more'}
+                                </button>
+                              </div>
                             )}
                             {activity.created_by_name && (
-                              <p className="text-xs text-muted-foreground mt-1">
+                              <p className="text-xs text-muted-foreground truncate" title={`by ${activity.created_by_name}`}>
                                 by {activity.created_by_name}
                               </p>
                             )}
