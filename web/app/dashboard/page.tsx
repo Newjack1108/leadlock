@@ -219,6 +219,40 @@ export default function DashboardPage() {
           </Link>
         </div>
 
+        {/* Charts */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Lead Status</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <StatusPieChart
+                newCount={stats.new_count}
+                quotedCount={stats.leads_with_sent_quotes_count}
+                wonCount={stats.won_count}
+                lostCount={stats.lost_count}
+                closedCount={stats.closed_count}
+              />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Leads by Source</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <LeadsBySourceBarChart data={stats.leads_by_source || []} />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Lead Locations</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <LeadMap locations={leadLocations} loading={loading} period={datePeriod} />
+            </CardContent>
+          </Card>
+        </div>
+
         {communicationTotals && (
           <Card className="mb-8">
             <CardHeader>
@@ -261,40 +295,6 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         )}
-
-        {/* Charts */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Lead Status</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <StatusPieChart
-                newCount={stats.new_count}
-                quotedCount={stats.leads_with_sent_quotes_count}
-                wonCount={stats.won_count}
-                lostCount={stats.lost_count}
-                closedCount={stats.closed_count}
-              />
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Leads by Source</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <LeadsBySourceBarChart data={stats.leads_by_source || []} />
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Lead Locations</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <LeadMap locations={leadLocations} loading={loading} period={datePeriod} />
-            </CardContent>
-          </Card>
-        </div>
 
         {/* Status Breakdown */}
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-6 mb-8">
