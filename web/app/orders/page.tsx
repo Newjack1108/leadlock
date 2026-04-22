@@ -21,6 +21,7 @@ import { Badge } from '@/components/ui/badge';
 import NinoxBadge from '@/components/NinoxBadge';
 
 type OrderStatusFilter = 'new' | 'deposit_paid' | 'installation_booked' | 'installation_completed' | 'all';
+type LeadTypeFilter = 'all' | LeadType | 'unknown';
 
 function formatCurrency(amount: number, currency: string = 'GBP'): string {
   return new Intl.NumberFormat('en-GB', {
@@ -55,11 +56,18 @@ function getDisplayLeadType(leadType?: LeadType | null): LeadType | null {
   return leadType;
 }
 
+function orderMatchesLeadTypeFilter(order: Order, filter: LeadTypeFilter): boolean {
+  if (filter === 'all') return true;
+  if (filter === 'unknown') return !getDisplayLeadType(order.lead_type);
+  return order.lead_type === filter;
+}
+
 export default function OrdersPage() {
   const router = useRouter();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<OrderStatusFilter>('all');
+  const [leadTypeFilter, setLeadTypeFilter] = useState<LeadTypeFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
@@ -89,6 +97,7 @@ export default function OrdersPage() {
 
   const filteredOrders = useMemo(() => {
     let result = orders.filter((o) => orderMatchesStatusFilter(o, statusFilter));
+    result = result.filter((o) => orderMatchesLeadTypeFilter(o, leadTypeFilter));
     if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase();
       result = result.filter(
@@ -98,7 +107,7 @@ export default function OrdersPage() {
       );
     }
     return result;
-  }, [orders, statusFilter, searchQuery]);
+  }, [orders, statusFilter, leadTypeFilter, searchQuery]);
 
   if (loading) {
     return (
@@ -131,6 +140,18 @@ export default function OrdersPage() {
                 <SelectItem value="all">All</SelectItem>
               </SelectContent>
             </Select>
+            <Select value={leadTypeFilter} onValueChange={(v) => setLeadTypeFilter(v as LeadTypeFilter)}>
+              <SelectTrigger className="w-full md:w-[200px]">
+                <SelectValue placeholder="Lead type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All lead types</SelectItem>
+                <SelectItem value={LeadType.STABLES}>Stables</SelectItem>
+                <SelectItem value={LeadType.SHEDS}>Sheds</SelectItem>
+                <SelectItem value={LeadType.CABINS}>Cabins</SelectItem>
+                <SelectItem value="unknown">Unknown / not set</SelectItem>
+              </SelectContent>
+            </Select>
             <Input
               placeholder="Search by order # or customer..."
               value={searchQuery}
@@ -161,6 +182,7 @@ export default function OrdersPage() {
                   className="mt-4"
                   onClick={() => {
                     setStatusFilter('all');
+                    setLeadTypeFilter('all');
                     setSearchQuery('');
                   }}
                 >

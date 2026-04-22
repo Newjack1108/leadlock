@@ -973,7 +973,7 @@ export default function CustomerDetailPage() {
               </CardHeader>
               {historyExpanded && (
                 <CardContent>
-                  <div className="space-y-4">
+                  <div className="space-y-2">
                     {history.length === 0 ? (
                       <p className="text-sm text-muted-foreground">No history yet</p>
                     ) : (
@@ -981,41 +981,55 @@ export default function CustomerDetailPage() {
                         const Icon = historyIcons[event.event_type] || History;
                         const color = historyColors[event.event_type] || 'text-muted-foreground';
                         return (
-                          <div key={index} className="flex gap-4 relative">
+                          <div key={index} className="flex gap-3 relative items-start py-1">
                             <div className={`${color} flex-shrink-0`}>
-                              <Icon className="h-5 w-5" />
+                              <Icon className="h-4 w-4" />
                             </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-medium">{event.title}</span>
-                                <span className="text-xs text-muted-foreground">
+                            <div className="flex-1 min-w-0 space-y-1">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="font-medium text-sm truncate block min-w-0 flex-1" title={event.title}>
+                                  {event.title}
+                                </span>
+                                <span className="text-xs text-muted-foreground shrink-0">
                                   {formatDateTime(event.timestamp)}
                                 </span>
                               </div>
                               {event.description && (
-                                <p className="text-sm text-muted-foreground mt-1">
+                                <p className="text-xs text-muted-foreground truncate" title={event.description}>
                                   {event.description}
                                 </p>
                               )}
                               {event.created_by_name && (
-                                <p className="text-xs text-muted-foreground mt-1">
+                                <p className="text-xs text-muted-foreground truncate" title={`by ${event.created_by_name}`}>
                                   by {event.created_by_name}
                                 </p>
                               )}
                               {event.metadata && Object.keys(event.metadata).length > 0 && (
-                                <div className="mt-2 flex flex-wrap gap-2">
+                                <div className="flex gap-1 overflow-hidden whitespace-nowrap">
                                   {event.metadata.quote_number && (
-                                    <Badge variant="outline" className="text-xs">
+                                    <Badge
+                                      variant="outline"
+                                      className="text-xs shrink-0 max-w-[180px] truncate"
+                                      title={`Quote: ${event.metadata.quote_number}`}
+                                    >
                                       Quote: {event.metadata.quote_number}
                                     </Badge>
                                   )}
                                   {event.metadata.lead_name && (
-                                    <Badge variant="outline" className="text-xs">
+                                    <Badge
+                                      variant="outline"
+                                      className="text-xs shrink-0 max-w-[180px] truncate"
+                                      title={`Lead: ${event.metadata.lead_name}`}
+                                    >
                                       Lead: {event.metadata.lead_name}
                                     </Badge>
                                   )}
                                   {event.metadata.old_status && event.metadata.new_status && (
-                                    <Badge variant="outline" className="text-xs">
+                                    <Badge
+                                      variant="outline"
+                                      className="text-xs shrink-0 max-w-[220px] truncate"
+                                      title={`${event.metadata.old_status} → ${event.metadata.new_status}`}
+                                    >
                                       {event.metadata.old_status} → {event.metadata.new_status}
                                     </Badge>
                                   )}
