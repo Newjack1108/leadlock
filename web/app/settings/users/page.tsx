@@ -22,7 +22,8 @@ import { listUsers, createUser, updateUser, deactivateUser } from '@/lib/api';
 import { UserList } from '@/lib/types';
 import { toast } from 'sonner';
 
-const ROLES = ['DIRECTOR', 'SALES_MANAGER', 'CLOSER'] as const;
+const ROLES = ['DIRECTOR', 'SALES_MANAGER', 'CLOSER', 'DEALER_ADMIN', 'DEALER_USER'] as const;
+const DEALER_ROLES = new Set(['DEALER_ADMIN', 'DEALER_USER']);
 
 export default function UsersPage() {
   const router = useRouter();
@@ -37,6 +38,8 @@ export default function UsersPage() {
     full_name: '',
     password: '',
     role: 'CLOSER' as string,
+    dealer_id: '',
+    dealer_commission_pct: '10',
   });
 
   useEffect(() => {
@@ -85,6 +88,8 @@ export default function UsersPage() {
       full_name: '',
       password: '',
       role: 'CLOSER',
+      dealer_id: '',
+      dealer_commission_pct: '10',
     });
     setDialogOpen(true);
   };
@@ -96,6 +101,8 @@ export default function UsersPage() {
       full_name: user.full_name,
       password: '',
       role: user.role,
+      dealer_id: user.dealer_id?.toString() || '',
+      dealer_commission_pct: user.dealer_commission_pct?.toString() || '10',
     });
     setDialogOpen(true);
   };
@@ -114,6 +121,7 @@ export default function UsersPage() {
   };
 
   const handleSave = async () => {
+    const isDealerRole = DEALER_ROLES.has(formData.role);
     if (!formData.full_name.trim()) {
       toast.error('Full name is required');
       return;
@@ -126,14 +134,34 @@ export default function UsersPage() {
       toast.error('Email is required');
       return;
     }
+    if (isDealerRole) {
+      if (!formData.dealer_id.trim()) {
+        toast.error('Dealer ID is required for dealer roles');
+        return;
+      }
+      if (!['10', '15'].includes(formData.dealer_commission_pct)) {
+        toast.error('Dealer commission must be 10 or 15');
+        return;
+      }
+    }
 
     try {
       setSaving(true);
       if (editingUser) {
-        const payload: { full_name?: string; role?: string; password?: string } = {
+        const payload: {
+          full_name?: string;
+          role?: string;
+          password?: string;
+          dealer_id?: number;
+          dealer_commission_pct?: number;
+        } = {
           full_name: formData.full_name.trim(),
           role: formData.role,
         };
+        if (isDealerRole) {
+          payload.dealer_id = parseInt(formData.dealer_id, 10);
+          payload.dealer_commission_pct = parseInt(formData.dealer_commission_pct, 10);
+        }
         if (formData.password.trim()) {
           payload.password = formData.password;
         }
@@ -145,6 +173,8 @@ export default function UsersPage() {
           full_name: formData.full_name.trim(),
           password: formData.password,
           role: formData.role,
+          dealer_id: isDealerRole ? parseInt(formData.dealer_id, 10) : undefined,
+          dealer_commission_pct: isDealerRole ? parseInt(formData.dealer_commission_pct, 10) : undefined,
         });
         toast.success('User created successfully');
       }
@@ -340,9 +370,43 @@ export default function UsersPage() {
                   ))}
                 </select>
                 <p className="text-xs text-muted-foreground">
-                  Director: full access. Sales Manager: can approve discounts. Closer: standard access.
+                  Director: full access. Sales Manager: can approve discounts. Closer: standard access. Dealer roles: require dealer ID and commission.
                 </p>
               </div>
+              {DEALER_ROLES.has(formData.role) && (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="dealer_id">Dealer ID</Label>
+                    <Input
+                      id="dealer_id"
+                      type="number"
+                      min={1}
+                      value={formData.dealer_id}
+                      onChange={(e) => setFormData({ ...formData, dealer_id: e.target.value })}
+                      placeholder="e.g. 1"
+                      disabled={saving}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Use an existing dealer record ID.
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="dealer_commission_pct">Dealer Commission %</Label>
+                    <select
+                      id="dealer_commission_pct"
+                      value={formData.dealer_commission_pct}
+                      onChange={(e) =>
+                        setFormData({ ...formData, dealer_commission_pct: e.target.value })
+                      }
+                      disabled={saving}
+                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <option value="10">10</option>
+                      <option value="15">15</option>
+                    </select>
+                  </div>
+                </>
+              )}
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saving}>

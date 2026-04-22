@@ -84,6 +84,8 @@ export interface UserList {
   email: string;
   full_name: string;
   role: string;
+  dealer_id?: number | null;
+  dealer_commission_pct?: number | null;
   is_active: boolean;
   created_at: string;
 }

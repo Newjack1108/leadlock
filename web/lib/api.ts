@@ -1360,6 +1360,8 @@ export const createUser = async (data: {
   full_name: string;
   password: string;
   role: string;
+  dealer_id?: number;
+  dealer_commission_pct?: number;
 }) => {
   const response = await api.post('/api/users', data);
   return response.data;
@@ -1367,7 +1369,13 @@ export const createUser = async (data: {
 
 export const updateUser = async (
   userId: number,
-  data: { full_name?: string; role?: string; password?: string }
+  data: {
+    full_name?: string;
+    role?: string;
+    password?: string;
+    dealer_id?: number;
+    dealer_commission_pct?: number;
+  }
 ) => {
   const response = await api.put(`/api/users/${userId}`, data);
   return response.data;
