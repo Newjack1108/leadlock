@@ -45,6 +45,7 @@ export default function DashboardPage() {
   const [activeDiscounts, setActiveDiscounts] = useState<DiscountTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [datePeriod, setDatePeriod] = useState<DatePeriod>('week');
+  const periodLabel = datePeriod === 'all' ? 'All Time' : `This ${datePeriod.charAt(0).toUpperCase() + datePeriod.slice(1)}`;
 
   useEffect(() => {
     fetchDashboard();
@@ -61,7 +62,7 @@ export default function DashboardPage() {
         getUnreadMessenger().catch(() => ({ count: 0, messages: [] })),
         getLeadLocations(datePeriod === 'all' ? undefined : datePeriod).catch(() => []),
         getDiscountTemplates(true).catch(() => []),
-        getDashboardCommunicationTotals('week').catch(() => null),
+        getDashboardCommunicationTotals(datePeriod).catch(() => null),
       ]);
       setStats(statsRes.data);
       setStuckLeads(stuckRes.data);
@@ -254,39 +255,39 @@ export default function DashboardPage() {
         </div>
 
         {communicationTotals && (
-          <Card className="mb-8">
+          <Card className="mb-8 border-primary/20 bg-primary/5">
             <CardHeader>
-              <CardTitle className="text-lg">Weekly Communication Totals</CardTitle>
+              <CardTitle className="text-lg">Communication Activity Overview</CardTitle>
               <p className="text-sm text-muted-foreground">
-                All communication this week across email, SMS, and phone.
+                {periodLabel} across email, SMS, and phone.
               </p>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="rounded-lg border p-4">
+                <div className="rounded-lg border border-primary/30 bg-primary/10 p-4">
                   <p className="text-xs uppercase tracking-wide text-muted-foreground">Total interactions</p>
-                  <p className="text-2xl font-bold">{communicationTotals.total}</p>
+                  <p className="text-2xl font-bold text-primary">{communicationTotals.total}</p>
                   <p className="text-xs text-muted-foreground mt-1">
                     Sent {communicationTotals.total_sent} / Received {communicationTotals.total_received}
                   </p>
                 </div>
-                <div className="rounded-lg border p-4">
+                <div className="rounded-lg border border-blue-500/30 bg-blue-500/10 p-4">
                   <p className="text-xs uppercase tracking-wide text-muted-foreground">Email</p>
-                  <p className="text-2xl font-bold">{communicationTotals.email.sent + communicationTotals.email.received}</p>
+                  <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">{communicationTotals.email.sent + communicationTotals.email.received}</p>
                   <p className="text-xs text-muted-foreground mt-1">
                     Sent {communicationTotals.email.sent} / Received {communicationTotals.email.received}
                   </p>
                 </div>
-                <div className="rounded-lg border p-4">
+                <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4">
                   <p className="text-xs uppercase tracking-wide text-muted-foreground">SMS</p>
-                  <p className="text-2xl font-bold">{communicationTotals.sms.sent + communicationTotals.sms.received}</p>
+                  <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">{communicationTotals.sms.sent + communicationTotals.sms.received}</p>
                   <p className="text-xs text-muted-foreground mt-1">
                     Sent {communicationTotals.sms.sent} / Received {communicationTotals.sms.received}
                   </p>
                 </div>
-                <div className="rounded-lg border p-4">
+                <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
                   <p className="text-xs uppercase tracking-wide text-muted-foreground">Phone</p>
-                  <p className="text-2xl font-bold">{communicationTotals.phone_answered + communicationTotals.phone_unanswered}</p>
+                  <p className="text-2xl font-bold text-amber-700 dark:text-amber-300">{communicationTotals.phone_answered + communicationTotals.phone_unanswered}</p>
                   <p className="text-xs text-muted-foreground mt-1">
                     Answered {communicationTotals.phone_answered} / Non-answered {communicationTotals.phone_unanswered}
                   </p>
