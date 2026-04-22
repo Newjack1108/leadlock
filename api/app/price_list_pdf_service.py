@@ -6,6 +6,7 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import datetime, timezone
 from io import BytesIO
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, List, Optional, Tuple
 from xml.sax.saxutils import escape
 
@@ -18,7 +19,7 @@ from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, Tabl
 
 from sqlmodel import Session, select
 
-from app.constants import VAT_RATE_PERCENT
+from app.constants import VAT_RATE_DECIMAL, VAT_RATE_PERCENT
 from app.models import CompanySettings, Product, ProductCategory
 from app.product_spec_pdf_service import _make_footer_drawer
 from app.quote_pdf_service import (
@@ -60,6 +61,12 @@ def _group_key(p: Product) -> Tuple[str, str]:
     cat = p.category.value if p.category else ""
     sub = (p.subcategory or "").strip() or "—"
     return (cat, sub)
+
+
+def _price_inc_vat(base_ex_vat: Decimal) -> Decimal:
+    return (base_ex_vat * (Decimal("1") + VAT_RATE_DECIMAL)).quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
+    )
 
 
 def generate_price_list_pdf(
@@ -185,7 +192,7 @@ def generate_price_list_pdf(
     elements.append(Spacer(1, 4))
     elements.append(
         Paragraph(
-            f"All prices are exclusive of VAT at {VAT_RATE_PERCENT}%.",
+            f"Ex VAT column excludes VAT; inc VAT includes VAT at {VAT_RATE_PERCENT}%.",
             muted_style,
         )
     )
@@ -201,13 +208,11 @@ def generate_price_list_pdf(
         for p in sorted_products:
             groups[_group_key(p)].append(p)
 
-        col_widths = [72 * mm, 26 * mm, 34 * mm, 22 * mm, 26 * mm]
+        col_widths = [108 * mm, 36 * mm, 36 * mm]
         header_row = [
             Paragraph("<b>Product</b>", header_cell_style),
-            Paragraph("<b>SKU</b>", header_cell_style),
-            Paragraph("<b>Size</b>", header_cell_style),
-            Paragraph("<b>Unit</b>", header_cell_style),
-            Paragraph("<b>Price (ex VAT)</b>", header_cell_style_right),
+            Paragraph("<b>Ex VAT</b>", header_cell_style_right),
+            Paragraph("<b>Inc VAT</b>", header_cell_style_right),
         ]
 
         for (cat_val, sub_val) in sorted(groups.keys()):
@@ -219,16 +224,16 @@ def generate_price_list_pdf(
 
             data: List[List[Any]] = [header_row]
             for p in section_products:
-                sku = escape((p.sku or "").strip() or "—")
-                size = escape((p.size or "").strip() or "—")
+                inc = _price_inc_vat(p.base_price)
                 data.append(
                     [
                         Paragraph(escape(p.name or ""), cell_style),
-                        Paragraph(sku, cell_style),
-                        Paragraph(size, cell_style),
-                        Paragraph(escape(str(p.unit or "—")), cell_style),
                         Paragraph(
                             escape(format_currency(p.base_price, "GBP")),
+                            cell_style_right,
+                        ),
+                        Paragraph(
+                            escape(format_currency(inc, "GBP")),
                             cell_style_right,
                         ),
                     ]
