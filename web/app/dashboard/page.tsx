@@ -101,6 +101,14 @@ export default function DashboardPage() {
 
   const liveGiveaways = activeDiscounts.filter((discount) => discount.is_giveaway).length;
   const liveSpecialOffers = activeDiscounts.filter((discount) => !discount.is_giveaway).length;
+  const totalInteractions = communicationTotals?.total ?? 0;
+  const emailTotal = communicationTotals ? communicationTotals.email.sent + communicationTotals.email.received : 0;
+  const smsTotal = communicationTotals ? communicationTotals.sms.sent + communicationTotals.sms.received : 0;
+  const phoneTotal = communicationTotals ? communicationTotals.phone_answered + communicationTotals.phone_unanswered : 0;
+  const formatShare = (value: number) => {
+    if (totalInteractions <= 0) return '0%';
+    return `${Math.round((value / totalInteractions) * 100)}%`;
+  };
 
   return (
     <div className="min-h-screen">
@@ -267,27 +275,31 @@ export default function DashboardPage() {
                 <div className="rounded-lg border border-primary/30 bg-primary/10 p-4">
                   <p className="text-xs uppercase tracking-wide text-muted-foreground">Total interactions</p>
                   <p className="text-2xl font-bold text-primary">{communicationTotals.total}</p>
+                  <p className="text-xs text-muted-foreground mt-1">100% of communication</p>
                   <p className="text-xs text-muted-foreground mt-1">
                     Sent {communicationTotals.total_sent} / Received {communicationTotals.total_received}
                   </p>
                 </div>
                 <div className="rounded-lg border border-blue-500/30 bg-blue-500/10 p-4">
                   <p className="text-xs uppercase tracking-wide text-muted-foreground">Email</p>
-                  <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">{communicationTotals.email.sent + communicationTotals.email.received}</p>
+                  <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">{emailTotal}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{formatShare(emailTotal)} of total</p>
                   <p className="text-xs text-muted-foreground mt-1">
                     Sent {communicationTotals.email.sent} / Received {communicationTotals.email.received}
                   </p>
                 </div>
                 <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4">
                   <p className="text-xs uppercase tracking-wide text-muted-foreground">SMS</p>
-                  <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">{communicationTotals.sms.sent + communicationTotals.sms.received}</p>
+                  <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">{smsTotal}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{formatShare(smsTotal)} of total</p>
                   <p className="text-xs text-muted-foreground mt-1">
                     Sent {communicationTotals.sms.sent} / Received {communicationTotals.sms.received}
                   </p>
                 </div>
                 <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
                   <p className="text-xs uppercase tracking-wide text-muted-foreground">Phone</p>
-                  <p className="text-2xl font-bold text-amber-700 dark:text-amber-300">{communicationTotals.phone_answered + communicationTotals.phone_unanswered}</p>
+                  <p className="text-2xl font-bold text-amber-700 dark:text-amber-300">{phoneTotal}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{formatShare(phoneTotal)} of total</p>
                   <p className="text-xs text-muted-foreground mt-1">
                     Answered {communicationTotals.phone_answered} / Non-answered {communicationTotals.phone_unanswered}
                   </p>
