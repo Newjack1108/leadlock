@@ -278,6 +278,8 @@ export interface DashboardCommunicationTotals {
   phone: DashboardChannelDirectionCounts;
   phone_answered: number;
   phone_unanswered: number;
+  email_reply_rate_pct: number;
+  sms_reply_rate_pct: number;
   total_sent: number;
   total_received: number;
   total: number;

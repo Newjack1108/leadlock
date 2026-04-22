@@ -230,6 +230,55 @@ async def get_dashboard_communication_totals(
         )
     ).one()
 
+    # Reply rate = distinct contacted customers who replied / distinct contacted customers.
+    email_contacted_customers = set(
+        session.exec(
+            select(Email.customer_id).where(
+                Email.direction == EmailDirection.SENT,
+                Email.created_at >= date_clause[0],
+                Email.created_at <= date_clause[1],
+            )
+        ).all()
+    )
+    email_replied_customers = set(
+        session.exec(
+            select(Email.customer_id).where(
+                Email.direction == EmailDirection.RECEIVED,
+                Email.created_at >= date_clause[0],
+                Email.created_at <= date_clause[1],
+            )
+        ).all()
+    )
+    email_reply_rate_pct = (
+        round((len(email_contacted_customers & email_replied_customers) / len(email_contacted_customers)) * 100, 1)
+        if len(email_contacted_customers) > 0
+        else 0.0
+    )
+
+    sms_contacted_customers = set(
+        session.exec(
+            select(SmsMessage.customer_id).where(
+                SmsMessage.direction == SmsDirection.SENT,
+                SmsMessage.created_at >= date_clause[0],
+                SmsMessage.created_at <= date_clause[1],
+            )
+        ).all()
+    )
+    sms_replied_customers = set(
+        session.exec(
+            select(SmsMessage.customer_id).where(
+                SmsMessage.direction == SmsDirection.RECEIVED,
+                SmsMessage.created_at >= date_clause[0],
+                SmsMessage.created_at <= date_clause[1],
+            )
+        ).all()
+    )
+    sms_reply_rate_pct = (
+        round((len(sms_contacted_customers & sms_replied_customers) / len(sms_contacted_customers)) * 100, 1)
+        if len(sms_contacted_customers) > 0
+        else 0.0
+    )
+
     total_sent = email_sent + sms_sent + phone_unanswered
     total_received = email_received + sms_received + phone_answered
 
@@ -242,6 +291,8 @@ async def get_dashboard_communication_totals(
         phone=DashboardChannelDirectionCounts(sent=phone_unanswered, received=phone_answered),
         phone_answered=phone_answered,
         phone_unanswered=phone_unanswered,
+        email_reply_rate_pct=email_reply_rate_pct,
+        sms_reply_rate_pct=sms_reply_rate_pct,
         total_sent=total_sent,
         total_received=total_received,
         total=total_sent + total_received,

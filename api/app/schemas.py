@@ -654,6 +654,8 @@ class DashboardCommunicationTotals(BaseModel):
     phone: DashboardChannelDirectionCounts
     phone_answered: int
     phone_unanswered: int
+    email_reply_rate_pct: float
+    sms_reply_rate_pct: float
     total_sent: int
     total_received: int
     total: int

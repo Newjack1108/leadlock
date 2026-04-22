@@ -289,7 +289,7 @@ export default function DashboardPage() {
                   <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">{emailTotal}</p>
                   <p className="text-xs text-muted-foreground mt-1">{formatShare(emailTotal)} of total</p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Sent {communicationTotals.email.sent} ({formatSplit(communicationTotals.email.sent, emailTotal)}) / Received {communicationTotals.email.received} ({formatSplit(communicationTotals.email.received, emailTotal)})
+                    Reply rate: {communicationTotals.email_reply_rate_pct}% (customers who replied after email sent)
                   </p>
                 </div>
                 <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4">
@@ -297,7 +297,7 @@ export default function DashboardPage() {
                   <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">{smsTotal}</p>
                   <p className="text-xs text-muted-foreground mt-1">{formatShare(smsTotal)} of total</p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Sent {communicationTotals.sms.sent} ({formatSplit(communicationTotals.sms.sent, smsTotal)}) / Received {communicationTotals.sms.received} ({formatSplit(communicationTotals.sms.received, smsTotal)})
+                    Reply rate: {communicationTotals.sms_reply_rate_pct}% (customers who replied after SMS sent)
                   </p>
                 </div>
                 <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
