@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
+import re
+
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Response
 from sqlmodel import Session, select
 from typing import Optional, List
 from app.database import get_session
@@ -7,6 +9,7 @@ from app.auth import get_current_user, require_role
 from app.schemas import ProductCreate, ProductUpdate, ProductResponse
 from app.models import UserRole
 from app.image_upload_service import upload_product_image
+from app.price_list_pdf_service import generate_price_list_pdf
 from datetime import datetime
 
 router = APIRouter(prefix="/api/products", tags=["products"])
@@ -68,6 +71,82 @@ async def get_categories(
         "categories": list(categories.keys()),
         "subcategories": categories
     }
+
+
+@router.get("/price-list.pdf")
+async def export_price_list_pdf(
+    category: Optional[ProductCategory] = Query(None),
+    is_extra: Optional[bool] = Query(None),
+    is_active: Optional[bool] = Query(None),
+    subcategory: Optional[str] = Query(None),
+    trade_only: bool = Query(
+        False,
+        description="If true, only products marked for dealer/trade sale are included.",
+    ),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Download a branded price list PDF (company header/logo, prices ex VAT).
+    Filters match GET /api/products. Register before /{product_id} routes.
+    """
+    statement = select(Product)
+
+    if category:
+        statement = statement.where(Product.category == category)
+
+    if is_extra is not None:
+        statement = statement.where(Product.is_extra == is_extra)
+
+    if subcategory:
+        statement = statement.where(Product.subcategory == subcategory)
+
+    if is_active is None:
+        is_active = True
+    statement = statement.where(Product.is_active == is_active)
+
+    if trade_only:
+        statement = statement.where(Product.allow_trade_dealer_sale == True)
+
+    statement = statement.order_by(Product.category, Product.subcategory, Product.name)
+    products = list(session.exec(statement).all())
+
+    summary_parts: List[str] = []
+    if category:
+        summary_parts.append(f"Category: {category.value}")
+    if subcategory:
+        summary_parts.append(f"Subcategory: {subcategory}")
+    if is_extra is True:
+        summary_parts.append("Optional extras only")
+    elif is_extra is False:
+        summary_parts.append("Main products only (excluding optional extras)")
+    if trade_only:
+        summary_parts.append("Trade/dealer catalogue only")
+    if is_active is False:
+        summary_parts.append("Including inactive products")
+    filter_summary = "; ".join(summary_parts) if summary_parts else "All matching products"
+
+    pdf_buffer = generate_price_list_pdf(
+        products,
+        session=session,
+        filter_summary=filter_summary,
+    )
+    pdf_content = pdf_buffer.read()
+
+    safe_bits = []
+    if category:
+        safe_bits.append(category.value)
+    if subcategory:
+        safe_bits.append(re.sub(r"[^\w\-]+", "_", subcategory, flags=re.UNICODE)[:40])
+    suffix = "_".join(safe_bits) if safe_bits else "all"
+    pdf_filename = f"Price_list_{suffix}.pdf"
+    pdf_filename = re.sub(r'[<>:"/\\|?*]', "_", pdf_filename)
+
+    return Response(
+        content=pdf_content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{pdf_filename}"'},
+    )
 
 
 @router.post("/upload-image")

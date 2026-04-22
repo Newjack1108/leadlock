@@ -24,7 +24,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Plus, Edit, Trash2, Package, List, LayoutGrid } from 'lucide-react';
+import { Plus, Edit, Trash2, Package, List, LayoutGrid, FileDown } from 'lucide-react';
 import Link from 'next/link';
 import api from '@/lib/api';
 import { Product, ProductCategory, PRODUCT_SUBCATEGORIES, ProductSubcategory } from '@/lib/types';
@@ -40,6 +40,8 @@ export default function ProductsPage() {
   const [extrasFilter, setExtrasFilter] = useState<'ALL' | true | false>(false);
   const [subcategoryFilter, setSubcategoryFilter] = useState<'ALL' | ProductSubcategory>('ALL');
   const [viewMode, setViewMode] = useState<'list' | 'tile'>('list');
+  const [exportingPdf, setExportingPdf] = useState(false);
+  const [tradeOnlyPdf, setTradeOnlyPdf] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [saving, setSaving] = useState(false);
@@ -87,6 +89,53 @@ export default function ProductsPage() {
     }
   };
 
+  const handleExportPriceListPdf = async () => {
+    try {
+      setExportingPdf(true);
+      const params: Record<string, string | boolean> = { is_active: true };
+      if (categoryFilter !== 'ALL') {
+        params.category = categoryFilter;
+      }
+      if (extrasFilter !== 'ALL') {
+        params.is_extra = extrasFilter;
+      }
+      if (subcategoryFilter !== 'ALL') {
+        params.subcategory = subcategoryFilter;
+      }
+      if (tradeOnlyPdf) {
+        params.trade_only = true;
+      }
+
+      const response = await api.get('/api/products/price-list.pdf', {
+        params,
+        responseType: 'blob',
+      });
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const cd = response.headers['content-disposition'] as string | undefined;
+      let fname = 'Price_list.pdf';
+      if (cd && cd.includes('filename=')) {
+        const m = cd.match(/filename="([^"]+)"/);
+        if (m) fname = m[1];
+      }
+      a.download = fname;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success('Price list downloaded');
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        router.push('/login');
+      } else {
+        toast.error('Failed to export price list');
+      }
+    } finally {
+      setExportingPdf(false);
+    }
+  };
 
   const handleEditProduct = (product: Product) => {
     router.push(`/products/${product.id}/edit`);
@@ -214,6 +263,28 @@ export default function ProductsPage() {
                 ))}
               </SelectContent>
             </Select>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 border rounded-md px-3 py-2 bg-muted/20">
+              <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer shrink-0">
+                <input
+                  type="checkbox"
+                  checked={tradeOnlyPdf}
+                  onChange={(e) => setTradeOnlyPdf(e.target.checked)}
+                  className="rounded border-input"
+                />
+                Trade/dealer only
+              </label>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="shrink-0"
+                disabled={exportingPdf}
+                onClick={() => void handleExportPriceListPdf()}
+              >
+                <FileDown className="h-4 w-4 mr-2" />
+                {exportingPdf ? 'Exporting…' : 'Export price list (PDF)'}
+              </Button>
+            </div>
           </div>
           <div className="flex gap-1 border rounded-md p-1 bg-muted/30">
             <Button
