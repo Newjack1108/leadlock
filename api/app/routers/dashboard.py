@@ -3,6 +3,7 @@ from sqlmodel import Session, select, func, or_
 from sqlalchemy.exc import DataError
 from app.database import get_session
 from app.models import (
+    ActivityType,
     Lead,
     LeadStatus,
     LeadSource,
@@ -22,6 +23,8 @@ from app.distance_service import bulk_geocode_postcodes
 from app.auth import get_current_user
 from app.schemas import (
     DashboardStats,
+    DashboardChannelDirectionCounts,
+    DashboardCommunicationTotals,
     LeadSourceCount,
     LeadLocationItem,
     UnreadSmsSummary,
@@ -164,6 +167,84 @@ async def get_dashboard_stats(
         engaged_percentage=round(engaged_percentage, 1),
         qualified_percentage=round(qualified_percentage, 1),
         leads_by_source=leads_by_source,
+    )
+
+
+@router.get("/communication-totals", response_model=DashboardCommunicationTotals)
+async def get_dashboard_communication_totals(
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_user),
+    period: str = Query("week", description="Period: week, month, quarter, year, all"),
+):
+    normalized_period = (period or "week").lower()
+    if normalized_period in ("week", "month", "quarter", "year"):
+        start, end = get_date_range_for_period(normalized_period)
+    else:
+        normalized_period = "all"
+        start, end = get_date_range_for_period("all")
+
+    date_clause = (start, end)
+
+    email_sent = session.exec(
+        select(func.count(Email.id)).where(
+            Email.direction == EmailDirection.SENT,
+            Email.created_at >= date_clause[0],
+            Email.created_at <= date_clause[1],
+        )
+    ).one()
+    email_received = session.exec(
+        select(func.count(Email.id)).where(
+            Email.direction == EmailDirection.RECEIVED,
+            Email.created_at >= date_clause[0],
+            Email.created_at <= date_clause[1],
+        )
+    ).one()
+
+    sms_sent = session.exec(
+        select(func.count(SmsMessage.id)).where(
+            SmsMessage.direction == SmsDirection.SENT,
+            SmsMessage.created_at >= date_clause[0],
+            SmsMessage.created_at <= date_clause[1],
+        )
+    ).one()
+    sms_received = session.exec(
+        select(func.count(SmsMessage.id)).where(
+            SmsMessage.direction == SmsDirection.RECEIVED,
+            SmsMessage.created_at >= date_clause[0],
+            SmsMessage.created_at <= date_clause[1],
+        )
+    ).one()
+
+    phone_answered = session.exec(
+        select(func.count(Activity.id)).where(
+            Activity.activity_type == ActivityType.LIVE_CALL,
+            Activity.created_at >= date_clause[0],
+            Activity.created_at <= date_clause[1],
+        )
+    ).one()
+    phone_unanswered = session.exec(
+        select(func.count(Activity.id)).where(
+            Activity.activity_type == ActivityType.CALL_ATTEMPTED,
+            Activity.created_at >= date_clause[0],
+            Activity.created_at <= date_clause[1],
+        )
+    ).one()
+
+    total_sent = email_sent + sms_sent + phone_unanswered
+    total_received = email_received + sms_received + phone_answered
+
+    return DashboardCommunicationTotals(
+        period=normalized_period,
+        start_date=start,
+        end_date=end,
+        email=DashboardChannelDirectionCounts(sent=email_sent, received=email_received),
+        sms=DashboardChannelDirectionCounts(sent=sms_sent, received=sms_received),
+        phone=DashboardChannelDirectionCounts(sent=phone_unanswered, received=phone_answered),
+        phone_answered=phone_answered,
+        phone_unanswered=phone_unanswered,
+        total_sent=total_sent,
+        total_received=total_received,
+        total=total_sent + total_received,
     )
 
 

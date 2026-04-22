@@ -640,6 +640,25 @@ class DashboardStats(BaseModel):
     leads_by_source: List[LeadSourceCount] = []
 
 
+class DashboardChannelDirectionCounts(BaseModel):
+    sent: int
+    received: int
+
+
+class DashboardCommunicationTotals(BaseModel):
+    period: str
+    start_date: datetime
+    end_date: datetime
+    email: DashboardChannelDirectionCounts
+    sms: DashboardChannelDirectionCounts
+    phone: DashboardChannelDirectionCounts
+    phone_answered: int
+    phone_unanswered: int
+    total_sent: int
+    total_received: int
+    total: int
+
+
 class QualifiedForQuotingItem(BaseModel):
     """Lead ready for closer to quote."""
     id: int
@@ -799,6 +818,8 @@ class CustomerCommunicationStats(BaseModel):
     email: ChannelDirectionCounts
     sms: ChannelDirectionCounts
     phone: ChannelDirectionCounts
+    phone_answered: int = 0
+    phone_unanswered: int = 0
 
 
 PRODUCT_UNIT_VALUES = ("Per Box", "Unit", "Set")

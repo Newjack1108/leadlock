@@ -136,6 +136,8 @@ export default function CustomerDetailPage() {
     email: { sent: 0, received: 0 },
     sms: { sent: 0, received: 0 },
     phone: { sent: 0, received: 0 },
+    phone_answered: 0,
+    phone_unanswered: 0,
   });
   const [loading, setLoading] = useState(true);
   const [quoteLocked, setQuoteLocked] = useState(false);
@@ -609,8 +611,12 @@ export default function CustomerDetailPage() {
               </CardHeader>
               <CardContent className="space-y-3">
                 <p className="text-sm text-muted-foreground">
-                  Sent vs received by channel. Phone received is based on logged live calls.
+                  Sent vs received by channel. Phone uses answered (live call) and non-answered (call attempted) logs.
                 </p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Badge variant="outline">Phone answered: {communicationStats.phone_answered}</Badge>
+                  <Badge variant="outline">Phone non-answered: {communicationStats.phone_unanswered}</Badge>
+                </div>
                 <CustomerCommunicationBarChart stats={communicationStats} />
               </CardContent>
             </Card>

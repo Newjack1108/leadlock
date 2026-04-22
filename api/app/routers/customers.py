@@ -224,17 +224,26 @@ def get_customer_communication_stats_payload(session: Session, customer_id: int)
         )
     ).one()
 
-    phone_live_calls = session.exec(
+    phone_answered = session.exec(
         select(func.count(Activity.id)).where(
             Activity.customer_id == customer_id,
             Activity.activity_type == ActivityType.LIVE_CALL,
+        )
+    ).one()
+    phone_unanswered = session.exec(
+        select(func.count(Activity.id)).where(
+            Activity.customer_id == customer_id,
+            Activity.activity_type == ActivityType.CALL_ATTEMPTED,
         )
     ).one()
 
     return CustomerCommunicationStats(
         email=ChannelDirectionCounts(sent=email_sent, received=email_received),
         sms=ChannelDirectionCounts(sent=sms_sent, received=sms_received),
-        phone=ChannelDirectionCounts(sent=0, received=phone_live_calls),
+        # Keep sent/received shape for chart compatibility; map phone attempted/answered into it.
+        phone=ChannelDirectionCounts(sent=phone_unanswered, received=phone_answered),
+        phone_answered=phone_answered,
+        phone_unanswered=phone_unanswered,
     )
 
 

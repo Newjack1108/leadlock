@@ -15,13 +15,14 @@ import api, {
   getUnreadSms,
   getUnreadMessenger,
   getLeadLocations,
+  getDashboardCommunicationTotals,
   downloadPipelineValueReportPdf,
   downloadSourcePerformanceReportPdf,
   downloadCloserPerformanceReportPdf,
   downloadQuoteEngagementReportPdf,
   downloadWeeklySummaryReportPdf,
 } from '@/lib/api';
-import { DashboardStats, StaleSummary, CompanySettings, UnreadSmsSummary, UnreadMessengerSummary, LeadLocationItem, DiscountTemplate } from '@/lib/types';
+import { DashboardStats, StaleSummary, CompanySettings, UnreadSmsSummary, UnreadMessengerSummary, LeadLocationItem, DiscountTemplate, DashboardCommunicationTotals } from '@/lib/types';
 import { toast } from 'sonner';
 import { TrendingUp, Users, CheckCircle2, Trophy, Bell, ArrowRight, Clock, MessageSquare, FileDown, BarChart3, Target, MessageCircle, Calendar, DoorClosed } from 'lucide-react';
 import StatusPieChart from '@/components/StatusPieChart';
@@ -40,6 +41,7 @@ export default function DashboardPage() {
   const [unreadSms, setUnreadSms] = useState<UnreadSmsSummary | null>(null);
   const [unreadMessenger, setUnreadMessenger] = useState<UnreadMessengerSummary | null>(null);
   const [leadLocations, setLeadLocations] = useState<LeadLocationItem[]>([]);
+  const [communicationTotals, setCommunicationTotals] = useState<DashboardCommunicationTotals | null>(null);
   const [activeDiscounts, setActiveDiscounts] = useState<DiscountTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [datePeriod, setDatePeriod] = useState<DatePeriod>('week');
@@ -50,7 +52,7 @@ export default function DashboardPage() {
 
   const fetchDashboard = async () => {
     try {
-      const [statsRes, stuckRes, staleRes, companyRes, unreadSmsRes, unreadMessengerRes, locationsRes, discountsRes] = await Promise.all([
+      const [statsRes, stuckRes, staleRes, companyRes, unreadSmsRes, unreadMessengerRes, locationsRes, discountsRes, communicationRes] = await Promise.all([
         api.get('/api/dashboard/stats', { params: datePeriod === 'all' ? {} : { period: datePeriod } }),
         api.get('/api/dashboard/stuck-leads'),
         getStaleSummary().catch(() => null), // Don't fail if reminders not available
@@ -59,6 +61,7 @@ export default function DashboardPage() {
         getUnreadMessenger().catch(() => ({ count: 0, messages: [] })),
         getLeadLocations(datePeriod === 'all' ? undefined : datePeriod).catch(() => []),
         getDiscountTemplates(true).catch(() => []),
+        getDashboardCommunicationTotals('week').catch(() => null),
       ]);
       setStats(statsRes.data);
       setStuckLeads(stuckRes.data);
@@ -68,6 +71,7 @@ export default function DashboardPage() {
       setUnreadMessenger(unreadMessengerRes ?? { count: 0, messages: [] });
       setLeadLocations(Array.isArray(locationsRes) ? locationsRes : []);
       setActiveDiscounts(Array.isArray(discountsRes) ? discountsRes : []);
+      setCommunicationTotals(communicationRes);
     } catch (error: any) {
       if (error.response?.status === 401) {
         router.push('/login');
@@ -214,6 +218,49 @@ export default function DashboardPage() {
             </Card>
           </Link>
         </div>
+
+        {communicationTotals && (
+          <Card className="mb-8">
+            <CardHeader>
+              <CardTitle className="text-lg">Weekly Communication Totals</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                All communication this week across email, SMS, and phone.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="rounded-lg border p-4">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Total interactions</p>
+                  <p className="text-2xl font-bold">{communicationTotals.total}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Sent {communicationTotals.total_sent} / Received {communicationTotals.total_received}
+                  </p>
+                </div>
+                <div className="rounded-lg border p-4">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Email</p>
+                  <p className="text-2xl font-bold">{communicationTotals.email.sent + communicationTotals.email.received}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Sent {communicationTotals.email.sent} / Received {communicationTotals.email.received}
+                  </p>
+                </div>
+                <div className="rounded-lg border p-4">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">SMS</p>
+                  <p className="text-2xl font-bold">{communicationTotals.sms.sent + communicationTotals.sms.received}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Sent {communicationTotals.sms.sent} / Received {communicationTotals.sms.received}
+                  </p>
+                </div>
+                <div className="rounded-lg border p-4">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Phone</p>
+                  <p className="text-2xl font-bold">{communicationTotals.phone_answered + communicationTotals.phone_unanswered}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Answered {communicationTotals.phone_answered} / Non-answered {communicationTotals.phone_unanswered}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Charts */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">

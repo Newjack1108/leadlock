@@ -156,6 +156,8 @@ export interface CustomerCommunicationStats {
   email: ChannelDirectionCounts;
   sms: ChannelDirectionCounts;
   phone: ChannelDirectionCounts;
+  phone_answered: number;
+  phone_unanswered: number;
 }
 
 export interface Lead {
@@ -260,6 +262,25 @@ export interface DashboardStats {
   engaged_percentage: number;
   qualified_percentage: number;
   leads_by_source: LeadSourceCount[];
+}
+
+export interface DashboardChannelDirectionCounts {
+  sent: number;
+  received: number;
+}
+
+export interface DashboardCommunicationTotals {
+  period: string;
+  start_date: string;
+  end_date: string;
+  email: DashboardChannelDirectionCounts;
+  sms: DashboardChannelDirectionCounts;
+  phone: DashboardChannelDirectionCounts;
+  phone_answered: number;
+  phone_unanswered: number;
+  total_sent: number;
+  total_received: number;
+  total: number;
 }
 
 export interface QualifiedForQuotingItem {

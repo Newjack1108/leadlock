@@ -2,6 +2,7 @@ import axios from 'axios';
 import {
   ActivityType,
   type CustomerCommunicationStats,
+  type DashboardCommunicationTotals,
   type DealerProfile,
   type DealerProfileUpdatePayload,
   type DealerQuoteCreatePayload,
@@ -262,6 +263,13 @@ export const getUnreadEmails = async () => {
 export const getLeadLocations = async (period?: string) => {
   const params = period && period !== 'all' ? { period } : {};
   const response = await api.get('/api/dashboard/lead-locations', { params });
+  return response.data;
+};
+
+export const getDashboardCommunicationTotals = async (
+  period: 'week' | 'month' | 'quarter' | 'year' | 'all' = 'week'
+): Promise<DashboardCommunicationTotals> => {
+  const response = await api.get('/api/dashboard/communication-totals', { params: { period } });
   return response.data;
 };
 
