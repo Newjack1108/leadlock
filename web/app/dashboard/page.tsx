@@ -109,6 +109,10 @@ export default function DashboardPage() {
     if (totalInteractions <= 0) return '0%';
     return `${Math.round((value / totalInteractions) * 100)}%`;
   };
+  const formatSplit = (value: number, total: number) => {
+    if (total <= 0) return '0%';
+    return `${Math.round((value / total) * 100)}%`;
+  };
 
   return (
     <div className="min-h-screen">
@@ -277,7 +281,7 @@ export default function DashboardPage() {
                   <p className="text-2xl font-bold text-primary">{communicationTotals.total}</p>
                   <p className="text-xs text-muted-foreground mt-1">100% of communication</p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Sent {communicationTotals.total_sent} / Received {communicationTotals.total_received}
+                    Sent {communicationTotals.total_sent} ({formatSplit(communicationTotals.total_sent, communicationTotals.total)}) / Received {communicationTotals.total_received} ({formatSplit(communicationTotals.total_received, communicationTotals.total)})
                   </p>
                 </div>
                 <div className="rounded-lg border border-blue-500/30 bg-blue-500/10 p-4">
@@ -285,7 +289,7 @@ export default function DashboardPage() {
                   <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">{emailTotal}</p>
                   <p className="text-xs text-muted-foreground mt-1">{formatShare(emailTotal)} of total</p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Sent {communicationTotals.email.sent} / Received {communicationTotals.email.received}
+                    Sent {communicationTotals.email.sent} ({formatSplit(communicationTotals.email.sent, emailTotal)}) / Received {communicationTotals.email.received} ({formatSplit(communicationTotals.email.received, emailTotal)})
                   </p>
                 </div>
                 <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4">
@@ -293,7 +297,7 @@ export default function DashboardPage() {
                   <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">{smsTotal}</p>
                   <p className="text-xs text-muted-foreground mt-1">{formatShare(smsTotal)} of total</p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Sent {communicationTotals.sms.sent} / Received {communicationTotals.sms.received}
+                    Sent {communicationTotals.sms.sent} ({formatSplit(communicationTotals.sms.sent, smsTotal)}) / Received {communicationTotals.sms.received} ({formatSplit(communicationTotals.sms.received, smsTotal)})
                   </p>
                 </div>
                 <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
@@ -301,7 +305,7 @@ export default function DashboardPage() {
                   <p className="text-2xl font-bold text-amber-700 dark:text-amber-300">{phoneTotal}</p>
                   <p className="text-xs text-muted-foreground mt-1">{formatShare(phoneTotal)} of total</p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Answered {communicationTotals.phone_answered} / Non-answered {communicationTotals.phone_unanswered}
+                    Answered {communicationTotals.phone_answered} ({formatSplit(communicationTotals.phone_answered, phoneTotal)}) / Non-answered {communicationTotals.phone_unanswered} ({formatSplit(communicationTotals.phone_unanswered, phoneTotal)})
                   </p>
                 </div>
               </div>
