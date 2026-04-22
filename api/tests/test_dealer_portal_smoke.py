@@ -16,7 +16,6 @@ from app.models import (
     Dealer,
     DealerDiscountMode,
     DealerDiscountPolicy,
-    DealerProductAccess,
     Product,
     ProductCategory,
     User,
@@ -71,7 +70,6 @@ def test_dealer_portal_profile_quote_pdf_smoke(monkeypatch):
         session.refresh(user)
         session.refresh(product)
 
-        session.add(DealerProductAccess(dealer_id=dealer.id, product_id=product.id))
         session.add(
             DealerDiscountPolicy(
                 dealer_id=dealer.id,
@@ -196,16 +194,23 @@ def test_dealer_products_and_quote_respect_trade_toggle():
             base_price=Decimal("900.00"),
             allow_trade_dealer_sale=False,
         )
+        extra_only = Product(
+            name="Optional Extra Only",
+            category=ProductCategory.STABLES,
+            base_price=Decimal("50.00"),
+            is_extra=True,
+            allow_trade_dealer_sale=True,
+        )
         session.add(user)
         session.add(allowed_product)
         session.add(blocked_product)
+        session.add(extra_only)
         session.commit()
         session.refresh(user)
         session.refresh(allowed_product)
         session.refresh(blocked_product)
+        session.refresh(extra_only)
 
-        session.add(DealerProductAccess(dealer_id=dealer.id, product_id=allowed_product.id))
-        session.add(DealerProductAccess(dealer_id=dealer.id, product_id=blocked_product.id))
         session.add(
             DealerDiscountPolicy(
                 dealer_id=dealer.id,
@@ -225,6 +230,7 @@ def test_dealer_products_and_quote_respect_trade_toggle():
         }
         allowed_id = allowed_product.id
         blocked_id = blocked_product.id
+        extra_only_id = extra_only.id
 
     dealer_user_ctx = SimpleNamespace(
         id=user_ctx_data["id"],
@@ -241,6 +247,7 @@ def test_dealer_products_and_quote_respect_trade_toggle():
     returned_ids = {item["id"] for item in products_res.json()}
     assert allowed_id in returned_ids
     assert blocked_id not in returned_ids
+    assert extra_only_id not in returned_ids
 
     blocked_quote = client.post(
         "/api/dealer-portal/quotes",

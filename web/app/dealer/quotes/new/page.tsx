@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { createDealerQuote, getDealerProducts } from '@/lib/api';
 import type { Product } from '@/lib/types';
+import { toast } from 'sonner';
 
 type ProductRow = { product_id: number; quantity: number };
 
@@ -25,7 +26,16 @@ export default function NewDealerQuotePage() {
   useEffect(() => {
     getDealerProducts()
       .then((data: Product[]) => setProducts(data))
-      .catch(() => setProducts([]));
+      .catch((err: unknown) => {
+        setProducts([]);
+        const detail =
+          err && typeof err === 'object' && 'response' in err
+            ? (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
+            : undefined;
+        toast.error(
+          typeof detail === 'string' ? detail : 'Could not load products. Check your account or try again.'
+        );
+      });
   }, []);
 
   const total = useMemo(() => {

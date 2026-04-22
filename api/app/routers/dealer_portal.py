@@ -16,7 +16,6 @@ from app.models import (
     Dealer,
     DealerAllowedDiscount,
     DealerDiscountPolicy,
-    DealerProductAccess,
     DiscountTemplate,
     Product,
     ProductOptionalExtra,
@@ -183,11 +182,10 @@ async def get_dealer_products(
     _get_dealer_or_404(session, current_user.dealer_id)
     rows = session.exec(
         select(Product)
-        .join(DealerProductAccess, DealerProductAccess.product_id == Product.id)
         .where(
-            DealerProductAccess.dealer_id == current_user.dealer_id,
             Product.is_active == True,
             Product.allow_trade_dealer_sale == True,
+            Product.is_extra == False,
         )
         .order_by(Product.name.asc())
     ).all()
@@ -226,16 +224,6 @@ async def create_dealer_quote(
 
     if not payload.product_items:
         raise HTTPException(status_code=400, detail="At least one product is required")
-
-    allowed_product_ids = set(
-        session.exec(
-            select(DealerProductAccess.product_id).where(
-                DealerProductAccess.dealer_id == current_user.dealer_id
-            )
-        ).all()
-    )
-    if not allowed_product_ids:
-        raise HTTPException(status_code=400, detail="No products are enabled for this dealer")
 
     policy = session.exec(
         select(DealerDiscountPolicy).where(DealerDiscountPolicy.dealer_id == current_user.dealer_id)
@@ -280,11 +268,14 @@ async def create_dealer_quote(
     quote_items: List[QuoteItem] = []
     subtotal = Decimal("0")
     for idx, line in enumerate(payload.product_items):
-        if line.product_id not in allowed_product_ids:
-            raise HTTPException(status_code=403, detail="Product not available for this dealer")
         product = session.get(Product, line.product_id)
         if not product or not product.is_active:
             raise HTTPException(status_code=404, detail=f"Product {line.product_id} not found")
+        if product.is_extra:
+            raise HTTPException(
+                status_code=403,
+                detail="Optional extras cannot be added as a main line; add them via selected_extra_ids",
+            )
         if not product.allow_trade_dealer_sale:
             raise HTTPException(status_code=403, detail="Product not available for trade dealer sale")
 
@@ -315,7 +306,7 @@ async def create_dealer_quote(
                 ).all()
             )
             for extra_id in line.selected_extra_ids:
-                if extra_id not in allowed_extras or extra_id not in allowed_product_ids:
+                if extra_id not in allowed_extras:
                     raise HTTPException(status_code=403, detail="Optional extra not available")
                 extra = session.get(Product, extra_id)
                 if not extra or not extra.is_active:
