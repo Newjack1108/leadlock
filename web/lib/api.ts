@@ -1,6 +1,7 @@
 import axios from 'axios';
 import {
   ActivityType,
+  type CustomerCommunicationStats,
   type DealerProfile,
   type DealerProfileUpdatePayload,
   type DealerQuoteCreatePayload,
@@ -279,6 +280,13 @@ export const getCustomerUnreadChannels = async (
   customerId: number
 ): Promise<CustomerUnreadChannels> => {
   const response = await api.get(`/api/customers/${customerId}/unread-channels`);
+  return response.data;
+};
+
+export const getCustomerCommunicationStats = async (
+  customerId: number
+): Promise<CustomerCommunicationStats> => {
+  const response = await api.get(`/api/customers/${customerId}/communication-stats`);
   return response.data;
 };
 

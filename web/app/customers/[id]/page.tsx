@@ -41,17 +41,19 @@ import {
 } from '@/components/ui/dropdown-menu';
 import api, {
   getCustomerHistory,
+  getCustomerCommunicationStats,
   createLeadFromCustomer,
   getCustomerUnreadChannels,
   deleteCustomer,
 } from '@/lib/api';
 import { formatDateTime, formatActivityTypeLabel } from '@/lib/utils';
-import { Customer, Activity, ActivityType, Lead, CustomerHistoryEvent, CustomerHistoryEventType, WebsiteVisit, Order } from '@/lib/types';
+import { Customer, Activity, ActivityType, Lead, CustomerHistoryEvent, CustomerHistoryEventType, WebsiteVisit, Order, CustomerCommunicationStats } from '@/lib/types';
 import SendQuoteEmailDialog from '@/components/SendQuoteEmailDialog';
 import ComposeEmailDialog from '@/components/ComposeEmailDialog';
 import CallNotesDialog from '@/components/CallNotesDialog';
 import AddManualActivityDialog from '@/components/AddManualActivityDialog';
 import NinoxBadge from '@/components/NinoxBadge';
+import CustomerCommunicationBarChart from '@/components/CustomerCommunicationBarChart';
 import { toast } from 'sonner';
 
 const activityIcons: Record<ActivityType, any> = {
@@ -130,6 +132,11 @@ export default function CustomerDetailPage() {
   const [quotes, setQuotes] = useState<any[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [websiteVisits, setWebsiteVisits] = useState<WebsiteVisit[]>([]);
+  const [communicationStats, setCommunicationStats] = useState<CustomerCommunicationStats>({
+    email: { sent: 0, received: 0 },
+    sms: { sent: 0, received: 0 },
+    phone: { sent: 0, received: 0 },
+  });
   const [loading, setLoading] = useState(true);
   const [quoteLocked, setQuoteLocked] = useState(false);
   const [quoteLockReason, setQuoteLockReason] = useState<any>(null);
@@ -159,6 +166,7 @@ export default function CustomerDetailPage() {
       fetchOrders();
       fetchWebsiteVisits();
       fetchUnreadChannels();
+      fetchCommunicationStats();
     }
   }, [customerId]);
 
@@ -253,6 +261,15 @@ export default function CustomerDetailPage() {
     }
   };
 
+  const fetchCommunicationStats = async () => {
+    try {
+      const data = await getCustomerCommunicationStats(customerId);
+      setCommunicationStats(data);
+    } catch {
+      // Non-blocking; profile page remains usable without analytics card
+    }
+  };
+
   const checkQuotePrerequisites = async () => {
     try {
       const response = await api.get(`/api/customers/${customerId}/quote-status`);
@@ -325,6 +342,12 @@ export default function CustomerDetailPage() {
       </div>
     );
   }
+
+  const preferredChannel = [
+    { name: 'Email', received: communicationStats.email.received },
+    { name: 'SMS', received: communicationStats.sms.received },
+    { name: 'Phone', received: communicationStats.phone.received },
+  ].sort((a, b) => b.received - a.received)[0];
 
   return (
     <div className="min-h-screen">
@@ -574,6 +597,23 @@ export default function CustomerDetailPage() {
                 </Card>
               </div>
             </div>
+
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <CardTitle>Communication Preference</CardTitle>
+                  <Badge variant="secondary">
+                    Preferred: {preferredChannel.name} ({preferredChannel.received} received)
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Sent vs received by channel. Phone received is based on logged live calls.
+                </p>
+                <CustomerCommunicationBarChart stats={communicationStats} />
+              </CardContent>
+            </Card>
 
             {/* Quote Lock Card */}
             <QuoteLockCard 

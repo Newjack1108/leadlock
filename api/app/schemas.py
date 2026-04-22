@@ -790,6 +790,17 @@ class CustomerUnreadChannels(BaseModel):
     email_unread: int
 
 
+class ChannelDirectionCounts(BaseModel):
+    sent: int
+    received: int
+
+
+class CustomerCommunicationStats(BaseModel):
+    email: ChannelDirectionCounts
+    sms: ChannelDirectionCounts
+    phone: ChannelDirectionCounts
+
+
 PRODUCT_UNIT_VALUES = ("Per Box", "Unit", "Set")
 
 

@@ -31,6 +31,8 @@ from app.models import LeadType, LeadSource
 from app.constants import QUOTE_LIST_EXCLUDED_STATUSES
 from app.auth import get_current_user
 from app.schemas import (
+    ChannelDirectionCounts,
+    CustomerCommunicationStats,
     CustomerResponse,
     CustomerUpdate,
     ActivityCreate,
@@ -192,6 +194,62 @@ async def get_customer_unread_channels(
         messenger_unread=messenger_count,
         email_unread=email_count,
     )
+
+
+def get_customer_communication_stats_payload(session: Session, customer_id: int) -> CustomerCommunicationStats:
+    """Aggregate per-channel communication totals split by sent vs received."""
+    email_sent = session.exec(
+        select(func.count(Email.id)).where(
+            Email.customer_id == customer_id,
+            Email.direction == EmailDirection.SENT,
+        )
+    ).one()
+    email_received = session.exec(
+        select(func.count(Email.id)).where(
+            Email.customer_id == customer_id,
+            Email.direction == EmailDirection.RECEIVED,
+        )
+    ).one()
+
+    sms_sent = session.exec(
+        select(func.count(SmsMessage.id)).where(
+            SmsMessage.customer_id == customer_id,
+            SmsMessage.direction == SmsDirection.SENT,
+        )
+    ).one()
+    sms_received = session.exec(
+        select(func.count(SmsMessage.id)).where(
+            SmsMessage.customer_id == customer_id,
+            SmsMessage.direction == SmsDirection.RECEIVED,
+        )
+    ).one()
+
+    phone_live_calls = session.exec(
+        select(func.count(Activity.id)).where(
+            Activity.customer_id == customer_id,
+            Activity.activity_type == ActivityType.LIVE_CALL,
+        )
+    ).one()
+
+    return CustomerCommunicationStats(
+        email=ChannelDirectionCounts(sent=email_sent, received=email_received),
+        sms=ChannelDirectionCounts(sent=sms_sent, received=sms_received),
+        phone=ChannelDirectionCounts(sent=0, received=phone_live_calls),
+    )
+
+
+@router.get("/{customer_id}/communication-stats", response_model=CustomerCommunicationStats)
+async def get_customer_communication_stats(
+    customer_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Per-channel communication totals for this customer, split by direction."""
+    customer = session.get(Customer, customer_id)
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+
+    return get_customer_communication_stats_payload(session, customer_id)
 
 
 @router.get("/{customer_id}/website-visits", response_model=WebsiteVisitsListResponse)

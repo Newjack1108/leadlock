@@ -147,6 +147,17 @@ export interface Customer {
   source_system?: string | null;
 }
 
+export interface ChannelDirectionCounts {
+  sent: number;
+  received: number;
+}
+
+export interface CustomerCommunicationStats {
+  email: ChannelDirectionCounts;
+  sms: ChannelDirectionCounts;
+  phone: ChannelDirectionCounts;
+}
+
 export interface Lead {
   id: number;
   name: string;
