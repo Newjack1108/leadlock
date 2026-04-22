@@ -833,6 +833,7 @@ class ProductCreate(BaseModel):
     category: ProductCategory
     subcategory: Optional[str] = None
     is_extra: bool = False
+    allow_trade_dealer_sale: bool = False
     base_price: Decimal
     unit: str = "Unit"
     sku: Optional[str] = None
@@ -861,6 +862,7 @@ class ProductUpdate(BaseModel):
     category: Optional[ProductCategory] = None
     subcategory: Optional[str] = None
     is_extra: Optional[bool] = None
+    allow_trade_dealer_sale: Optional[bool] = None
     base_price: Optional[Decimal] = None
     unit: Optional[str] = None
     sku: Optional[str] = None
@@ -893,6 +895,7 @@ class ProductResponse(BaseModel):
     category: ProductCategory
     subcategory: Optional[str]
     is_extra: bool
+    allow_trade_dealer_sale: bool
     base_price: Decimal
     unit: str
     sku: Optional[str]

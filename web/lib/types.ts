@@ -372,6 +372,7 @@ export interface Product {
   category: ProductCategory;
   subcategory?: string;
   is_extra: boolean;
+  allow_trade_dealer_sale: boolean;
   base_price: number;
   unit: string;
   sku?: string;

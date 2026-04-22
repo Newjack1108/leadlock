@@ -374,6 +374,7 @@ class Product(SQLModel, table=True):
     unit: str = Field(default="unit")  # e.g., "unit", "sqft", "per item"
     sku: Optional[str] = None  # Stock keeping unit (optional)
     is_active: bool = Field(default=True)  # For soft deletion
+    allow_trade_dealer_sale: bool = Field(default=False)  # True if visible/sellable in dealer portal
     image_url: Optional[str] = None  # Product image URL
     specifications: Optional[str] = None  # Technical specs (JSON or text)
     size: Optional[str] = None  # Display dimensions, e.g. "3m x 4m", "12ft x 16ft"

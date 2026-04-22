@@ -34,6 +34,7 @@ export default function CreateProductPage() {
     category: ProductCategory.STABLES,
     subcategory: '',
     is_extra: false,
+    allow_trade_dealer_sale: false,
     base_price: '',
     unit: 'Unit',
     sku: '',
@@ -186,6 +187,24 @@ export default function CreateProductPage() {
                     rows={3}
                     disabled={loading}
                   />
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    id="allow_trade_dealer_sale"
+                    type="checkbox"
+                    checked={formData.allow_trade_dealer_sale}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        allow_trade_dealer_sale: e.target.checked,
+                      })
+                    }
+                    className="h-4 w-4"
+                    disabled={loading}
+                  />
+                  <Label htmlFor="allow_trade_dealer_sale">
+                    Allow trade dealers to sell this product
+                  </Label>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">

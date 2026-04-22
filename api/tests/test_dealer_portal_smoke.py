@@ -63,6 +63,7 @@ def test_dealer_portal_profile_quote_pdf_smoke(monkeypatch):
             name="Stable A",
             category=ProductCategory.STABLES,
             base_price=Decimal("1000.00"),
+            allow_trade_dealer_sale=True,
         )
         session.add(user)
         session.add(product)
@@ -159,3 +160,95 @@ def test_dealer_portal_profile_quote_pdf_smoke(monkeypatch):
     assert captured["trader_logo_url"] == "/static/products/dealer-smoke.png"
     assert captured["dealer_profile"]["company_name"] == "Smoke Trading"
     assert "profile:" in captured["cache_key"]
+
+
+def test_dealer_products_and_quote_respect_trade_toggle():
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SQLModel.metadata.create_all(engine)
+
+    with Session(engine) as session:
+        dealer = Dealer(name="Toggle Dealer")
+        session.add(dealer)
+        session.commit()
+        session.refresh(dealer)
+
+        user = User(
+            email="dealer-toggle@example.com",
+            hashed_password="dummy",
+            full_name="Dealer Toggle",
+            role=UserRole.DEALER_USER,
+            dealer_id=dealer.id,
+            dealer_commission_pct=10,
+        )
+        allowed_product = Product(
+            name="Trade Enabled Product",
+            category=ProductCategory.STABLES,
+            base_price=Decimal("1500.00"),
+            allow_trade_dealer_sale=True,
+        )
+        blocked_product = Product(
+            name="Trade Disabled Product",
+            category=ProductCategory.STABLES,
+            base_price=Decimal("900.00"),
+            allow_trade_dealer_sale=False,
+        )
+        session.add(user)
+        session.add(allowed_product)
+        session.add(blocked_product)
+        session.commit()
+        session.refresh(user)
+        session.refresh(allowed_product)
+        session.refresh(blocked_product)
+
+        session.add(DealerProductAccess(dealer_id=dealer.id, product_id=allowed_product.id))
+        session.add(DealerProductAccess(dealer_id=dealer.id, product_id=blocked_product.id))
+        session.add(
+            DealerDiscountPolicy(
+                dealer_id=dealer.id,
+                mode=DealerDiscountMode.TEMPLATE,
+                allow_fixed_amount=False,
+                allow_percentage=False,
+            )
+        )
+        session.commit()
+
+        user_ctx_data = {
+            "id": user.id,
+            "dealer_id": user.dealer_id,
+            "dealer_commission_pct": user.dealer_commission_pct,
+            "role": user.role,
+            "full_name": user.full_name,
+        }
+        allowed_id = allowed_product.id
+        blocked_id = blocked_product.id
+
+    dealer_user_ctx = SimpleNamespace(
+        id=user_ctx_data["id"],
+        dealer_id=user_ctx_data["dealer_id"],
+        dealer_commission_pct=user_ctx_data["dealer_commission_pct"],
+        role=user_ctx_data["role"],
+        full_name=user_ctx_data["full_name"],
+    )
+    app = _make_app(engine, dealer_user_ctx)
+    client = TestClient(app)
+
+    products_res = client.get("/api/dealer-portal/products")
+    assert products_res.status_code == 200
+    returned_ids = {item["id"] for item in products_res.json()}
+    assert allowed_id in returned_ids
+    assert blocked_id not in returned_ids
+
+    blocked_quote = client.post(
+        "/api/dealer-portal/quotes",
+        json={
+            "customer_name": "Blocked Customer",
+            "product_items": [{"product_id": blocked_id, "quantity": 1}],
+            "discount_template_ids": [],
+        },
+    )
+    assert blocked_quote.status_code == 403
+    assert blocked_quote.json()["detail"] == "Product not available for trade dealer sale"

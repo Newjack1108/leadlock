@@ -187,6 +187,7 @@ async def get_dealer_products(
         .where(
             DealerProductAccess.dealer_id == current_user.dealer_id,
             Product.is_active == True,
+            Product.allow_trade_dealer_sale == True,
         )
         .order_by(Product.name.asc())
     ).all()
@@ -284,6 +285,8 @@ async def create_dealer_quote(
         product = session.get(Product, line.product_id)
         if not product or not product.is_active:
             raise HTTPException(status_code=404, detail=f"Product {line.product_id} not found")
+        if not product.allow_trade_dealer_sale:
+            raise HTTPException(status_code=403, detail="Product not available for trade dealer sale")
 
         quantity = Decimal(str(line.quantity))
         line_total = Decimal(str(product.base_price)) * quantity
@@ -317,6 +320,8 @@ async def create_dealer_quote(
                 extra = session.get(Product, extra_id)
                 if not extra or not extra.is_active:
                     raise HTTPException(status_code=404, detail=f"Extra {extra_id} not found")
+                if not extra.allow_trade_dealer_sale:
+                    raise HTTPException(status_code=403, detail="Optional extra not available for trade dealer sale")
                 extra_total = Decimal(str(extra.base_price)) * quantity
                 extra_item = QuoteItem(
                     quote_id=quote.id,

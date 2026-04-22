@@ -992,6 +992,7 @@ export const createProduct = async (productData: {
   category: string;
   subcategory?: string;
   is_extra?: boolean;
+  allow_trade_dealer_sale?: boolean;
   base_price: number;
   unit?: string;
   sku?: string;
@@ -1016,6 +1017,7 @@ export const updateProduct = async (productId: number, productData: {
   category?: string;
   subcategory?: string;
   is_extra?: boolean;
+  allow_trade_dealer_sale?: boolean;
   base_price?: number;
   unit?: string;
   sku?: string;
