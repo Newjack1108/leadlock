@@ -134,6 +134,14 @@ export default function Header() {
 
   /* eslint-disable react-hooks/set-state-in-effect -- async API helpers update badge state after await; not synchronous setState */
   useEffect(() => {
+    if (userRole === 'DEALER_ADMIN' || userRole === 'DEALER_USER') {
+      setReminderCount(0);
+      setNewLeadsCount(0);
+      setUnreadMessagesCount(0);
+      setPendingDiscountCount(0);
+      setNewQualifiedDashboardCount(0);
+      return;
+    }
     fetchReminderCount();
     fetchNewLeadsCount();
     fetchUnreadMessagesCount();
@@ -177,7 +185,11 @@ export default function Header() {
   return (
     <header className="border-b border-border bg-card shadow-sm">
       <div className="container mx-auto flex items-center justify-between px-4 py-0 sm:px-6">
-        <Logo disableLink={isCloser} size="header" />
+        <Logo
+          disableLink={isCloser}
+          linkHref={isDealer ? '/dealer' : '/dashboard'}
+          size="header"
+        />
         {/* Desktop nav */}
         <nav className="hidden lg:flex items-center gap-4">
           {isDealer ? (

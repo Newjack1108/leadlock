@@ -23,7 +23,6 @@ from app.models import (
     Lead,
     LeadType,
     ProductCategory,
-    User,
 )
 from app.constants import (
     VAT_RATE_DECIMAL,
@@ -796,10 +795,6 @@ def generate_quote_pdf(
     if quote.total_amount > 0:
         deposit_row_index = len(table_data)
         deposit_label = "Deposit (on order, inc VAT):"
-        if quote.dealer_id and session:
-            creator = session.get(User, quote.created_by_id)
-            pct = (creator.dealer_commission_pct if creator else None) or 10
-            deposit_label = f"Trade deposit ({pct}% commission, inc VAT):"
         table_data.append([deposit_label, "", "", format_currency(quote.deposit_amount, quote.currency)])
         balance_row_index = len(table_data)
         table_data.append(["Balance (inc VAT):", "", "", format_currency(quote.balance_amount, quote.currency)])

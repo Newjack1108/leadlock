@@ -20,7 +20,7 @@ from app.models import (
     EmailDirection,
 )
 from app.distance_service import bulk_geocode_postcodes
-from app.auth import get_current_user
+from app.auth import require_non_dealer_user
 from app.schemas import (
     DashboardStats,
     DashboardChannelDirectionCounts,
@@ -69,7 +69,7 @@ def get_date_range_for_period(period: str) -> tuple[datetime, datetime]:
 @router.get("/stats", response_model=DashboardStats)
 async def get_dashboard_stats(
     session: Session = Depends(get_session),
-    current_user = Depends(get_current_user),
+    current_user = Depends(require_non_dealer_user),
     period: Optional[str] = Query(None, description="Filter by period: week, month, quarter, year. Omit for all-time."),
 ):
     date_filter = None
@@ -173,7 +173,7 @@ async def get_dashboard_stats(
 @router.get("/communication-totals", response_model=DashboardCommunicationTotals)
 async def get_dashboard_communication_totals(
     session: Session = Depends(get_session),
-    current_user=Depends(get_current_user),
+    current_user=Depends(require_non_dealer_user),
     period: str = Query("week", description="Period: week, month, quarter, year, all"),
 ):
     normalized_period = (period or "week").lower()
@@ -302,7 +302,7 @@ async def get_dashboard_communication_totals(
 @router.get("/lead-locations", response_model=list[LeadLocationItem])
 async def get_lead_locations(
     session: Session = Depends(get_session),
-    current_user = Depends(get_current_user),
+    current_user = Depends(require_non_dealer_user),
     period: Optional[str] = Query(None, description="Filter by period: week, month, quarter, year. Omit for all-time."),
 ):
     """Get geocoded lead locations for dashboard map. Includes all leads that came in during the period (any status). Uses lead postcode, or customer postcode when lead has none."""
@@ -368,7 +368,7 @@ async def get_lead_locations(
 @router.get("/stuck-leads")
 async def get_stuck_leads(
     session: Session = Depends(get_session),
-    current_user = Depends(get_current_user)
+    current_user = Depends(require_non_dealer_user)
 ):
     """Get oldest lead per status that hasn't been updated recently."""
     stuck_leads = []
@@ -395,7 +395,7 @@ async def get_stuck_leads(
 @router.get("/unread-sms", response_model=UnreadSmsSummary)
 async def get_unread_sms(
     session: Session = Depends(get_session),
-    current_user=Depends(get_current_user),
+    current_user=Depends(require_non_dealer_user),
 ):
     """Get count and list of unread received SMS for the dashboard."""
     # Unread = RECEIVED messages with read_at IS NULL
@@ -434,7 +434,7 @@ async def get_unread_sms(
 @router.get("/unread-messenger", response_model=UnreadMessengerSummary)
 async def get_unread_messenger(
     session: Session = Depends(get_session),
-    current_user=Depends(get_current_user),
+    current_user=Depends(require_non_dealer_user),
 ):
     """Get count and list of unread received Messenger messages for the dashboard."""
     statement = (
@@ -470,7 +470,7 @@ async def get_unread_messenger(
 @router.get("/unread-email", response_model=UnreadEmailSummary)
 async def get_unread_email(
     session: Session = Depends(get_session),
-    current_user=Depends(get_current_user),
+    current_user=Depends(require_non_dealer_user),
 ):
     """Count of unread received inbound emails (read_at IS NULL)."""
     count_statement = select(func.count(Email.id)).where(
@@ -484,7 +484,7 @@ async def get_unread_email(
 @router.get("/qualified-for-quoting", response_model=QualifiedForQuotingSummary)
 async def get_qualified_for_quoting(
     session: Session = Depends(get_session),
-    current_user=Depends(get_current_user),
+    current_user=Depends(require_non_dealer_user),
     assigned_to: Optional[str] = Query(None, description="Filter: 'me' for leads assigned to current user. Omit for all QUALIFIED leads."),
 ):
     """QUALIFIED leads with no customer Activity since last time they became QUALIFIED (new qualified queue)."""
@@ -542,7 +542,7 @@ async def get_qualified_for_quoting(
 @router.get("/unread-by-customer", response_model=list[UnreadByCustomerItem])
 async def get_unread_by_customer(
     session: Session = Depends(get_session),
-    current_user=Depends(get_current_user),
+    current_user=Depends(require_non_dealer_user),
 ):
     """Get unread message count per customer (SMS + Messenger + email). Only includes customers with at least one unread."""
     # Unread SMS counts per customer_id

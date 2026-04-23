@@ -37,9 +37,12 @@ const sizeConfig: Record<
 export default function Logo({
   disableLink = false,
   size = 'default',
+  linkHref = '/dashboard',
 }: {
   disableLink?: boolean;
   size?: LogoSize;
+  /** Home link when the logo is clickable (e.g. `/dealer` for trade dealers). */
+  linkHref?: string;
 }) {
   const [imgSrc, setImgSrc] = useState<string | null>(null);
   const [imgError, setImgError] = useState(false);
@@ -112,7 +115,7 @@ export default function Logo({
   }
 
   return (
-    <Link href="/dashboard" className={`${outerClass} cursor-pointer hover:opacity-80 transition-opacity`}>
+    <Link href={linkHref} className={`${outerClass} cursor-pointer hover:opacity-80 transition-opacity`}>
       {content}
     </Link>
   );

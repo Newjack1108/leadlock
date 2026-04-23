@@ -93,6 +93,16 @@ async def require_dealer_user(current_user: User = Depends(get_current_user)) ->
     return current_user
 
 
+async def require_non_dealer_user(current_user: User = Depends(get_current_user)) -> User:
+    """Dealers use the dealer portal only; block staff dashboard and related APIs."""
+    if current_user.role in (UserRole.DEALER_ADMIN, UserRole.DEALER_USER):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Dashboard is not available for dealer accounts",
+        )
+    return current_user
+
+
 def get_webhook_api_key(api_key: str = Header(None, alias="X-API-Key")) -> str:
     """Validate webhook API key from header."""
     expected_key = os.getenv("WEBHOOK_API_KEY")

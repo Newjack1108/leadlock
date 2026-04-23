@@ -53,6 +53,13 @@ export default function DashboardPage() {
 
   const fetchDashboard = async () => {
     try {
+      const me = await api.get('/api/auth/me');
+      const role = me.data?.role as string | undefined;
+      if (role === 'DEALER_ADMIN' || role === 'DEALER_USER') {
+        router.replace('/dealer');
+        return;
+      }
+
       const [statsRes, stuckRes, staleRes, companyRes, unreadSmsRes, unreadMessengerRes, locationsRes, discountsRes, communicationRes] = await Promise.all([
         api.get('/api/dashboard/stats', { params: datePeriod === 'all' ? {} : { period: datePeriod } }),
         api.get('/api/dashboard/stuck-leads'),
