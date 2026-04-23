@@ -32,6 +32,7 @@ import { toast } from 'sonner';
 
 const PRODUCT_UNIT_OPTIONS = ['Per Box', 'Unit', 'Set'] as const;
 const SUBCATEGORY_NONE = '__NONE__';
+const FILTER_SUBCATEGORIES = PRODUCT_SUBCATEGORIES.filter((sub) => sub !== 'Other');
 
 export default function ProductsPage() {
   const router = useRouter();
@@ -260,7 +261,7 @@ export default function ProductsPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">All Subcategories</SelectItem>
-                {PRODUCT_SUBCATEGORIES.map((sub) => (
+                {FILTER_SUBCATEGORIES.map((sub) => (
                   <SelectItem key={sub} value={sub}>
                     {sub}
                   </SelectItem>
