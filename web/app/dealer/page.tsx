@@ -24,6 +24,9 @@ export default function DealerWelcomePage() {
           <p className="text-sm text-muted-foreground">
             Build simple quotes from your approved products and download PDF documents.
           </p>
+          <p className="text-sm text-muted-foreground">
+            Add your logo and company details in Dealer profile — they appear on quote PDFs.
+          </p>
           {welcome && (
             <div className="grid gap-2 text-sm">
               <p><strong>Dealer:</strong> {welcome.dealer_name}</p>
@@ -31,12 +34,15 @@ export default function DealerWelcomePage() {
               <p><strong>Commission:</strong> {welcome.commission_pct}%</p>
             </div>
           )}
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-3">
             <Link href="/dealer/quotes">
               <Button>View quotes</Button>
             </Link>
             <Link href="/dealer/quotes/new">
               <Button variant="outline">Create quote</Button>
+            </Link>
+            <Link href="/dealer/profile">
+              <Button variant="outline">Dealer profile</Button>
             </Link>
           </div>
         </CardContent>

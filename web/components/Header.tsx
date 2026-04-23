@@ -196,6 +196,20 @@ export default function Header() {
                 Dealer Portal
               </Button>
             </Link>
+            <Link href="/dealer/profile">
+              <Button
+                variant={pathname?.startsWith('/dealer/profile') ? 'default' : 'ghost'}
+                size="sm"
+                className={
+                  pathname?.startsWith('/dealer/profile')
+                    ? 'text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                }
+              >
+                <User className="h-4 w-4 mr-2" />
+                Profile
+              </Button>
+            </Link>
             </>
           ) : isCloser ? (
             <>
@@ -496,6 +510,20 @@ export default function Header() {
                       <span className="flex items-center gap-2">
                         <LayoutDashboard className="h-4 w-4 shrink-0" />
                         Dealer Portal
+                      </span>
+                    </Link>
+                    <Link
+                      href="/dealer/profile"
+                      onClick={closeMobile}
+                      className={cn(
+                        mobileNavLinkClass,
+                        pathname?.startsWith('/dealer/profile') &&
+                          'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground'
+                      )}
+                    >
+                      <span className="flex items-center gap-2">
+                        <User className="h-4 w-4 shrink-0" />
+                        Profile
                       </span>
                     </Link>
                   </>

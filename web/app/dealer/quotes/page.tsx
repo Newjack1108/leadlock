@@ -18,8 +18,13 @@ export default function DealerQuotesPage() {
 
   return (
     <main className="container mx-auto px-4 py-6 sm:px-6">
-      <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Dealer Quotes</h1>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <h1 className="text-xl font-semibold">Dealer Quotes</h1>
+          <Link href="/dealer/profile" className="text-sm text-muted-foreground underline hover:text-foreground">
+            Profile
+          </Link>
+        </div>
         <Link href="/dealer/quotes/new">
           <Button>Create quote</Button>
         </Link>

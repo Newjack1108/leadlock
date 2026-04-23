@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -8,15 +9,43 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { getDealerProfile, updateDealerProfile, uploadDealerLogo } from '@/lib/api';
 import type { DealerProfile } from '@/lib/types';
+import type { AxiosError } from 'axios';
+
+function apiErrorMessage(err: unknown, fallback: string): string {
+  const ax = err as AxiosError<{ detail?: unknown }>;
+  const d = ax.response?.data?.detail;
+  if (typeof d === 'string') return d;
+  if (Array.isArray(d) && d.length && typeof d[0] === 'object' && d[0] && 'msg' in d[0]) {
+    return String((d[0] as { msg: string }).msg);
+  }
+  return fallback;
+}
 
 export default function DealerProfilePage() {
   const [profile, setProfile] = useState<DealerProfile | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [initialLoad, setInitialLoad] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
 
-  useEffect(() => {
-    getDealerProfile().then(setProfile).catch(() => setProfile(null));
+  const fetchProfile = useCallback(() => {
+    setInitialLoad(true);
+    setLoadError(null);
+    return getDealerProfile()
+      .then((p) => {
+        setProfile(p);
+        setLoadError(null);
+      })
+      .catch((err) => {
+        setProfile(null);
+        setLoadError(apiErrorMessage(err, 'Failed to load profile'));
+      })
+      .finally(() => setInitialLoad(false));
   }, []);
+
+  useEffect(() => {
+    void fetchProfile();
+  }, [fetchProfile]);
 
   const update = (key: keyof DealerProfile, value: string) => {
     setProfile((prev) => (prev ? { ...prev, [key]: value } : prev));
@@ -39,6 +68,9 @@ export default function DealerProfilePage() {
         website: profile.website || undefined,
       });
       setProfile(next);
+      toast.success('Profile saved');
+    } catch (err) {
+      toast.error(apiErrorMessage(err, 'Failed to save profile'));
     } finally {
       setSaving(false);
     }
@@ -50,13 +82,35 @@ export default function DealerProfilePage() {
     try {
       const next = await uploadDealerLogo(file);
       setProfile(next);
+      toast.success('Logo uploaded');
+    } catch (err) {
+      toast.error(apiErrorMessage(err, 'Failed to upload logo'));
     } finally {
       setUploading(false);
     }
   };
 
+  if (initialLoad) {
+    return (
+      <main className="container mx-auto px-4 py-6 sm:px-6 text-sm text-muted-foreground">
+        Loading profile...
+      </main>
+    );
+  }
+
+  if (loadError && !profile) {
+    return (
+      <main className="container mx-auto px-4 py-6 sm:px-6 space-y-4">
+        <p className="text-sm text-destructive">{loadError}</p>
+        <Button type="button" variant="outline" onClick={() => void fetchProfile()}>
+          Retry
+        </Button>
+      </main>
+    );
+  }
+
   if (!profile) {
-    return <main className="container mx-auto px-4 py-6 sm:px-6 text-sm text-muted-foreground">Loading profile...</main>;
+    return null;
   }
 
   return (
@@ -81,7 +135,19 @@ export default function DealerProfilePage() {
             <div className="space-y-2 border-t pt-4">
               <Label htmlFor="dealer-logo">Trader logo</Label>
               <Input id="dealer-logo" type="file" accept="image/*" onChange={(e) => onLogoChange(e.target.files?.[0] || null)} />
-              {profile.logo_url && <a className="text-sm text-blue-600 underline" href={profile.logo_url} target="_blank" rel="noreferrer">View current logo</a>}
+              {profile.logo_url && (
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={profile.logo_url}
+                    alt="Current dealer logo"
+                    className="max-h-24 max-w-[200px] object-contain rounded border bg-muted p-1"
+                  />
+                  <a className="text-sm text-blue-600 underline shrink-0" href={profile.logo_url} target="_blank" rel="noreferrer">
+                    Open full size
+                  </a>
+                </div>
+              )}
               {uploading && <p className="text-sm text-muted-foreground">Uploading logo...</p>}
             </div>
             <div className="flex justify-end">

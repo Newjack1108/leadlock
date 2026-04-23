@@ -440,9 +440,6 @@ async def create_dealer_quote(
 
     quote.subtotal = subtotal
     quote.total_amount = subtotal
-    total_inc_vat = subtotal * (Decimal("1") + VAT_RATE_DECIMAL)
-    quote.deposit_amount = total_inc_vat * Decimal("0.5")
-    quote.balance_amount = total_inc_vat - quote.deposit_amount
 
     for template_id in payload.discount_template_ids:
         template = session.exec(
@@ -462,6 +459,8 @@ async def create_dealer_quote(
     )
     quote.total_amount = max(Decimal("0"), quote.subtotal - quote.discount_total)
     total_inc_vat = quote.total_amount * (Decimal("1") + VAT_RATE_DECIMAL)
+    commission_pct = Decimal(str(current_user.dealer_commission_pct or 10))
+    quote.deposit_amount = (total_inc_vat * commission_pct / Decimal(100)).quantize(Decimal("0.01"))
     if quote.deposit_amount > total_inc_vat:
         quote.deposit_amount = total_inc_vat
     quote.balance_amount = total_inc_vat - quote.deposit_amount
