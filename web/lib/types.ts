@@ -42,6 +42,9 @@ export enum ProductCategory {
 export const PRODUCT_SUBCATEGORIES = [
   "Standard",
   "Extras",
+  "Pent",
+  "Pony",
+  "Professional",
   "Bespoke",
   "Other",
 ] as const;
