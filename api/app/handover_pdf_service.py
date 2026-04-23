@@ -3,6 +3,8 @@ Service for generating lead handover PDF documents.
 """
 from __future__ import annotations
 
+import html
+import re
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from io import BytesIO
@@ -52,6 +54,56 @@ def _count_result_to_int(value: object) -> int:
     if isinstance(value, (tuple, list)):
         return int(value[0] or 0)
     return int(value or 0)
+
+
+def _to_activity_type_value(raw: object) -> str:
+    text = getattr(raw, "value", raw)
+    return str(text or "").strip().upper()
+
+
+def _extract_email_message_body(notes: str) -> str:
+    """
+    PDF-only cleanup for activity email notes.
+    Removes metadata prefix lines (e.g. quote/email summary + subject),
+    keeping the message body content for handover readability.
+    """
+    raw_lines = [line.strip() for line in notes.splitlines()]
+    lines = [line for line in raw_lines if line]
+    if not lines:
+        return ""
+
+    body_start = 0
+    if re.match(r"^(quote\s+.+\s+sent\s+to\s+|email\s+(sent|received)\b)", lines[0], re.IGNORECASE):
+        body_start = 1
+    if len(lines) > body_start and re.match(r"^subject\s*:", lines[body_start], re.IGNORECASE):
+        body_start += 1
+
+    body_lines = lines[body_start:]
+    if not body_lines:
+        return lines[-1]
+    return "\n".join(body_lines).strip()
+
+
+def _format_activity_note_for_pdf(activity_type: object, notes: Optional[str], max_chars: int = 1600) -> str:
+    text = (notes or "").strip()
+    if not text:
+        return "-"
+
+    activity_type_value = _to_activity_type_value(activity_type)
+    if activity_type_value in {"EMAIL_SENT", "EMAIL_RECEIVED"}:
+        text = _extract_email_message_body(text) or text
+
+    text = re.sub(r"\r\n?", "\n", text)
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\n{3,}", "\n\n", text).strip()
+    if len(text) > max_chars:
+        text = text[:max_chars].rstrip() + "..."
+    return text or "-"
+
+
+def _note_paragraph(text: str, style: ParagraphStyle) -> Paragraph:
+    escaped = html.escape(text).replace("\n", "<br/>")
+    return Paragraph(escaped, style)
 
 
 def _fmt_date(value: Optional[date]) -> str:
@@ -255,6 +307,12 @@ def generate_lead_handover_pdf(
         textColor=colors.HexColor("#222222"),
         leading=12,
     )
+    timeline_note_style = ParagraphStyle(
+        "HandoverTimelineNote",
+        parent=normal_style,
+        fontSize=8,
+        leading=10,
+    )
 
     buffer = BytesIO()
     doc = SimpleDocTemplate(
@@ -301,29 +359,6 @@ def generate_lead_handover_pdf(
         )
     )
     elements.append(info_table)
-
-    if customer:
-        elements.append(Spacer(1, 8))
-        customer_info = [
-            ["Customer number", customer.customer_number or "-"],
-            ["Customer name", customer.name or "-"],
-            ["Customer email", customer.email or "-"],
-            ["Customer phone", customer.phone or "-"],
-            ["Customer since", _fmt_datetime(customer.customer_since)],
-        ]
-        customer_table = Table(customer_info, colWidths=[110, 390])
-        customer_table.setStyle(
-            TableStyle(
-                [
-                    ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#eef2ff")),
-                    ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
-                    ("FONTSIZE", (0, 0), (-1, -1), 9),
-                    ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#d0d7de")),
-                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ]
-            )
-        )
-        elements.append(customer_table)
 
     elements.append(Spacer(1, 10))
     elements.append(Paragraph("Recent Communication Summary", heading_style))
@@ -375,11 +410,12 @@ def generate_lead_handover_pdf(
     if activities:
         timeline_rows = [["When", "Type", "Notes"]]
         for activity in activities[:30]:
+            cleaned_note = _format_activity_note_for_pdf(activity.activity_type, activity.notes)
             timeline_rows.append(
                 [
                     _fmt_datetime(activity.created_at),
                     _activity_label(activity.activity_type),
-                    (activity.notes or "-")[:180],
+                    _note_paragraph(cleaned_note, timeline_note_style),
                 ]
             )
         timeline_table = Table(timeline_rows, colWidths=[95, 125, 280])
