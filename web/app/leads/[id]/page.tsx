@@ -40,7 +40,7 @@ import {
   DoorClosed,
   Trash2,
 } from 'lucide-react';
-import api, { getLeadQuotes, listFacebookAdverts } from '@/lib/api';
+import api, { downloadLeadHandoverPdf, getLeadQuotes, listFacebookAdverts } from '@/lib/api';
 import { formatDateTime, formatActivityTypeLabel } from '@/lib/utils';
 import { Lead, Activity, ActivityType, LeadStatus, Timeframe, LeadType, LeadSource, FacebookAdvertProfile } from '@/lib/types';
 import { toast } from 'sonner';
@@ -98,6 +98,7 @@ export default function LeadDetailPage() {
   const [advertPreviewOpen, setAdvertPreviewOpen] = useState(false);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [removeSpamLoading, setRemoveSpamLoading] = useState(false);
+  const [handoverLoading, setHandoverLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -318,6 +319,19 @@ export default function LeadDetailPage() {
     }
   };
 
+  const handleDownloadHandover = async () => {
+    setHandoverLoading(true);
+    try {
+      await downloadLeadHandoverPdf(leadId, { days: 14 });
+      toast.success('Handover PDF downloaded');
+    } catch (error: any) {
+      const detail = error?.response?.data?.detail;
+      toast.error(typeof detail === 'string' ? detail : 'Failed to generate handover PDF');
+    } finally {
+      setHandoverLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen">
@@ -420,6 +434,17 @@ export default function LeadDetailPage() {
                         {removeSpamLoading ? 'Removing...' : 'Remove spam'}
                       </Button>
                     )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleDownloadHandover}
+                      disabled={handoverLoading}
+                      className="gap-1"
+                      title="Download 14-day handover summary PDF"
+                    >
+                      <FileText className="h-4 w-4" />
+                      {handoverLoading ? 'Generating...' : 'Handover PDF'}
+                    </Button>
                     <Badge className="bg-primary/20 text-primary">
                       {lead.status.replace('_', ' ')}
                     </Badge>

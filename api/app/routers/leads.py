@@ -39,6 +39,7 @@ from app.workflow import can_transition, check_sla_overdue, check_quote_prerequi
 from app.quote_delete import delete_quote_cascade
 from app.lead_delete import delete_lead_cascade
 from app.constants import QUOTE_LIST_EXCLUDED_STATUSES, LIST_PAGE_SIZE_DEFAULT, LIST_PAGE_SIZE_MAX
+from app.handover_pdf_service import generate_lead_handover_pdf
 from datetime import datetime
 
 router = APIRouter(prefix="/api/leads", tags=["leads"])
@@ -923,3 +924,36 @@ async def get_lead_quotes(
         result.append(build_quote_response(quote, list(quote_items), session))
 
     return result
+
+
+@router.get("/{lead_id}/handover-pdf")
+async def get_lead_handover_pdf(
+    lead_id: int,
+    days: int = Query(14, ge=1, le=90),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Generate a handover PDF with recent lead activity and quote context."""
+    lead = session.exec(select(Lead).where(Lead.id == lead_id)).first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    customer = None
+    if lead.customer_id:
+        customer = session.exec(select(Customer).where(Customer.id == lead.customer_id)).first()
+
+    pdf_buffer = generate_lead_handover_pdf(
+        session=session,
+        lead=lead,
+        customer=customer,
+        days=days,
+    )
+
+    safe_lead_name = (lead.name or "Lead").replace('"', "").replace("/", "-")
+    filename = f'Handover_{safe_lead_name}_{datetime.utcnow().strftime("%Y%m%d")}.pdf'
+
+    return Response(
+        content=pdf_buffer.getvalue(),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

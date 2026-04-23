@@ -211,6 +211,10 @@ export interface LeadListPayload {
   page_size: number;
 }
 
+export interface LeadHandoverPdfOptions {
+  days?: number;
+}
+
 export interface FacebookAdvertProfile {
   id: number;
   name: string;

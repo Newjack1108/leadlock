@@ -4,6 +4,7 @@ import {
   type CustomerCommunicationStats,
   type DashboardCommunicationTotals,
   type DealerProfile,
+  type LeadHandoverPdfOptions,
   type DealerProfileUpdatePayload,
   type DealerQuoteCreatePayload,
   type DealerWelcome,
@@ -947,6 +948,26 @@ export const getCustomerQuotes = async (customerId: number) => {
 export const getLeadQuotes = async (leadId: number) => {
   const response = await api.get(`/api/leads/${leadId}/quotes`);
   return response.data;
+};
+
+export const downloadLeadHandoverPdf = async (leadId: number, options?: LeadHandoverPdfOptions) => {
+  const response = await api.get(`/api/leads/${leadId}/handover-pdf`, {
+    responseType: 'blob',
+    params: { days: options?.days ?? 14 },
+  });
+  const blob = new Blob([response.data], { type: 'application/pdf' });
+  const url = window.URL.createObjectURL(blob);
+  const disposition = response.headers['content-disposition'];
+  let filename = `Lead_Handover_${leadId}.pdf`;
+  if (disposition) {
+    const match = /filename="?([^";\n]+)"?/.exec(disposition);
+    if (match) filename = match[1].trim();
+  }
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  setTimeout(() => window.URL.revokeObjectURL(url), 100);
 };
 
 export const previewQuotePdf = async (
