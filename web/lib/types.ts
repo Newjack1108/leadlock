@@ -45,6 +45,7 @@ export const PRODUCT_SUBCATEGORIES = [
   "Pent",
   "Pony",
   "Professional",
+  "Coachman",
   "Bespoke",
   "Other",
 ] as const;
