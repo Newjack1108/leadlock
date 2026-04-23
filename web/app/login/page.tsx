@@ -32,8 +32,18 @@ export default function LoginPage() {
       document.cookie = `token=${response.data.access_token}; path=/; max-age=86400`;
       sessionStorage.setItem(LEADLOCK_LOGIN_GREETING_SESSION_KEY, '1');
       router.push('/');
-    } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Login failed');
+    } catch (error: unknown) {
+      const detail = (error as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+      let message = 'Login failed';
+      if (typeof detail === 'string') {
+        message = detail;
+      } else if (Array.isArray(detail) && detail.length > 0) {
+        const first = detail[0] as { msg?: string };
+        message = typeof first?.msg === 'string' ? first.msg : JSON.stringify(detail);
+      } else if (detail != null && typeof detail === 'object') {
+        message = JSON.stringify(detail);
+      }
+      toast.error(message);
     } finally {
       setLoading(false);
     }
