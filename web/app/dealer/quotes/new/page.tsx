@@ -7,33 +7,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { createDealerQuote, estimateDeliveryInstall, getDealerProducts } from '@/lib/api';
+import { createDealerQuote, estimateDeliveryInstall, getApiErrorDetail, getDealerProducts } from '@/lib/api';
 import type { DealerDeliveryEstimateInclusion, DeliveryInstallEstimateResponse, Product } from '@/lib/types';
 import { toast } from 'sonner';
 
 type ProductRow = { product_id: number; quantity: number };
-
-function errMessage(err: unknown): string {
-  if (!err || typeof err !== 'object' || !('response' in err)) {
-    return err instanceof Error ? err.message : 'Something went wrong';
-  }
-  const data = (err as { response?: { data?: unknown } }).response?.data;
-  if (!data || typeof data !== 'object') {
-    return 'Something went wrong';
-  }
-  const detail = 'detail' in data ? (data as { detail: unknown }).detail : undefined;
-  if (typeof detail === 'string') return detail;
-  if (Array.isArray(detail)) {
-    return detail
-      .map((item) =>
-        typeof item === 'object' && item !== null && 'msg' in item
-          ? String((item as { msg: unknown }).msg)
-          : JSON.stringify(item)
-      )
-      .join('; ');
-  }
-  return 'Something went wrong';
-}
 
 export default function NewDealerQuotePage() {
   const router = useRouter();
@@ -58,7 +36,7 @@ export default function NewDealerQuotePage() {
       .then((data: Product[]) => setProducts(data))
       .catch((err: unknown) => {
         setProducts([]);
-        toast.error(errMessage(err) || 'Could not load products. Check your account or try again.');
+        toast.error(getApiErrorDetail(err) || 'Could not load products. Check your account or try again.');
       });
   }, []);
 
@@ -107,7 +85,7 @@ export default function NewDealerQuotePage() {
         setEstErrDelivery(null);
       } else {
         setEstDeliveryOnly(null);
-        setEstErrDelivery(errMessage(onlyRes.reason));
+        setEstErrDelivery(getApiErrorDetail(onlyRes.reason));
       }
       if (installHours > 0 && settled[1]) {
         const fullRes = settled[1];
@@ -116,7 +94,7 @@ export default function NewDealerQuotePage() {
           setEstErrFull(null);
         } else {
           setEstFull(null);
-          setEstErrFull(errMessage(fullRes.reason));
+          setEstErrFull(getApiErrorDetail(fullRes.reason));
         }
       } else {
         setEstFull(null);
@@ -151,7 +129,29 @@ export default function NewDealerQuotePage() {
     setRows((prev) => prev.filter((r) => r.product_id !== product_id));
   };
 
-  const onSubmit = async (e: React.FormEvent) => {
+  /** Keep submit handler synchronous so React does not surface an unhandled rejection from an async `onSubmit`. */
+  const submitQuoteAsync = async () => {
+    setSaving(true);
+    try {
+      const quote = await createDealerQuote({
+        customer_name: customerName.trim(),
+        customer_email: customerEmail.trim() || undefined,
+        customer_phone: customerPhone.trim() || undefined,
+        customer_address: customerAddress.trim() || undefined,
+        customer_postcode: pcTrim || undefined,
+        delivery_estimate_inclusion: inclusion,
+        discount_template_ids: [],
+        product_items: rows.map((r) => ({ product_id: r.product_id, quantity: r.quantity })),
+      });
+      await router.push(`/dealer/quotes/${quote.id}`);
+    } catch (err: unknown) {
+      toast.error(getApiErrorDetail(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!customerName.trim() || !rows.length) return;
     if (inclusion === 'delivery_and_install' && installHours <= 0) {
@@ -170,24 +170,7 @@ export default function NewDealerQuotePage() {
       toast.error('Fix the delivery & installation estimate error before creating the quote');
       return;
     }
-    setSaving(true);
-    try {
-      const quote = await createDealerQuote({
-        customer_name: customerName.trim(),
-        customer_email: customerEmail.trim() || undefined,
-        customer_phone: customerPhone.trim() || undefined,
-        customer_address: customerAddress.trim() || undefined,
-        customer_postcode: pcTrim || undefined,
-        delivery_estimate_inclusion: inclusion,
-        discount_template_ids: [],
-        product_items: rows.map((r) => ({ product_id: r.product_id, quantity: r.quantity })),
-      });
-      await router.push(`/dealer/quotes/${quote.id}`);
-    } catch (err: unknown) {
-      toast.error(errMessage(err));
-    } finally {
-      setSaving(false);
-    }
+    void submitQuoteAsync();
   };
 
   const canPickDeliveryOnly = !estErrDelivery && estDeliveryOnly && Number(estDeliveryOnly.cost_total) > 0;

@@ -50,6 +50,37 @@ api.interceptors.response.use(
   }
 );
 
+/** Readable message from axios / FastAPI (`detail` string or validation array). */
+export function getApiErrorDetail(err: unknown): string {
+  if (axios.isAxiosError(err)) {
+    const status = err.response?.status;
+    const data = err.response?.data;
+    if (data && typeof data === 'object' && 'detail' in data) {
+      const detail = (data as { detail: unknown }).detail;
+      if (typeof detail === 'string' && detail.trim()) return detail;
+      if (Array.isArray(detail)) {
+        return detail
+          .map((item) =>
+            typeof item === 'object' && item !== null && 'msg' in item
+              ? String((item as { msg: unknown }).msg)
+              : JSON.stringify(item)
+          )
+          .join('; ');
+      }
+    }
+    if (typeof data === 'string' && data.trim()) return data;
+    if (err.message) {
+      if (status && !err.message.includes(String(status))) {
+        return `${err.message} (${status})`;
+      }
+      return err.message;
+    }
+    if (status) return `Request failed (${status})`;
+  }
+  if (err instanceof Error && err.message) return err.message;
+  return 'Something went wrong';
+}
+
 export default api;
 
 // Email API functions
