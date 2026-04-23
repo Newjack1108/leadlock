@@ -36,6 +36,9 @@ export default function DealerQuoteDetailPage() {
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
           <p><strong>Customer:</strong> {quote.customer_name}</p>
+          {quote.dealer_customer_postcode?.trim() && (
+            <p><strong>Postcode:</strong> {quote.dealer_customer_postcode}</p>
+          )}
           <p><strong>Status:</strong> {quote.status}</p>
           <p><strong>Total:</strong> £{Number(quote.total_amount).toFixed(2)}</p>
           <div className="space-y-2">

@@ -432,6 +432,7 @@ def build_quote_response(
         dealer_customer_email=getattr(quote, "dealer_customer_email", None),
         dealer_customer_phone=getattr(quote, "dealer_customer_phone", None),
         dealer_customer_address=getattr(quote, "dealer_customer_address", None),
+        dealer_customer_postcode=getattr(quote, "dealer_customer_postcode", None),
         lead_quotes_sent_count=lead_quotes_sent_count,
         customer_replied_since_quote_sent=customer_replied_since_quote_sent,
         inbound_count_since_quote_sent=inbound_count_since_quote_sent,

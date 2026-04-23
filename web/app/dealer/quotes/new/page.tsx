@@ -7,11 +7,33 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { createDealerQuote, getDealerProducts } from '@/lib/api';
-import type { Product } from '@/lib/types';
+import { createDealerQuote, estimateDeliveryInstall, getDealerProducts } from '@/lib/api';
+import type { DealerDeliveryEstimateInclusion, DeliveryInstallEstimateResponse, Product } from '@/lib/types';
 import { toast } from 'sonner';
 
 type ProductRow = { product_id: number; quantity: number };
+
+function errMessage(err: unknown): string {
+  if (!err || typeof err !== 'object' || !('response' in err)) {
+    return err instanceof Error ? err.message : 'Something went wrong';
+  }
+  const data = (err as { response?: { data?: unknown } }).response?.data;
+  if (!data || typeof data !== 'object') {
+    return 'Something went wrong';
+  }
+  const detail = 'detail' in data ? (data as { detail: unknown }).detail : undefined;
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail)) {
+    return detail
+      .map((item) =>
+        typeof item === 'object' && item !== null && 'msg' in item
+          ? String((item as { msg: unknown }).msg)
+          : JSON.stringify(item)
+      )
+      .join('; ');
+  }
+  return 'Something went wrong';
+}
 
 export default function NewDealerQuotePage() {
   const router = useRouter();
@@ -20,23 +42,93 @@ export default function NewDealerQuotePage() {
   const [customerEmail, setCustomerEmail] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerAddress, setCustomerAddress] = useState('');
+  const [customerPostcode, setCustomerPostcode] = useState('');
   const [rows, setRows] = useState<ProductRow[]>([]);
   const [saving, setSaving] = useState(false);
+
+  const [estDeliveryOnly, setEstDeliveryOnly] = useState<DeliveryInstallEstimateResponse | null>(null);
+  const [estFull, setEstFull] = useState<DeliveryInstallEstimateResponse | null>(null);
+  const [estLoading, setEstLoading] = useState(false);
+  const [estErrDelivery, setEstErrDelivery] = useState<string | null>(null);
+  const [estErrFull, setEstErrFull] = useState<string | null>(null);
+  const [inclusion, setInclusion] = useState<DealerDeliveryEstimateInclusion>('none');
 
   useEffect(() => {
     getDealerProducts()
       .then((data: Product[]) => setProducts(data))
       .catch((err: unknown) => {
         setProducts([]);
-        const detail =
-          err && typeof err === 'object' && 'response' in err
-            ? (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
-            : undefined;
-        toast.error(
-          typeof detail === 'string' ? detail : 'Could not load products. Check your account or try again.'
-        );
+        toast.error(errMessage(err) || 'Could not load products. Check your account or try again.');
       });
   }, []);
+
+  const installHours = useMemo(() => {
+    return rows.reduce((total, row) => {
+      const product = products.find((p) => p.id === row.product_id);
+      const hrs = product?.installation_hours;
+      if (hrs == null || Number(hrs) <= 0) return total;
+      return total + row.quantity * Number(hrs);
+    }, 0);
+  }, [rows, products]);
+
+  useEffect(() => {
+    if (inclusion === 'delivery_and_install' && installHours <= 0) {
+      setInclusion('none');
+    }
+  }, [installHours, inclusion]);
+
+  const pcTrim = customerPostcode.trim();
+
+  useEffect(() => {
+    if (!pcTrim || !rows.length) {
+      setEstDeliveryOnly(null);
+      setEstFull(null);
+      setEstErrDelivery(null);
+      setEstErrFull(null);
+      setEstLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setEstLoading(true);
+    setEstErrDelivery(null);
+    setEstErrFull(null);
+
+    const run = async () => {
+      const settled = await Promise.allSettled([
+        estimateDeliveryInstall(pcTrim, 0, { deliveryOnly: true }),
+        ...(installHours > 0
+          ? [estimateDeliveryInstall(pcTrim, installHours, { deliveryOnly: false })]
+          : []),
+      ]);
+      if (cancelled) return;
+      const onlyRes = settled[0];
+      if (onlyRes.status === 'fulfilled') {
+        setEstDeliveryOnly(onlyRes.value);
+        setEstErrDelivery(null);
+      } else {
+        setEstDeliveryOnly(null);
+        setEstErrDelivery(errMessage(onlyRes.reason));
+      }
+      if (installHours > 0 && settled[1]) {
+        const fullRes = settled[1];
+        if (fullRes.status === 'fulfilled') {
+          setEstFull(fullRes.value);
+          setEstErrFull(null);
+        } else {
+          setEstFull(null);
+          setEstErrFull(errMessage(fullRes.reason));
+        }
+      } else {
+        setEstFull(null);
+        setEstErrFull(null);
+      }
+      setEstLoading(false);
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [pcTrim, rows, installHours]);
 
   const total = useMemo(() => {
     return rows.reduce((sum, row) => {
@@ -62,6 +154,22 @@ export default function NewDealerQuotePage() {
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!customerName.trim() || !rows.length) return;
+    if (inclusion === 'delivery_and_install' && installHours <= 0) {
+      toast.error('Add products with installation hours to include delivery & installation');
+      return;
+    }
+    if (inclusion !== 'none' && !pcTrim) {
+      toast.error('Enter customer postcode to include a delivery line');
+      return;
+    }
+    if (inclusion === 'delivery_only' && estErrDelivery) {
+      toast.error('Fix the delivery-only estimate error before creating the quote');
+      return;
+    }
+    if (inclusion === 'delivery_and_install' && estErrFull) {
+      toast.error('Fix the delivery & installation estimate error before creating the quote');
+      return;
+    }
     setSaving(true);
     try {
       const quote = await createDealerQuote({
@@ -69,13 +177,30 @@ export default function NewDealerQuotePage() {
         customer_email: customerEmail.trim() || undefined,
         customer_phone: customerPhone.trim() || undefined,
         customer_address: customerAddress.trim() || undefined,
+        customer_postcode: pcTrim || undefined,
+        delivery_estimate_inclusion: inclusion,
+        discount_template_ids: [],
         product_items: rows.map((r) => ({ product_id: r.product_id, quantity: r.quantity })),
       });
-      router.push(`/dealer/quotes/${quote.id}`);
+      await router.push(`/dealer/quotes/${quote.id}`);
+    } catch (err: unknown) {
+      toast.error(errMessage(err));
     } finally {
       setSaving(false);
     }
   };
+
+  const canPickDeliveryOnly = !estErrDelivery && estDeliveryOnly && Number(estDeliveryOnly.cost_total) > 0;
+  const canPickFull =
+    installHours > 0 && !estErrFull && estFull && Number(estFull.cost_total) > 0;
+
+  const submitBlocked =
+    saving ||
+    !rows.length ||
+    (inclusion !== 'none' &&
+      (estLoading ||
+        (inclusion === 'delivery_only' && !canPickDeliveryOnly) ||
+        (inclusion === 'delivery_and_install' && !canPickFull)));
 
   return (
     <main className="container mx-auto px-4 py-6 sm:px-6">
@@ -88,15 +213,39 @@ export default function NewDealerQuotePage() {
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <Label htmlFor="customer-name">Customer name</Label>
-                <Input id="customer-name" value={customerName} onChange={(e) => setCustomerName(e.target.value)} required />
+                <Input
+                  id="customer-name"
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  required
+                />
               </div>
               <div>
                 <Label htmlFor="customer-email">Customer email</Label>
-                <Input id="customer-email" type="email" value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} />
+                <Input
+                  id="customer-email"
+                  type="email"
+                  value={customerEmail}
+                  onChange={(e) => setCustomerEmail(e.target.value)}
+                />
               </div>
               <div>
                 <Label htmlFor="customer-phone">Customer phone</Label>
-                <Input id="customer-phone" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} />
+                <Input
+                  id="customer-phone"
+                  value={customerPhone}
+                  onChange={(e) => setCustomerPhone(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label htmlFor="customer-postcode">Customer / installation postcode</Label>
+                <Input
+                  id="customer-postcode"
+                  value={customerPostcode}
+                  onChange={(e) => setCustomerPostcode(e.target.value)}
+                  placeholder="For delivery & install distance from factory"
+                  autoCapitalize="characters"
+                />
               </div>
               <div className="sm:col-span-2">
                 <Label htmlFor="customer-address">Customer address</Label>
@@ -108,6 +257,100 @@ export default function NewDealerQuotePage() {
                 />
               </div>
             </div>
+
+            {pcTrim && rows.length > 0 && (
+              <Card className="border-muted">
+                <CardHeader className="py-3">
+                  <CardTitle className="text-base">Delivery estimates (Ex VAT)</CardTitle>
+                  <p className="text-sm text-muted-foreground font-normal">
+                    From factory to this postcode. Pick one option below to add a single line to the quote.
+                  </p>
+                </CardHeader>
+                <CardContent className="space-y-4 pt-0">
+                  {estLoading && <p className="text-sm text-muted-foreground">Loading estimates…</p>}
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-md border p-3 text-sm space-y-1">
+                      <p className="font-medium">Delivery only</p>
+                      {estErrDelivery && (
+                        <p className="text-destructive text-xs">{estErrDelivery}</p>
+                      )}
+                      {!estLoading && !estErrDelivery && estDeliveryOnly && (
+                        <>
+                          <p>
+                            <span className="text-muted-foreground">Total: </span>
+                            <span className="font-semibold">£{Number(estDeliveryOnly.cost_total).toFixed(2)}</span>
+                          </p>
+                          <p className="text-muted-foreground text-xs">
+                            {estDeliveryOnly.distance_miles} mi one way · unload labour included in model
+                          </p>
+                        </>
+                      )}
+                    </div>
+                    <div className="rounded-md border p-3 text-sm space-y-1">
+                      <p className="font-medium">Delivery & installation</p>
+                      {installHours <= 0 && (
+                        <p className="text-muted-foreground text-xs">
+                          Add products with installation hours to see this estimate.
+                        </p>
+                      )}
+                      {installHours > 0 && estErrFull && (
+                        <p className="text-destructive text-xs">{estErrFull}</p>
+                      )}
+                      {installHours > 0 && !estLoading && !estErrFull && estFull && (
+                        <>
+                          <p>
+                            <span className="text-muted-foreground">Total: </span>
+                            <span className="font-semibold">£{Number(estFull.cost_total).toFixed(2)}</span>
+                          </p>
+                          <p className="text-muted-foreground text-xs">
+                            {estFull.fitting_days} fitting day(s) · {installHours.toFixed(1)} install hr (catalog)
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  <fieldset className="space-y-2">
+                    <legend className="text-sm font-medium">Include on quote</legend>
+                    <div className="flex flex-col gap-2">
+                      <label className="flex items-center gap-2 text-sm cursor-pointer">
+                        <input
+                          type="radio"
+                          name="delivery-inclusion"
+                          checked={inclusion === 'none'}
+                          onChange={() => setInclusion('none')}
+                        />
+                        None (products only)
+                      </label>
+                      <label
+                        className={`flex items-center gap-2 text-sm ${canPickDeliveryOnly ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}
+                      >
+                        <input
+                          type="radio"
+                          name="delivery-inclusion"
+                          checked={inclusion === 'delivery_only'}
+                          disabled={!canPickDeliveryOnly}
+                          onChange={() => setInclusion('delivery_only')}
+                        />
+                        Delivery only line
+                      </label>
+                      <label
+                        className={`flex items-center gap-2 text-sm ${canPickFull ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}
+                      >
+                        <input
+                          type="radio"
+                          name="delivery-inclusion"
+                          checked={inclusion === 'delivery_and_install'}
+                          disabled={!canPickFull}
+                          onChange={() => setInclusion('delivery_and_install')}
+                        />
+                        Delivery & installation line
+                      </label>
+                    </div>
+                  </fieldset>
+                </CardContent>
+              </Card>
+            )}
 
             <div className="space-y-2">
               <Label>Add product</Label>
@@ -135,7 +378,9 @@ export default function NewDealerQuotePage() {
                       onChange={(e) => updateQty(row.product_id, Math.max(1, Number(e.target.value)))}
                     />
                     <div className="w-28 text-right text-sm">£{(Number(product.base_price) * row.quantity).toFixed(2)}</div>
-                    <Button type="button" variant="ghost" onClick={() => removeRow(row.product_id)}>Remove</Button>
+                    <Button type="button" variant="ghost" onClick={() => removeRow(row.product_id)}>
+                      Remove
+                    </Button>
                   </div>
                 );
               })}
@@ -144,7 +389,7 @@ export default function NewDealerQuotePage() {
 
             <div className="flex items-center justify-between border-t pt-4">
               <p className="text-sm font-medium">Estimated subtotal: £{total.toFixed(2)}</p>
-              <Button type="submit" disabled={saving || !rows.length}>
+              <Button type="submit" disabled={submitBlocked}>
                 {saving ? 'Creating...' : 'Create quote'}
               </Button>
             </div>

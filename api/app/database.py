@@ -217,6 +217,9 @@ def _ensure_dealer_portal_schema(engine) -> None:
                 conn.execute(text("ALTER TABLE quote ADD COLUMN IF NOT EXISTS dealer_customer_email VARCHAR(255)"))
                 conn.execute(text("ALTER TABLE quote ADD COLUMN IF NOT EXISTS dealer_customer_phone VARCHAR(255)"))
                 conn.execute(text("ALTER TABLE quote ADD COLUMN IF NOT EXISTS dealer_customer_address TEXT"))
+                conn.execute(
+                    text("ALTER TABLE quote ADD COLUMN IF NOT EXISTS dealer_customer_postcode VARCHAR(16)")
+                )
                 conn.execute(text("ALTER TABLE quote ADD COLUMN IF NOT EXISTS revision_hash VARCHAR(128)"))
                 conn.execute(text("CREATE INDEX IF NOT EXISTS ix_quote_dealer_id ON quote (dealer_id)"))
                 conn.execute(text("CREATE INDEX IF NOT EXISTS ix_quote_revision_hash ON quote (revision_hash)"))

@@ -11,7 +11,9 @@ from app.auth import require_dealer_user
 from app.constants import VAT_RATE_DECIMAL
 from app.database import get_session
 from app.image_upload_service import upload_product_image
+from app.delivery_install_service import compute_delivery_install_estimate
 from app.models import (
+    CompanySettings,
     Customer,
     Dealer,
     DealerAllowedDiscount,
@@ -22,6 +24,7 @@ from app.models import (
     Quote,
     QuoteDiscount,
     QuoteItem,
+    QuoteItemLineType,
     QuoteStatus,
     User,
 )
@@ -29,6 +32,7 @@ from app.quote_pdf_service import generate_quote_pdf_cached
 from app.routers.quotes import apply_discount_to_quote, build_quote_response, generate_quote_number
 from app.schemas import (
     DealerAllowedDiscountPolicyResponse,
+    DealerDeliveryEstimateInclusion,
     DealerProfileResponse,
     DealerProfileUpdate,
     DealerQuoteCreate,
@@ -52,6 +56,25 @@ def _get_dealer_or_404(session: Session, dealer_id: int) -> Dealer:
 def _require_dealer_quote_access(quote: Quote, current_user: User) -> None:
     if quote.dealer_id != current_user.dealer_id:
         raise HTTPException(status_code=404, detail="Quote not found")
+
+
+def _dealer_quote_main_product_install_hours(session: Session, quote_id: int) -> float:
+    """Sum installation hours x qty for main dealer lines only (excludes optional extras: sort_order >= 1000)."""
+    items = session.exec(
+        select(QuoteItem).where(QuoteItem.quote_id == quote_id).order_by(QuoteItem.sort_order)
+    ).all()
+    total = Decimal("0")
+    for item in items:
+        if item.sort_order >= 1000:
+            continue
+        if item.product_id is None:
+            continue
+        product = session.get(Product, item.product_id)
+        if not product or product.is_extra:
+            continue
+        if product.installation_hours:
+            total += item.quantity * product.installation_hours
+    return float(total)
 
 
 def _build_quote_revision_hash(quote: Quote, items: List[QuoteItem]) -> str:
@@ -228,21 +251,29 @@ async def create_dealer_quote(
     if not payload.product_items:
         raise HTTPException(status_code=400, detail="At least one product is required")
 
-    policy = session.exec(
-        select(DealerDiscountPolicy).where(DealerDiscountPolicy.dealer_id == current_user.dealer_id)
-    ).first()
-    if not policy:
-        raise HTTPException(status_code=400, detail="Dealer discount policy not configured")
+    if payload.discount_template_ids:
+        policy = session.exec(
+            select(DealerDiscountPolicy).where(DealerDiscountPolicy.dealer_id == current_user.dealer_id)
+        ).first()
+        if not policy:
+            raise HTTPException(status_code=400, detail="Dealer discount policy not configured")
 
-    allowed_discount_ids = set(
-        session.exec(
-            select(DealerAllowedDiscount.discount_template_id).where(
-                DealerAllowedDiscount.dealer_id == current_user.dealer_id
-            )
-        ).all()
-    )
-    if any(template_id not in allowed_discount_ids for template_id in payload.discount_template_ids):
-        raise HTTPException(status_code=403, detail="One or more discounts are not permitted")
+        allowed_discount_ids = set(
+            session.exec(
+                select(DealerAllowedDiscount.discount_template_id).where(
+                    DealerAllowedDiscount.dealer_id == current_user.dealer_id
+                )
+            ).all()
+        )
+        if any(template_id not in allowed_discount_ids for template_id in payload.discount_template_ids):
+            raise HTTPException(status_code=403, detail="One or more discounts are not permitted")
+
+    postcode = (payload.customer_postcode or "").strip() or None
+    if payload.delivery_estimate_inclusion != DealerDeliveryEstimateInclusion.NONE and not postcode:
+        raise HTTPException(
+            status_code=400,
+            detail="Customer postcode is required when including a delivery or delivery & installation line",
+        )
 
     quote = Quote(
         customer_id=None,
@@ -263,6 +294,7 @@ async def create_dealer_quote(
         dealer_customer_email=payload.customer_email,
         dealer_customer_phone=payload.customer_phone,
         dealer_customer_address=payload.customer_address,
+        dealer_customer_postcode=postcode,
     )
     session.add(quote)
     session.commit()
@@ -338,6 +370,74 @@ async def create_dealer_quote(
         session.exec(select(QuoteItem).where(QuoteItem.quote_id == quote.id).order_by(QuoteItem.sort_order)).all()
     )
 
+    if payload.delivery_estimate_inclusion != DealerDeliveryEstimateInclusion.NONE:
+        install_hours = _dealer_quote_main_product_install_hours(session, quote.id)
+        if payload.delivery_estimate_inclusion == DealerDeliveryEstimateInclusion.DELIVERY_AND_INSTALL:
+            if install_hours <= 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Selected products have no installation hours; choose delivery only or add products with installation time",
+                )
+        delivery_only = payload.delivery_estimate_inclusion == DealerDeliveryEstimateInclusion.DELIVERY_ONLY
+        inst_hours = 0.0 if delivery_only else install_hours
+
+        settings = session.exec(select(CompanySettings).limit(1)).first()
+        if not settings:
+            raise HTTPException(
+                status_code=400,
+                detail="Configure factory postcode and installation & travel settings in Company settings.",
+            )
+        factory_postcode = (settings.postcode or "").strip()
+        if not factory_postcode:
+            raise HTTPException(
+                status_code=400,
+                detail="Configure factory postcode and installation & travel settings in Company settings.",
+            )
+        try:
+            est = compute_delivery_install_estimate(
+                factory_postcode=factory_postcode,
+                customer_postcode=postcode,
+                installation_hours=inst_hours,
+                distance_before_overnight_miles=settings.distance_before_overnight_miles,
+                cost_per_mile=settings.cost_per_mile,
+                hourly_install_rate=settings.hourly_install_rate,
+                hotel_allowance_per_night=settings.hotel_allowance_per_night,
+                meal_allowance_per_day=settings.meal_allowance_per_day,
+                average_speed_mph=settings.average_speed_mph,
+                install_quote_margin_pct=settings.install_quote_margin_pct,
+                delivery_only=delivery_only,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        if est.cost_total is None or est.cost_total <= 0:
+            raise HTTPException(
+                status_code=400,
+                detail="Could not compute a delivery cost for this postcode; check company rates and postcode.",
+            )
+
+        max_sort = max((i.sort_order for i in quote_items), default=-1)
+        desc = "Delivery only" if delivery_only else "Delivery & Installation"
+        cost = est.cost_total.quantize(Decimal("0.01"))
+        delivery_item = QuoteItem(
+            quote_id=quote.id,
+            product_id=None,
+            description=desc,
+            quantity=Decimal("1"),
+            unit_price=cost,
+            line_total=cost,
+            discount_amount=Decimal("0"),
+            final_line_total=cost,
+            sort_order=max_sort + 1,
+            is_custom=True,
+            line_type=QuoteItemLineType.DELIVERY,
+        )
+        session.add(delivery_item)
+        session.commit()
+        quote_items = list(
+            session.exec(select(QuoteItem).where(QuoteItem.quote_id == quote.id).order_by(QuoteItem.sort_order)).all()
+        )
+        subtotal = sum((i.line_total for i in quote_items), start=Decimal("0"))
+
     quote.subtotal = subtotal
     quote.total_amount = subtotal
     total_inc_vat = subtotal * (Decimal("1") + VAT_RATE_DECIMAL)
@@ -411,6 +511,7 @@ async def download_dealer_quote_pdf(
         email=quote.dealer_customer_email,
         phone=quote.dealer_customer_phone,
         address_line1=quote.dealer_customer_address,
+        postcode=getattr(quote, "dealer_customer_postcode", None),
     )
     revision_hash = quote.revision_hash or _build_quote_revision_hash(quote, quote_items)
     if quote.revision_hash != revision_hash:

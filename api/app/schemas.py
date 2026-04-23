@@ -1300,6 +1300,7 @@ class QuoteResponse(BaseModel):
     dealer_customer_email: Optional[str] = None
     dealer_customer_phone: Optional[str] = None
     dealer_customer_address: Optional[str] = None
+    dealer_customer_postcode: Optional[str] = None
     # List / engagement (optional; set on paginated quote list)
     lead_quotes_sent_count: Optional[int] = None
     customer_replied_since_quote_sent: bool = False
@@ -1738,11 +1739,19 @@ class DealerQuoteProductItem(BaseModel):
     selected_extra_ids: List[int] = Field(default_factory=list)
 
 
+class DealerDeliveryEstimateInclusion(str, Enum):
+    NONE = "none"
+    DELIVERY_ONLY = "delivery_only"
+    DELIVERY_AND_INSTALL = "delivery_and_install"
+
+
 class DealerQuoteCreate(BaseModel):
     customer_name: str
     customer_email: Optional[str] = None
     customer_phone: Optional[str] = None
     customer_address: Optional[str] = None
+    customer_postcode: Optional[str] = None
+    delivery_estimate_inclusion: DealerDeliveryEstimateInclusion = DealerDeliveryEstimateInclusion.NONE
     notes: Optional[str] = None
     valid_until: Optional[datetime] = None
     product_items: List[DealerQuoteProductItem]

@@ -564,6 +564,7 @@ class Quote(SQLModel, table=True):
     dealer_customer_email: Optional[str] = None
     dealer_customer_phone: Optional[str] = None
     dealer_customer_address: Optional[str] = None
+    dealer_customer_postcode: Optional[str] = None
     revision_hash: Optional[str] = Field(default=None, index=True)
     
     # Relationships

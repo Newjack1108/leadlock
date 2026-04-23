@@ -965,6 +965,7 @@ export interface Quote {
   dealer_customer_email?: string | null;
   dealer_customer_phone?: string | null;
   dealer_customer_address?: string | null;
+  dealer_customer_postcode?: string | null;
   /** Quotes on this lead with sent_at (paginated list only). */
   lead_quotes_sent_count?: number | null;
   customer_replied_since_quote_sent?: boolean;
@@ -1302,11 +1303,18 @@ export interface DealerQuoteProductItem {
   selected_extra_ids?: number[];
 }
 
+export type DealerDeliveryEstimateInclusion =
+  | 'none'
+  | 'delivery_only'
+  | 'delivery_and_install';
+
 export interface DealerQuoteCreatePayload {
   customer_name: string;
   customer_email?: string;
   customer_phone?: string;
   customer_address?: string;
+  customer_postcode?: string;
+  delivery_estimate_inclusion?: DealerDeliveryEstimateInclusion;
   notes?: string;
   valid_until?: string;
   product_items: DealerQuoteProductItem[];
