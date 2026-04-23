@@ -110,6 +110,10 @@ async def export_price_list_pdf(
 
     statement = statement.order_by(Product.category, Product.subcategory, Product.name)
     products = list(session.exec(statement).all())
+    products = [
+        p for p in products
+        if (p.subcategory or "").strip().lower() != "other"
+    ]
 
     summary_parts: List[str] = []
     if category:
