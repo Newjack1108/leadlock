@@ -339,6 +339,11 @@ export default function ProductsPage() {
                       <td className="p-3">
                         <div>
                           <span className="font-medium">{product.name}</span>
+                          {product.is_production_synced && (
+                            <Badge variant="secondary" className="ml-2">
+                              Production
+                            </Badge>
+                          )}
                           {product.subcategory && (
                             <span className="text-muted-foreground text-sm ml-2">({product.subcategory})</span>
                           )}
@@ -396,6 +401,9 @@ export default function ProductsPage() {
                         </Badge>
                         {product.is_extra && (
                           <Badge variant="outline">Extra</Badge>
+                        )}
+                        {product.is_production_synced && (
+                          <Badge variant="secondary">Production</Badge>
                         )}
                         {product.subcategory && (
                           <Badge variant="secondary">{product.subcategory}</Badge>

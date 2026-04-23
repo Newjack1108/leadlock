@@ -189,7 +189,10 @@ async def get_dealer_products(
         )
         .order_by(Product.name.asc())
     ).all()
-    return list(rows)
+    return [
+        ProductResponse(**{**product.dict(), "is_production_synced": product.production_product_id is not None})
+        for product in rows
+    ]
 
 
 @router.get("/quotes", response_model=QuoteListResponse)

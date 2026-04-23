@@ -909,6 +909,7 @@ class ProductResponse(BaseModel):
     length: Optional[Decimal] = None
     installation_hours: Optional[Decimal] = None
     boxes_per_product: Optional[int] = None
+    is_production_synced: bool = False
     optional_extras: Optional[List["ProductResponse"]] = None  # Nested optional extras
     created_at: datetime
     updated_at: datetime

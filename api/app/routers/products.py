@@ -17,6 +17,15 @@ router = APIRouter(prefix="/api/products", tags=["products"])
 PRODUCT_EDITOR_ROLES = [UserRole.DIRECTOR, UserRole.CLOSER]
 
 
+def _build_product_response(product: Product, optional_extras: Optional[List[ProductResponse]] = None) -> ProductResponse:
+    payload = {
+        **product.dict(),
+        "is_production_synced": product.production_product_id is not None,
+        "optional_extras": optional_extras,
+    }
+    return ProductResponse(**payload)
+
+
 @router.get("", response_model=List[ProductResponse])
 async def get_products(
     category: Optional[ProductCategory] = Query(None),
@@ -48,7 +57,7 @@ async def get_products(
     products = session.exec(statement).all()
     
     # Return products without nested optional_extras for list view (performance)
-    return [ProductResponse(**{**product.dict(), "optional_extras": None}) for product in products]
+    return [_build_product_response(product, optional_extras=None) for product in products]
 
 
 @router.get("/categories")
@@ -179,7 +188,7 @@ async def get_optional_extras(
         Product.is_active == True
     )
     products = session.exec(statement).all()
-    return [ProductResponse(**product.dict()) for product in products]
+    return [_build_product_response(product) for product in products]
 
 
 @router.get("/{product_id}", response_model=ProductResponse)
@@ -203,12 +212,9 @@ async def get_product(
     extras_results = session.exec(extras_statement).all()
     optional_extras = []
     for extra_link, extra_product in extras_results:
-        optional_extras.append(ProductResponse(**extra_product.dict()))
+        optional_extras.append(_build_product_response(extra_product))
     
-    product_dict = product.dict()
-    product_dict["optional_extras"] = optional_extras if optional_extras else None
-    
-    return ProductResponse(**product_dict)
+    return _build_product_response(product, optional_extras=optional_extras if optional_extras else None)
 
 
 @router.post("", response_model=ProductResponse)
@@ -251,12 +257,9 @@ async def create_product(
     extras_results = session.exec(extras_statement).all()
     optional_extras_list = []
     for extra_link, extra_product in extras_results:
-        optional_extras_list.append(ProductResponse(**extra_product.dict()))
+        optional_extras_list.append(_build_product_response(extra_product))
     
-    product_dict = product.dict()
-    product_dict["optional_extras"] = optional_extras_list if optional_extras_list else None
-    
-    return ProductResponse(**product_dict)
+    return _build_product_response(product, optional_extras=optional_extras_list if optional_extras_list else None)
 
 
 @router.patch("/{product_id}", response_model=ProductResponse)
@@ -317,12 +320,9 @@ async def update_product(
     extras_results = session.exec(extras_statement).all()
     optional_extras_list = []
     for extra_link, extra_product in extras_results:
-        optional_extras_list.append(ProductResponse(**extra_product.dict()))
+        optional_extras_list.append(_build_product_response(extra_product))
     
-    product_dict = product.dict()
-    product_dict["optional_extras"] = optional_extras_list if optional_extras_list else None
-    
-    return ProductResponse(**product_dict)
+    return _build_product_response(product, optional_extras=optional_extras_list if optional_extras_list else None)
 
 
 @router.post("/{product_id}/optional-extras")
@@ -412,7 +412,7 @@ async def get_product_optional_extras(
     extras_results = session.exec(extras_statement).all()
     optional_extras = []
     for extra_link, extra_product in extras_results:
-        optional_extras.append(ProductResponse(**extra_product.dict()))
+        optional_extras.append(_build_product_response(extra_product))
     
     return optional_extras
 
