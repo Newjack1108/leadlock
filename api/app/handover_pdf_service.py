@@ -3,10 +3,10 @@ Service for generating lead handover PDF documents.
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from io import BytesIO
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -22,6 +22,7 @@ from app.models import (
     Lead,
     MessengerMessage,
     Quote,
+    Reminder,
     SmsMessage,
     User,
 )
@@ -51,6 +52,80 @@ def _count_result_to_int(value: object) -> int:
     if isinstance(value, (tuple, list)):
         return int(value[0] or 0)
     return int(value or 0)
+
+
+def _fmt_date(value: Optional[date]) -> str:
+    if value is None:
+        return "-"
+    return value.strftime("%d %b %Y")
+
+
+def _action_status_hint(due_at: Optional[datetime], due_on: Optional[date], now: datetime) -> str:
+    if due_at is not None:
+        if due_at < now:
+            return "Overdue"
+        if due_at <= now + timedelta(days=2):
+            return "Due soon"
+        return "Upcoming"
+    if due_on is not None:
+        today = now.date()
+        if due_on < today:
+            return "Overdue"
+        if due_on <= today + timedelta(days=2):
+            return "Due soon"
+        return "Upcoming"
+    return "Unscheduled"
+
+
+def _normalize_next_actions(
+    quotes: List[Quote],
+    reminders: List[Reminder],
+    user_names_by_id: Dict[int, str],
+    default_owner: str,
+    now: datetime,
+) -> List[Dict[str, Any]]:
+    actions: List[Dict[str, Any]] = []
+
+    for quote in quotes:
+        if not quote.next_action:
+            continue
+        owner_name = default_owner
+        if quote.owner_id:
+            owner_name = user_names_by_id.get(quote.owner_id, f"User #{quote.owner_id}")
+        actions.append(
+            {
+                "due_at": quote.next_action_due_date,
+                "due_on": None,
+                "type": "Quote follow-up",
+                "details": quote.next_action.strip(),
+                "owner": owner_name,
+                "status": _action_status_hint(quote.next_action_due_date, None, now),
+            }
+        )
+
+    for reminder in reminders:
+        owner_name = user_names_by_id.get(reminder.assigned_to_id, f"User #{reminder.assigned_to_id}")
+        action_title = (reminder.title or "").strip() or "Reminder task"
+        action_message = (reminder.message or "").strip()
+        details = action_title if not action_message else f"{action_title}: {action_message}"
+        actions.append(
+            {
+                "due_at": None,
+                "due_on": reminder.due_date,
+                "type": "Reminder",
+                "details": details[:220],
+                "owner": owner_name,
+                "status": _action_status_hint(None, reminder.due_date, now),
+            }
+        )
+
+    actions.sort(
+        key=lambda a: (
+            a["due_at"] is None and a["due_on"] is None,
+            a["due_at"] if a["due_at"] is not None else datetime.combine(a["due_on"], datetime.min.time()),
+        )
+    )
+    return actions
 
 
 def generate_lead_handover_pdf(
@@ -88,10 +163,21 @@ def generate_lead_handover_pdf(
             .order_by(Quote.updated_at.desc())
         ).all()
     )
+    quotes_with_next_actions: List[Quote] = list(
+        session.exec(
+            select(Quote)
+            .where(
+                Quote.lead_id == lead.id,
+                Quote.next_action.isnot(None),
+            )
+            .order_by(Quote.next_action_due_date.asc(), Quote.updated_at.desc())
+        ).all()
+    )
 
     email_count = 0
     sms_count = 0
     messenger_count = 0
+    reminders: List[Reminder] = []
     if customer:
         email_count = _count_result_to_int(
             session.exec(
@@ -117,6 +203,34 @@ def generate_lead_handover_pdf(
                 )
             ).one()
         )
+        reminders = list(
+            session.exec(
+                select(Reminder)
+                .where(
+                    Reminder.customer_id == customer.id,
+                    Reminder.dismissed_at.is_(None),
+                    Reminder.acted_upon_at.is_(None),
+                )
+                .order_by(Reminder.due_date.asc(), Reminder.created_at.desc())
+            ).all()
+        )
+
+    now = datetime.utcnow()
+    owner_ids = {q.owner_id for q in quotes_with_next_actions if q.owner_id} | {
+        r.assigned_to_id for r in reminders if r.assigned_to_id
+    }
+    user_names_by_id: Dict[int, str] = {}
+    if owner_ids:
+        users = list(session.exec(select(User).where(User.id.in_(list(owner_ids)))).all())
+        for user in users:
+            user_names_by_id[user.id] = user.full_name or f"User #{user.id}"
+    normalized_actions = _normalize_next_actions(
+        quotes=quotes_with_next_actions,
+        reminders=reminders,
+        user_names_by_id=user_names_by_id,
+        default_owner=assigned_to_name,
+        now=now,
+    )
 
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle(
@@ -219,6 +333,42 @@ def generate_lead_handover_pdf(
             normal_style,
         )
     )
+
+    elements.append(Spacer(1, 10))
+    elements.append(Paragraph("Next Scheduled Actions", heading_style))
+    if normalized_actions:
+        action_rows = [["Due", "Type", "Action details", "Owner", "Status"]]
+        for action in normalized_actions[:10]:
+            due_label = (
+                _fmt_datetime(action["due_at"])
+                if action["due_at"] is not None
+                else _fmt_date(action["due_on"])
+            )
+            action_rows.append(
+                [
+                    due_label,
+                    str(action["type"])[:22],
+                    str(action["details"])[:160],
+                    str(action["owner"])[:28],
+                    str(action["status"]),
+                ]
+            )
+        action_table = Table(action_rows, colWidths=[85, 80, 200, 90, 45])
+        action_table.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0f5132")),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                    ("FONTSIZE", (0, 0), (-1, -1), 8),
+                    ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#d0d7de")),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ]
+            )
+        )
+        elements.append(action_table)
+    else:
+        elements.append(Paragraph("No upcoming scheduled actions found.", normal_style))
 
     elements.append(Spacer(1, 10))
     elements.append(Paragraph("Recent Activity Timeline", heading_style))
