@@ -31,6 +31,7 @@ import { Product, ProductCategory, PRODUCT_SUBCATEGORIES, ProductSubcategory } f
 import { toast } from 'sonner';
 
 const PRODUCT_UNIT_OPTIONS = ['Per Box', 'Unit', 'Set'] as const;
+const SUBCATEGORY_NONE = '__NONE__';
 
 export default function ProductsPage() {
   const router = useRouter();
@@ -57,6 +58,9 @@ export default function ProductsPage() {
     image_url: '',
     specifications: '',
   });
+
+  const isStandardSubcategory = (value: string) =>
+    PRODUCT_SUBCATEGORIES.includes(value as ProductSubcategory);
 
   useEffect(() => {
     fetchProducts();
@@ -515,13 +519,38 @@ export default function ProductsPage() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="edit-subcategory">Subcategory</Label>
-                  <Input
-                    id="edit-subcategory"
-                    value={newProduct.subcategory}
-                    onChange={(e) => setNewProduct({ ...newProduct, subcategory: e.target.value })}
-                    placeholder="e.g., Extras, Premium"
+                  <Select
+                    value={
+                      !newProduct.subcategory || newProduct.subcategory.trim() === ''
+                        ? SUBCATEGORY_NONE
+                        : newProduct.subcategory
+                    }
+                    onValueChange={(value) =>
+                      setNewProduct({
+                        ...newProduct,
+                        subcategory: value === SUBCATEGORY_NONE ? '' : value,
+                      })
+                    }
                     disabled={saving}
-                  />
+                  >
+                    <SelectTrigger id="edit-subcategory">
+                      <SelectValue placeholder="Select subcategory" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={SUBCATEGORY_NONE}>None</SelectItem>
+                      {PRODUCT_SUBCATEGORIES.map((sub) => (
+                        <SelectItem key={sub} value={sub}>
+                          {sub}
+                        </SelectItem>
+                      ))}
+                      {newProduct.subcategory &&
+                        !isStandardSubcategory(newProduct.subcategory) && (
+                          <SelectItem value={newProduct.subcategory}>
+                            {`Legacy: ${newProduct.subcategory}`}
+                          </SelectItem>
+                        )}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">

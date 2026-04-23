@@ -17,11 +17,12 @@ import {
 } from '@/components/ui/select';
 import ImageUpload from '@/components/ImageUpload';
 import { getProduct, updateProduct, getOptionalExtras } from '@/lib/api';
-import { ProductCategory, Product } from '@/lib/types';
+import { ProductCategory, Product, PRODUCT_SUBCATEGORIES } from '@/lib/types';
 import { toast } from 'sonner';
 import { ArrowLeft } from 'lucide-react';
 
 const PRODUCT_UNIT_OPTIONS = ['Per Box', 'Unit', 'Set'] as const;
+const SUBCATEGORY_NONE = '__NONE__';
 
 export default function EditProductPage() {
   const router = useRouter();
@@ -52,6 +53,14 @@ export default function EditProductPage() {
     installation_hours: '',
     boxes_per_product: '',
   });
+
+  const isStandardSubcategory = (value: string) =>
+    PRODUCT_SUBCATEGORIES.includes(value as (typeof PRODUCT_SUBCATEGORIES)[number]);
+
+  const subcategorySelectValue =
+    !formData.subcategory || formData.subcategory.trim() === ''
+      ? SUBCATEGORY_NONE
+      : formData.subcategory;
 
   useEffect(() => {
     if (productId) {
@@ -310,15 +319,34 @@ export default function EditProductPage() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="subcategory">Subcategory</Label>
-                    <Input
-                      id="subcategory"
-                      value={formData.subcategory}
-                      onChange={(e) =>
-                        setFormData({ ...formData, subcategory: e.target.value })
+                    <Select
+                      value={subcategorySelectValue}
+                      onValueChange={(value) =>
+                        setFormData({
+                          ...formData,
+                          subcategory: value === SUBCATEGORY_NONE ? '' : value,
+                        })
                       }
-                      placeholder="e.g., Extras, Premium"
                       disabled={loading}
-                    />
+                    >
+                      <SelectTrigger id="subcategory">
+                        <SelectValue placeholder="Select subcategory" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={SUBCATEGORY_NONE}>None</SelectItem>
+                        {PRODUCT_SUBCATEGORIES.map((sub) => (
+                          <SelectItem key={sub} value={sub}>
+                            {sub}
+                          </SelectItem>
+                        ))}
+                        {formData.subcategory &&
+                          !isStandardSubcategory(formData.subcategory) && (
+                            <SelectItem value={formData.subcategory}>
+                              {`Legacy: ${formData.subcategory}`}
+                            </SelectItem>
+                          )}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
