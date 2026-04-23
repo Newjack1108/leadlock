@@ -187,9 +187,19 @@ export const pauseCustomerSmsBot = async (customerId: number, minutes = 720) => 
   return response.data as { ok: boolean; customer_id: number; paused_until: string };
 };
 
+export const stopCustomerSmsBot = async (customerId: number) => {
+  const response = await api.post(`/api/sms/customers/${customerId}/bot/stop`);
+  return response.data as { ok: boolean; customer_id: number; sms_bot_stopped: boolean };
+};
+
 export const resumeCustomerSmsBot = async (customerId: number) => {
   const response = await api.post(`/api/sms/customers/${customerId}/bot/resume`);
-  return response.data as { ok: boolean; customer_id: number; paused_until: null };
+  return response.data as {
+    ok: boolean;
+    customer_id: number;
+    paused_until: null;
+    sms_bot_stopped: boolean;
+  };
 };
 
 export const createScheduledSms = async (data: {

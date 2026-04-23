@@ -34,6 +34,7 @@ from app.schemas import (
     ChannelDirectionCounts,
     CustomerCommunicationStats,
     CustomerResponse,
+    customer_to_response,
     CustomerUpdate,
     ActivityCreate,
     ActivityResponse,
@@ -100,27 +101,7 @@ async def get_customers(
     statement = statement.order_by(Customer.created_at.desc())
     customers = session.exec(statement).all()
     
-    return [
-        CustomerResponse(
-            id=customer.id,
-            customer_number=customer.customer_number,
-            name=customer.name,
-            email=customer.email,
-            phone=customer.phone,
-            address_line1=customer.address_line1,
-            address_line2=customer.address_line2,
-            city=customer.city,
-            county=customer.county,
-            postcode=customer.postcode,
-            country=customer.country,
-            customer_since=customer.customer_since,
-            created_at=customer.created_at,
-            updated_at=customer.updated_at,
-            messenger_psid=customer.messenger_psid,
-            source_system=customer.source_system,
-        )
-        for customer in customers
-    ]
+    return [customer_to_response(customer) for customer in customers]
 
 
 @router.get("/{customer_id}", response_model=CustomerResponse)
@@ -136,24 +117,7 @@ async def get_customer(
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
     
-    return CustomerResponse(
-        id=customer.id,
-        customer_number=customer.customer_number,
-        name=customer.name,
-        email=customer.email,
-        phone=customer.phone,
-        address_line1=customer.address_line1,
-        address_line2=customer.address_line2,
-        city=customer.city,
-        county=customer.county,
-        postcode=customer.postcode,
-        country=customer.country,
-        customer_since=customer.customer_since,
-        created_at=customer.created_at,
-        updated_at=customer.updated_at,
-        messenger_psid=customer.messenger_psid,
-        source_system=customer.source_system,
-    )
+    return customer_to_response(customer)
 
 
 @router.get("/{customer_id}/unread-channels", response_model=CustomerUnreadChannels)
@@ -369,24 +333,7 @@ async def update_customer(
                     current_user.id
                 )
     
-    return CustomerResponse(
-        id=customer.id,
-        customer_number=customer.customer_number,
-        name=customer.name,
-        email=customer.email,
-        phone=customer.phone,
-        address_line1=customer.address_line1,
-        address_line2=customer.address_line2,
-        city=customer.city,
-        county=customer.county,
-        postcode=customer.postcode,
-        country=customer.country,
-        customer_since=customer.customer_since,
-        created_at=customer.created_at,
-        updated_at=customer.updated_at,
-        messenger_psid=customer.messenger_psid,
-        source_system=customer.source_system,
-    )
+    return customer_to_response(customer)
 
 
 @router.delete("/{customer_id}", status_code=204)

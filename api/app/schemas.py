@@ -4,6 +4,7 @@ from datetime import datetime, date
 from decimal import Decimal
 from enum import Enum
 from app.models import (
+    Customer,
     LeadStatus, ActivityType, Timeframe, UserRole, ProductCategory,
     QuoteStatus, QuoteTemperature, DiscountType, DiscountScope, DiscountRequestStatus,
     LeadType, LeadSource, EmailDirection, ReminderPriority, ReminderType,
@@ -142,10 +143,34 @@ class CustomerResponse(BaseModel):
     country: Optional[str]
     customer_since: datetime
     sms_bot_paused_until: Optional[datetime] = None
+    sms_bot_stopped: bool = False
     created_at: datetime
     updated_at: datetime
     messenger_psid: Optional[str] = None
     source_system: Optional[str] = None
+
+
+def customer_to_response(customer: Customer) -> CustomerResponse:
+    return CustomerResponse(
+        id=customer.id,
+        customer_number=customer.customer_number,
+        name=customer.name,
+        email=customer.email,
+        phone=customer.phone,
+        address_line1=customer.address_line1,
+        address_line2=customer.address_line2,
+        city=customer.city,
+        county=customer.county,
+        postcode=customer.postcode,
+        country=customer.country,
+        customer_since=customer.customer_since,
+        sms_bot_paused_until=customer.sms_bot_paused_until,
+        sms_bot_stopped=bool(getattr(customer, "sms_bot_stopped", False)),
+        created_at=customer.created_at,
+        updated_at=customer.updated_at,
+        messenger_psid=customer.messenger_psid,
+        source_system=customer.source_system,
+    )
 
 
 class WebsiteVisitResponse(BaseModel):

@@ -490,6 +490,19 @@ def create_db_and_tables():
                             file=sys.stderr,
                             flush=True,
                         )
+            customer_columns = [col["name"] for col in inspector.get_columns("customer")]
+            if "sms_bot_stopped" not in customer_columns:
+                print("Adding sms_bot_stopped column to customer table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(
+                            text("ALTER TABLE customer ADD COLUMN sms_bot_stopped BOOLEAN DEFAULT FALSE NOT NULL")
+                        )
+                    print("Added sms_bot_stopped column to customer table", file=sys.stderr, flush=True)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Error adding sms_bot_stopped to customer: {e}", file=sys.stderr, flush=True)
         if has_lead_table:
             lead_columns = [col['name'] for col in inspector.get_columns("lead")]
             if "messenger_psid" not in lead_columns:

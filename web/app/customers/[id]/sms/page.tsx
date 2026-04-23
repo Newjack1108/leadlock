@@ -24,6 +24,7 @@ import {
   sendSms,
   pauseCustomerSmsBot,
   resumeCustomerSmsBot,
+  stopCustomerSmsBot,
   createScheduledSms,
   getScheduledSms,
   cancelScheduledSms,
@@ -120,6 +121,9 @@ export default function CustomerSmsPage() {
     customer?.sms_bot_paused_until &&
     new Date(customer.sms_bot_paused_until).getTime() > Date.now()
   );
+  const isBotStopped = !!customer?.sms_bot_stopped;
+
+  const botStatusLabel = isBotStopped ? 'Bot stopped' : isBotPaused ? 'Bot paused' : 'Bot active';
 
   const handlePauseBot = async () => {
     const minutes = Math.max(1, parseInt(botPauseMinutes || '720', 10) || 720);
@@ -139,13 +143,28 @@ export default function CustomerSmsPage() {
     }
   };
 
+  const handleStopBot = async () => {
+    setBotUpdating(true);
+    try {
+      await stopCustomerSmsBot(customerId);
+      setCustomer((prev) =>
+        prev ? { ...prev, sms_bot_stopped: true } : prev
+      );
+      toast.success('SMS bot stopped until you resume');
+    } catch {
+      toast.error('Failed to stop SMS bot');
+    } finally {
+      setBotUpdating(false);
+    }
+  };
+
   const handleResumeBot = async () => {
     setBotUpdating(true);
     try {
       await resumeCustomerSmsBot(customerId);
       setCustomer((prev) =>
         prev
-          ? { ...prev, sms_bot_paused_until: null }
+          ? { ...prev, sms_bot_paused_until: null, sms_bot_stopped: false }
           : prev
       );
       toast.success('SMS bot resumed');
@@ -366,11 +385,21 @@ export default function CustomerSmsPage() {
                 <div className="rounded-md border p-3 bg-muted/20 space-y-2">
                   <div className="flex items-center justify-between gap-2">
                     <Label>Customer bot handling</Label>
-                    <Badge variant={isBotPaused ? 'secondary' : 'default'}>
-                      {isBotPaused ? 'Bot Paused' : 'Bot Active'}
+                    <Badge
+                      variant={
+                        isBotStopped ? 'destructive' : isBotPaused ? 'secondary' : 'default'
+                      }
+                    >
+                      {botStatusLabel}
                     </Badge>
                   </div>
-                  {isBotPaused && customer?.sms_bot_paused_until && (
+                  {isBotStopped && (
+                    <p className="text-xs text-muted-foreground">
+                      Auto-replies are off for this customer until you resume. Messages like STOP from
+                      the customer also stop the bot until resumed.
+                    </p>
+                  )}
+                  {isBotPaused && customer?.sms_bot_paused_until && !isBotStopped && (
                     <p className="text-xs text-muted-foreground">
                       Paused until {formatDateTime(customer.sms_bot_paused_until)}
                     </p>
@@ -392,6 +421,14 @@ export default function CustomerSmsPage() {
                       disabled={botUpdating}
                     >
                       Pause bot
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleStopBot}
+                      disabled={botUpdating || isBotStopped}
+                    >
+                      Stop bot
                     </Button>
                     <Button
                       type="button"

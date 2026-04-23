@@ -32,7 +32,7 @@ from app.models import (
 from app.auth import get_current_user, require_role
 from app.schemas import (
     LeadCreate, LeadUpdate, LeadResponse, LeadListResponse, StatusTransitionRequest,
-    ActivityCreate, ActivityResponse, StatusHistoryResponse, CustomerResponse, QuoteResponse,
+    ActivityCreate, ActivityResponse, StatusHistoryResponse, CustomerResponse, customer_to_response, QuoteResponse,
     FacebookAdvertProfileResponse,
 )
 from app.workflow import can_transition, check_sla_overdue, check_quote_prerequisites
@@ -303,24 +303,7 @@ def enrich_lead_response(
     
     customer_response = None
     if customer:
-        customer_response = CustomerResponse(
-            id=customer.id,
-            customer_number=customer.customer_number,
-            name=customer.name,
-            email=customer.email,
-            phone=customer.phone,
-            address_line1=customer.address_line1,
-            address_line2=customer.address_line2,
-            city=customer.city,
-            county=customer.county,
-            postcode=customer.postcode,
-            country=customer.country,
-            customer_since=customer.customer_since,
-            created_at=customer.created_at,
-            updated_at=customer.updated_at,
-            messenger_psid=customer.messenger_psid,
-            source_system=customer.source_system,
-        )
+        customer_response = customer_to_response(customer)
 
     advert_profile_response = None
     if lead.facebook_advert_profile_id:
@@ -874,24 +857,7 @@ async def get_lead_customer(
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
     
-    return CustomerResponse(
-        id=customer.id,
-        customer_number=customer.customer_number,
-        name=customer.name,
-        email=customer.email,
-        phone=customer.phone,
-        address_line1=customer.address_line1,
-        address_line2=customer.address_line2,
-        city=customer.city,
-        county=customer.county,
-        postcode=customer.postcode,
-        country=customer.country,
-        customer_since=customer.customer_since,
-        created_at=customer.created_at,
-        updated_at=customer.updated_at,
-        messenger_psid=customer.messenger_psid,
-        source_system=customer.source_system,
-    )
+    return customer_to_response(customer)
 
 
 @router.get("/{lead_id}/quotes", response_model=List[QuoteResponse])

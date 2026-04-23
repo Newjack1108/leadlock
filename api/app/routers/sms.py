@@ -217,17 +217,42 @@ async def pause_customer_sms_bot(
     return {"ok": True, "customer_id": customer.id, "paused_until": until}
 
 
+@router.post("/customers/{customer_id}/bot/stop")
+async def stop_customer_sms_bot(
+    customer_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Stop SMS bot auto-replies for this customer until resumed."""
+    customer = session.get(Customer, customer_id)
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    customer.sms_bot_stopped = True
+    session.add(customer)
+    session.add(
+        Activity(
+            customer_id=customer.id,
+            activity_type=ActivityType.NOTE,
+            notes="SMS bot stopped for this customer",
+            created_by_id=current_user.id,
+        )
+    )
+    session.commit()
+    return {"ok": True, "customer_id": customer.id, "sms_bot_stopped": True}
+
+
 @router.post("/customers/{customer_id}/bot/resume")
 async def resume_customer_sms_bot(
     customer_id: int,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    """Resume SMS bot replies for one customer immediately."""
+    """Resume SMS bot replies: clears pause timer and stopped flag."""
     customer = session.get(Customer, customer_id)
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
     customer.sms_bot_paused_until = None
+    customer.sms_bot_stopped = False
     session.add(customer)
     session.add(
         Activity(
@@ -238,7 +263,7 @@ async def resume_customer_sms_bot(
         )
     )
     session.commit()
-    return {"ok": True, "customer_id": customer.id, "paused_until": None}
+    return {"ok": True, "customer_id": customer.id, "paused_until": None, "sms_bot_stopped": False}
 
 
 # Scheduled SMS (must be before /{sms_id} so /scheduled is not captured as sms_id)

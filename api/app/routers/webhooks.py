@@ -203,30 +203,13 @@ async def create_lead_webhook(
                     quote_locked = True
                     quote_lock_reason = error
         
-        from app.schemas import CustomerResponse
+        from app.schemas import customer_to_response
         customer_response = None
         if lead.customer_id:
             statement = select(Customer).where(Customer.id == lead.customer_id)
             customer = session.exec(statement).first()
             if customer:
-                customer_response = CustomerResponse(
-                    id=customer.id,
-                    customer_number=customer.customer_number,
-                    name=customer.name,
-                    email=customer.email,
-                    phone=customer.phone,
-                    address_line1=customer.address_line1,
-                    address_line2=customer.address_line2,
-                    city=customer.city,
-                    county=customer.county,
-                    postcode=customer.postcode,
-                    country=customer.country,
-                    customer_since=customer.customer_since,
-                    created_at=customer.created_at,
-                    updated_at=customer.updated_at,
-                    messenger_psid=customer.messenger_psid,
-                    source_system=customer.source_system,
-                )
+                customer_response = customer_to_response(customer)
         
         return LeadResponse(
             id=lead.id,

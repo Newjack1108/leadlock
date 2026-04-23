@@ -120,9 +120,12 @@ def should_bot_reply(
 ) -> Tuple[bool, Optional[str]]:
     if not settings or not customer:
         return False, "no_settings_or_customer"
+    if getattr(customer, "sms_bot_stopped", False):
+        return False, "bot_stopped"
     if customer.sms_bot_paused_until and customer.sms_bot_paused_until > datetime.utcnow():
         return False, "customer_pause_active"
     if _contains_opt_out(inbound_body):
+        customer.sms_bot_stopped = True
         return False, "opt_out_keyword"
     if not is_bot_active_now(settings):
         return False, "bot_inactive"

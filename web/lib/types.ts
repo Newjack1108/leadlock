@@ -147,6 +147,7 @@ export interface Customer {
   country?: string;
   customer_since: string;
   sms_bot_paused_until?: string | null;
+  sms_bot_stopped?: boolean;
   created_at: string;
   updated_at: string;
   messenger_psid?: string | null;
