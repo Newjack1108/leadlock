@@ -107,6 +107,38 @@ function QuoteListEngagementBadges({ quote }: { quote: Quote }) {
 
 const VALID_QUOTE_STATUSES = Object.values(QuoteStatus);
 
+type QuotesListFilter = QuoteStatus | 'ALL' | 'LIVE' | 'CLOSED';
+
+function isConcreteQuoteStatus(f: QuotesListFilter): f is QuoteStatus {
+  return f !== 'ALL' && f !== 'LIVE' && f !== 'CLOSED';
+}
+
+/** URL → filter (default LIVE when no relevant params). ALL uses pipeline=1. */
+function parseFilterFromSearchParams(sp: { get: (key: string) => string | null }): QuotesListFilter {
+  const status = sp.get('status');
+  if (status && VALID_QUOTE_STATUSES.includes(status as QuoteStatus)) {
+    return status as QuoteStatus;
+  }
+  if (sp.get('lifecycle') === 'closed') return 'CLOSED';
+  if (sp.get('lifecycle') === 'live') return 'LIVE';
+  if (sp.get('pipeline') === '1') return 'ALL';
+  return 'LIVE';
+}
+
+/** Filter → query string (null means bare /quotes). */
+function filterToSearchString(filter: QuotesListFilter): string | null {
+  if (isConcreteQuoteStatus(filter)) {
+    return new URLSearchParams({ status: filter }).toString();
+  }
+  if (filter === 'CLOSED') {
+    return new URLSearchParams({ lifecycle: 'closed' }).toString();
+  }
+  if (filter === 'ALL') {
+    return new URLSearchParams({ pipeline: '1' }).toString();
+  }
+  return null;
+}
+
 const QUOTES_PAGE_SIZE = 50;
 
 type QuotesSortBy = 'last_contacted' | 'created';
@@ -130,14 +162,10 @@ function getDisplayLeadType(leadType?: LeadType | null): LeadType | null {
 function QuotesPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const statusFromUrl = searchParams.get('status');
-  const initialStatus = statusFromUrl && VALID_QUOTE_STATUSES.includes(statusFromUrl as QuoteStatus)
-    ? (statusFromUrl as QuoteStatus)
-    : 'ALL';
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'list' | 'tile'>('list');
-  const [statusFilter, setStatusFilter] = useState<QuoteStatus | 'ALL'>(initialStatus);
+  const [statusFilter, setStatusFilter] = useState<QuotesListFilter>(() => parseFilterFromSearchParams(searchParams));
   const [temperatureFilter, setTemperatureFilter] = useState<QuoteTemperature | 'ALL'>('ALL');
   const [searchDraft, setSearchDraft] = useState('');
   const [searchApplied, setSearchApplied] = useState('');
@@ -146,13 +174,21 @@ function QuotesPageContent() {
   const [total, setTotal] = useState(0);
   const [includeArchived, setIncludeArchived] = useState(false);
 
-  // Sync status filter from URL when search params change (e.g. navigation from dashboard)
+  // Sync filter from URL (back/forward, dashboard links, shared URLs)
   useEffect(() => {
-    const status = searchParams.get('status');
-    if (status && VALID_QUOTE_STATUSES.includes(status as QuoteStatus)) {
-      setStatusFilter(status as QuoteStatus);
-    }
+    const parsed = parseFilterFromSearchParams(searchParams);
+    setStatusFilter((prev) => (prev === parsed ? prev : parsed));
   }, [searchParams]);
+
+  const onStatusFilterChange = useCallback(
+    (v: string) => {
+      const next = v as QuotesListFilter;
+      setStatusFilter(next);
+      const qs = filterToSearchString(next);
+      router.replace(qs ? `/quotes?${qs}` : '/quotes', { scroll: false });
+    },
+    [router],
+  );
 
   useLayoutEffect(() => {
     setPage(1);
@@ -163,7 +199,9 @@ function QuotesPageContent() {
       setLoading(true);
       const searchValue = searchApplied.trim() || undefined;
       const data = await getQuotes({
-        status: statusFilter === 'ALL' ? undefined : statusFilter,
+        status: isConcreteQuoteStatus(statusFilter) ? statusFilter : undefined,
+        lifecycle:
+          statusFilter === 'LIVE' ? 'live' : statusFilter === 'CLOSED' ? 'closed' : undefined,
         search: searchValue,
         temperature: temperatureFilter === 'ALL' ? undefined : temperatureFilter,
         page,
@@ -257,12 +295,14 @@ function QuotesPageContent() {
         </div>
 
         <div className="flex flex-col lg:flex-row flex-wrap gap-4 mb-6 items-end">
-            <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as QuoteStatus | 'ALL')}>
-              <SelectTrigger className="w-full md:w-[200px]">
+            <Select value={statusFilter} onValueChange={onStatusFilterChange}>
+              <SelectTrigger className="w-full md:w-[220px]">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="ALL">All statuses</SelectItem>
+                <SelectItem value="LIVE">Live quotes</SelectItem>
+                <SelectItem value="CLOSED">Closed quotes</SelectItem>
+                <SelectItem value="ALL">All statuses (excl. rejected & expired)</SelectItem>
                 {Object.values(QuoteStatus).map((s) => (
                   <SelectItem key={s} value={s}>
                     {s}

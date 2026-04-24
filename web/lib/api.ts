@@ -723,6 +723,7 @@ export const duplicateQuoteToDraft = async (quoteId: number) => {
 
 export const getQuotes = async (options?: {
   status?: QuoteStatus;
+  lifecycle?: 'live' | 'closed';
   search?: string;
   temperature?: QuoteTemperature;
   page?: number;
@@ -731,6 +732,7 @@ export const getQuotes = async (options?: {
 }) => {
   const params: Record<string, string | number | boolean> = {};
   if (options?.status) params.status = options.status;
+  if (options?.lifecycle) params.lifecycle = options.lifecycle;
   if (options?.search?.trim()) params.search = options.search.trim();
   if (options?.temperature) params.temperature = options.temperature;
   if (options?.page != null) params.page = options.page;

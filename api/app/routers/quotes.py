@@ -5,7 +5,7 @@ from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Query, 
 from fastapi.responses import Response
 from sqlmodel import Session, select, or_, and_
 from sqlalchemy import func, true, String as SAString
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Literal, Optional, Tuple
 from app.database import get_session
 from app.models import (
     Quote,
@@ -61,7 +61,14 @@ from app.sms_service import send_sms, normalize_phone
 from app.quote_pdf_service import generate_quote_pdf
 from app.available_optional_extras import get_available_optional_extras_for_quote
 from app.reminder_service import get_last_activity_date, dismiss_open_reminders_for_quote
-from app.constants import QUOTE_LIST_EXCLUDED_STATUSES, VAT_RATE_DECIMAL, LIST_PAGE_SIZE_DEFAULT, LIST_PAGE_SIZE_MAX
+from app.constants import (
+    QUOTE_LIST_EXCLUDED_STATUSES,
+    QUOTE_LIVE_STATUSES,
+    QUOTE_CLOSED_STATUSES,
+    VAT_RATE_DECIMAL,
+    LIST_PAGE_SIZE_DEFAULT,
+    LIST_PAGE_SIZE_MAX,
+)
 from app.quote_delete import delete_quote_cascade
 from app.discount_limits import assert_templates_not_expired_for_apply, validate_and_record_redemptions_on_accept
 from datetime import datetime
@@ -928,6 +935,7 @@ async def create_quote(
 @router.get("", response_model=QuoteListResponse)
 async def get_all_quotes(
     status: Optional[QuoteStatus] = Query(None),
+    lifecycle: Optional[Literal["live", "closed"]] = Query(None),
     search: Optional[str] = Query(None),
     temperature: Optional[QuoteTemperature] = Query(None),
     page: int = Query(1, ge=1),
@@ -936,7 +944,12 @@ async def get_all_quotes(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
-    """Paginated quotes. By default excludes REJECTED and EXPIRED; pass status= to list only that status."""
+    """Paginated quotes.
+
+    Default: excludes REJECTED and EXPIRED (pipeline list).
+    Pass status= for a single status (special case: VIEWED includes SENT rows with viewed_at set); lifecycle is ignored.
+    Pass lifecycle=live for DRAFT/SENT/VIEWED only, or lifecycle=closed for ACCEPTED/REJECTED/EXPIRED only.
+    """
     try:
         effective_include_archived = include_archived or (bool(search and search.strip()))
         conditions = []
@@ -954,6 +967,10 @@ async def get_all_quotes(
                 )
             else:
                 conditions.append(Quote.status == status)
+        elif lifecycle == "live":
+            conditions.append(Quote.status.in_(QUOTE_LIVE_STATUSES))
+        elif lifecycle == "closed":
+            conditions.append(Quote.status.in_(QUOTE_CLOSED_STATUSES))
         else:
             conditions.append(Quote.status.notin_(QUOTE_LIST_EXCLUDED_STATUSES))
 

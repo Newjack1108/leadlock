@@ -8,6 +8,10 @@ from app.models import QuoteStatus
 # Excluded from list UIs (quotes index, opportunities, customer/lead quote panels)
 QUOTE_LIST_EXCLUDED_STATUSES = (QuoteStatus.REJECTED, QuoteStatus.EXPIRED)
 
+# Quotes list lifecycle buckets (GET /api/quotes?lifecycle=...)
+QUOTE_LIVE_STATUSES = (QuoteStatus.DRAFT, QuoteStatus.SENT, QuoteStatus.VIEWED)
+QUOTE_CLOSED_STATUSES = (QuoteStatus.ACCEPTED, QuoteStatus.REJECTED, QuoteStatus.EXPIRED)
+
 # List endpoints: default page size and max per request
 LIST_PAGE_SIZE_DEFAULT = 50
 LIST_PAGE_SIZE_MAX = 200
