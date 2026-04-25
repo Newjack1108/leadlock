@@ -64,6 +64,11 @@ async def send_sms_to_customer(
     customer = session.exec(statement).first()
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
+    if not (customer.phone or "").strip():
+        raise HTTPException(
+            status_code=400,
+            detail="SMS is disabled for this customer until a phone number is added",
+        )
 
     to_phone = data.to_phone or (customer.phone if customer.phone else None)
     if data.lead_id and not to_phone:
@@ -278,6 +283,11 @@ async def create_scheduled_sms(
     customer = session.exec(statement).first()
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
+    if not (customer.phone or "").strip():
+        raise HTTPException(
+            status_code=400,
+            detail="SMS automations are disabled for this customer until a phone number is added",
+        )
     is_valid, normalized_to_phone, phone_error = validate_outbound_phone(data.to_phone)
     if not is_valid:
         raise HTTPException(status_code=400, detail=phone_error or "Invalid phone number")

@@ -135,9 +135,13 @@ def _send_outreach_sms(
     if not sid or not token or not from_phone:
         return False, None, "Twilio not configured"
 
-    to_phone = customer.phone or (lead.phone if lead and lead.phone else None)
+    to_phone = customer.phone
     if not to_phone:
-        return False, None, "No phone number"
+        return (
+            False,
+            None,
+            "Customer has no phone number; SMS outreach is disabled until number is added",
+        )
 
     body = render_sms_template(template, customer, user=actor, company_settings=company)
     success, twilio_sid, err = send_sms(to_phone, body)

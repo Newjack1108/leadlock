@@ -122,6 +122,7 @@ export default function CustomerSmsPage() {
     new Date(customer.sms_bot_paused_until).getTime() > Date.now()
   );
   const isBotStopped = !!customer?.sms_bot_stopped;
+  const hasCustomerPhone = !!customer?.phone?.trim();
 
   const botStatusLabel = isBotStopped ? 'Bot stopped' : isBotPaused ? 'Bot paused' : 'Bot active';
 
@@ -364,6 +365,7 @@ export default function CustomerSmsPage() {
               <Button
                 variant="outline"
                 onClick={() => setScheduleDialogOpen(true)}
+                disabled={!hasCustomerPhone}
               >
                 <CalendarClock className="h-4 w-4 mr-2" />
                 Schedule message
@@ -418,7 +420,7 @@ export default function CustomerSmsPage() {
                       type="button"
                       variant="outline"
                       onClick={handlePauseBot}
-                      disabled={botUpdating}
+                      disabled={botUpdating || !hasCustomerPhone}
                     >
                       Pause bot
                     </Button>
@@ -426,7 +428,7 @@ export default function CustomerSmsPage() {
                       type="button"
                       variant="outline"
                       onClick={handleStopBot}
-                      disabled={botUpdating || isBotStopped}
+                      disabled={botUpdating || isBotStopped || !hasCustomerPhone}
                     >
                       Stop bot
                     </Button>
@@ -434,11 +436,16 @@ export default function CustomerSmsPage() {
                       type="button"
                       variant="outline"
                       onClick={handleResumeBot}
-                      disabled={botUpdating}
+                      disabled={botUpdating || !hasCustomerPhone}
                     >
                       Resume bot
                     </Button>
                   </div>
+                  {!hasCustomerPhone && (
+                    <p className="text-xs text-muted-foreground">
+                      SMS and SMS automations are disabled until this customer has a phone number.
+                    </p>
+                  )}
                 </div>
                 <div>
                   <Label htmlFor="to_phone">To (phone)</Label>
@@ -447,6 +454,7 @@ export default function CustomerSmsPage() {
                     value={composeToPhone}
                     onChange={(e) => setComposeToPhone(e.target.value)}
                     placeholder="+44 7700 900000"
+                    disabled={!hasCustomerPhone}
                   />
                 </div>
                 <div>
@@ -462,7 +470,7 @@ export default function CustomerSmsPage() {
                   <Select
                     value={selectedComposeTemplateId}
                     onValueChange={handleComposeTemplateChange}
-                    disabled={loadingComposeTemplate}
+                    disabled={loadingComposeTemplate || !hasCustomerPhone}
                   >
                     <SelectTrigger className="w-full">
                       <SelectValue placeholder="No template" />
@@ -488,9 +496,10 @@ export default function CustomerSmsPage() {
                     onChange={(e) => setComposeBody(e.target.value)}
                     placeholder="Your message..."
                     rows={3}
+                    disabled={!hasCustomerPhone}
                   />
                 </div>
-                <Button onClick={handleSend} disabled={sending}>
+                <Button onClick={handleSend} disabled={sending || !hasCustomerPhone}>
                   <Send className="h-4 w-4 mr-2" />
                   {sending ? 'Sending...' : 'Send'}
                 </Button>
@@ -648,6 +657,7 @@ export default function CustomerSmsPage() {
                 value={scheduleToPhone}
                 onChange={(e) => setScheduleToPhone(e.target.value)}
                 placeholder="+44 7700 900000"
+                disabled={!hasCustomerPhone}
               />
             </div>
             <div>
@@ -655,7 +665,7 @@ export default function CustomerSmsPage() {
               <Select
                 value={selectedScheduleTemplateId}
                 onValueChange={handleScheduleTemplateChange}
-                disabled={loadingScheduleTemplate}
+                disabled={loadingScheduleTemplate || !hasCustomerPhone}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="No template" />
@@ -681,6 +691,7 @@ export default function CustomerSmsPage() {
                 onChange={(e) => setScheduleBody(e.target.value)}
                 placeholder="Your message..."
                 rows={3}
+                disabled={!hasCustomerPhone}
               />
             </div>
             <div>
@@ -690,6 +701,7 @@ export default function CustomerSmsPage() {
                 type="datetime-local"
                 value={scheduleDatetime}
                 onChange={(e) => setScheduleDatetime(e.target.value)}
+                disabled={!hasCustomerPhone}
               />
             </div>
           </div>
@@ -697,7 +709,7 @@ export default function CustomerSmsPage() {
             <Button variant="outline" onClick={() => setScheduleDialogOpen(false)}>
               Close
             </Button>
-            <Button onClick={handleSchedule} disabled={scheduling}>
+            <Button onClick={handleSchedule} disabled={scheduling || !hasCustomerPhone}>
               {scheduling ? 'Scheduling...' : 'Schedule'}
             </Button>
           </DialogFooter>

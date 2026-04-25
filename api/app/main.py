@@ -327,6 +327,7 @@ def on_startup():
         from app.models import (
             Activity,
             ActivityType,
+            Customer,
             ScheduledSms,
             SmsMessage,
             SmsDirection,
@@ -363,11 +364,20 @@ def on_startup():
                                 "body": scheduled.body,
                                 "created_by_id": scheduled.created_by_id,
                             }
+                            customer = session.get(Customer, scheduled.customer_id)
+                            has_customer_phone = bool(customer and (customer.phone or "").strip())
 
-                        try:
-                            success, sid, err = send_sms(payload["to_phone"], payload["body"])
-                        except Exception as e:
-                            success, sid, err = False, None, str(e)
+                        if has_customer_phone:
+                            try:
+                                success, sid, err = send_sms(payload["to_phone"], payload["body"])
+                            except Exception as e:
+                                success, sid, err = False, None, str(e)
+                        else:
+                            success, sid, err = (
+                                False,
+                                None,
+                                "Customer has no phone number; SMS automation disabled until number is added",
+                            )
 
                         with Session(engine) as session:
                             scheduled = session.get(ScheduledSms, scheduled_id)
