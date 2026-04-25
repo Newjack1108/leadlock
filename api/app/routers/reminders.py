@@ -7,7 +7,7 @@ from sqlmodel import Session, select, and_, or_, func
 from typing import List, Optional, Dict
 from app.database import get_session
 from app.auth import get_current_user
-from datetime import date as date_type, datetime
+from datetime import date as date_type, datetime, timedelta
 from app.models import (
     Reminder, ReminderRule, User, UserRole, Lead, Quote, Customer,
     ReminderType, ReminderPriority, SuggestedAction, LeadStatus, QuoteStatus,
@@ -26,6 +26,7 @@ _LEAD_CHECK_TYPES = frozenset({"LAST_ACTIVITY", "STATUS_DURATION"})
 _QUOTE_CHECK_TYPES = frozenset({
     "SENT_DATE", "VALID_UNTIL", "STATUS_DURATION", "SENT_NOT_OPENED", "OPENED_NO_REPLY",
 })
+_USER_TASK_NEAR_DUE_DAYS = 1
 
 
 def _normalize_outreach_fields(
@@ -263,6 +264,7 @@ async def get_reminders(
     current_user: User = Depends(get_current_user)
 ):
     """Get active reminders for the current user (per role; Directors see all)."""
+    today = date_type.today()
     statement = select(Reminder)
     visibility = _reminder_visibility_filter(current_user)
     if visibility is not None:
@@ -289,9 +291,18 @@ async def get_reminders(
     
     if reminder_type:
         statement = statement.where(Reminder.reminder_type == reminder_type)
-    
+
+    # Keep user tasks out of active reminder lists until they are near due.
+    if done is not True and dismissed is False:
+        near_due_cutoff = today + timedelta(days=_USER_TASK_NEAR_DUE_DAYS)
+        statement = statement.where(
+            or_(
+                Reminder.reminder_type != ReminderType.USER_TASK,
+                Reminder.due_date <= near_due_cutoff,
+            )
+        )
+
     reminders = session.exec(statement).all()
-    today = date_type.today()
 
     user_ids = set()
     for r in reminders:

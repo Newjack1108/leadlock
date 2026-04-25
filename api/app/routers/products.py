@@ -119,9 +119,11 @@ async def export_price_list_pdf(
 
     statement = statement.order_by(Product.category, Product.subcategory, Product.name)
     products = list(session.exec(statement).all())
+    excluded_subcategories = {"other", "bespoke"}
     products = [
-        p for p in products
-        if (p.subcategory or "").strip().lower() != "other"
+        p
+        for p in products
+        if (p.subcategory or "").strip().lower() not in excluded_subcategories
     ]
 
     summary_parts: List[str] = []
