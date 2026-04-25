@@ -83,7 +83,7 @@ export default function QuoteTemplatesPage() {
       name: '',
       description: '',
       email_subject_template: 'Quote {{ quote.quote_number }}',
-      email_body_template: '<p>Dear {{ customer.name }},</p>\n\n<p>Thank you for your interest. We have prepared quote {{ quote.quote_number }} for you.</p>\n\n<p>Please use the secure link below to view the full quote. If you have any questions, we would be happy to help.</p>\n\n{% if custom_message %}\n<p>{{ custom_message }}</p>\n{% endif %}\n\n<p>Best regards,<br>\n{{ company_settings.company_name if company_settings else \'LeadLock CRM\' }}</p>',
+      email_body_template: '<p>Dear {{ customer.name }},</p>\n\n<p>Thank you for your interest. We have prepared quote {{ quote.quote_number }} for you.</p>\n\n<p>Please use the secure link below to view the full quote. If you have any questions, we would be happy to help.</p>\n\n{% if custom_message %}\n<p>{{ custom_message }}</p>\n{% endif %}\n\n<p>Best regards,<br>\n{{ company_settings.company_name if company_settings else \'Our team\' }}</p>',
       is_default: false,
       sales_document_ids: [],
     });

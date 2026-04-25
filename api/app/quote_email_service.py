@@ -28,7 +28,7 @@ def get_sample_quote_preview_data() -> Dict[str, Any]:
         phone = "+44 1234 567890"
 
     class SampleCompany:
-        company_name = "LeadLock CRM"
+        company_name = "Our team"
 
     currency_symbol = "£"
     vat_amount = Decimal("300.00")

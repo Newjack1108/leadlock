@@ -1761,7 +1761,7 @@ async def post_quote_send_sms(
     else:
         has_order = session.exec(select(Order).where(Order.quote_id == quote.id)).first() is not None
         label = "order" if has_order else "quote"
-        sms_body = f"View your {label}: {view_url}"
+        sms_body = f"Here is your {label} link to review online: {view_url}"
 
     success, sid, error = send_sms(to_phone, sms_body)
     if not success:

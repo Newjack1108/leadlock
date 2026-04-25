@@ -167,7 +167,7 @@ def _build_company_context_block(settings: Optional[CompanySettings]) -> Optiona
 def _build_sms_bot_system_prompt(settings: Optional[CompanySettings]) -> str:
     """Guardrails first, then optional company facts, then company-specific instructions."""
     guardrails = (
-        "You are LeadLock's out-of-hours SMS assistant. "
+        "You are the company's out-of-hours SMS assistant. "
         "Reply in plain text under 320 characters. "
         "If the question is complex, pricing-specific, complaint-related, or unclear, politely hand over to a human for next business day. "
         "Do not invent facts or promise specific installation dates."
