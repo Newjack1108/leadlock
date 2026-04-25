@@ -19,7 +19,18 @@ if "localhost" not in DATABASE_URL and "127.0.0.1" not in DATABASE_URL:
 
 # Only echo SQL in development (noisy in production)
 _echo_sql = os.getenv("DEBUG", "false").lower() == "true" and not os.getenv("RAILWAY_ENVIRONMENT")
-engine = create_engine(DATABASE_URL, echo=_echo_sql)
+
+_engine_kwargs = {"echo": _echo_sql, "pool_pre_ping": True}
+if not DATABASE_URL.startswith("sqlite"):
+    _engine_kwargs.update(
+        {
+            "pool_size": int(os.getenv("DB_POOL_SIZE", "20")),
+            "max_overflow": int(os.getenv("DB_MAX_OVERFLOW", "20")),
+            "pool_timeout": int(os.getenv("DB_POOL_TIMEOUT", "30")),
+            "pool_recycle": int(os.getenv("DB_POOL_RECYCLE", "1800")),
+        }
+    )
+engine = create_engine(DATABASE_URL, **_engine_kwargs)
 
 
 def _ensure_facebook_advert_schema(engine) -> None:

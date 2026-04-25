@@ -341,33 +341,57 @@ def on_startup():
                 try:
                     time.sleep(poll_interval)
                     with Session(engine) as session:
-                        statement = (
-                            select(ScheduledSms)
-                            .where(ScheduledSms.status == ScheduledSmsStatus.PENDING)
-                            .where(ScheduledSms.scheduled_at <= dt.utcnow())
+                        due_ids = list(
+                            session.exec(
+                                select(ScheduledSms.id)
+                                .where(ScheduledSms.status == ScheduledSmsStatus.PENDING)
+                                .where(ScheduledSms.scheduled_at <= dt.utcnow())
+                            ).all()
                         )
-                        due = list(session.exec(statement).all())
-                        for scheduled in due:
+
+                    for scheduled_id in due_ids:
+                        # Keep DB sessions short and avoid holding a pooled connection
+                        # while waiting on Twilio/network calls.
+                        with Session(engine) as session:
+                            scheduled = session.get(ScheduledSms, scheduled_id)
+                            if not scheduled or scheduled.status != ScheduledSmsStatus.PENDING:
+                                continue
+
+                            payload = {
+                                "customer_id": scheduled.customer_id,
+                                "to_phone": scheduled.to_phone,
+                                "body": scheduled.body,
+                                "created_by_id": scheduled.created_by_id,
+                            }
+
+                        try:
+                            success, sid, err = send_sms(payload["to_phone"], payload["body"])
+                        except Exception as e:
+                            success, sid, err = False, None, str(e)
+
+                        with Session(engine) as session:
+                            scheduled = session.get(ScheduledSms, scheduled_id)
+                            if not scheduled or scheduled.status != ScheduledSmsStatus.PENDING:
+                                continue
                             try:
-                                success, sid, err = send_sms(scheduled.to_phone, scheduled.body)
                                 if success:
                                     from_phone = os.getenv("TWILIO_PHONE_NUMBER", "")
                                     msg = SmsMessage(
-                                        customer_id=scheduled.customer_id,
+                                        customer_id=payload["customer_id"],
                                         direction=SmsDirection.SENT,
                                         from_phone=from_phone,
-                                        to_phone=normalize_phone(scheduled.to_phone),
-                                        body=scheduled.body,
+                                        to_phone=normalize_phone(payload["to_phone"]),
+                                        body=payload["body"],
                                         twilio_sid=sid,
                                         sent_at=dt.utcnow(),
-                                        created_by_id=scheduled.created_by_id,
+                                        created_by_id=payload["created_by_id"],
                                     )
                                     session.add(msg)
                                     activity = Activity(
-                                        customer_id=scheduled.customer_id,
+                                        customer_id=payload["customer_id"],
                                         activity_type=ActivityType.SMS_SENT,
-                                        notes=f"Scheduled SMS sent to {scheduled.to_phone}\n{scheduled.body}",
-                                        created_by_id=scheduled.created_by_id,
+                                        notes=f"Scheduled SMS sent to {payload['to_phone']}\n{payload['body']}",
+                                        created_by_id=payload["created_by_id"],
                                     )
                                     session.add(activity)
                                     scheduled.status = ScheduledSmsStatus.SENT
@@ -375,13 +399,13 @@ def on_startup():
                                     scheduled.twilio_sid = sid
                                     session.add(scheduled)
                                 else:
-                                    print(f"Scheduled SMS {scheduled.id} send failed: {err}", file=__import__("sys").stderr, flush=True)
+                                    print(f"Scheduled SMS {scheduled_id} send failed: {err}", file=__import__("sys").stderr, flush=True)
                                     scheduled.status = ScheduledSmsStatus.FAILED
                                     scheduled.failure_reason = (err or "Twilio send failed")[:1000]
                                     session.add(scheduled)
                                 session.commit()
                             except Exception as e:
-                                print(f"Error processing scheduled SMS {scheduled.id}: {e}", file=__import__("sys").stderr, flush=True)
+                                print(f"Error processing scheduled SMS {scheduled_id}: {e}", file=__import__("sys").stderr, flush=True)
                                 session.rollback()
                 except Exception as e:
                     print(f"Error in scheduled SMS worker: {e}", file=__import__("sys").stderr, flush=True)
