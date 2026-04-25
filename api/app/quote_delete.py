@@ -3,16 +3,24 @@
 from sqlmodel import Session, select
 
 from app.models import (
+    CustomerOutreachSend,
     DiscountRequest,
     Quote,
     QuoteDiscount,
     QuoteEmail,
     QuoteItem,
+    Reminder,
 )
 
 
 def delete_quote_cascade(session: Session, quote_id: int) -> None:
     """Delete a quote and dependents. Caller must delete orders referencing this quote first."""
+    for rem in session.exec(select(Reminder).where(Reminder.quote_id == quote_id)).all():
+        session.delete(rem)
+    session.flush()
+    for cos in session.exec(select(CustomerOutreachSend).where(CustomerOutreachSend.quote_id == quote_id)).all():
+        session.delete(cos)
+    session.flush()
     for dr in session.exec(select(DiscountRequest).where(DiscountRequest.quote_id == quote_id)).all():
         session.delete(dr)
     session.flush()
