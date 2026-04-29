@@ -24,7 +24,7 @@ import api, {
 } from '@/lib/api';
 import { DashboardStats, StaleSummary, CompanySettings, UnreadSmsSummary, UnreadMessengerSummary, LeadLocationItem, DiscountTemplate, DashboardCommunicationTotals } from '@/lib/types';
 import { toast } from 'sonner';
-import { TrendingUp, Users, CheckCircle2, Trophy, Bell, ArrowRight, Clock, MessageSquare, FileDown, BarChart3, Target, MessageCircle, Calendar, DoorClosed } from 'lucide-react';
+import { TrendingUp, Users, CheckCircle2, Trophy, Bell, ArrowRight, Clock, MessageSquare, FileDown, BarChart3, Target, MessageCircle, Calendar, DoorClosed, LayoutDashboard } from 'lucide-react';
 import StatusPieChart from '@/components/StatusPieChart';
 import LeadsBySourceBarChart from '@/components/LeadsBySourceBarChart';
 
@@ -45,6 +45,7 @@ export default function DashboardPage() {
   const [activeDiscounts, setActiveDiscounts] = useState<DiscountTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [datePeriod, setDatePeriod] = useState<DatePeriod>('week');
+  const [userRole, setUserRole] = useState<string | null>(null);
   const periodLabel = datePeriod === 'all' ? 'All Time' : `This ${datePeriod.charAt(0).toUpperCase() + datePeriod.slice(1)}`;
 
   useEffect(() => {
@@ -55,6 +56,7 @@ export default function DashboardPage() {
     try {
       const me = await api.get('/api/auth/me');
       const role = me.data?.role as string | undefined;
+      setUserRole(role ?? null);
       if (role === 'DEALER_ADMIN' || role === 'DEALER_USER') {
         router.replace('/dealer');
         return;
@@ -126,7 +128,17 @@ export default function DashboardPage() {
       <Header />
       <main className="container mx-auto px-4 sm:px-6 py-8">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
-          <h1 className="text-3xl font-semibold">Dashboard</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-semibold">Dashboard</h1>
+            {(userRole === 'DIRECTOR' || userRole === 'SALES_MANAGER') && (
+              <Link href="/closer-dashboard">
+                <Button variant="outline" size="sm">
+                  <LayoutDashboard className="h-4 w-4 mr-2" />
+                  Closer Dashboard
+                </Button>
+              </Link>
+            )}
+          </div>
           <div className="flex max-w-full flex-wrap gap-2">
             {(['all', 'week', 'month', 'quarter', 'year'] as const).map((period) => (
               <Button
