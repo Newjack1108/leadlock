@@ -200,7 +200,7 @@ export default function CustomerEmailsPage() {
                           {thread.emails.length} {thread.emails.length === 1 ? 'email' : 'emails'}
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          {new Date(thread.latestDate).toLocaleDateString()}
+                          {new Date(thread.latestDate).toLocaleDateString('en-GB')}
                         </div>
                       </div>
                     ))}

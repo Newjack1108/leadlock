@@ -412,7 +412,7 @@ function QuotesPageContent() {
                       </td>
                       <td className="p-3 text-muted-foreground">
                         {quote.customer_last_interacted_at
-                          ? new Date(quote.customer_last_interacted_at).toLocaleDateString()
+                          ? new Date(quote.customer_last_interacted_at).toLocaleDateString('en-GB')
                           : '—'}
                       </td>
                       <td className="p-3">
@@ -442,11 +442,11 @@ function QuotesPageContent() {
                       <td className="p-3 font-semibold">£{Number(quote.total_amount).toFixed(2)}</td>
                       <td className="p-3 text-muted-foreground">
                         {quote.valid_until
-                          ? new Date(quote.valid_until).toLocaleDateString()
+                          ? new Date(quote.valid_until).toLocaleDateString('en-GB')
                           : '—'}
                       </td>
                       <td className="p-3 text-muted-foreground">
-                        {new Date(quote.created_at).toLocaleDateString()}
+                        {new Date(quote.created_at).toLocaleDateString('en-GB')}
                       </td>
                       <td className="p-3 text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex gap-2 justify-end">
@@ -548,13 +548,13 @@ function QuotesPageContent() {
                         <p>Total: £{Number(quote.total_amount).toFixed(2)}</p>
                         {quote.valid_until && (
                           <p>
-                            Valid until: {new Date(quote.valid_until).toLocaleDateString()}
+                            Valid until: {new Date(quote.valid_until).toLocaleDateString('en-GB')}
                           </p>
                         )}
-                        <p>Created: {new Date(quote.created_at).toLocaleDateString()}</p>
+                        <p>Created: {new Date(quote.created_at).toLocaleDateString('en-GB')}</p>
                         <p>
                           Last contacted: {quote.customer_last_interacted_at
-                            ? new Date(quote.customer_last_interacted_at).toLocaleDateString()
+                            ? new Date(quote.customer_last_interacted_at).toLocaleDateString('en-GB')
                             : '—'}
                         </p>
                       </div>

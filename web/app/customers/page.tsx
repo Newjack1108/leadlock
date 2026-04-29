@@ -180,7 +180,7 @@ function CustomersPageContent() {
                         {locationText(customer)}
                       </td>
                       <td className="p-3 text-muted-foreground">
-                        {new Date(customer.customer_since).toLocaleDateString()}
+                        {new Date(customer.customer_since).toLocaleDateString('en-GB')}
                       </td>
                       <td className="p-3 text-center">
                         {unreadByCustomer[customer.id] > 0 ? (

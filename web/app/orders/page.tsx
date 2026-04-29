@@ -258,7 +258,7 @@ export default function OrdersPage() {
                         </div>
                       </td>
                       <td className="p-3 text-muted-foreground">
-                        {new Date(order.created_at).toLocaleDateString()}
+                        {new Date(order.created_at).toLocaleDateString('en-GB')}
                       </td>
                       <td className="p-3 text-right" onClick={(e) => e.stopPropagation()}>
                         <Button

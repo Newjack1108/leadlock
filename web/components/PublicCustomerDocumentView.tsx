@@ -212,7 +212,7 @@ export default function PublicCustomerDocumentView() {
 
             {data.valid_until && (
               <p className="text-sm text-muted-foreground">
-                Valid until: {new Date(data.valid_until).toLocaleDateString()}
+                Valid until: {new Date(data.valid_until).toLocaleDateString('en-GB')}
               </p>
             )}
 

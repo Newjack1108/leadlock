@@ -112,7 +112,7 @@ export default function ReminderList({
       if (due.getTime() === today.getTime()) {
         return 'Due today';
       }
-      return `Due ${new Date(r.due_date).toLocaleDateString()}`;
+      return `Due ${new Date(r.due_date).toLocaleDateString('en-GB')}`;
     }
     return `${r.days_stale} days stale`;
   };
@@ -370,12 +370,12 @@ export default function ReminderList({
                       </span>
                       {isDoneMode && reminder.acted_upon_at && (
                         <span>
-                          Completed on {new Date(reminder.acted_upon_at).toLocaleDateString()}
+                          Completed on {new Date(reminder.acted_upon_at).toLocaleDateString('en-GB')}
                         </span>
                       )}
                       {isDoneMode && !reminder.acted_upon_at && reminder.dismissed_at && (
                         <span>
-                          Dismissed on {new Date(reminder.dismissed_at).toLocaleDateString()}
+                          Dismissed on {new Date(reminder.dismissed_at).toLocaleDateString('en-GB')}
                         </span>
                       )}
                     </div>

@@ -15,7 +15,7 @@ export function getTelUrl(phone: string): string {
 /** Format date and time as locale string without seconds (HH:MM). */
 export function formatDateTime(date: string | Date): string {
   const d = typeof date === 'string' ? new Date(date) : date
-  return d.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })
+  return d.toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' })
 }
 
 /** Human-readable label for activity timeline (e.g. LIVE_CALL -> "Call accepted"). */

@@ -20,6 +20,33 @@ def quote_excluded_from_stale_reminders(quote: Quote) -> bool:
     return False
 
 
+def latest_quotes_per_customer(quotes: List[Quote]) -> List[Quote]:
+    """
+    Keep only the latest quote per customer.
+    Ordering: sent_at (non-null first), then created_at, then id.
+    Quotes without a customer_id are kept as-is.
+    """
+    latest_by_customer: dict[int, Quote] = {}
+    no_customer_quotes: List[Quote] = []
+
+    def _ordering_key(quote: Quote) -> tuple:
+        sent_at = quote.sent_at or datetime.min
+        created_at = quote.created_at or datetime.min
+        # Prefer sent quotes over unsent, then most recent timestamps, then id for stability.
+        return (quote.sent_at is not None, sent_at, created_at, quote.id or 0)
+
+    for quote in quotes:
+        if quote.customer_id is None:
+            no_customer_quotes.append(quote)
+            continue
+
+        current = latest_by_customer.get(quote.customer_id)
+        if current is None or _ordering_key(quote) > _ordering_key(current):
+            latest_by_customer[quote.customer_id] = quote
+
+    return list(latest_by_customer.values()) + no_customer_quotes
+
+
 def dismiss_open_reminders_for_quote(session: Session, quote_id: int) -> int:
     """Set dismissed_at on open (not dismissed, not acted) reminders tied to this quote."""
     now = datetime.utcnow()
@@ -187,6 +214,7 @@ def detect_stale_quotes(session: Session) -> List[Tuple[Quote, ReminderRule, int
             )
         
         quotes = session.exec(quote_statement).all()
+        quotes = latest_quotes_per_customer(quotes)
         
         for quote in quotes:
             if quote_excluded_from_stale_reminders(quote):

@@ -438,7 +438,7 @@ export default function CustomerDetailPage() {
                     <div className="text-sm font-medium">Customer Number</div>
                     <div className="text-lg font-semibold">{customer.customer_number}</div>
                     <div className="text-xs text-muted-foreground mt-1">
-                      Customer since: {new Date(customer.customer_since).toLocaleDateString()}
+                      Customer since: {new Date(customer.customer_since).toLocaleDateString('en-GB')}
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
@@ -650,7 +650,7 @@ export default function CustomerDetailPage() {
                             key={lead.id}
                             onClick={() => router.push(`/quotes/create?customer_id=${customerId}&lead_id=${lead.id}`)}
                           >
-                            From lead: {lead.name} ({new Date(lead.created_at).toLocaleDateString()})
+                            From lead: {lead.name} ({new Date(lead.created_at).toLocaleDateString('en-GB')})
                           </DropdownMenuItem>
                         ))}
                         <DropdownMenuItem
@@ -695,7 +695,7 @@ export default function CustomerDetailPage() {
                               key={lead.id}
                               onClick={() => router.push(`/quotes/create?customer_id=${customerId}&lead_id=${lead.id}`)}
                             >
-                              From lead: {lead.name} ({new Date(lead.created_at).toLocaleDateString()})
+                              From lead: {lead.name} ({new Date(lead.created_at).toLocaleDateString('en-GB')})
                             </DropdownMenuItem>
                           ))}
                           <DropdownMenuItem

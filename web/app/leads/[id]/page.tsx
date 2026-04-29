@@ -722,7 +722,7 @@ export default function LeadDetailPage() {
                     <div className="text-sm font-medium">Customer Number</div>
                     <div className="text-lg font-semibold">{lead.customer.customer_number}</div>
                     <div className="text-xs text-muted-foreground mt-1">
-                      Customer since: {new Date(lead.customer.customer_since).toLocaleDateString()}
+                      Customer since: {new Date(lead.customer.customer_since).toLocaleDateString('en-GB')}
                     </div>
                   </div>
                   <div className="flex flex-col gap-2">

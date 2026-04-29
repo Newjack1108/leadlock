@@ -45,7 +45,7 @@ function formatFileSize(bytes?: number): string {
 function formatDate(iso?: string): string {
   if (!iso) return '-';
   const d = new Date(iso);
-  return d.toLocaleDateString();
+  return d.toLocaleDateString('en-GB');
 }
 
 export default function SalesDocumentsPage() {

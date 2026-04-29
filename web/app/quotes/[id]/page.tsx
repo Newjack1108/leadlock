@@ -720,7 +720,7 @@ export default function QuoteDetailPage() {
                   <div>
                     <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Valid Until</div>
                     <div className="font-medium">
-                      {new Date(quote.valid_until).toLocaleDateString()}
+                      {new Date(quote.valid_until).toLocaleDateString('en-GB')}
                     </div>
                   </div>
                 )}

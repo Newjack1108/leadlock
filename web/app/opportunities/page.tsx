@@ -154,7 +154,7 @@ export default function OpportunitiesPage() {
                               <span className="text-sm text-muted-foreground">{opp.next_action}</span>
                               {opp.next_action_due_date && (
                                 <span className={`text-xs ml-2 ${isOverdue ? 'text-red-600 font-semibold' : 'text-muted-foreground'}`}>
-                                  (Due: {new Date(opp.next_action_due_date).toLocaleDateString()})
+                                  (Due: {new Date(opp.next_action_due_date).toLocaleDateString('en-GB')})
                                 </span>
                               )}
                             </div>
@@ -169,7 +169,7 @@ export default function OpportunitiesPage() {
                             {opp.expected_close_date && (
                               <span className="flex items-center gap-1">
                                 <TrendingUp className="h-3 w-3" />
-                                Close: {new Date(opp.expected_close_date).toLocaleDateString()}
+                                Close: {new Date(opp.expected_close_date).toLocaleDateString('en-GB')}
                               </span>
                             )}
                             <span className="flex items-center gap-1">

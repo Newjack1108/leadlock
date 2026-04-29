@@ -928,28 +928,10 @@ def generate_quote_pdf(
         else None
     )
 
-    # Page 2: Terms and Conditions – quote terms when present, else company default (same header and footer)
+    # Terms and Conditions text source: quote terms when present, else company default
     terms_text = (quote.terms_and_conditions or "").strip() or (
         (company_settings.default_terms_and_conditions or "").strip() if company_settings else ""
     )
-    if terms_text and company_settings:
-        elements.append(PageBreak())
-        elements.extend(
-            _build_header_flowables(
-                company_settings,
-                logo_path,
-                logo_bytes,
-                normal_style,
-                company_name_style,
-                customer.customer_number,
-                trading_name_override=trading_name_override,
-            )
-        )
-        elements.append(Paragraph("Terms and Conditions:", heading_style))
-        for line in terms_text.split("\n"):
-            if line.strip():
-                elements.append(Paragraph(line.strip(), terms_style))
-        elements.append(Spacer(1, 8))
     
     # Notes (Internal - typically not shown to customer, but included for completeness)
     # Note: In a real scenario, you might want to exclude this from customer-facing PDFs
@@ -965,6 +947,7 @@ def generate_quote_pdf(
         doc.build(elements)
     buffer.seek(0)
 
+    spec_buffer: Optional[BytesIO] = None
     # Optionally append product spec sheets for main products only (exclude optional extras)
     if include_spec_sheets and session and len(quote_items) > 0:
         ordered_product_ids = []
@@ -987,24 +970,63 @@ def generate_quote_pdf(
                 products = [products_by_id[pid] for pid in ordered_product_ids if pid in products_by_id]
                 if products:
                     from app.product_spec_pdf_service import generate_products_spec_sheets_pdf
-                    from pypdf import PdfWriter, PdfReader
 
                     spec_buffer = generate_products_spec_sheets_pdf(
                         products,
                         company_settings=company_settings,
                         session=session,
                     )
-                    writer = PdfWriter()
-                    writer.append(PdfReader(buffer))
-                    writer.append(PdfReader(spec_buffer))
-                    merged = BytesIO()
-                    writer.write(merged)
-                    merged.seek(0)
-                    return merged
             except Exception as e:
                 print(f"Could not append product spec sheets: {e}", file=sys.stderr, flush=True)
 
-    buffer.seek(0)
+    terms_buffer: Optional[BytesIO] = None
+    if terms_text and company_settings:
+        terms_buffer = BytesIO()
+        terms_doc = SimpleDocTemplate(
+            terms_buffer,
+            pagesize=A4,
+            topMargin=10 * mm,
+            bottomMargin=FOOTER_BOTTOM_MARGIN,
+            leftMargin=15 * mm,
+            rightMargin=15 * mm,
+        )
+        terms_elements: List[Any] = []
+        terms_elements.extend(
+            _build_header_flowables(
+                company_settings,
+                logo_path,
+                logo_bytes,
+                normal_style,
+                company_name_style,
+                customer.customer_number,
+                trading_name_override=trading_name_override,
+            )
+        )
+        terms_elements.append(Paragraph("Terms and Conditions:", heading_style))
+        for line in terms_text.split("\n"):
+            if line.strip():
+                terms_elements.append(Paragraph(line.strip(), terms_style))
+        terms_elements.append(Spacer(1, 8))
+        if footer_drawer:
+            terms_doc.build(terms_elements, onFirstPage=footer_drawer, onLaterPages=footer_drawer)
+        else:
+            terms_doc.build(terms_elements)
+        terms_buffer.seek(0)
+
+    if spec_buffer or terms_buffer:
+        from pypdf import PdfWriter, PdfReader
+
+        writer = PdfWriter()
+        writer.append(PdfReader(buffer))
+        if spec_buffer:
+            writer.append(PdfReader(spec_buffer))
+        if terms_buffer:
+            writer.append(PdfReader(terms_buffer))
+        merged = BytesIO()
+        writer.write(merged)
+        merged.seek(0)
+        return merged
+
     return buffer
 
 

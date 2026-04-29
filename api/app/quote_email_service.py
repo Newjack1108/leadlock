@@ -8,7 +8,7 @@ from sqlmodel import Session, select
 from app.models import Quote, QuoteTemplate, Customer, CompanySettings, Order
 from types import SimpleNamespace
 from app.customer_view_links import customer_view_path_segment
-from app.email_service import send_email, EMAIL_TRACKED_LINK_STYLE
+from app.email_service import send_email
 from app.constants import VAT_RATE_DECIMAL
 from decimal import Decimal
 
@@ -141,8 +141,28 @@ def send_quote_email(
         if view_token and frontend_base_url:
             base = frontend_base_url.rstrip("/")
             path_seg = customer_view_path_segment(session, quote.id, view_token)
-            link_style = EMAIL_TRACKED_LINK_STYLE
-            view_link = f'<p style="margin-top:1.5em;"><a href="{base}/{path_seg}" style="{link_style}">{link_label}</a></p>'
+            link_style = (
+                "display:inline-block;"
+                "background-color:#15803d;"
+                "color:#ffffff;"
+                "font-weight:700;"
+                "font-size:16px;"
+                "line-height:1.2;"
+                "padding:12px 22px;"
+                "border-radius:8px;"
+                "text-decoration:none;"
+                "border:1px solid #166534;"
+            )
+            view_link = (
+                '<table width="100%" cellpadding="0" cellspacing="0" role="presentation" '
+                'style="margin:18px 0 10px 0;">'
+                '<tr>'
+                '<td align="center" style="text-align:center;">'
+                f'<a href="{base}/{path_seg}" style="{link_style}">{link_label}</a>'
+                "</td>"
+                "</tr>"
+                "</table>"
+            )
             body_html = (body_html or "") + view_link
 
         success, message_id, error, sent_html, sent_text = send_email(
