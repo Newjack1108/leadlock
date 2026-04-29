@@ -1265,7 +1265,7 @@ export const getReminderRules = async () => {
 export const updateReminderRule = async (
   ruleId: number,
   data: {
-    threshold_hours?: number;
+    threshold_minutes?: number;
     is_active?: boolean;
     priority?: string;
     suggested_action?: string;
@@ -1283,7 +1283,7 @@ export const createReminderRule = async (data: {
   rule_name: string;
   entity_type: string;
   status?: string | null;
-  threshold_hours: number;
+  threshold_minutes: number;
   check_type: string;
   is_active: boolean;
   priority: string;

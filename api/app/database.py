@@ -1330,11 +1330,121 @@ def create_db_and_tables():
                                     "VALUES ('reminderrule_threshold_days_to_hours')"
                                 )
                             )
+                    elif (
+                        "threshold_minutes" in rr_cols
+                        and "threshold_hours" not in rr_cols
+                        and "threshold_days" not in rr_cols
+                    ):
+                        # ORM created reminderrule with threshold_minutes only (skipped legacy day columns)
+                        with engine.begin() as conn:
+                            conn.execute(
+                                text(
+                                    "INSERT INTO applied_data_migrations (migration_name) "
+                                    "VALUES ('reminderrule_threshold_days_to_hours')"
+                                )
+                            )
             except Exception as e:
                 error_str = str(e).lower()
                 if "already exists" not in error_str and "duplicate" not in error_str:
                     print(
                         f"Error migrating reminderrule threshold to hours: {e}",
+                        file=sys.stderr,
+                        flush=True,
+                    )
+                    import traceback
+
+                    print(traceback.format_exc(), file=sys.stderr, flush=True)
+
+        # Step 9c: Migrate reminderrule.threshold_hours -> threshold_minutes (values were hours; multiply by 60)
+        if has_reminder_rule_table or inspector.has_table("reminderrule"):
+            try:
+                with engine.begin() as conn:
+                    conn.execute(
+                        text(
+                            """
+                            CREATE TABLE IF NOT EXISTS applied_data_migrations (
+                                migration_name VARCHAR(255) PRIMARY KEY,
+                                applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                            )
+                            """
+                        )
+                    )
+                insp_m = inspect(engine)
+                rr_cols_m = {c["name"] for c in insp_m.get_columns("reminderrule")}
+                with engine.connect() as conn:
+                    already_m = conn.execute(
+                        text(
+                            "SELECT 1 FROM applied_data_migrations "
+                            "WHERE migration_name = 'reminderrule_threshold_hours_to_minutes'"
+                        )
+                    ).fetchone()
+                if not already_m:
+                    dialect_m = getattr(engine.dialect, "name", "")
+                    if "threshold_hours" in rr_cols_m and "threshold_minutes" not in rr_cols_m:
+                        with engine.begin() as conn:
+                            conn.execute(
+                                text(
+                                    "ALTER TABLE reminderrule RENAME COLUMN threshold_hours TO threshold_minutes"
+                                )
+                            )
+                            conn.execute(
+                                text(
+                                    "UPDATE reminderrule SET threshold_minutes = COALESCE(threshold_minutes, 0) * 60"
+                                )
+                            )
+                            conn.execute(
+                                text(
+                                    "INSERT INTO applied_data_migrations (migration_name) "
+                                    "VALUES ('reminderrule_threshold_hours_to_minutes')"
+                                )
+                            )
+                        print(
+                            "Migrated reminderrule.threshold_hours to threshold_minutes",
+                            file=sys.stderr,
+                            flush=True,
+                        )
+                    elif "threshold_hours" in rr_cols_m and "threshold_minutes" in rr_cols_m:
+                        with engine.begin() as conn:
+                            conn.execute(
+                                text(
+                                    "UPDATE reminderrule SET threshold_minutes = COALESCE(threshold_hours, 0) * 60"
+                                )
+                            )
+                            if dialect_m == "postgresql":
+                                conn.execute(text("ALTER TABLE reminderrule DROP COLUMN threshold_hours"))
+                            else:
+                                try:
+                                    conn.execute(text("ALTER TABLE reminderrule DROP COLUMN threshold_hours"))
+                                except Exception as drop_e:
+                                    print(
+                                        f"Could not DROP threshold_hours from reminderrule: {drop_e}",
+                                        file=sys.stderr,
+                                        flush=True,
+                                    )
+                            conn.execute(
+                                text(
+                                    "INSERT INTO applied_data_migrations (migration_name) "
+                                    "VALUES ('reminderrule_threshold_hours_to_minutes')"
+                                )
+                            )
+                        print(
+                            "Migrated reminderrule (dual column) to threshold_minutes only",
+                            file=sys.stderr,
+                            flush=True,
+                        )
+                    elif "threshold_minutes" in rr_cols_m:
+                        with engine.begin() as conn:
+                            conn.execute(
+                                text(
+                                    "INSERT INTO applied_data_migrations (migration_name) "
+                                    "VALUES ('reminderrule_threshold_hours_to_minutes')"
+                                )
+                            )
+            except Exception as e:
+                error_str = str(e).lower()
+                if "already exists" not in error_str and "duplicate" not in error_str:
+                    print(
+                        f"Error migrating reminderrule threshold to minutes: {e}",
                         file=sys.stderr,
                         flush=True,
                     )
@@ -1352,7 +1462,7 @@ def create_db_and_tables():
                     rule_name="NEW_LEAD_STALE",
                     entity_type="LEAD",
                     status="NEW",
-                    threshold_hours=72,
+                    threshold_minutes=4320,
                     check_type="LAST_ACTIVITY",
                     is_active=True,
                     priority=ReminderPriority.HIGH,
@@ -1362,7 +1472,7 @@ def create_db_and_tables():
                     rule_name="CONTACT_ATTEMPTED_STALE",
                     entity_type="LEAD",
                     status="CONTACT_ATTEMPTED",
-                    threshold_hours=120,
+                    threshold_minutes=7200,
                     check_type="LAST_ACTIVITY",
                     is_active=True,
                     priority=ReminderPriority.HIGH,
@@ -1372,7 +1482,7 @@ def create_db_and_tables():
                     rule_name="ENGAGED_STALE",
                     entity_type="LEAD",
                     status="ENGAGED",
-                    threshold_hours=168,
+                    threshold_minutes=10080,
                     check_type="LAST_ACTIVITY",
                     is_active=True,
                     priority=ReminderPriority.MEDIUM,
@@ -1382,7 +1492,7 @@ def create_db_and_tables():
                     rule_name="QUALIFIED_STALE",
                     entity_type="LEAD",
                     status="QUALIFIED",
-                    threshold_hours=168,
+                    threshold_minutes=10080,
                     check_type="LAST_ACTIVITY",
                     is_active=True,
                     priority=ReminderPriority.MEDIUM,
@@ -1392,7 +1502,7 @@ def create_db_and_tables():
                     rule_name="QUOTED_STALE",
                     entity_type="LEAD",
                     status="QUOTED",
-                    threshold_hours=120,
+                    threshold_minutes=7200,
                     check_type="LAST_ACTIVITY",
                     is_active=True,
                     priority=ReminderPriority.HIGH,
@@ -1402,7 +1512,7 @@ def create_db_and_tables():
                     rule_name="QUOTE_SENT_STALE",
                     entity_type="QUOTE",
                     status="SENT",
-                    threshold_hours=168,
+                    threshold_minutes=10080,
                     check_type="SENT_DATE",
                     is_active=True,
                     priority=ReminderPriority.HIGH,
@@ -1412,7 +1522,7 @@ def create_db_and_tables():
                     rule_name="QUOTE_EXPIRED",
                     entity_type="QUOTE",
                     status=None,
-                    threshold_hours=0,
+                    threshold_minutes=0,
                     check_type="VALID_UNTIL",
                     is_active=True,
                     priority=ReminderPriority.URGENT,
@@ -1422,7 +1532,7 @@ def create_db_and_tables():
                     rule_name="QUOTE_NOT_OPENED_48H",
                     entity_type="QUOTE",
                     status="SENT",
-                    threshold_hours=48,
+                    threshold_minutes=2880,
                     check_type="SENT_NOT_OPENED",
                     is_active=True,
                     priority=ReminderPriority.HIGH,
@@ -1432,7 +1542,7 @@ def create_db_and_tables():
                     rule_name="QUOTE_OPENED_NO_REPLY",
                     entity_type="QUOTE",
                     status="SENT",
-                    threshold_hours=120,
+                    threshold_minutes=7200,
                     check_type="OPENED_NO_REPLY",
                     is_active=True,
                     priority=ReminderPriority.HIGH,

@@ -1649,7 +1649,7 @@ class ReminderRuleResponse(BaseModel):
     rule_name: str
     entity_type: str
     status: Optional[str]
-    threshold_hours: int
+    threshold_minutes: int
     check_type: str
     is_active: bool
     priority: ReminderPriority
@@ -1663,7 +1663,7 @@ class ReminderRuleResponse(BaseModel):
 
 
 class ReminderRuleUpdate(BaseModel):
-    threshold_hours: Optional[int] = None
+    threshold_minutes: Optional[int] = None
     is_active: Optional[bool] = None
     priority: Optional[ReminderPriority] = None
     suggested_action: Optional[SuggestedAction] = None
@@ -1677,7 +1677,7 @@ class ReminderRuleCreate(BaseModel):
     rule_name: str
     entity_type: str  # LEAD | QUOTE
     status: Optional[str] = None
-    threshold_hours: int = 0
+    threshold_minutes: int = 0
     check_type: str
     is_active: bool = True
     priority: ReminderPriority = ReminderPriority.MEDIUM
