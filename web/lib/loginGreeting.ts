@@ -39,12 +39,11 @@ export function displayFirstNameFromUser(fullName: string, email: string): strin
 }
 
 export function pickRandomLoginQuote(): string {
-  if (LOGIN_QUOTES.length === 0) return DEFAULT_LOGIN_QUOTE;
-
   const playfulQuotes = LOGIN_QUOTES.filter((quote) => quote.tone === 'witty' || quote.tone === 'fun');
   const deepQuotes = LOGIN_QUOTES.filter((quote) => quote.tone === 'deep');
   const usePlayful = playfulQuotes.length > 0 && (deepQuotes.length === 0 || Math.random() < 0.7);
   const pool = usePlayful ? playfulQuotes : deepQuotes;
+  if (pool.length === 0) return DEFAULT_LOGIN_QUOTE;
   const idx = Math.floor(Math.random() * pool.length);
   const selected = pool[idx];
   return selected?.text ?? DEFAULT_LOGIN_QUOTE;
