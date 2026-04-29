@@ -132,6 +132,7 @@ class CustomerUpdate(BaseModel):
     county: Optional[str] = None
     postcode: Optional[str] = None
     country: Optional[str] = None
+    automated_reminder_outreach_opt_out: Optional[bool] = None
 
 
 class CustomerResponse(BaseModel):
@@ -149,6 +150,7 @@ class CustomerResponse(BaseModel):
     customer_since: datetime
     sms_bot_paused_until: Optional[datetime] = None
     sms_bot_stopped: bool = False
+    automated_reminder_outreach_opt_out: bool = False
     created_at: datetime
     updated_at: datetime
     messenger_psid: Optional[str] = None
@@ -171,6 +173,9 @@ def customer_to_response(customer: Customer) -> CustomerResponse:
         customer_since=customer.customer_since,
         sms_bot_paused_until=customer.sms_bot_paused_until,
         sms_bot_stopped=bool(getattr(customer, "sms_bot_stopped", False)),
+        automated_reminder_outreach_opt_out=bool(
+            getattr(customer, "automated_reminder_outreach_opt_out", False)
+        ),
         created_at=customer.created_at,
         updated_at=customer.updated_at,
         messenger_psid=customer.messenger_psid,

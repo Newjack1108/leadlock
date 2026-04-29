@@ -32,6 +32,8 @@ import {
   ChevronUp,
   Pencil,
   Trash2,
+  BellOff,
+  Bell,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -158,6 +160,7 @@ export default function CustomerDetailPage() {
     email_unread: 0,
   });
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [outreachOptOutLoading, setOutreachOptOutLoading] = useState(false);
 
   useEffect(() => {
     if (customerId) {
@@ -300,6 +303,26 @@ export default function CustomerDetailPage() {
       checkQuotePrerequisites();
     } catch (error: any) {
       toast.error('Failed to update');
+    }
+  };
+
+  const handleAutomatedOutreachOptOut = async (optOut: boolean) => {
+    setOutreachOptOutLoading(true);
+    try {
+      await api.patch(`/api/customers/${customerId}`, {
+        automated_reminder_outreach_opt_out: optOut,
+      });
+      setCustomer((prev) => (prev ? { ...prev, automated_reminder_outreach_opt_out: optOut } : null));
+      toast.success(
+        optOut
+          ? 'Automated reminder SMS and email from rules are stopped for this customer.'
+          : 'Automated reminder messages from rules are enabled again.'
+      );
+      fetchHistory();
+    } catch {
+      toast.error('Failed to update automated message setting');
+    } finally {
+      setOutreachOptOutLoading(false);
     }
   };
 
@@ -596,6 +619,44 @@ export default function CustomerDetailPage() {
                     >
                       View Messenger
                     </Button>
+                  </CardContent>
+                </Card>
+                <Card className="flex-1 min-h-0 flex flex-col border-dashed">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center gap-2">
+                      {customer.automated_reminder_outreach_opt_out ? (
+                        <BellOff className="h-5 w-5 text-muted-foreground shrink-0" aria-hidden />
+                      ) : (
+                        <Bell className="h-5 w-5 text-muted-foreground shrink-0" aria-hidden />
+                      )}
+                      <CardTitle className="text-base">Automated reminder messages</CardTitle>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3 pt-0">
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      Stops automatic SMS or email sent by{' '}
+                      <span className="font-medium text-foreground">reminder rules</span> only. Messages you send from
+                      LeadLock (compose email, SMS thread, quotes) are not affected.
+                    </p>
+                    {customer.automated_reminder_outreach_opt_out ? (
+                      <Button
+                        variant="outline"
+                        className="w-full"
+                        disabled={outreachOptOutLoading}
+                        onClick={() => handleAutomatedOutreachOptOut(false)}
+                      >
+                        Resume automated messages
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="secondary"
+                        className="w-full"
+                        disabled={outreachOptOutLoading}
+                        onClick={() => handleAutomatedOutreachOptOut(true)}
+                      >
+                        Stop automated messages
+                      </Button>
+                    )}
                   </CardContent>
                 </Card>
               </div>

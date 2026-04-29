@@ -261,6 +261,14 @@ def run_customer_outreach_cycle(session: Session) -> int:
         customer = session.get(Customer, lead.customer_id)
         if not customer:
             continue
+        if getattr(customer, "automated_reminder_outreach_opt_out", False):
+            print(
+                f"Customer outreach: skip lead {lead.id} rule {rule.id}: "
+                f"customer {customer.id} opted out of automated reminder messages",
+                file=sys.stderr,
+                flush=True,
+            )
+            continue
         actor_id = _resolve_actor_user_id(session, lead, None)
         if not actor_id:
             print(
@@ -335,6 +343,14 @@ def run_customer_outreach_cycle(session: Session) -> int:
             continue
         customer = session.get(Customer, quote.customer_id)
         if not customer:
+            continue
+        if getattr(customer, "automated_reminder_outreach_opt_out", False):
+            print(
+                f"Customer outreach: skip quote {quote.id} rule {rule.id}: "
+                f"customer {customer.id} opted out of automated reminder messages",
+                file=sys.stderr,
+                flush=True,
+            )
             continue
         lead = session.get(Lead, quote.lead_id) if quote.lead_id else None
         actor_id = _resolve_actor_user_id(session, lead, quote)

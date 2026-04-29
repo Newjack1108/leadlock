@@ -148,6 +148,8 @@ export interface Customer {
   customer_since: string;
   sms_bot_paused_until?: string | null;
   sms_bot_stopped?: boolean;
+  /** When true, background reminder-rule SMS/email is not sent (manual staff messages still allowed). */
+  automated_reminder_outreach_opt_out?: boolean;
   created_at: string;
   updated_at: string;
   messenger_psid?: string | null;
