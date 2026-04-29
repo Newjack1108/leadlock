@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import confetti from 'canvas-confetti';
 import type { Options as ConfettiOptions } from 'canvas-confetti';
 import { X } from 'lucide-react';
-import api from '@/lib/api';
+import api, { getLoginQuote } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import {
   LEADLOCK_LOGIN_GREETING_SESSION_KEY,
@@ -13,6 +13,7 @@ import {
   displayFirstNameFromUser,
   getGreetingLabelForHour,
   loginGreetingPathShouldSuppress,
+  pickRandomLoginQuote,
 } from '@/lib/loginGreeting';
 
 /** Match globals.css brand greens: --primary #1F6B3A, --secondary / --success #3FA86B */
@@ -64,6 +65,7 @@ export default function LoginGreeting() {
   const [active, setActive] = useState(false);
   const [exiting, setExiting] = useState(false);
   const [line, setLine] = useState('');
+  const [quote, setQuote] = useState('');
 
   const dismiss = useCallback(() => {
     setExiting(true);
@@ -75,6 +77,7 @@ export default function LoginGreeting() {
       setActive(false);
       setExiting(false);
       setLine('');
+      setQuote('');
     }, FADE_OUT_MS);
     return () => window.clearTimeout(id);
   }, [exiting]);
@@ -96,6 +99,16 @@ export default function LoginGreeting() {
         const greeting = getGreetingLabelForHour(hour);
         const name = displayFirstNameFromUser(data.full_name ?? '', data.email ?? '');
         setLine(`${greeting}, ${name}!`);
+        let selectedQuote = pickRandomLoginQuote();
+        try {
+          const quotePayload = await getLoginQuote();
+          const apiQuote = typeof quotePayload?.quote === 'string' ? quotePayload.quote.trim() : '';
+          if (apiQuote) selectedQuote = apiQuote;
+        } catch {
+          // Keep deterministic local fallback quote if API quote fetch fails.
+        }
+        if (cancelled) return;
+        setQuote(selectedQuote);
         setExiting(false);
         setActive(true);
       } catch {
@@ -147,7 +160,7 @@ export default function LoginGreeting() {
       >
         <p className="text-4xl font-extrabold tracking-tight text-primary sm:text-5xl">{line}</p>
         <p className="mt-4 text-xl font-medium text-muted-foreground">
-          Great to have you here — have a brilliant day.
+          {quote || 'Great to have you here - have a brilliant day.'}
         </p>
         <button
           type="button"

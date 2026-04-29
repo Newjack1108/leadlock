@@ -18,6 +18,11 @@ class Token(BaseModel):
     token_type: str
 
 
+class LoginQuoteResponse(BaseModel):
+    quote: str
+    source: str
+
+
 class UserLogin(BaseModel):
     email: EmailStr
     password: str

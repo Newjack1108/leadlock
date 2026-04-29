@@ -3,7 +3,8 @@ from sqlmodel import Session, select
 from app.database import get_session
 from app.models import User, UserRole
 from app.auth import verify_password, create_access_token, get_current_user, get_password_hash
-from app.schemas import Token, UserLogin, UserResponse, BootstrapCreate
+from app.schemas import Token, UserLogin, UserResponse, BootstrapCreate, LoginQuoteResponse
+from app.login_quote_service import generate_login_quote
 from datetime import timedelta
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -58,3 +59,9 @@ async def login(credentials: UserLogin, session: Session = Depends(get_session))
 @router.get("/me", response_model=UserResponse)
 async def get_current_user_info(current_user: User = Depends(get_current_user)):
     return current_user
+
+
+@router.get("/login-quote", response_model=LoginQuoteResponse)
+async def get_login_quote(current_user: User = Depends(get_current_user)):
+    quote, source = await generate_login_quote()
+    return {"quote": quote, "source": source}

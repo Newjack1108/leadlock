@@ -1171,6 +1171,11 @@ export const getAuthMe = async () => {
   return response.data as { id: number; email: string; full_name: string; role: string };
 };
 
+export const getLoginQuote = async (): Promise<{ quote: string; source: 'ai' | 'fallback' | string }> => {
+  const response = await api.get('/api/auth/login-quote');
+  return response.data;
+};
+
 export const getStaleSummary = async () => {
   const response = await api.get('/api/reminders/stale-summary');
   return response.data;
