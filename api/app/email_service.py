@@ -134,7 +134,11 @@ def _build_website_tracking_link_html(customer_number: Optional[str]) -> str:
         f'<a href="{base}?ltk={token}" style="{link_style}">{label}</a>'
         for base, label in TRACKING_WEBSITE_BASE_URLS
     ]
-    return '<p style="margin-top:1em;">Visit us: ' + " | ".join(links) + '</p>'
+    return (
+        '<p style="margin:12px 0 0 0; text-align:center;">Visit us: '
+        + " | ".join(links)
+        + '</p>'
+    )
 
 
 def _build_website_tracking_link_text(customer_number: Optional[str]) -> str:
@@ -1004,10 +1008,15 @@ def assemble_outbound_email_html(
     header_tagline: Optional[str] = None,
 ) -> Tuple[Optional[str], Optional[str]]:
     """
-    Apply the same HTML assembly as outbound sends: tracking, signature/disclaimer,
+    Apply the same HTML assembly as outbound sends: signature/disclaimer, tracking,
     attachment highlight, system layout. Does not send mail.
     """
-    # Append website visit tracking link before signature (order: body -> tracking link -> signature -> disclaimer)
+    # Append user signature and company disclaimer to all outgoing emails.
+    # Order starts as: body -> signature -> disclaimer.
+    body_html, body_text = _append_signature_and_disclaimer(body_html, body_text, user_id)
+
+    # Append website visit tracking links after signature/disclaimer.
+    # Order becomes: body -> signature -> disclaimer -> tracking links.
     if customer_number:
         tracking_html = _build_website_tracking_link_html(customer_number)
         tracking_text = _build_website_tracking_link_text(customer_number)
@@ -1016,9 +1025,6 @@ def assemble_outbound_email_html(
             body_html = (body_html or "") + sep_html + tracking_html
         if tracking_text and body_text is not None:
             body_text = body_text + tracking_text
-
-    # Append user signature and company disclaimer to all outgoing emails
-    body_html, body_text = _append_signature_and_disclaimer(body_html, body_text, user_id)
 
     primary = _get_email_brand_primary()
     highlight_fragment = _compose_email_highlight_fragment(
