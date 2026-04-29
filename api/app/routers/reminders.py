@@ -81,7 +81,7 @@ def _reminder_rule_to_response(rule: ReminderRule) -> ReminderRuleResponse:
         rule_name=rule.rule_name,
         entity_type=rule.entity_type,
         status=rule.status,
-        threshold_days=rule.threshold_days,
+        threshold_hours=rule.threshold_hours,
         check_type=rule.check_type,
         is_active=rule.is_active,
         priority=rule.priority,
@@ -483,8 +483,8 @@ async def create_reminder_rule(
             detail=f"check_type for QUOTE must be one of: {sorted(_QUOTE_CHECK_TYPES)}",
         )
 
-    if body.threshold_days < 0:
-        raise HTTPException(status_code=400, detail="threshold_days cannot be negative")
+    if body.threshold_hours < 0:
+        raise HTTPException(status_code=400, detail="threshold_hours cannot be negative")
 
     if entity == "LEAD":
         if not body.status or not str(body.status).strip():
@@ -513,7 +513,7 @@ async def create_reminder_rule(
         rule_name=rule_name,
         entity_type=entity,
         status=status_val,
-        threshold_days=body.threshold_days,
+        threshold_hours=body.threshold_hours,
         check_type=check_type,
         is_active=body.is_active,
         priority=body.priority,
@@ -545,8 +545,10 @@ async def update_reminder_rule(
     if not rule:
         raise HTTPException(status_code=404, detail="Reminder rule not found")
     
-    if rule_update.threshold_days is not None:
-        rule.threshold_days = rule_update.threshold_days
+    if rule_update.threshold_hours is not None:
+        if rule_update.threshold_hours < 0:
+            raise HTTPException(status_code=400, detail="threshold_hours cannot be negative")
+        rule.threshold_hours = rule_update.threshold_hours
     if rule_update.is_active is not None:
         rule.is_active = rule_update.is_active
     if rule_update.priority is not None:

@@ -87,6 +87,19 @@ def calculate_days_stale(last_date: Optional[datetime], reference_date: Optional
     return max(0, delta.days)
 
 
+def calculate_hours_stale(last_date: Optional[datetime], reference_date: Optional[datetime] = None) -> int:
+    """Calculate whole hours since last_date. If reference_date is provided, use that instead of now."""
+    if not last_date:
+        return 999 * 24  # Parity with calculate_days_stale sentinel, in hours
+
+    if reference_date:
+        delta = reference_date - last_date
+    else:
+        delta = datetime.utcnow() - last_date
+
+    return max(0, int(delta.total_seconds() // 3600))
+
+
 def get_suggested_action_for_lead(lead: Lead, days_stale: int) -> SuggestedAction:
     """Determine suggested action based on lead status and days stale."""
     if lead.status == LeadStatus.QUOTED:
@@ -161,7 +174,8 @@ def detect_stale_leads(session: Session) -> List[Tuple[Lead, ReminderRule, int]]
         
         for lead in leads:
             days_stale = 0
-            
+            hours_stale = 0
+
             if rule.check_type == "LAST_ACTIVITY":
                 # Check time since last activity
                 last_activity = get_last_activity_date(lead.customer_id, session)
@@ -169,12 +183,14 @@ def detect_stale_leads(session: Session) -> List[Tuple[Lead, ReminderRule, int]]
                     # No activity at all, use created_at or updated_at
                     last_activity = lead.updated_at or lead.created_at
                 days_stale = calculate_days_stale(last_activity)
+                hours_stale = calculate_hours_stale(last_activity)
             elif rule.check_type == "STATUS_DURATION":
                 # Check time since status change (updated_at)
                 days_stale = calculate_days_stale(lead.updated_at)
-            
-            # Check if stale based on threshold
-            if days_stale >= rule.threshold_days:
+                hours_stale = calculate_hours_stale(lead.updated_at)
+
+            # Check if stale based on threshold (hours)
+            if hours_stale >= rule.threshold_hours:
                 stale_items.append((lead, rule, days_stale))
     
     return stale_items
@@ -221,22 +237,26 @@ def detect_stale_quotes(session: Session) -> List[Tuple[Quote, ReminderRule, int
                 continue
             days_stale = 0
             
+            hours_stale = 0
             if rule.check_type == "SENT_DATE":
                 # Check time since quote was sent
                 if not quote.sent_at:
                     continue  # Skip quotes that haven't been sent
                 days_stale = calculate_days_stale(quote.sent_at)
+                hours_stale = calculate_hours_stale(quote.sent_at)
             elif rule.check_type == "VALID_UNTIL":
                 # Check if quote is expired
                 if not quote.valid_until:
                     continue
                 if quote.valid_until < now:
                     days_stale = calculate_days_stale(quote.valid_until)
+                    hours_stale = calculate_hours_stale(quote.valid_until)
                 else:
                     continue  # Not expired yet
             elif rule.check_type == "STATUS_DURATION":
                 # Check time since status change (updated_at)
                 days_stale = calculate_days_stale(quote.updated_at)
+                hours_stale = calculate_hours_stale(quote.updated_at)
             elif rule.check_type == "SENT_NOT_OPENED":
                 # Quote sent but view link never opened (nudge after 48h)
                 if not quote.sent_at:
@@ -248,6 +268,7 @@ def detect_stale_quotes(session: Session) -> List[Tuple[Quote, ReminderRule, int
                 if session.exec(open_stmt).first() is not None:
                     continue  # Already opened
                 days_stale = calculate_days_stale(quote.sent_at)
+                hours_stale = calculate_hours_stale(quote.sent_at)
             elif rule.check_type == "OPENED_NO_REPLY":
                 # Quote was opened but no reply (phone call reminder after X days)
                 if quote.status != QuoteStatus.SENT:
@@ -255,11 +276,12 @@ def detect_stale_quotes(session: Session) -> List[Tuple[Quote, ReminderRule, int
                 if quote.viewed_at is None:
                     continue  # Not opened
                 days_stale = calculate_days_stale(quote.viewed_at)
+                hours_stale = calculate_hours_stale(quote.viewed_at)
             else:
                 continue  # Unknown check_type, skip
 
-            # Check if stale based on threshold
-            if days_stale >= rule.threshold_days:
+            # Check if stale based on threshold (hours)
+            if hours_stale >= rule.threshold_hours:
                 stale_items.append((quote, rule, days_stale))
     
     return stale_items

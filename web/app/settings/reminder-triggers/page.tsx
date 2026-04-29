@@ -81,7 +81,7 @@ export default function ReminderTriggersPage() {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingRule, setEditingRule] = useState<ReminderRule | null>(null);
   const [formData, setFormData] = useState({
-    threshold_days: 0,
+    threshold_hours: 0,
     is_active: true,
     priority: ReminderPriority.MEDIUM,
     suggested_action: SuggestedAction.FOLLOW_UP,
@@ -100,7 +100,7 @@ export default function ReminderTriggersPage() {
     entity_type: 'LEAD' as 'LEAD' | 'QUOTE',
     status: 'NEW' as string,
     check_type: 'LAST_ACTIVITY' as string,
-    threshold_days: 7,
+    threshold_hours: 168,
     is_active: true,
     priority: ReminderPriority.MEDIUM,
     suggested_action: SuggestedAction.FOLLOW_UP,
@@ -163,7 +163,7 @@ export default function ReminderTriggersPage() {
     setEditingRule(rule);
     const ch = rule.customer_outreach_channel;
     setFormData({
-      threshold_days: rule.threshold_days,
+      threshold_hours: rule.threshold_hours,
       is_active: rule.is_active,
       priority: rule.priority,
       suggested_action: rule.suggested_action,
@@ -188,7 +188,7 @@ export default function ReminderTriggersPage() {
     try {
       setSaving(true);
       const update: ReminderRuleUpdate = {
-        threshold_days: formData.threshold_days,
+        threshold_hours: formData.threshold_hours,
         is_active: formData.is_active,
         priority: formData.priority,
         suggested_action: formData.suggested_action,
@@ -222,7 +222,7 @@ export default function ReminderTriggersPage() {
       entity_type: 'LEAD',
       status: 'NEW',
       check_type: 'LAST_ACTIVITY',
-      threshold_days: 7,
+      threshold_hours: 168,
       is_active: true,
       priority: ReminderPriority.MEDIUM,
       suggested_action: SuggestedAction.FOLLOW_UP,
@@ -286,7 +286,7 @@ export default function ReminderTriggersPage() {
       await createReminderRule({
         rule_name: name,
         entity_type: createForm.entity_type,
-        threshold_days: createForm.threshold_days,
+        threshold_hours: createForm.threshold_hours,
         check_type: createForm.check_type,
         is_active: createForm.is_active,
         priority: createForm.priority,
@@ -382,7 +382,7 @@ export default function ReminderTriggersPage() {
                         <td className="py-2 px-2">{formatRuleName(rule.rule_name)}</td>
                         <td className="py-2 px-2">{rule.status || '-'}</td>
                         <td className="py-2 px-2">{CHECK_TYPE_LABELS[rule.check_type] || rule.check_type}</td>
-                        <td className="py-2 px-2">{rule.threshold_days} days</td>
+                        <td className="py-2 px-2">{rule.threshold_hours} hours</td>
                         <td className="py-2 px-2">{rule.is_active ? 'Yes' : 'No'}</td>
                         <td className="py-2 px-2">{rule.priority}</td>
                         <td className="py-2 px-2">{rule.suggested_action.replace(/_/g, ' ')}</td>
@@ -454,7 +454,7 @@ export default function ReminderTriggersPage() {
                         <td className="py-2 px-2">{formatRuleName(rule.rule_name)}</td>
                         <td className="py-2 px-2">{rule.status || '-'}</td>
                         <td className="py-2 px-2">{CHECK_TYPE_LABELS[rule.check_type] || rule.check_type}</td>
-                        <td className="py-2 px-2">{rule.threshold_days} days</td>
+                        <td className="py-2 px-2">{rule.threshold_hours} hours</td>
                         <td className="py-2 px-2">{rule.is_active ? 'Yes' : 'No'}</td>
                         <td className="py-2 px-2">{rule.priority}</td>
                         <td className="py-2 px-2">{rule.suggested_action.replace(/_/g, ' ')}</td>
@@ -572,14 +572,14 @@ export default function ReminderTriggersPage() {
                 </Select>
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="create_threshold">Threshold (days)</Label>
+                <Label htmlFor="create_threshold">Threshold (hours)</Label>
                 <Input
                   id="create_threshold"
                   type="number"
                   min={0}
-                  value={createForm.threshold_days}
+                  value={createForm.threshold_hours}
                   onChange={(e) =>
-                    setCreateForm((f) => ({ ...f, threshold_days: parseInt(e.target.value, 10) || 0 }))
+                    setCreateForm((f) => ({ ...f, threshold_hours: parseInt(e.target.value, 10) || 0 }))
                   }
                 />
               </div>
@@ -764,13 +764,13 @@ export default function ReminderTriggersPage() {
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
-                <Label htmlFor="threshold_days">Threshold (days)</Label>
+                <Label htmlFor="threshold_hours">Threshold (hours)</Label>
                 <Input
-                  id="threshold_days"
+                  id="threshold_hours"
                   type="number"
                   min={0}
-                  value={formData.threshold_days}
-                  onChange={(e) => setFormData((f) => ({ ...f, threshold_days: parseInt(e.target.value, 10) || 0 }))}
+                  value={formData.threshold_hours}
+                  onChange={(e) => setFormData((f) => ({ ...f, threshold_hours: parseInt(e.target.value, 10) || 0 }))}
                 />
               </div>
               <div className="grid gap-2">

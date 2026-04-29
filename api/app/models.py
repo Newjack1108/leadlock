@@ -927,7 +927,7 @@ class ReminderRule(SQLModel, table=True):
     rule_name: str = Field(unique=True, index=True)  # "NEW_LEAD_STALE", "QUOTE_SENT_STALE"
     entity_type: str  # "LEAD", "QUOTE"
     status: Optional[str] = None  # LeadStatus or QuoteStatus value as string
-    threshold_days: int
+    threshold_hours: int
     check_type: str  # "LAST_ACTIVITY", "STATUS_DURATION", "SENT_DATE", "VALID_UNTIL"
     is_active: bool = Field(default=True)
     priority: ReminderPriority = Field(default=ReminderPriority.MEDIUM)

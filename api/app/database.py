@@ -1247,6 +1247,100 @@ def create_db_and_tables():
         # Step 9: Create Reminder and ReminderRule tables + seed default rules
         has_reminder_table = inspector.has_table("reminder")
         has_reminder_rule_table = inspector.has_table("reminderrule")
+
+        # Step 9b: Migrate reminderrule.threshold_days -> threshold_hours (existing DBs store days; multiply by 24)
+        if has_reminder_rule_table or inspector.has_table("reminderrule"):
+            try:
+                with engine.begin() as conn:
+                    conn.execute(
+                        text(
+                            """
+                            CREATE TABLE IF NOT EXISTS applied_data_migrations (
+                                migration_name VARCHAR(255) PRIMARY KEY,
+                                applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                            )
+                            """
+                        )
+                    )
+                rr_cols = {c["name"] for c in inspector.get_columns("reminderrule")}
+                with engine.connect() as conn:
+                    already = conn.execute(
+                        text(
+                            "SELECT 1 FROM applied_data_migrations "
+                            "WHERE migration_name = 'reminderrule_threshold_days_to_hours'"
+                        )
+                    ).fetchone()
+                if not already:
+                    dialect = getattr(engine.dialect, "name", "")
+                    if "threshold_days" in rr_cols and "threshold_hours" not in rr_cols:
+                        with engine.begin() as conn:
+                            conn.execute(
+                                text("ALTER TABLE reminderrule RENAME COLUMN threshold_days TO threshold_hours")
+                            )
+                            conn.execute(
+                                text(
+                                    "UPDATE reminderrule SET threshold_hours = COALESCE(threshold_hours, 0) * 24"
+                                )
+                            )
+                            conn.execute(
+                                text(
+                                    "INSERT INTO applied_data_migrations (migration_name) "
+                                    "VALUES ('reminderrule_threshold_days_to_hours')"
+                                )
+                            )
+                        print(
+                            "Migrated reminderrule.threshold_days to threshold_hours",
+                            file=sys.stderr,
+                            flush=True,
+                        )
+                    elif "threshold_days" in rr_cols and "threshold_hours" in rr_cols:
+                        with engine.begin() as conn:
+                            conn.execute(
+                                text(
+                                    "UPDATE reminderrule SET threshold_hours = COALESCE(threshold_days, 0) * 24"
+                                )
+                            )
+                            if dialect == "postgresql":
+                                conn.execute(text("ALTER TABLE reminderrule DROP COLUMN threshold_days"))
+                            else:
+                                try:
+                                    conn.execute(text("ALTER TABLE reminderrule DROP COLUMN threshold_days"))
+                                except Exception as drop_e:
+                                    print(
+                                        f"Could not DROP threshold_days from reminderrule: {drop_e}",
+                                        file=sys.stderr,
+                                        flush=True,
+                                    )
+                            conn.execute(
+                                text(
+                                    "INSERT INTO applied_data_migrations (migration_name) "
+                                    "VALUES ('reminderrule_threshold_days_to_hours')"
+                                )
+                            )
+                        print(
+                            "Migrated reminderrule (dual column) to threshold_hours only",
+                            file=sys.stderr,
+                            flush=True,
+                        )
+                    elif "threshold_hours" in rr_cols:
+                        with engine.begin() as conn:
+                            conn.execute(
+                                text(
+                                    "INSERT INTO applied_data_migrations (migration_name) "
+                                    "VALUES ('reminderrule_threshold_days_to_hours')"
+                                )
+                            )
+            except Exception as e:
+                error_str = str(e).lower()
+                if "already exists" not in error_str and "duplicate" not in error_str:
+                    print(
+                        f"Error migrating reminderrule threshold to hours: {e}",
+                        file=sys.stderr,
+                        flush=True,
+                    )
+                    import traceback
+
+                    print(traceback.format_exc(), file=sys.stderr, flush=True)
         
         # Insert any canonical default ReminderRule rows missing by rule_name (fixes partial legacy seeds)
         def _backfill_default_reminder_rules(session):
@@ -1258,7 +1352,7 @@ def create_db_and_tables():
                     rule_name="NEW_LEAD_STALE",
                     entity_type="LEAD",
                     status="NEW",
-                    threshold_days=3,
+                    threshold_hours=72,
                     check_type="LAST_ACTIVITY",
                     is_active=True,
                     priority=ReminderPriority.HIGH,
@@ -1268,7 +1362,7 @@ def create_db_and_tables():
                     rule_name="CONTACT_ATTEMPTED_STALE",
                     entity_type="LEAD",
                     status="CONTACT_ATTEMPTED",
-                    threshold_days=5,
+                    threshold_hours=120,
                     check_type="LAST_ACTIVITY",
                     is_active=True,
                     priority=ReminderPriority.HIGH,
@@ -1278,7 +1372,7 @@ def create_db_and_tables():
                     rule_name="ENGAGED_STALE",
                     entity_type="LEAD",
                     status="ENGAGED",
-                    threshold_days=7,
+                    threshold_hours=168,
                     check_type="LAST_ACTIVITY",
                     is_active=True,
                     priority=ReminderPriority.MEDIUM,
@@ -1288,7 +1382,7 @@ def create_db_and_tables():
                     rule_name="QUALIFIED_STALE",
                     entity_type="LEAD",
                     status="QUALIFIED",
-                    threshold_days=7,
+                    threshold_hours=168,
                     check_type="LAST_ACTIVITY",
                     is_active=True,
                     priority=ReminderPriority.MEDIUM,
@@ -1298,7 +1392,7 @@ def create_db_and_tables():
                     rule_name="QUOTED_STALE",
                     entity_type="LEAD",
                     status="QUOTED",
-                    threshold_days=5,
+                    threshold_hours=120,
                     check_type="LAST_ACTIVITY",
                     is_active=True,
                     priority=ReminderPriority.HIGH,
@@ -1308,7 +1402,7 @@ def create_db_and_tables():
                     rule_name="QUOTE_SENT_STALE",
                     entity_type="QUOTE",
                     status="SENT",
-                    threshold_days=7,
+                    threshold_hours=168,
                     check_type="SENT_DATE",
                     is_active=True,
                     priority=ReminderPriority.HIGH,
@@ -1318,7 +1412,7 @@ def create_db_and_tables():
                     rule_name="QUOTE_EXPIRED",
                     entity_type="QUOTE",
                     status=None,
-                    threshold_days=0,
+                    threshold_hours=0,
                     check_type="VALID_UNTIL",
                     is_active=True,
                     priority=ReminderPriority.URGENT,
@@ -1328,7 +1422,7 @@ def create_db_and_tables():
                     rule_name="QUOTE_NOT_OPENED_48H",
                     entity_type="QUOTE",
                     status="SENT",
-                    threshold_days=2,
+                    threshold_hours=48,
                     check_type="SENT_NOT_OPENED",
                     is_active=True,
                     priority=ReminderPriority.HIGH,
@@ -1338,7 +1432,7 @@ def create_db_and_tables():
                     rule_name="QUOTE_OPENED_NO_REPLY",
                     entity_type="QUOTE",
                     status="SENT",
-                    threshold_days=5,
+                    threshold_hours=120,
                     check_type="OPENED_NO_REPLY",
                     is_active=True,
                     priority=ReminderPriority.HIGH,

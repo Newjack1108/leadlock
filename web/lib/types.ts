@@ -1218,7 +1218,7 @@ export interface ReminderRule {
   rule_name: string;
   entity_type: string;
   status: string | null;
-  threshold_days: number;
+  threshold_hours: number;
   check_type: string;
   is_active: boolean;
   priority: ReminderPriority;
@@ -1232,7 +1232,7 @@ export interface ReminderRule {
 }
 
 export interface ReminderRuleUpdate {
-  threshold_days?: number;
+  threshold_hours?: number;
   is_active?: boolean;
   priority?: ReminderPriority;
   suggested_action?: SuggestedAction;
@@ -1246,7 +1246,7 @@ export interface ReminderRuleCreate {
   rule_name: string;
   entity_type: 'LEAD' | 'QUOTE';
   status?: string | null;
-  threshold_days: number;
+  threshold_hours: number;
   check_type: string;
   is_active: boolean;
   priority: ReminderPriority;
