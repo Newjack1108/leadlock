@@ -368,7 +368,7 @@ export default function ReminderTriggersPage() {
                       <th className="text-left py-2 px-2 font-medium">Rule</th>
                       <th className="text-left py-2 px-2 font-medium">Status</th>
                       <th className="text-left py-2 px-2 font-medium">Check</th>
-                      <th className="text-left py-2 px-2 font-medium">Threshold</th>
+                      <th className="text-left py-2 px-2 font-medium">Minimum whole hours</th>
                       <th className="text-left py-2 px-2 font-medium">Active</th>
                       <th className="text-left py-2 px-2 font-medium">Priority</th>
                       <th className="text-left py-2 px-2 font-medium">Action</th>
@@ -382,7 +382,10 @@ export default function ReminderTriggersPage() {
                         <td className="py-2 px-2">{formatRuleName(rule.rule_name)}</td>
                         <td className="py-2 px-2">{rule.status || '-'}</td>
                         <td className="py-2 px-2">{CHECK_TYPE_LABELS[rule.check_type] || rule.check_type}</td>
-                        <td className="py-2 px-2">{rule.threshold_hours} hours</td>
+                        <td className="py-2 px-2 tabular-nums">
+                          {rule.threshold_hours}
+                          <span className="text-muted-foreground"> h</span>
+                        </td>
                         <td className="py-2 px-2">{rule.is_active ? 'Yes' : 'No'}</td>
                         <td className="py-2 px-2">{rule.priority}</td>
                         <td className="py-2 px-2">{rule.suggested_action.replace(/_/g, ' ')}</td>
@@ -440,7 +443,7 @@ export default function ReminderTriggersPage() {
                       <th className="text-left py-2 px-2 font-medium">Rule</th>
                       <th className="text-left py-2 px-2 font-medium">Status</th>
                       <th className="text-left py-2 px-2 font-medium">Check</th>
-                      <th className="text-left py-2 px-2 font-medium">Threshold</th>
+                      <th className="text-left py-2 px-2 font-medium">Minimum whole hours</th>
                       <th className="text-left py-2 px-2 font-medium">Active</th>
                       <th className="text-left py-2 px-2 font-medium">Priority</th>
                       <th className="text-left py-2 px-2 font-medium">Action</th>
@@ -454,7 +457,10 @@ export default function ReminderTriggersPage() {
                         <td className="py-2 px-2">{formatRuleName(rule.rule_name)}</td>
                         <td className="py-2 px-2">{rule.status || '-'}</td>
                         <td className="py-2 px-2">{CHECK_TYPE_LABELS[rule.check_type] || rule.check_type}</td>
-                        <td className="py-2 px-2">{rule.threshold_hours} hours</td>
+                        <td className="py-2 px-2 tabular-nums">
+                          {rule.threshold_hours}
+                          <span className="text-muted-foreground"> h</span>
+                        </td>
                         <td className="py-2 px-2">{rule.is_active ? 'Yes' : 'No'}</td>
                         <td className="py-2 px-2">{rule.priority}</td>
                         <td className="py-2 px-2">{rule.suggested_action.replace(/_/g, ' ')}</td>
@@ -572,16 +578,23 @@ export default function ReminderTriggersPage() {
                 </Select>
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="create_threshold">Threshold (hours)</Label>
-                <Input
-                  id="create_threshold"
-                  type="number"
-                  min={0}
-                  value={createForm.threshold_hours}
-                  onChange={(e) =>
-                    setCreateForm((f) => ({ ...f, threshold_hours: parseInt(e.target.value, 10) || 0 }))
-                  }
-                />
+                <Label htmlFor="create_threshold">Minimum whole hours</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="create_threshold"
+                    type="number"
+                    min={0}
+                    className="max-w-[10rem]"
+                    value={createForm.threshold_hours}
+                    onChange={(e) =>
+                      setCreateForm((f) => ({ ...f, threshold_hours: parseInt(e.target.value, 10) || 0 }))
+                    }
+                    aria-describedby="create_threshold_hint"
+                  />
+                  <span id="create_threshold_hint" className="text-sm text-muted-foreground shrink-0">
+                    hours (not days)
+                  </span>
+                </div>
               </div>
               <div className="grid gap-2">
                 <Label>Active</Label>
@@ -764,14 +777,23 @@ export default function ReminderTriggersPage() {
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
-                <Label htmlFor="threshold_hours">Threshold (hours)</Label>
-                <Input
-                  id="threshold_hours"
-                  type="number"
-                  min={0}
-                  value={formData.threshold_hours}
-                  onChange={(e) => setFormData((f) => ({ ...f, threshold_hours: parseInt(e.target.value, 10) || 0 }))}
-                />
+                <Label htmlFor="threshold_hours">Minimum whole hours</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="threshold_hours"
+                    type="number"
+                    min={0}
+                    className="max-w-[10rem]"
+                    value={formData.threshold_hours}
+                    onChange={(e) =>
+                      setFormData((f) => ({ ...f, threshold_hours: parseInt(e.target.value, 10) || 0 }))
+                    }
+                    aria-describedby="edit_threshold_hint"
+                  />
+                  <span id="edit_threshold_hint" className="text-sm text-muted-foreground shrink-0">
+                    hours (not days)
+                  </span>
+                </div>
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="is_active">Active</Label>
