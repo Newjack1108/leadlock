@@ -193,6 +193,21 @@ def on_startup():
         log_inbound_poll_configuration()
     except Exception as e:
         print(f"Inbound config log failed: {e}", file=sys.stderr, flush=True)
+    try:
+        from app.sms_bot_service import backfill_stop_opt_out_customers
+
+        with Session(engine) as session:
+            updated = backfill_stop_opt_out_customers(session)
+        if updated:
+            print(
+                f"SMS STOP backfill: updated {updated} customer(s) with stop + automated opt-out flags",
+                file=sys.stderr,
+                flush=True,
+            )
+        else:
+            print("SMS STOP backfill: no customer updates needed", file=sys.stderr, flush=True)
+    except Exception as e:
+        print(f"SMS STOP backfill failed: {e}", file=sys.stderr, flush=True)
 
     # Start IMAP polling background task (optional - don't crash if import/config fails)
     import threading

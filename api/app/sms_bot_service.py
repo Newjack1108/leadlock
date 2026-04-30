@@ -126,6 +126,7 @@ def should_bot_reply(
         return False, "customer_pause_active"
     if _contains_opt_out(inbound_body):
         customer.sms_bot_stopped = True
+        customer.automated_reminder_outreach_opt_out = True
         return False, "opt_out_keyword"
     if not is_bot_active_now(settings):
         return False, "bot_inactive"
@@ -144,6 +145,43 @@ def should_bot_reply(
     if _contains_handover_hint(inbound_body):
         return True, "handover"
     return True, None
+
+
+def backfill_stop_opt_out_customers(session: Session) -> int:
+    """
+    Backfill customer stop flags from historical inbound STOP-like SMS messages.
+    Returns number of customers updated.
+    """
+    stmt = (
+        select(SmsMessage)
+        .where(SmsMessage.direction == SmsDirection.RECEIVED)
+        .where(SmsMessage.customer_id.is_not(None))
+    )
+    updated = 0
+    seen_customer_ids: set[int] = set()
+    for msg in session.exec(stmt).all():
+        customer_id = msg.customer_id
+        if not customer_id or customer_id in seen_customer_ids:
+            continue
+        if not _contains_opt_out(msg.body or ""):
+            continue
+        customer = session.get(Customer, customer_id)
+        if not customer:
+            continue
+        changed = False
+        if not getattr(customer, "sms_bot_stopped", False):
+            customer.sms_bot_stopped = True
+            changed = True
+        if not getattr(customer, "automated_reminder_outreach_opt_out", False):
+            customer.automated_reminder_outreach_opt_out = True
+            changed = True
+        if changed:
+            session.add(customer)
+            updated += 1
+        seen_customer_ids.add(customer_id)
+    if updated:
+        session.commit()
+    return updated
 
 
 def _build_company_context_block(settings: Optional[CompanySettings]) -> Optional[str]:
