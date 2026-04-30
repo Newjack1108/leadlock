@@ -623,40 +623,49 @@ export default function CustomerDetailPage() {
                 </Card>
                 <Card className="flex-1 min-h-0 flex flex-col border-dashed">
                   <CardHeader className="pb-2">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-2">
+                        {customer.automated_reminder_outreach_opt_out ? (
+                          <BellOff className="h-5 w-5 text-muted-foreground shrink-0" aria-hidden />
+                        ) : (
+                          <Bell className="h-5 w-5 text-muted-foreground shrink-0" aria-hidden />
+                        )}
+                        <CardTitle className="text-base">Automated reminder messages</CardTitle>
+                      </div>
                       {customer.automated_reminder_outreach_opt_out ? (
-                        <BellOff className="h-5 w-5 text-muted-foreground shrink-0" aria-hidden />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={outreachOptOutLoading}
+                          onClick={() => handleAutomatedOutreachOptOut(false)}
+                        >
+                          Resume automated messages
+                        </Button>
                       ) : (
-                        <Bell className="h-5 w-5 text-muted-foreground shrink-0" aria-hidden />
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          disabled={outreachOptOutLoading}
+                          onClick={() => handleAutomatedOutreachOptOut(true)}
+                        >
+                          Stop automated messages
+                        </Button>
                       )}
-                      <CardTitle className="text-base">Automated reminder messages</CardTitle>
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-3 pt-0">
                     <p className="text-xs text-muted-foreground leading-relaxed">
-                      Stops automatic SMS or email sent by{' '}
-                      <span className="font-medium text-foreground">reminder rules</span> only. Messages you send from
+                      Preferred channel based on customer responses:{' '}
+                      <span className="font-medium text-foreground">
+                        {preferredChannel.name} ({preferredChannel.received} received)
+                      </span>
+                      .
+                    </p>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      This only stops automatic SMS or email sent by{' '}
+                      <span className="font-medium text-foreground">reminder rules</span>. Messages you send from
                       LeadLock (compose email, SMS thread, quotes) are not affected.
                     </p>
-                    {customer.automated_reminder_outreach_opt_out ? (
-                      <Button
-                        variant="outline"
-                        className="w-full"
-                        disabled={outreachOptOutLoading}
-                        onClick={() => handleAutomatedOutreachOptOut(false)}
-                      >
-                        Resume automated messages
-                      </Button>
-                    ) : (
-                      <Button
-                        variant="secondary"
-                        className="w-full"
-                        disabled={outreachOptOutLoading}
-                        onClick={() => handleAutomatedOutreachOptOut(true)}
-                      >
-                        Stop automated messages
-                      </Button>
-                    )}
                   </CardContent>
                 </Card>
               </div>
