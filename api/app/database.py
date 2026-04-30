@@ -1902,6 +1902,10 @@ def create_db_and_tables():
                 ("customer_outreach_email_template_id", "ALTER TABLE reminderrule ADD COLUMN customer_outreach_email_template_id INTEGER REFERENCES emailtemplate(id)"),
                 ("customer_outreach_cooldown_days", "ALTER TABLE reminderrule ADD COLUMN customer_outreach_cooldown_days INTEGER DEFAULT 14 NOT NULL"),
                 ("outreach_enabled_from_utc", "ALTER TABLE reminderrule ADD COLUMN outreach_enabled_from_utc TIMESTAMP"),
+                (
+                    "customer_outreach_on_lead_create",
+                    "ALTER TABLE reminderrule ADD COLUMN customer_outreach_on_lead_create BOOLEAN DEFAULT 0 NOT NULL",
+                ),
             ]
             for col_name, ddl in outreach_alters:
                 rr_columns = [col["name"] for col in inspector.get_columns("reminderrule")]

@@ -44,7 +44,7 @@ from app.schemas import LeadCreate, LeadResponse, ProductImportPayload, ProductI
 from app.auth import get_webhook_api_key, get_product_import_api_key
 from app.routers.settings import get_company_settings
 from app.workflow import check_sla_overdue
-from app.routers.leads import enrich_lead_response
+from app.routers.leads import enrich_lead_response, find_or_create_customer
 from app.sms_service import (
     validate_twilio_webhook,
     normalize_phone,
@@ -122,7 +122,7 @@ async def create_lead_webhook(
     """
     Create a lead via webhook (e.g., from Make.com).
     Requires X-API-Key header for authentication.
-    Links to existing Customer if email or phone matches (no Customer creation).
+    Finds or creates a Customer when email or phone is present so automated outreach can run.
     """
     # Build lead dict (exclude alias fields not on Lead model; exclude_none so Lead uses defaults for unset enums)
     lead_dict = lead_data.model_dump(
@@ -131,21 +131,9 @@ async def create_lead_webhook(
     )
     lead = Lead(**lead_dict)
 
-    # Link to existing Customer if email or phone matches (returning submitter)
     if lead.email or lead.phone:
-        customer = None
-        if lead.email:
-            stmt = select(Customer).where(Customer.email == lead.email)
-            customer = session.exec(stmt).first()
-        if not customer and lead.phone:
-            norm_phone = normalize_phone(lead.phone)
-            if norm_phone:
-                for c in session.exec(select(Customer).where(Customer.phone.isnot(None))).all():
-                    if c.phone and normalize_phone(c.phone) == norm_phone:
-                        customer = c
-                        break
-        if customer:
-            lead.customer_id = customer.id
+        customer = find_or_create_customer(lead, session)
+        lead.customer_id = customer.id
 
     # Assign to default user if configured, otherwise leave unassigned
     default_user_id = os.getenv("WEBHOOK_DEFAULT_USER_ID")
@@ -177,7 +165,12 @@ async def create_lead_webhook(
         )
         session.add(status_history)
         session.commit()
-    
+
+    session.refresh(lead)
+    from app.customer_outreach_service import try_customer_outreach_for_new_lead
+
+    try_customer_outreach_for_new_lead(session, lead)
+
     # For webhook responses, we need to create a minimal user object for enrich_lead_response
     # Since we don't have a current_user, we'll pass None and handle it in enrich_lead_response
     # Actually, let's get the user if assigned, otherwise create a dummy response
@@ -574,6 +567,7 @@ async def facebook_messenger_webhook(request: Request, session: Session = Depend
         return Response(status_code=200)
     activity_user_id = _get_activity_user_id(session)
     now = datetime.utcnow()
+    new_leads_for_outreach: list[Lead] = []
     for ev in events:
         sender_psid = ev["sender_id"]
         text = ev.get("text", "")
@@ -646,6 +640,7 @@ async def facebook_messenger_webhook(request: Request, session: Session = Depend
                 )
                 session.add(lead)
                 session.flush()
+                new_leads_for_outreach.append(lead)
         msg = MessengerMessage(
             customer_id=customer.id,
             lead_id=lead.id if lead else None,
@@ -670,6 +665,14 @@ async def facebook_messenger_webhook(request: Request, session: Session = Depend
     except Exception as e:
         print(f"Facebook Messenger webhook commit error: {e}", file=sys.stderr, flush=True)
         session.rollback()
+        return Response(status_code=200)
+
+    from app.customer_outreach_service import try_customer_outreach_for_new_lead
+
+    for lo in new_leads_for_outreach:
+        fresh = session.get(Lead, lo.id)
+        if fresh:
+            try_customer_outreach_for_new_lead(session, fresh)
     return Response(status_code=200)
 
 
@@ -749,6 +752,7 @@ async def facebook_leadgen_webhook(request: Request, session: Session = Depends(
     from datetime import date
     now = datetime.utcnow()
     year = date.today().year
+    created_lead_ids: list[int] = []
     for ev in events:
         leadgen_id = ev["leadgen_id"]
         ok, field_map, err = fetch_leadgen_lead(leadgen_id, token)
@@ -801,6 +805,7 @@ async def facebook_leadgen_webhook(request: Request, session: Session = Depends(
         )
         session.add(lead)
         session.flush()
+        created_lead_ids.append(lead.id)
         if activity_user_id:
             activity = Activity(
                 customer_id=customer.id,
@@ -820,4 +825,12 @@ async def facebook_leadgen_webhook(request: Request, session: Session = Depends(
     except Exception as e:
         print(f"Facebook Lead Ads webhook commit error: {e}", file=sys.stderr, flush=True)
         session.rollback()
+        return Response(status_code=200)
+
+    from app.customer_outreach_service import try_customer_outreach_for_new_lead
+
+    for lid in created_lead_ids:
+        lo = session.get(Lead, lid)
+        if lo:
+            try_customer_outreach_for_new_lead(session, lo)
     return Response(status_code=200)

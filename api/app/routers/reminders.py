@@ -98,6 +98,9 @@ def _reminder_rule_to_response(rule: ReminderRule) -> ReminderRuleResponse:
         customer_outreach_cooldown_days=rule.customer_outreach_cooldown_days
         if rule.customer_outreach_cooldown_days is not None
         else 14,
+        customer_outreach_on_lead_create=bool(
+            getattr(rule, "customer_outreach_on_lead_create", False)
+        ),
     )
 
 
@@ -586,6 +589,18 @@ async def create_reminder_rule(
         cooldown_days=body.customer_outreach_cooldown_days,
     )
 
+    on_create = bool(body.customer_outreach_on_lead_create) if entity == "LEAD" else False
+    if entity != "LEAD" and body.customer_outreach_on_lead_create:
+        raise HTTPException(
+            status_code=400,
+            detail="customer_outreach_on_lead_create applies only to LEAD rules",
+        )
+    if on_create and not och:
+        raise HTTPException(
+            status_code=400,
+            detail="customer_outreach_on_lead_create requires customer outreach channel and template",
+        )
+
     rule = ReminderRule(
         rule_name=rule_name,
         entity_type=entity,
@@ -600,6 +615,7 @@ async def create_reminder_rule(
         customer_outreach_email_template_id=oet,
         customer_outreach_cooldown_days=ocd,
         outreach_enabled_from_utc=datetime.utcnow() if och else None,
+        customer_outreach_on_lead_create=on_create,
     )
     session.add(rule)
     session.commit()
@@ -619,10 +635,10 @@ async def update_reminder_rule(
         raise HTTPException(status_code=403, detail="Only directors can update reminder rules")
     
     rule = session.exec(select(ReminderRule).where(ReminderRule.id == rule_id)).first()
-    prev_channel = (rule.customer_outreach_channel or "").strip().upper() if rule.customer_outreach_channel else None
-    
     if not rule:
         raise HTTPException(status_code=404, detail="Reminder rule not found")
+
+    prev_channel = (rule.customer_outreach_channel or "").strip().upper() if rule.customer_outreach_channel else None
     
     if rule_update.threshold_minutes is not None:
         if rule_update.threshold_minutes < 0:
@@ -649,6 +665,7 @@ async def update_reminder_rule(
                 rule.customer_outreach_channel = None
                 rule.customer_outreach_sms_template_id = None
                 rule.customer_outreach_email_template_id = None
+                rule.customer_outreach_on_lead_create = False
                 if "customer_outreach_cooldown_days" in patch and patch["customer_outreach_cooldown_days"] is not None:
                     if patch["customer_outreach_cooldown_days"] < 0:
                         raise HTTPException(
@@ -695,6 +712,25 @@ async def update_reminder_rule(
         rule.outreach_enabled_from_utc = datetime.utcnow()
     elif prev_channel and not new_channel:
         rule.outreach_enabled_from_utc = None
+
+    if rule_update.customer_outreach_on_lead_create is not None:
+        if rule.entity_type != "LEAD":
+            if rule_update.customer_outreach_on_lead_create:
+                raise HTTPException(
+                    status_code=400,
+                    detail="customer_outreach_on_lead_create applies only to LEAD rules",
+                )
+        else:
+            rule.customer_outreach_on_lead_create = rule_update.customer_outreach_on_lead_create
+            new_ch = (rule.customer_outreach_channel or "").strip().upper()
+            if rule.customer_outreach_on_lead_create and new_ch not in (
+                CustomerOutreachChannel.SMS.value,
+                CustomerOutreachChannel.EMAIL.value,
+            ):
+                raise HTTPException(
+                    status_code=400,
+                    detail="customer_outreach_on_lead_create requires customer outreach channel and template",
+                )
 
     rule.updated_at = datetime.utcnow()
 

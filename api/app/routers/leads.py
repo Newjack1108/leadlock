@@ -41,6 +41,7 @@ from app.lead_delete import delete_lead_cascade
 from app.constants import QUOTE_LIST_EXCLUDED_STATUSES, LIST_PAGE_SIZE_DEFAULT, LIST_PAGE_SIZE_MAX
 from app.handover_pdf_service import generate_lead_handover_pdf
 from datetime import datetime
+from app.sms_service import normalize_phone
 
 router = APIRouter(prefix="/api/leads", tags=["leads"])
 
@@ -74,6 +75,35 @@ def generate_customer_number(session: Session) -> str:
     return f"CUST-{year}-{next_num:03d}"
 
 
+def _find_customer_by_normalized_phone(session: Session, phone: Optional[str]) -> Optional[Customer]:
+    norm = normalize_phone(phone or "")
+    if not norm:
+        return None
+    statement = select(Customer).where(Customer.phone.isnot(None))
+    for c in session.exec(statement).all():
+        if c.phone and normalize_phone(c.phone) == norm:
+            return c
+    return None
+
+
+def _merge_lead_into_customer_if_sparse(customer: Customer, lead: Lead, session: Session) -> None:
+    """Fill missing CRM phone/email/postcode from inbound lead so SMS outreach can reach the submitter."""
+    dirty = False
+    if lead.phone and not (customer.phone or "").strip():
+        customer.phone = lead.phone
+        dirty = True
+    if lead.email and not (customer.email or "").strip():
+        customer.email = lead.email
+        dirty = True
+    if lead.postcode and not (customer.postcode or "").strip():
+        customer.postcode = lead.postcode
+        dirty = True
+    if dirty:
+        session.add(customer)
+        session.commit()
+        session.refresh(customer)
+
+
 def find_or_create_customer(lead: Lead, session: Session) -> Customer:
     """
     Find existing customer by email or phone, or create new customer from lead.
@@ -84,13 +114,17 @@ def find_or_create_customer(lead: Lead, session: Session) -> Customer:
         statement = select(Customer).where(Customer.email == lead.email)
         customer = session.exec(statement).first()
         if customer:
+            _merge_lead_into_customer_if_sparse(customer, lead, session)
             return customer
     
-    # Try to find existing customer by phone
+    # Try to find existing customer by phone (normalized match, then raw)
     if lead.phone:
-        statement = select(Customer).where(Customer.phone == lead.phone)
-        customer = session.exec(statement).first()
+        customer = _find_customer_by_normalized_phone(session, lead.phone)
+        if not customer:
+            statement = select(Customer).where(Customer.phone == lead.phone)
+            customer = session.exec(statement).first()
         if customer:
+            _merge_lead_into_customer_if_sparse(customer, lead, session)
             return customer
     
     # Create new customer from lead data
@@ -527,6 +561,11 @@ async def create_lead(
         )
         session.add(status_history)
         session.commit()
+
+        session.refresh(lead)
+        from app.customer_outreach_service import try_customer_outreach_for_new_lead
+
+        try_customer_outreach_for_new_lead(session, lead)
 
         return enrich_lead_response(lead, session, current_user)
     except Exception as e:

@@ -469,7 +469,14 @@ def on_startup():
 
         outreach_thread = threading.Thread(target=poll_customer_outreach, daemon=True)
         outreach_thread.start()
-        print("Customer outreach worker started", file=__import__("sys").stderr, flush=True)
+        poll_s = int(os.getenv("CUSTOMER_OUTREACH_INTERVAL", "300"))
+        print(
+            "Customer outreach worker started "
+            f"(CUSTOMER_OUTREACH_INTERVAL={poll_s}s; set CUSTOMER_OUTREACH_ACTOR_USER_ID or "
+            "WEBHOOK_DEFAULT_USER_ID when leads have no assignee)",
+            file=__import__("sys").stderr,
+            flush=True,
+        )
     except Exception as e:
         print("Customer outreach worker not started:", str(e), file=__import__("sys").stderr, flush=True)
 

@@ -1665,6 +1665,7 @@ class ReminderRuleResponse(BaseModel):
     customer_outreach_sms_template_id: Optional[int] = None
     customer_outreach_email_template_id: Optional[int] = None
     customer_outreach_cooldown_days: int = 14
+    customer_outreach_on_lead_create: bool = False
 
 
 class ReminderRuleUpdate(BaseModel):
@@ -1676,6 +1677,7 @@ class ReminderRuleUpdate(BaseModel):
     customer_outreach_sms_template_id: Optional[int] = None
     customer_outreach_email_template_id: Optional[int] = None
     customer_outreach_cooldown_days: Optional[int] = None
+    customer_outreach_on_lead_create: Optional[bool] = None
 
 
 class ReminderRuleCreate(BaseModel):
@@ -1691,6 +1693,7 @@ class ReminderRuleCreate(BaseModel):
     customer_outreach_sms_template_id: Optional[int] = None
     customer_outreach_email_template_id: Optional[int] = None
     customer_outreach_cooldown_days: Optional[int] = 14
+    customer_outreach_on_lead_create: Optional[bool] = False
 
 
 class OutreachSendTargetType(str, Enum):

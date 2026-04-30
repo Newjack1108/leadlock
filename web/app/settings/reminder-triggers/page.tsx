@@ -93,6 +93,7 @@ export default function ReminderTriggersPage() {
     outreach_sms_template_id: null as number | null,
     outreach_email_template_id: null as number | null,
     outreach_cooldown_days: 14,
+    outreach_on_lead_create: false,
   });
   const [smsTemplates, setSmsTemplates] = useState<SmsTemplate[]>([]);
   const [emailTemplates, setEmailTemplates] = useState<EmailTemplate[]>([]);
@@ -119,6 +120,7 @@ export default function ReminderTriggersPage() {
     outreach_sms_template_id: null as number | null,
     outreach_email_template_id: null as number | null,
     outreach_cooldown_days: 14,
+    outreach_on_lead_create: false,
   });
 
   const isDirector = userRole === 'DIRECTOR';
@@ -206,6 +208,7 @@ export default function ReminderTriggersPage() {
       outreach_sms_template_id: rule.customer_outreach_sms_template_id ?? null,
       outreach_email_template_id: rule.customer_outreach_email_template_id ?? null,
       outreach_cooldown_days: rule.customer_outreach_cooldown_days ?? 14,
+      outreach_on_lead_create: rule.customer_outreach_on_lead_create ?? false,
     });
     setEditDialogOpen(true);
   };
@@ -230,6 +233,7 @@ export default function ReminderTriggersPage() {
       };
       if (formData.outreach_channel === OUTREACH_NONE) {
         update.customer_outreach_channel = null;
+        update.customer_outreach_on_lead_create = false;
       } else {
         update.customer_outreach_channel = formData.outreach_channel;
         update.customer_outreach_sms_template_id =
@@ -237,6 +241,9 @@ export default function ReminderTriggersPage() {
         update.customer_outreach_email_template_id =
           formData.outreach_channel === 'EMAIL' ? formData.outreach_email_template_id : null;
         update.customer_outreach_cooldown_days = formData.outreach_cooldown_days;
+        if (editingRule.entity_type === 'LEAD') {
+          update.customer_outreach_on_lead_create = formData.outreach_on_lead_create;
+        }
       }
       await updateReminderRule(editingRule.id, update);
       toast.success('Rule updated successfully');
@@ -265,6 +272,7 @@ export default function ReminderTriggersPage() {
       outreach_sms_template_id: null,
       outreach_email_template_id: null,
       outreach_cooldown_days: 14,
+      outreach_on_lead_create: false,
     });
     setCreateDialogOpen(true);
   };
@@ -335,6 +343,9 @@ export default function ReminderTriggersPage() {
               customer_outreach_email_template_id:
                 createForm.outreach_channel === 'EMAIL' ? createForm.outreach_email_template_id : null,
               customer_outreach_cooldown_days: createForm.outreach_cooldown_days,
+              ...(createForm.entity_type === 'LEAD' && createForm.outreach_on_lead_create
+                ? { customer_outreach_on_lead_create: true }
+                : {}),
             }
           : {}),
       });
@@ -374,9 +385,10 @@ export default function ReminderTriggersPage() {
             <p className="text-muted-foreground">
               Configure when reminders are created for stale leads and quotes. Only Directors can create, edit, or delete.
               New rules must use check types the engine already supports (see form options). You can optionally send a
-              customer-facing SMS or email when the same conditions match; the server runs that on a
-              timer (not when you click Generate Reminders), with a cooldown per rule to limit repeat sends. You are
-              responsible for consent and compliance.
+              customer-facing SMS or email when stale thresholds match; the server runs that on a timer (not when you
+              click Generate Reminders), with a cooldown per rule to limit repeat sends. For lead rules with outreach
+              enabled, you can also send once immediately when a new lead is created in the matching status (for example a
+              thank-you SMS). You are responsible for consent and compliance.
             </p>
           </div>
           {isDirector && (
@@ -555,7 +567,10 @@ export default function ReminderTriggersPage() {
                         <td className="py-2 px-2">{rule.priority}</td>
                         <td className="py-2 px-2">{rule.suggested_action.replace(/_/g, ' ')}</td>
                         <td className="py-2 px-2 text-muted-foreground">
-                          {rule.customer_outreach_channel || '—'}
+                          <span className="block">{rule.customer_outreach_channel || '—'}</span>
+                          {rule.customer_outreach_on_lead_create ? (
+                            <span className="text-xs">Also on new lead</span>
+                          ) : null}
                         </td>
                         {isDirector && (
                           <td className="py-2 px-2 text-right">
@@ -689,6 +704,7 @@ export default function ReminderTriggersPage() {
                       entity_type: et,
                       check_type: et === 'LEAD' ? LEAD_CHECK_TYPES[0] : QUOTE_CHECK_TYPES[0],
                       status: et === 'LEAD' ? 'NEW' : QUOTE_STATUS_NONE,
+                      outreach_on_lead_create: et === 'LEAD' ? f.outreach_on_lead_create : false,
                     }));
                   }}
                 >
@@ -817,7 +833,8 @@ export default function ReminderTriggersPage() {
                   <div className="rounded-md border p-3 space-y-3 bg-muted/30">
                     <p className="text-sm font-medium">Customer outreach (optional)</p>
                     <p className="text-xs text-muted-foreground">
-                      Sends automatically when this rule matches; not tied to Generate Reminders. Cooldown limits repeats.
+                      Stale matching uses the timer worker; optional immediate send runs when a new lead is saved (webhook
+                      or app). Cooldown limits repeats.
                     </p>
                     <div className="grid gap-2">
                       <Label>Channel</Label>
@@ -827,6 +844,7 @@ export default function ReminderTriggersPage() {
                           setCreateForm((f) => ({
                             ...f,
                             outreach_channel: v as typeof OUTREACH_NONE | 'SMS' | 'EMAIL',
+                            outreach_on_lead_create: v === OUTREACH_NONE ? false : f.outreach_on_lead_create,
                           }))
                         }
                       >
@@ -916,6 +934,22 @@ export default function ReminderTriggersPage() {
                           }
                         />
                       </div>
+                    )}
+                    {createForm.entity_type === 'LEAD' && createForm.outreach_channel !== OUTREACH_NONE && (
+                      <label className="flex items-start gap-2 text-sm cursor-pointer">
+                        <input
+                          type="checkbox"
+                          className="mt-0.5 rounded border-input"
+                          checked={createForm.outreach_on_lead_create}
+                          onChange={(e) =>
+                            setCreateForm((f) => ({ ...f, outreach_on_lead_create: e.target.checked }))
+                          }
+                        />
+                        <span>
+                          Send immediately when a new lead is created in this rule&apos;s status (in addition to stale
+                          reminders).
+                        </span>
+                      </label>
                     )}
                   </div>
                 </>
@@ -1014,7 +1048,8 @@ export default function ReminderTriggersPage() {
               <div className="rounded-md border p-3 space-y-3 bg-muted/30">
                 <p className="text-sm font-medium">Customer outreach (optional)</p>
                 <p className="text-xs text-muted-foreground">
-                  Sends automatically when this rule matches; not tied to Generate Reminders. Cooldown limits repeats.
+                  Stale matching uses the timer worker; optional immediate send runs when a new lead is saved. Cooldown
+                  limits repeats.
                 </p>
                 <div className="grid gap-2">
                   <Label>Channel</Label>
@@ -1024,6 +1059,7 @@ export default function ReminderTriggersPage() {
                       setFormData((f) => ({
                         ...f,
                         outreach_channel: v as typeof OUTREACH_NONE | 'SMS' | 'EMAIL',
+                        outreach_on_lead_create: v === OUTREACH_NONE ? false : f.outreach_on_lead_create,
                       }))
                     }
                   >
@@ -1113,6 +1149,22 @@ export default function ReminderTriggersPage() {
                       }
                     />
                   </div>
+                )}
+                {editingRule?.entity_type === 'LEAD' && formData.outreach_channel !== OUTREACH_NONE && (
+                  <label className="flex items-start gap-2 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5 rounded border-input"
+                      checked={formData.outreach_on_lead_create}
+                      onChange={(e) =>
+                        setFormData((f) => ({ ...f, outreach_on_lead_create: e.target.checked }))
+                      }
+                    />
+                    <span>
+                      Send immediately when a new lead is created in this rule&apos;s status (in addition to stale
+                      reminders).
+                    </span>
+                  </label>
                 )}
               </div>
             </div>

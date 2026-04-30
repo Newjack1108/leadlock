@@ -943,6 +943,8 @@ class ReminderRule(SQLModel, table=True):
     customer_outreach_cooldown_days: int = Field(default=14)
     # Set when outreach is enabled so newly-enabled rules only apply forward (no backfill on old stale entities).
     outreach_enabled_from_utc: Optional[datetime] = None
+    # LEAD rules only: send outreach once when a lead is created matching rule.status (in addition to stale worker).
+    customer_outreach_on_lead_create: bool = Field(default=False)
 
 
 class CustomerOutreachSend(SQLModel, table=True):

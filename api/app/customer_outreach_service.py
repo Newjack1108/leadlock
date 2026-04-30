@@ -1,5 +1,11 @@
 """
 Background evaluation: send customer SMS/email when reminder rules match stale leads/quotes.
+
+Lead outreach prerequisites (stale worker and immediate-on-create):
+- Linked Customer (``lead.customer_id``); webhook intake creates/links via ``find_or_create_customer``.
+- SMS recipient: ``customer.phone``, falling back to ``lead.phone`` when the template sends for that lead.
+- Actor user for templates/logging: ``CUSTOMER_OUTREACH_ACTOR_USER_ID``, ``WEBHOOK_DEFAULT_USER_ID``, or ``lead.assigned_to_id``.
+- Long-running API process running the customer outreach thread (see ``CUSTOMER_OUTREACH_INTERVAL``); immediate sends run inline on lead create.
 """
 from __future__ import annotations
 
@@ -24,6 +30,7 @@ from app.models import (
     EmailDirection,
     EmailTemplate,
     Lead,
+    LeadStatus,
     Quote,
     ReminderRule,
     SmsMessage,
@@ -185,12 +192,12 @@ def _send_outreach_sms(
     if not sid or not token or not from_phone:
         return False, None, "Twilio not configured"
 
-    to_phone = customer.phone
+    to_phone = (customer.phone or "").strip() or ((lead.phone or "").strip() if lead else "")
     if not to_phone:
         return (
             False,
             None,
-            "Customer has no phone number; SMS outreach is disabled until number is added",
+            "No phone number on customer or lead; SMS outreach is disabled until a number is added",
         )
 
     body = render_sms_template(template, customer, user=actor, company_settings=company)
@@ -290,6 +297,158 @@ def _send_outreach_email(
     return True, message_id, None
 
 
+def _deliver_lead_customer_outreach_once(
+    session: Session,
+    *,
+    company: Optional[CompanySettings],
+    lead: Lead,
+    rule: ReminderRule,
+) -> bool:
+    """Send SMS/email for one lead/rule pair; commit on success or logged failure. Returns True if sent."""
+    ch = (rule.customer_outreach_channel or "").strip().upper()
+    if not lead.customer_id:
+        return False
+    customer = session.get(Customer, lead.customer_id)
+    if not customer:
+        return False
+    if getattr(customer, "automated_reminder_outreach_opt_out", False):
+        print(
+            f"Customer outreach: skip lead {lead.id} rule {rule.id}: "
+            f"customer {customer.id} opted out of automated reminder messages",
+            file=sys.stderr,
+            flush=True,
+        )
+        return False
+    actor_id = _resolve_actor_user_id(session, lead, None)
+    if not actor_id:
+        print(
+            f"Customer outreach: skip lead {lead.id} rule {rule.id}: no actor user",
+            file=sys.stderr,
+            flush=True,
+        )
+        return False
+    actor = session.get(User, actor_id)
+    if not actor:
+        return False
+
+    external_id: Optional[str] = None
+    ok = False
+    err_msg: Optional[str] = None
+    try:
+        if ch == CustomerOutreachChannel.SMS.value:
+            ok, external_id, err_msg = _send_outreach_sms(
+                session,
+                rule=rule,
+                customer=customer,
+                lead=lead,
+                quote=None,
+                actor=actor,
+                company=company,
+            )
+        elif ch == CustomerOutreachChannel.EMAIL.value:
+            ok, external_id, err_msg = _send_outreach_email(
+                session,
+                rule=rule,
+                customer=customer,
+                lead=lead,
+                quote=None,
+                actor=actor,
+            )
+        else:
+            return False
+    except Exception as e:  # noqa: BLE001
+        err_msg = str(e)
+        print(f"Customer outreach error lead {lead.id} rule {rule.id}: {e}", file=sys.stderr, flush=True)
+        session.rollback()
+        return False
+
+    if not ok:
+        if err_msg:
+            if ch == CustomerOutreachChannel.SMS.value and is_unsubscribed_recipient_error(err_msg):
+                customer.automated_reminder_outreach_opt_out = True
+                session.add(customer)
+            session.add(
+                CustomerOutreachSend(
+                    reminder_rule_id=rule.id,
+                    customer_id=customer.id,
+                    channel=ch,
+                    lead_id=lead.id,
+                    quote_id=None,
+                    external_message_id=None,
+                    status="FAILED",
+                    failure_reason=(err_msg or "send failed")[:1000],
+                    sent_at=datetime.utcnow(),
+                )
+            )
+            session.commit()
+            print(
+                f"Customer outreach skip lead {lead.id} rule {rule.rule_name}: {err_msg}",
+                file=sys.stderr,
+                flush=True,
+            )
+        return False
+
+    log = CustomerOutreachSend(
+        reminder_rule_id=rule.id,
+        customer_id=customer.id,
+        channel=ch,
+        lead_id=lead.id,
+        quote_id=None,
+        external_message_id=external_id,
+        status="SENT",
+        failure_reason=None,
+        sent_at=datetime.utcnow(),
+    )
+    session.add(log)
+    session.commit()
+    return True
+
+
+def try_customer_outreach_for_new_lead(session: Session, lead: Lead) -> int:
+    """
+    Run outreach rules configured with customer_outreach_on_lead_create for this lead's status.
+    Called after persisting a new lead (webhook, UI create, Facebook Lead Ads, etc.).
+    """
+    if not lead.id:
+        return 0
+    company = session.exec(select(CompanySettings).limit(1)).first()
+    statement = (
+        select(ReminderRule)
+        .where(
+            ReminderRule.entity_type == "LEAD",
+            ReminderRule.is_active == True,  # noqa: E712
+            ReminderRule.customer_outreach_on_lead_create == True,
+        )
+        .order_by(ReminderRule.id)
+    )
+    rules = session.exec(statement).all()
+    sent_count = 0
+    for rule in rules:
+        if not rule.status:
+            continue
+        try:
+            rule_status = LeadStatus(rule.status)
+        except ValueError:
+            continue
+        if lead.status != rule_status:
+            continue
+        if not _rule_outreach_ready(rule):
+            continue
+        if not lead.customer_id:
+            continue
+        enabled_from = getattr(rule, "outreach_enabled_from_utc", None)
+        if enabled_from is not None and lead.created_at < enabled_from:
+            continue
+        ch = (rule.customer_outreach_channel or "").strip().upper()
+        if _attempt_already_recorded(session, rule, lead_id=lead.id, quote_id=None, channel=ch):
+            continue
+        if _cooldown_blocks(session, rule, lead_id=lead.id, quote_id=None):
+            continue
+        if _deliver_lead_customer_outreach_once(session, company=company, lead=lead, rule=rule):
+            sent_count += 1
+    return sent_count
+
+
 def run_customer_outreach_cycle(session: Session) -> int:
     """
     Evaluate stale lead/quote rules that have customer outreach configured; send at most one
@@ -321,98 +480,8 @@ def run_customer_outreach_cycle(session: Session) -> int:
             continue
         if _cooldown_blocks(session, rule, lead_id=lead.id, quote_id=None):
             continue
-        customer = session.get(Customer, lead.customer_id)
-        if not customer:
-            continue
-        if getattr(customer, "automated_reminder_outreach_opt_out", False):
-            print(
-                f"Customer outreach: skip lead {lead.id} rule {rule.id}: "
-                f"customer {customer.id} opted out of automated reminder messages",
-                file=sys.stderr,
-                flush=True,
-            )
-            continue
-        actor_id = _resolve_actor_user_id(session, lead, None)
-        if not actor_id:
-            print(
-                f"Customer outreach: skip lead {lead.id} rule {rule.id}: no actor user",
-                file=sys.stderr,
-                flush=True,
-            )
-            continue
-        actor = session.get(User, actor_id)
-        if not actor:
-            continue
-
-        external_id: Optional[str] = None
-        ok = False
-        err_msg: Optional[str] = None
-        try:
-            if ch == CustomerOutreachChannel.SMS.value:
-                ok, external_id, err_msg = _send_outreach_sms(
-                    session,
-                    rule=rule,
-                    customer=customer,
-                    lead=lead,
-                    quote=None,
-                    actor=actor,
-                    company=company,
-                )
-            elif ch == CustomerOutreachChannel.EMAIL.value:
-                ok, external_id, err_msg = _send_outreach_email(
-                    session,
-                    rule=rule,
-                    customer=customer,
-                    lead=lead,
-                    quote=None,
-                    actor=actor,
-                )
-        except Exception as e:  # noqa: BLE001
-            err_msg = str(e)
-            print(f"Customer outreach error lead {lead.id} rule {rule.id}: {e}", file=sys.stderr, flush=True)
-            session.rollback()
-            continue
-
-        if not ok:
-            if err_msg:
-                if ch == CustomerOutreachChannel.SMS.value and is_unsubscribed_recipient_error(err_msg):
-                    customer.automated_reminder_outreach_opt_out = True
-                    session.add(customer)
-                session.add(
-                    CustomerOutreachSend(
-                        reminder_rule_id=rule.id,
-                        customer_id=customer.id,
-                        channel=ch,
-                        lead_id=lead.id,
-                        quote_id=None,
-                        external_message_id=None,
-                        status="FAILED",
-                        failure_reason=(err_msg or "send failed")[:1000],
-                        sent_at=datetime.utcnow(),
-                    )
-                )
-                session.commit()
-                print(
-                    f"Customer outreach skip lead {lead.id} rule {rule.rule_name}: {err_msg}",
-                    file=sys.stderr,
-                    flush=True,
-                )
-            continue
-
-        log = CustomerOutreachSend(
-            reminder_rule_id=rule.id,
-            customer_id=customer.id,
-            channel=ch,
-            lead_id=lead.id,
-            quote_id=None,
-            external_message_id=external_id,
-            status="SENT",
-            failure_reason=None,
-            sent_at=datetime.utcnow(),
-        )
-        session.add(log)
-        session.commit()
-        sent_count += 1
+        if _deliver_lead_customer_outreach_once(session, company=company, lead=lead, rule=rule):
+            sent_count += 1
 
     stale_quotes = detect_stale_quotes(session)
     for quote, rule, _days in stale_quotes:

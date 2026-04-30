@@ -1231,6 +1231,7 @@ export interface ReminderRule {
   customer_outreach_sms_template_id?: number | null;
   customer_outreach_email_template_id?: number | null;
   customer_outreach_cooldown_days?: number;
+  customer_outreach_on_lead_create?: boolean;
 }
 
 export interface ReminderRuleUpdate {
@@ -1242,6 +1243,7 @@ export interface ReminderRuleUpdate {
   customer_outreach_sms_template_id?: number | null;
   customer_outreach_email_template_id?: number | null;
   customer_outreach_cooldown_days?: number | null;
+  customer_outreach_on_lead_create?: boolean | null;
 }
 
 export interface ReminderRuleCreate {
@@ -1257,6 +1259,7 @@ export interface ReminderRuleCreate {
   customer_outreach_sms_template_id?: number | null;
   customer_outreach_email_template_id?: number | null;
   customer_outreach_cooldown_days?: number | null;
+  customer_outreach_on_lead_create?: boolean | null;
 }
 
 export type OutreachSendChannel = 'SMS' | 'EMAIL';
