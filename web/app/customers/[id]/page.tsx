@@ -633,25 +633,16 @@ export default function CustomerDetailPage() {
                         )}
                         <CardTitle className="text-base">Automated reminder messages</CardTitle>
                       </div>
-                      {customer.automated_reminder_outreach_opt_out ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
+                      <label className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-muted-foreground/40"
+                          checked={!!customer.automated_reminder_outreach_opt_out}
                           disabled={outreachOptOutLoading}
-                          onClick={() => handleAutomatedOutreachOptOut(false)}
-                        >
-                          Resume automated messages
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          disabled={outreachOptOutLoading}
-                          onClick={() => handleAutomatedOutreachOptOut(true)}
-                        >
-                          Stop automated messages
-                        </Button>
-                      )}
+                          onChange={(e) => handleAutomatedOutreachOptOut(e.target.checked)}
+                        />
+                        <span>Stop automated messages</span>
+                      </label>
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-3 pt-0">
