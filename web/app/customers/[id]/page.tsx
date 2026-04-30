@@ -654,14 +654,14 @@ export default function CustomerDetailPage() {
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-3 pt-0">
-                    <p className="text-xs text-muted-foreground leading-relaxed">
+                    <p className="text-xs text-muted-foreground leading-relaxed whitespace-normal break-words">
                       Preferred channel based on customer responses:{' '}
                       <span className="font-medium text-foreground">
                         {preferredChannel.name} ({preferredChannel.received} received)
                       </span>
                       .
                     </p>
-                    <p className="text-xs text-muted-foreground leading-relaxed">
+                    <p className="text-xs text-muted-foreground leading-relaxed whitespace-normal break-words">
                       This only stops automatic SMS or email sent by{' '}
                       <span className="font-medium text-foreground">reminder rules</span>. Messages you send from
                       LeadLock (compose email, SMS thread, quotes) are not affected.
@@ -675,7 +675,7 @@ export default function CustomerDetailPage() {
               <CardHeader>
                 <div className="flex items-center justify-between gap-3 flex-wrap">
                   <CardTitle>Communication Preference</CardTitle>
-                  <Badge variant="secondary">
+                  <Badge variant="secondary" className="max-w-full whitespace-normal break-words text-right sm:text-left">
                     Preferred: {preferredChannel.name} ({preferredChannel.received} received)
                   </Badge>
                 </div>
