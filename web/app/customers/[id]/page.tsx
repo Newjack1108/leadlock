@@ -34,6 +34,7 @@ import {
   Trash2,
   BellOff,
   Bell,
+  Info,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -661,11 +662,21 @@ export default function CustomerDetailPage() {
                       </span>
                       .
                     </p>
-                    <p className="text-xs text-muted-foreground leading-relaxed whitespace-normal break-words">
-                      This only stops automatic SMS or email sent by{' '}
-                      <span className="font-medium text-foreground">reminder rules</span>. Messages you send from
-                      LeadLock (compose email, SMS thread, quotes) are not affected.
-                    </p>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <span>What this controls</span>
+                      <div className="relative group">
+                        <button
+                          type="button"
+                          className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-muted-foreground/40"
+                          aria-label="What automated reminder messages control"
+                        >
+                          <Info className="h-3.5 w-3.5" />
+                        </button>
+                        <div className="pointer-events-none absolute bottom-7 left-1/2 z-20 hidden w-64 -translate-x-1/2 rounded-md border bg-popover p-2 text-xs text-popover-foreground shadow-md group-hover:block group-focus-within:block">
+                          This only stops automatic SMS or email sent by reminder rules. Messages you send from LeadLock (compose email, SMS thread, quotes) are not affected.
+                        </div>
+                      </div>
+                    </div>
                   </CardContent>
                 </Card>
               </div>
