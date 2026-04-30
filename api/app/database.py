@@ -1904,7 +1904,7 @@ def create_db_and_tables():
                 ("outreach_enabled_from_utc", "ALTER TABLE reminderrule ADD COLUMN outreach_enabled_from_utc TIMESTAMP"),
                 (
                     "customer_outreach_on_lead_create",
-                    "ALTER TABLE reminderrule ADD COLUMN customer_outreach_on_lead_create BOOLEAN DEFAULT 0 NOT NULL",
+                    "ALTER TABLE reminderrule ADD COLUMN customer_outreach_on_lead_create BOOLEAN DEFAULT FALSE NOT NULL",
                 ),
             ]
             for col_name, ddl in outreach_alters:
