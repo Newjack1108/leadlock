@@ -5,6 +5,8 @@ import {
   type DashboardCommunicationTotals,
   type DealerProfile,
   type LeadHandoverPdfOptions,
+  type OutreachSendListResponse,
+  type OutreachSendTargetType,
   type DealerProfileUpdatePayload,
   type DealerQuoteCreatePayload,
   type DealerWelcome,
@@ -1299,6 +1301,17 @@ export const createReminderRule = async (data: {
 
 export const deleteReminderRule = async (ruleId: number) => {
   const response = await api.delete(`/api/reminders/rules/${ruleId}`);
+  return response.data;
+};
+
+export const getOutreachSends = async (params?: {
+  channel?: 'SMS' | 'EMAIL';
+  target_type?: OutreachSendTargetType;
+  customer_id?: number;
+  page?: number;
+  page_size?: number;
+}): Promise<OutreachSendListResponse> => {
+  const response = await api.get('/api/reminders/outreach-sends', { params });
   return response.data;
 };
 

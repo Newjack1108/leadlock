@@ -1259,6 +1259,32 @@ export interface ReminderRuleCreate {
   customer_outreach_cooldown_days?: number | null;
 }
 
+export type OutreachSendChannel = 'SMS' | 'EMAIL';
+export type OutreachSendTargetType = 'LEAD' | 'QUOTE';
+
+export interface OutreachSendListItem {
+  id: number;
+  reminder_rule_id: number;
+  reminder_rule_name: string;
+  customer_id: number;
+  customer_name?: string | null;
+  channel: OutreachSendChannel;
+  target_type: OutreachSendTargetType;
+  lead_id?: number | null;
+  lead_name?: string | null;
+  quote_id?: number | null;
+  quote_number?: string | null;
+  external_message_id?: string | null;
+  sent_at: string;
+}
+
+export interface OutreachSendListResponse {
+  items: OutreachSendListItem[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
 export enum CustomerHistoryEventType {
   ACTIVITY = "ACTIVITY",
   LEAD_STATUS_CHANGE = "LEAD_STATUS_CHANGE",

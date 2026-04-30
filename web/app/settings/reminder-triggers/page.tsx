@@ -22,6 +22,7 @@ import {
   updateReminderRule,
   createReminderRule,
   deleteReminderRule,
+  getOutreachSends,
   getSmsTemplates,
   getEmailTemplates,
 } from '@/lib/api';
@@ -30,6 +31,8 @@ import {
   ReminderRuleUpdate,
   ReminderPriority,
   SuggestedAction,
+  OutreachSendListItem,
+  OutreachSendTargetType,
   SmsTemplate,
   EmailTemplate,
 } from '@/lib/types';
@@ -95,6 +98,13 @@ export default function ReminderTriggersPage() {
   const [saving, setSaving] = useState(false);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [createSaving, setCreateSaving] = useState(false);
+  const [outreachSends, setOutreachSends] = useState<OutreachSendListItem[]>([]);
+  const [outreachLoading, setOutreachLoading] = useState(false);
+  const [outreachTotal, setOutreachTotal] = useState(0);
+  const [outreachPage, setOutreachPage] = useState(1);
+  const [outreachChannelFilter, setOutreachChannelFilter] = useState<'ALL' | 'SMS' | 'EMAIL'>('ALL');
+  const [outreachTargetFilter, setOutreachTargetFilter] = useState<'ALL' | OutreachSendTargetType>('ALL');
+  const OUTREACH_PAGE_SIZE = 10;
   const [createForm, setCreateForm] = useState({
     rule_name: '',
     entity_type: 'LEAD' as 'LEAD' | 'QUOTE',
@@ -129,6 +139,10 @@ export default function ReminderTriggersPage() {
   }, []);
 
   useEffect(() => {
+    fetchOutreachSends();
+  }, [outreachPage, outreachChannelFilter, outreachTargetFilter]);
+
+  useEffect(() => {
     if (!isDirector) return;
     const loadTemplates = async () => {
       try {
@@ -156,6 +170,26 @@ export default function ReminderTriggersPage() {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchOutreachSends = async () => {
+    try {
+      setOutreachLoading(true);
+      const data = await getOutreachSends({
+        channel: outreachChannelFilter === 'ALL' ? undefined : outreachChannelFilter,
+        target_type: outreachTargetFilter === 'ALL' ? undefined : outreachTargetFilter,
+        page: outreachPage,
+        page_size: OUTREACH_PAGE_SIZE,
+      });
+      setOutreachSends(data.items || []);
+      setOutreachTotal(data.total || 0);
+    } catch {
+      toast.error('Failed to load automated outreach sends');
+      setOutreachSends([]);
+      setOutreachTotal(0);
+    } finally {
+      setOutreachLoading(false);
     }
   };
 
@@ -353,6 +387,125 @@ export default function ReminderTriggersPage() {
         </div>
 
         <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Automated Outreach Sends</CardTitle>
+              <CardDescription>
+                SMS and email messages sent automatically by reminder rule outreach.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid gap-2">
+                  <Label>Channel</Label>
+                  <Select
+                    value={outreachChannelFilter}
+                    onValueChange={(v) => {
+                      setOutreachChannelFilter(v as 'ALL' | 'SMS' | 'EMAIL');
+                      setOutreachPage(1);
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL">All channels</SelectItem>
+                      <SelectItem value="SMS">SMS</SelectItem>
+                      <SelectItem value="EMAIL">Email</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-2">
+                  <Label>Target type</Label>
+                  <Select
+                    value={outreachTargetFilter}
+                    onValueChange={(v) => {
+                      setOutreachTargetFilter(v as 'ALL' | OutreachSendTargetType);
+                      setOutreachPage(1);
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL">All targets</SelectItem>
+                      <SelectItem value="LEAD">Lead</SelectItem>
+                      <SelectItem value="QUOTE">Quote</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left py-2 px-2 font-medium">Sent</th>
+                      <th className="text-left py-2 px-2 font-medium">Channel</th>
+                      <th className="text-left py-2 px-2 font-medium">Target</th>
+                      <th className="text-left py-2 px-2 font-medium">Customer</th>
+                      <th className="text-left py-2 px-2 font-medium">Lead</th>
+                      <th className="text-left py-2 px-2 font-medium">Quote</th>
+                      <th className="text-left py-2 px-2 font-medium">Rule</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {outreachLoading ? (
+                      <tr>
+                        <td colSpan={7} className="py-4 px-2 text-muted-foreground">
+                          Loading outreach sends...
+                        </td>
+                      </tr>
+                    ) : outreachSends.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="py-4 px-2 text-muted-foreground">
+                          No automated outreach sends found for the selected filters.
+                        </td>
+                      </tr>
+                    ) : (
+                      outreachSends.map((send) => (
+                        <tr key={send.id} className="border-b last:border-0">
+                          <td className="py-2 px-2">{new Date(send.sent_at).toLocaleString('en-GB')}</td>
+                          <td className="py-2 px-2">{send.channel}</td>
+                          <td className="py-2 px-2">{send.target_type}</td>
+                          <td className="py-2 px-2">{send.customer_name || `#${send.customer_id}`}</td>
+                          <td className="py-2 px-2">{send.lead_name || (send.lead_id ? `#${send.lead_id}` : '—')}</td>
+                          <td className="py-2 px-2">{send.quote_number || (send.quote_id ? `#${send.quote_id}` : '—')}</td>
+                          <td className="py-2 px-2">{formatRuleName(send.reminder_rule_name)}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs text-muted-foreground">
+                  Showing {outreachSends.length} of {outreachTotal}
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={outreachPage <= 1 || outreachLoading}
+                    onClick={() => setOutreachPage((p) => Math.max(1, p - 1))}
+                  >
+                    Previous
+                  </Button>
+                  <span className="text-xs text-muted-foreground">Page {outreachPage}</span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={outreachLoading || outreachPage * OUTREACH_PAGE_SIZE >= outreachTotal}
+                    onClick={() => setOutreachPage((p) => p + 1)}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle>Lead Rules</CardTitle>

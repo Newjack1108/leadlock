@@ -1693,6 +1693,34 @@ class ReminderRuleCreate(BaseModel):
     customer_outreach_cooldown_days: Optional[int] = 14
 
 
+class OutreachSendTargetType(str, Enum):
+    LEAD = "LEAD"
+    QUOTE = "QUOTE"
+
+
+class OutreachSendListItemResponse(BaseModel):
+    id: int
+    reminder_rule_id: int
+    reminder_rule_name: str
+    customer_id: int
+    customer_name: Optional[str] = None
+    channel: str
+    target_type: OutreachSendTargetType
+    lead_id: Optional[int] = None
+    lead_name: Optional[str] = None
+    quote_id: Optional[int] = None
+    quote_number: Optional[str] = None
+    external_message_id: Optional[str] = None
+    sent_at: datetime
+
+
+class OutreachSendListResponse(BaseModel):
+    items: List[OutreachSendListItemResponse]
+    total: int
+    page: int
+    page_size: int
+
+
 class StaleSummaryResponse(BaseModel):
     total_reminders: int
     urgent_count: int

@@ -2,8 +2,8 @@
 API endpoints for reminders and stale item management.
 """
 import re
-from fastapi import APIRouter, Depends, HTTPException
-from sqlmodel import Session, select, and_, or_, func
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlmodel import Session, select, and_, or_, func, col
 from typing import List, Optional, Dict
 from app.database import get_session
 from app.auth import get_current_user
@@ -12,11 +12,15 @@ from app.models import (
     Reminder, ReminderRule, User, UserRole, Lead, Quote, Customer,
     ReminderType, ReminderPriority, SuggestedAction, LeadStatus, QuoteStatus,
     CustomerOutreachChannel,
+    CustomerOutreachSend,
 )
 from app.schemas import (
     ReminderResponse, ReminderDismissRequest, ReminderActRequest,
     ReminderRuleResponse, ReminderRuleUpdate, ReminderRuleCreate, StaleSummaryResponse,
     ManualReminderCreate, UserTaskCreate,
+    OutreachSendListResponse,
+    OutreachSendListItemResponse,
+    OutreachSendTargetType,
 )
 from app.reminder_service import generate_reminders, calculate_priority
 
@@ -450,6 +454,77 @@ async def get_reminder_rules(
     """Get all reminder rules (configuration)."""
     rules = session.exec(select(ReminderRule).order_by(ReminderRule.entity_type, ReminderRule.rule_name)).all()
     return [_reminder_rule_to_response(rule) for rule in rules]
+
+
+@router.get("/outreach-sends", response_model=OutreachSendListResponse)
+async def list_outreach_sends(
+    channel: Optional[CustomerOutreachChannel] = Query(None),
+    target_type: Optional[OutreachSendTargetType] = Query(None),
+    customer_id: Optional[int] = Query(None, ge=1),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(25, ge=1, le=200),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """List automated reminder-rule SMS/email sends with filtering and pagination."""
+    if current_user.role != UserRole.DIRECTOR:
+        raise HTTPException(status_code=403, detail="Only directors can view automated outreach sends")
+
+    where_clauses = []
+    if channel is not None:
+        where_clauses.append(CustomerOutreachSend.channel == channel.value)
+    if target_type == OutreachSendTargetType.LEAD:
+        where_clauses.append(CustomerOutreachSend.quote_id.is_(None))
+    elif target_type == OutreachSendTargetType.QUOTE:
+        where_clauses.append(CustomerOutreachSend.quote_id.is_not(None))
+    if customer_id is not None:
+        where_clauses.append(CustomerOutreachSend.customer_id == customer_id)
+
+    count_statement = select(func.count(CustomerOutreachSend.id))
+    if where_clauses:
+        count_statement = count_statement.where(and_(*where_clauses))
+    total = int(session.exec(count_statement).one())
+
+    statement = (
+        select(
+            CustomerOutreachSend,
+            ReminderRule.rule_name,
+            Customer.name,
+            Lead.name,
+            Quote.quote_number,
+        )
+        .join(ReminderRule, ReminderRule.id == CustomerOutreachSend.reminder_rule_id)
+        .outerjoin(Customer, Customer.id == CustomerOutreachSend.customer_id)
+        .outerjoin(Lead, Lead.id == CustomerOutreachSend.lead_id)
+        .outerjoin(Quote, Quote.id == CustomerOutreachSend.quote_id)
+    )
+    if where_clauses:
+        statement = statement.where(and_(*where_clauses))
+    statement = statement.order_by(col(CustomerOutreachSend.sent_at).desc(), col(CustomerOutreachSend.id).desc())
+    statement = statement.offset((page - 1) * page_size).limit(page_size)
+
+    rows = session.exec(statement).all()
+    items: List[OutreachSendListItemResponse] = []
+    for send, rule_name, customer_name, lead_name, quote_number in rows:
+        items.append(
+            OutreachSendListItemResponse(
+                id=send.id,
+                reminder_rule_id=send.reminder_rule_id,
+                reminder_rule_name=rule_name,
+                customer_id=send.customer_id,
+                customer_name=customer_name,
+                channel=send.channel,
+                target_type=OutreachSendTargetType.QUOTE if send.quote_id is not None else OutreachSendTargetType.LEAD,
+                lead_id=send.lead_id,
+                lead_name=lead_name,
+                quote_id=send.quote_id,
+                quote_number=quote_number,
+                external_message_id=send.external_message_id,
+                sent_at=send.sent_at,
+            )
+        )
+
+    return OutreachSendListResponse(items=items, total=total, page=page, page_size=page_size)
 
 
 @router.post("/rules", response_model=ReminderRuleResponse)
