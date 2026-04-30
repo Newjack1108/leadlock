@@ -941,6 +941,8 @@ class ReminderRule(SQLModel, table=True):
     customer_outreach_sms_template_id: Optional[int] = Field(default=None, foreign_key="smstemplate.id")
     customer_outreach_email_template_id: Optional[int] = Field(default=None, foreign_key="emailtemplate.id")
     customer_outreach_cooldown_days: int = Field(default=14)
+    # Set when outreach is enabled so newly-enabled rules only apply forward (no backfill on old stale entities).
+    outreach_enabled_from_utc: Optional[datetime] = None
 
 
 class CustomerOutreachSend(SQLModel, table=True):
@@ -952,6 +954,8 @@ class CustomerOutreachSend(SQLModel, table=True):
     lead_id: Optional[int] = Field(default=None, foreign_key="lead.id")
     quote_id: Optional[int] = Field(default=None, foreign_key="quote.id")
     external_message_id: Optional[str] = Field(default=None)  # Twilio SID or email Message-ID
+    status: str = Field(default="SENT")  # SENT or FAILED
+    failure_reason: Optional[str] = None
     sent_at: datetime = Field(default_factory=datetime.utcnow)
 
 

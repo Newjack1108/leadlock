@@ -45,7 +45,13 @@ from app.auth import get_webhook_api_key, get_product_import_api_key
 from app.routers.settings import get_company_settings
 from app.workflow import check_sla_overdue
 from app.routers.leads import enrich_lead_response
-from app.sms_service import validate_twilio_webhook, normalize_phone, get_twilio_config, send_sms
+from app.sms_service import (
+    validate_twilio_webhook,
+    normalize_phone,
+    get_twilio_config,
+    send_sms,
+    is_unsubscribed_recipient_error,
+)
 from app.sms_bot_service import should_bot_reply, generate_bot_reply
 from app.messenger_service import (
     parse_webhook_payload,
@@ -512,6 +518,11 @@ async def twilio_inbound_sms(request: Request, session: Session = Depends(get_se
                             session.add(cust)
                 session.commit()
             else:
+                if is_unsubscribed_recipient_error(sent_err):
+                    customer.automated_reminder_outreach_opt_out = True
+                    customer.sms_bot_stopped = True
+                    session.add(customer)
+                    session.commit()
                 print(f"Twilio SMS bot send failed: {sent_err}", file=sys.stderr, flush=True)
         elif reason:
             print(f"Twilio SMS bot skipped: {reason}", file=sys.stderr, flush=True)

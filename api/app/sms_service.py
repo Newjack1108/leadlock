@@ -57,6 +57,14 @@ def get_twilio_config() -> Tuple[Optional[str], Optional[str], Optional[str]]:
     return sid, token, from_phone
 
 
+def is_unsubscribed_recipient_error(error_message: Optional[str]) -> bool:
+    """True when Twilio rejected send to an opted-out number (error 21610)."""
+    if not error_message:
+        return False
+    msg = error_message.lower()
+    return "21610" in msg or "unsubscribed recipient" in msg
+
+
 def send_sms(to_phone: str, body: str) -> Tuple[bool, Optional[str], Optional[str]]:
     """
     Send SMS via Twilio. Returns (success, message_sid, error_message).
@@ -69,9 +77,15 @@ def send_sms(to_phone: str, body: str) -> Tuple[bool, Optional[str], Optional[st
         return False, None, phone_error or "Invalid phone number"
     try:
         from twilio.rest import Client
+        from twilio.base.exceptions import TwilioRestException
         client = Client(sid, token)
         message = client.messages.create(body=body, from_=from_phone, to=normalized_phone)
         return True, message.sid, None
+    except TwilioRestException as e:
+        code = getattr(e, "code", None)
+        if code:
+            return False, None, f"Twilio error {code}: {e.msg}"
+        return False, None, str(e)
     except Exception as e:
         return False, None, str(e)
 

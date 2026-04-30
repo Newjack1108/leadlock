@@ -1275,6 +1275,8 @@ export interface OutreachSendListItem {
   quote_id?: number | null;
   quote_number?: string | null;
   external_message_id?: string | null;
+  status: 'SENT' | 'FAILED' | string;
+  failure_reason?: string | null;
   sent_at: string;
 }
 

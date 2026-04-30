@@ -32,8 +32,13 @@ from app.models import (
     User,
     CompanySettings,
 )
-from app.reminder_service import detect_stale_leads, detect_stale_quotes
-from app.sms_service import send_sms, normalize_phone, get_twilio_config
+from app.reminder_service import detect_stale_leads, detect_stale_quotes, get_last_activity_date
+from app.sms_service import (
+    send_sms,
+    normalize_phone,
+    get_twilio_config,
+    is_unsubscribed_recipient_error,
+)
 from app.sms_template_service import render_sms_template
 
 
@@ -74,6 +79,51 @@ def _cooldown_blocks(
     if not last:
         return False
     return (datetime.utcnow() - last.sent_at) < timedelta(days=cd)
+
+
+def _attempt_already_recorded(
+    session: Session,
+    rule: ReminderRule,
+    *,
+    lead_id: Optional[int],
+    quote_id: Optional[int],
+    channel: str,
+) -> bool:
+    statement = select(CustomerOutreachSend).where(
+        CustomerOutreachSend.reminder_rule_id == rule.id,
+        CustomerOutreachSend.channel == channel,
+    )
+    if lead_id is not None:
+        statement = statement.where(
+            CustomerOutreachSend.lead_id == lead_id,
+            CustomerOutreachSend.quote_id.is_(None),
+        )
+    else:
+        statement = statement.where(CustomerOutreachSend.quote_id == quote_id)
+    return session.exec(statement.limit(1)).first() is not None
+
+
+def _lead_stale_reference_timestamp(session: Session, lead: Lead, rule: ReminderRule) -> Optional[datetime]:
+    if rule.check_type == "LAST_ACTIVITY":
+        last_activity = get_last_activity_date(lead.customer_id, session)
+        return last_activity or lead.updated_at or lead.created_at
+    if rule.check_type == "STATUS_DURATION":
+        return lead.updated_at or lead.created_at
+    return lead.updated_at or lead.created_at
+
+
+def _quote_stale_reference_timestamp(quote: Quote, rule: ReminderRule) -> Optional[datetime]:
+    if rule.check_type == "SENT_DATE":
+        return quote.sent_at
+    if rule.check_type == "VALID_UNTIL":
+        return quote.valid_until
+    if rule.check_type == "STATUS_DURATION":
+        return quote.updated_at or quote.created_at
+    if rule.check_type == "SENT_NOT_OPENED":
+        return quote.sent_at
+    if rule.check_type == "OPENED_NO_REPLY":
+        return quote.viewed_at
+    return quote.updated_at or quote.created_at
 
 
 def _resolve_actor_user_id(session: Session, lead: Optional[Lead], quote: Optional[Quote]) -> Optional[int]:
@@ -256,6 +306,19 @@ def run_customer_outreach_cycle(session: Session) -> int:
         ch = (rule.customer_outreach_channel or "").strip().upper()
         if not lead.customer_id:
             continue
+        enabled_from = getattr(rule, "outreach_enabled_from_utc", None)
+        if enabled_from is not None:
+            ref_ts = _lead_stale_reference_timestamp(session, lead, rule)
+            if ref_ts is None or ref_ts < enabled_from:
+                continue
+        if _attempt_already_recorded(
+            session,
+            rule,
+            lead_id=lead.id,
+            quote_id=None,
+            channel=ch,
+        ):
+            continue
         if _cooldown_blocks(session, rule, lead_id=lead.id, quote_id=None):
             continue
         customer = session.get(Customer, lead.customer_id)
@@ -312,6 +375,23 @@ def run_customer_outreach_cycle(session: Session) -> int:
 
         if not ok:
             if err_msg:
+                if ch == CustomerOutreachChannel.SMS.value and is_unsubscribed_recipient_error(err_msg):
+                    customer.automated_reminder_outreach_opt_out = True
+                    session.add(customer)
+                session.add(
+                    CustomerOutreachSend(
+                        reminder_rule_id=rule.id,
+                        customer_id=customer.id,
+                        channel=ch,
+                        lead_id=lead.id,
+                        quote_id=None,
+                        external_message_id=None,
+                        status="FAILED",
+                        failure_reason=(err_msg or "send failed")[:1000],
+                        sent_at=datetime.utcnow(),
+                    )
+                )
+                session.commit()
                 print(
                     f"Customer outreach skip lead {lead.id} rule {rule.rule_name}: {err_msg}",
                     file=sys.stderr,
@@ -326,6 +406,8 @@ def run_customer_outreach_cycle(session: Session) -> int:
             lead_id=lead.id,
             quote_id=None,
             external_message_id=external_id,
+            status="SENT",
+            failure_reason=None,
             sent_at=datetime.utcnow(),
         )
         session.add(log)
@@ -338,6 +420,19 @@ def run_customer_outreach_cycle(session: Session) -> int:
             continue
         ch = (rule.customer_outreach_channel or "").strip().upper()
         if not quote.customer_id:
+            continue
+        enabled_from = getattr(rule, "outreach_enabled_from_utc", None)
+        if enabled_from is not None:
+            ref_ts = _quote_stale_reference_timestamp(quote, rule)
+            if ref_ts is None or ref_ts < enabled_from:
+                continue
+        if _attempt_already_recorded(
+            session,
+            rule,
+            lead_id=None,
+            quote_id=quote.id,
+            channel=ch,
+        ):
             continue
         if _cooldown_blocks(session, rule, lead_id=None, quote_id=quote.id):
             continue
@@ -396,6 +491,23 @@ def run_customer_outreach_cycle(session: Session) -> int:
 
         if not ok:
             if err_msg:
+                if ch == CustomerOutreachChannel.SMS.value and is_unsubscribed_recipient_error(err_msg):
+                    customer.automated_reminder_outreach_opt_out = True
+                    session.add(customer)
+                session.add(
+                    CustomerOutreachSend(
+                        reminder_rule_id=rule.id,
+                        customer_id=customer.id,
+                        channel=ch,
+                        lead_id=quote.lead_id,
+                        quote_id=quote.id,
+                        external_message_id=None,
+                        status="FAILED",
+                        failure_reason=(err_msg or "send failed")[:1000],
+                        sent_at=datetime.utcnow(),
+                    )
+                )
+                session.commit()
                 print(
                     f"Customer outreach skip quote {quote.id} rule {rule.rule_name}: {err_msg}",
                     file=sys.stderr,
@@ -410,6 +522,8 @@ def run_customer_outreach_cycle(session: Session) -> int:
             lead_id=quote.lead_id,
             quote_id=quote.id,
             external_message_id=external_id,
+            status="SENT",
+            failure_reason=None,
             sent_at=datetime.utcnow(),
         )
         session.add(log)

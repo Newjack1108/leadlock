@@ -57,7 +57,7 @@ from app.routers.emails import (
 )
 from app.customer_view_links import customer_view_path_segment
 from app.email_service import is_email_configured, build_activity_email_notes
-from app.sms_service import send_sms, normalize_phone
+from app.sms_service import send_sms, normalize_phone, is_unsubscribed_recipient_error
 from app.quote_pdf_service import generate_quote_pdf
 from app.available_optional_extras import get_available_optional_extras_for_quote
 from app.reminder_service import get_last_activity_date, dismiss_open_reminders_for_quote
@@ -1765,6 +1765,17 @@ async def post_quote_send_sms(
 
     success, sid, error = send_sms(to_phone, sms_body)
     if not success:
+        if is_unsubscribed_recipient_error(error):
+            customer.automated_reminder_outreach_opt_out = True
+            session.add(customer)
+            session.commit()
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Recipient has unsubscribed from SMS (Twilio 21610). "
+                    "Customer has been opted out from automated reminder outreach."
+                ),
+            )
         raise HTTPException(status_code=500, detail=error or "Failed to send SMS")
 
     from_phone = (os.getenv("TWILIO_PHONE_NUMBER") or "").strip()

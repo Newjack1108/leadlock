@@ -333,7 +333,7 @@ def on_startup():
             SmsDirection,
             ScheduledSmsStatus,
         )
-        from app.sms_service import send_sms, normalize_phone
+        from app.sms_service import send_sms, normalize_phone, is_unsubscribed_recipient_error
         from datetime import datetime as dt
 
         def poll_scheduled_sms():
@@ -410,6 +410,11 @@ def on_startup():
                                     session.add(scheduled)
                                 else:
                                     print(f"Scheduled SMS {scheduled_id} send failed: {err}", file=__import__("sys").stderr, flush=True)
+                                    if is_unsubscribed_recipient_error(err):
+                                        customer = session.get(Customer, payload["customer_id"])
+                                        if customer:
+                                            customer.automated_reminder_outreach_opt_out = True
+                                            session.add(customer)
                                     scheduled.status = ScheduledSmsStatus.FAILED
                                     scheduled.failure_reason = (err or "Twilio send failed")[:1000]
                                     session.add(scheduled)

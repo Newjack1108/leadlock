@@ -1711,6 +1711,8 @@ class OutreachSendListItemResponse(BaseModel):
     quote_id: Optional[int] = None
     quote_number: Optional[str] = None
     external_message_id: Optional[str] = None
+    status: str = "SENT"
+    failure_reason: Optional[str] = None
     sent_at: datetime
 
 

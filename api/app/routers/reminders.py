@@ -520,6 +520,8 @@ async def list_outreach_sends(
                 quote_id=send.quote_id,
                 quote_number=quote_number,
                 external_message_id=send.external_message_id,
+                status=getattr(send, "status", "SENT"),
+                failure_reason=getattr(send, "failure_reason", None),
                 sent_at=send.sent_at,
             )
         )
@@ -597,6 +599,7 @@ async def create_reminder_rule(
         customer_outreach_sms_template_id=ost,
         customer_outreach_email_template_id=oet,
         customer_outreach_cooldown_days=ocd,
+        outreach_enabled_from_utc=datetime.utcnow() if och else None,
     )
     session.add(rule)
     session.commit()
@@ -616,6 +619,7 @@ async def update_reminder_rule(
         raise HTTPException(status_code=403, detail="Only directors can update reminder rules")
     
     rule = session.exec(select(ReminderRule).where(ReminderRule.id == rule_id)).first()
+    prev_channel = (rule.customer_outreach_channel or "").strip().upper() if rule.customer_outreach_channel else None
     
     if not rule:
         raise HTTPException(status_code=404, detail="Reminder rule not found")
@@ -686,6 +690,11 @@ async def update_reminder_rule(
             rule.customer_outreach_sms_template_id = st_n
             rule.customer_outreach_email_template_id = et_n
             rule.customer_outreach_cooldown_days = cd_n
+    new_channel = (rule.customer_outreach_channel or "").strip().upper() if rule.customer_outreach_channel else None
+    if not prev_channel and new_channel:
+        rule.outreach_enabled_from_utc = datetime.utcnow()
+    elif prev_channel and not new_channel:
+        rule.outreach_enabled_from_utc = None
 
     rule.updated_at = datetime.utcnow()
 

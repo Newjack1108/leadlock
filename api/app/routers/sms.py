@@ -29,7 +29,12 @@ from app.schemas import (
     MessageIdsMarkUnread,
     MessagesMarkUnreadResult,
 )
-from app.sms_service import send_sms, normalize_phone, validate_outbound_phone
+from app.sms_service import (
+    send_sms,
+    normalize_phone,
+    validate_outbound_phone,
+    is_unsubscribed_recipient_error,
+)
 
 router = APIRouter(prefix="/api/sms", tags=["sms"])
 
@@ -81,6 +86,17 @@ async def send_sms_to_customer(
 
     success, sid, error = send_sms(to_phone, data.body)
     if not success:
+        if is_unsubscribed_recipient_error(error):
+            customer.automated_reminder_outreach_opt_out = True
+            session.add(customer)
+            session.commit()
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Recipient has unsubscribed from SMS (Twilio 21610). "
+                    "Customer has been opted out from automated reminder outreach."
+                ),
+            )
         raise HTTPException(status_code=500, detail=error or "Failed to send SMS")
 
     from_phone = None

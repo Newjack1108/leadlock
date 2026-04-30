@@ -18,6 +18,7 @@ function CustomersPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const hasUnreadFilter = searchParams.get('has_unread') === '1';
+  const smsOptedOutFilter = searchParams.get('sms_opted_out') === '1';
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [unreadByCustomer, setUnreadByCustomer] = useState<Record<number, number>>({});
   const [loading, setLoading] = useState(true);
@@ -30,7 +31,9 @@ function CustomersPageContent() {
     try {
       setLoading(true);
       const searchValue = searchApplied.trim();
-      const params = searchValue ? { search: searchValue } : {};
+      const params: Record<string, string | boolean> = {};
+      if (searchValue) params.search = searchValue;
+      if (smsOptedOutFilter) params.sms_opted_out = true;
       const [customersRes, unreadRes] = await Promise.all([
         api.get('/api/customers', { params }),
         getUnreadCountsByCustomer().catch(() => []),
@@ -51,7 +54,7 @@ function CustomersPageContent() {
 
   useEffect(() => {
     void fetchCustomers();
-  }, [searchApplied]);
+  }, [searchApplied, smsOptedOutFilter]);
 
   function locationText(c: Customer): string {
     if (c.city && c.county) return `${c.city}, ${c.county}`;
@@ -98,6 +101,21 @@ function CustomersPageContent() {
               />
             </div>
           </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant={smsOptedOutFilter ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => {
+                const next = new URLSearchParams(searchParams.toString());
+                if (smsOptedOutFilter) next.delete('sms_opted_out');
+                else next.set('sms_opted_out', '1');
+                const qs = next.toString();
+                router.push(qs ? `/customers?${qs}` : '/customers');
+              }}
+            >
+              SMS opted out
+            </Button>
+          </div>
           {hasUnreadFilter && (
             <div className="flex items-center gap-2 rounded-lg border bg-muted/50 px-4 py-2 text-sm">
               <span className="text-muted-foreground">
@@ -108,6 +126,27 @@ function CustomersPageContent() {
                 size="sm"
                 className="h-7 gap-1 px-2"
                 onClick={() => router.push('/customers')}
+              >
+                <X className="h-3.5 w-3.5" />
+                Clear filter
+              </Button>
+            </div>
+          )}
+          {smsOptedOutFilter && (
+            <div className="flex items-center gap-2 rounded-lg border bg-muted/50 px-4 py-2 text-sm">
+              <span className="text-muted-foreground">
+                Showing customers opted out of automated SMS outreach
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 gap-1 px-2"
+                onClick={() => {
+                  const next = new URLSearchParams(searchParams.toString());
+                  next.delete('sms_opted_out');
+                  const qs = next.toString();
+                  router.push(qs ? `/customers?${qs}` : '/customers');
+                }}
               >
                 <X className="h-3.5 w-3.5" />
                 Clear filter
@@ -135,7 +174,11 @@ function CustomersPageContent() {
                 {displayedCustomers.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="p-8 text-center text-muted-foreground">
-                      {hasUnreadFilter ? 'No customers with unread SMS, Messenger, or email' : 'No customers found'}
+                      {hasUnreadFilter
+                        ? 'No customers with unread SMS, Messenger, or email'
+                        : smsOptedOutFilter
+                        ? 'No customers currently flagged as SMS opted out'
+                        : 'No customers found'}
                     </td>
                   </tr>
                 ) : (

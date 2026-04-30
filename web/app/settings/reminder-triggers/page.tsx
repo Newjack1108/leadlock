@@ -16,6 +16,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
 import { Edit, Plus, Trash2 } from 'lucide-react';
 import {
   getReminderRules,
@@ -441,6 +442,7 @@ export default function ReminderTriggersPage() {
                   <thead>
                     <tr className="border-b">
                       <th className="text-left py-2 px-2 font-medium">Sent</th>
+                      <th className="text-left py-2 px-2 font-medium">Status</th>
                       <th className="text-left py-2 px-2 font-medium">Channel</th>
                       <th className="text-left py-2 px-2 font-medium">Target</th>
                       <th className="text-left py-2 px-2 font-medium">Customer</th>
@@ -452,13 +454,13 @@ export default function ReminderTriggersPage() {
                   <tbody>
                     {outreachLoading ? (
                       <tr>
-                        <td colSpan={7} className="py-4 px-2 text-muted-foreground">
+                        <td colSpan={8} className="py-4 px-2 text-muted-foreground">
                           Loading outreach sends...
                         </td>
                       </tr>
                     ) : outreachSends.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="py-4 px-2 text-muted-foreground">
+                        <td colSpan={8} className="py-4 px-2 text-muted-foreground">
                           No automated outreach sends found for the selected filters.
                         </td>
                       </tr>
@@ -466,6 +468,16 @@ export default function ReminderTriggersPage() {
                       outreachSends.map((send) => (
                         <tr key={send.id} className="border-b last:border-0">
                           <td className="py-2 px-2">{new Date(send.sent_at).toLocaleString('en-GB')}</td>
+                          <td className="py-2 px-2">
+                            <div className="flex flex-col gap-1">
+                              <Badge variant={send.status === 'FAILED' ? 'destructive' : 'secondary'} className="w-fit">
+                                {send.status}
+                              </Badge>
+                              {send.status === 'FAILED' && send.failure_reason ? (
+                                <span className="text-xs text-muted-foreground">{send.failure_reason}</span>
+                              ) : null}
+                            </div>
+                          </td>
                           <td className="py-2 px-2">{send.channel}</td>
                           <td className="py-2 px-2">{send.target_type}</td>
                           <td className="py-2 px-2">{send.customer_name || `#${send.customer_id}`}</td>

@@ -1901,6 +1901,7 @@ def create_db_and_tables():
                 ("customer_outreach_sms_template_id", "ALTER TABLE reminderrule ADD COLUMN customer_outreach_sms_template_id INTEGER REFERENCES smstemplate(id)"),
                 ("customer_outreach_email_template_id", "ALTER TABLE reminderrule ADD COLUMN customer_outreach_email_template_id INTEGER REFERENCES emailtemplate(id)"),
                 ("customer_outreach_cooldown_days", "ALTER TABLE reminderrule ADD COLUMN customer_outreach_cooldown_days INTEGER DEFAULT 14 NOT NULL"),
+                ("outreach_enabled_from_utc", "ALTER TABLE reminderrule ADD COLUMN outreach_enabled_from_utc TIMESTAMP"),
             ]
             for col_name, ddl in outreach_alters:
                 rr_columns = [col["name"] for col in inspector.get_columns("reminderrule")]
@@ -1941,6 +1942,8 @@ def create_db_and_tables():
                                 lead_id INTEGER REFERENCES lead(id) ON DELETE SET NULL,
                                 quote_id INTEGER REFERENCES quote(id) ON DELETE SET NULL,
                                 external_message_id VARCHAR(512),
+                                status VARCHAR(16) NOT NULL DEFAULT 'SENT',
+                                failure_reason TEXT,
                                 sent_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
                             )
                             """
@@ -1961,6 +1964,31 @@ def create_db_and_tables():
                 error_str = str(e).lower()
                 if "already exists" not in error_str and "duplicate" not in error_str:
                     print(f"Error creating customeroutreachsend: {e}", file=sys.stderr, flush=True)
+        else:
+            outreach_columns = [col["name"] for col in inspector.get_columns("customeroutreachsend")]
+            if "status" not in outreach_columns:
+                print("Adding status column to customeroutreachsend table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(
+                            text(
+                                "ALTER TABLE customeroutreachsend "
+                                "ADD COLUMN status VARCHAR(16) DEFAULT 'SENT' NOT NULL"
+                            )
+                        )
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Error adding status to customeroutreachsend: {e}", file=sys.stderr, flush=True)
+            if "failure_reason" not in outreach_columns:
+                print("Adding failure_reason column to customeroutreachsend table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE customeroutreachsend ADD COLUMN failure_reason TEXT"))
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Error adding failure_reason to customeroutreachsend: {e}", file=sys.stderr, flush=True)
 
         # Facebook advert schema: handled by _ensure_facebook_advert_schema() immediately after create_all.
 

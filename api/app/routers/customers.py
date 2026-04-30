@@ -79,6 +79,7 @@ def quote_item_to_response(item: QuoteItem) -> QuoteItemResponse:
 @router.get("", response_model=List[CustomerResponse])
 async def get_customers(
     search: Optional[str] = Query(None),
+    sms_opted_out: Optional[bool] = Query(None),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
@@ -96,6 +97,9 @@ async def get_customers(
                 Customer.postcode.ilike(search_term)
             )
         )
+
+    if sms_opted_out is not None:
+        statement = statement.where(Customer.automated_reminder_outreach_opt_out == sms_opted_out)
     
     statement = statement.order_by(Customer.created_at.desc())
     customers = session.exec(statement).all()
