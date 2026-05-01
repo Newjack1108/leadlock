@@ -4,7 +4,8 @@ Background evaluation: send customer SMS/email when reminder rules match stale l
 Lead outreach prerequisites (stale worker and immediate-on-create):
 - Linked Customer (``lead.customer_id``); webhook intake creates/links via ``find_or_create_customer``.
 - SMS recipient: ``customer.phone``, falling back to ``lead.phone`` when the template sends for that lead.
-- Actor user for templates/logging: ``CUSTOMER_OUTREACH_ACTOR_USER_ID``, ``WEBHOOK_DEFAULT_USER_ID``, or ``lead.assigned_to_id``.
+- Actor user (SMTP, template variables): ``CUSTOMER_OUTREACH_ACTOR_USER_ID``, ``WEBHOOK_DEFAULT_USER_ID``, or assignee/quote owner.
+- Activity and stored message ``created_by_id`` use the System user (``app.system_user_service``).
 - Long-running API process running the customer outreach thread (see ``CUSTOMER_OUTREACH_INTERVAL``); immediate sends run inline on lead create.
 """
 from __future__ import annotations
@@ -19,6 +20,7 @@ from sqlalchemy import desc
 from sqlmodel import Session, select, col
 
 from app.email_service import send_email, is_email_configured, _html_to_plain, build_activity_email_notes
+from app.system_user_service import get_system_user_id
 from app.email_template_service import render_email_template
 from app.models import (
     Activity,
@@ -205,6 +207,7 @@ def _send_outreach_sms(
     if not success:
         return False, None, err or "send_sms failed"
 
+    system_uid = get_system_user_id(session)
     msg = SmsMessage(
         customer_id=customer.id,
         lead_id=lead.id if lead else None,
@@ -214,7 +217,7 @@ def _send_outreach_sms(
         body=body,
         twilio_sid=twilio_sid,
         sent_at=datetime.utcnow(),
-        created_by_id=actor.id,
+        created_by_id=system_uid,
     )
     session.add(msg)
     session.add(
@@ -222,7 +225,7 @@ def _send_outreach_sms(
             customer_id=customer.id,
             activity_type=ActivityType.SMS_SENT,
             notes=f"Automated SMS (rule {rule.rule_name}) to {to_phone}\n{body}",
-            created_by_id=actor.id,
+            created_by_id=system_uid,
         )
     )
     return True, twilio_sid, None
@@ -267,6 +270,7 @@ def _send_outreach_email(
     if not success:
         return False, None, err or "send_email failed"
 
+    system_uid = get_system_user_id(session)
     email_record = Email(
         customer_id=customer.id,
         message_id=message_id,
@@ -277,7 +281,7 @@ def _send_outreach_email(
         body_html=sent_html or body_html,
         body_text=sent_text if sent_text is not None else body_text,
         sent_at=datetime.utcnow(),
-        created_by_id=actor.id,
+        created_by_id=system_uid,
         thread_id=_generate_thread_id(message_id, None),
     )
     session.add(email_record)
@@ -291,7 +295,7 @@ def _send_outreach_email(
                 sent_text if sent_text is not None else body_text,
                 sent_html or body_html,
             ),
-            created_by_id=actor.id,
+            created_by_id=system_uid,
         )
     )
     return True, message_id, None

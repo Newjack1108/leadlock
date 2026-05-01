@@ -218,6 +218,7 @@ def on_startup():
         from app.email_service import receive_emails, build_activity_email_notes
         from app.email_threading import find_thread_id_for_inbound
         from app.models import Email, Customer, Activity, ActivityType, EmailDirection
+        from app.system_user_service import get_system_user_id
         from sqlmodel import select
         import re
         poll_interval = int(os.getenv("IMAP_POLL_INTERVAL", "300"))  # Default 5 minutes
@@ -310,7 +311,7 @@ def on_startup():
                                         email_data.get("body_text"),
                                         email_data.get("body_html"),
                                     ),
-                                    created_by_id=1  # System user (will need to handle this better)
+                                    created_by_id=get_system_user_id(session),
                                 )
                                 session.add(activity)
                                 session.commit()

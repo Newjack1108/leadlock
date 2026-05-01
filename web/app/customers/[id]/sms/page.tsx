@@ -37,6 +37,7 @@ import {
 import {
   SmsMessage,
   SmsDirection,
+  SmsSenderKind,
   Customer,
   SmsScheduled,
   ScheduledSmsStatus,
@@ -77,7 +78,11 @@ export default function CustomerSmsPage() {
   const [botUpdating, setBotUpdating] = useState(false);
   const [botAvatarMissing, setBotAvatarMissing] = useState(false);
 
-  const getMessageSource = (msg: SmsMessage): 'bot' | 'team' | 'customer' => {
+  const getMessageSource = (msg: SmsMessage): 'bot' | 'team' | 'customer' | 'system' => {
+    if (msg.sender_kind === SmsSenderKind.CUSTOMER) return 'customer';
+    if (msg.sender_kind === SmsSenderKind.SYSTEM) return 'system';
+    if (msg.sender_kind === SmsSenderKind.SMS_BOT) return 'bot';
+    if (msg.sender_kind === SmsSenderKind.USER) return 'team';
     if (msg.direction === SmsDirection.RECEIVED) return 'customer';
     if (msg.created_by_id == null) return 'bot';
     return 'team';
@@ -540,12 +545,15 @@ export default function CustomerSmsPage() {
                     {messages.map((msg) => {
                       const source = getMessageSource(msg);
                       const isBotMessage = source === 'bot';
+                      const isSystemMessage = source === 'system';
                       const isSent = msg.direction === SmsDirection.SENT;
                       const statusText = isBotMessage
                         ? 'Bot reply'
-                        : source === 'team'
-                          ? 'Sent by team'
-                          : 'Customer';
+                        : isSystemMessage
+                          ? 'System'
+                          : source === 'team'
+                            ? 'Sent by team'
+                            : 'Customer';
 
                       return (
                         <div
@@ -553,9 +561,11 @@ export default function CustomerSmsPage() {
                           className={`p-4 border rounded-md ${
                             isBotMessage
                               ? 'bg-violet-50 border-violet-200 ml-4 dark:bg-violet-950/20 dark:border-violet-800'
-                              : isSent
-                                ? 'bg-blue-50 border-blue-200 ml-4 dark:bg-blue-950/20 dark:border-blue-800'
-                                : 'bg-gray-50 border-gray-200 mr-4 dark:bg-slate-900/50 dark:border-slate-700'
+                              : isSystemMessage
+                                ? 'bg-slate-50 border-slate-200 ml-4 dark:bg-slate-900/40 dark:border-slate-600'
+                                : isSent
+                                  ? 'bg-blue-50 border-blue-200 ml-4 dark:bg-blue-950/20 dark:border-blue-800'
+                                  : 'bg-gray-50 border-gray-200 mr-4 dark:bg-slate-900/50 dark:border-slate-700'
                           }`}
                         >
                           <div className="flex items-center justify-between mb-2 gap-3">
@@ -576,7 +586,13 @@ export default function CustomerSmsPage() {
                               )}
                               <Badge
                                 variant={isSent ? 'default' : 'secondary'}
-                                className={isBotMessage ? 'bg-violet-600 hover:bg-violet-600 text-white' : ''}
+                                className={
+                                  isBotMessage
+                                    ? 'bg-violet-600 hover:bg-violet-600 text-white'
+                                    : isSystemMessage
+                                      ? 'bg-slate-600 hover:bg-slate-600 text-white'
+                                      : ''
+                                }
                               >
                                 <MessageSquare className="h-3 w-3 mr-1" />
                                 {statusText}

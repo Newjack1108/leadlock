@@ -3,6 +3,7 @@ from sqlmodel import Session, select
 from app.database import get_session
 from app.models import User, UserRole
 from app.auth import verify_password, create_access_token, get_current_user, get_password_hash
+from app.system_user_service import system_user_email
 from app.schemas import Token, UserLogin, UserResponse, BootstrapCreate, LoginQuoteResponse
 from app.login_quote_service import generate_login_quote
 from datetime import timedelta
@@ -33,6 +34,12 @@ async def bootstrap(data: BootstrapCreate, session: Session = Depends(get_sessio
 
 @router.post("/login", response_model=Token)
 async def login(credentials: UserLogin, session: Session = Depends(get_session)):
+    if credentials.email.strip().lower() == system_user_email():
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     statement = select(User).where(User.email == credentials.email)
     user = session.exec(statement).first()
     

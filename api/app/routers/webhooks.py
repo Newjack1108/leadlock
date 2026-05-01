@@ -59,6 +59,7 @@ from app.messenger_service import (
     get_page_access_token,
     fetch_leadgen_lead,
 )
+from app.system_user_service import get_system_user_id
 
 router = APIRouter(prefix="/api/webhooks", tags=["webhooks"])
 
@@ -411,19 +412,10 @@ async def twilio_inbound_sms(request: Request, session: Session = Depends(get_se
         print(f"Twilio SMS: no customer/lead match for From=...{mask}", file=sys.stderr, flush=True)
         return Response(content="<Response></Response>", media_type="application/xml")
 
-    # Resolve a valid user for Activity (avoid FK failure if user id 1 does not exist)
-    activity_user_id = None
     try:
-        preferred_id = int(os.getenv("TWILIO_ACTIVITY_USER_ID", "1"))
-        u = session.get(User, preferred_id)
-        if u:
-            activity_user_id = u.id
-    except (ValueError, TypeError):
-        pass
-    if activity_user_id is None:
-        first_user = session.exec(select(User).limit(1)).first()
-        if first_user:
-            activity_user_id = first_user.id
+        activity_user_id = get_system_user_id(session)
+    except Exception:
+        activity_user_id = None
 
     if message_sid:
         dup_stmt = (
@@ -527,17 +519,12 @@ async def twilio_inbound_sms(request: Request, session: Session = Depends(get_se
 
 # --- Facebook Messenger webhook ---
 
-def _get_activity_user_id(session) -> Optional[int]:
-    """Resolve a valid user ID for Activity records (e.g. FACEBOOK_ACTIVITY_USER_ID or first user)."""
+def _get_activity_user_id(session: Session) -> Optional[int]:
+    """System user id for webhook-created Activity / StatusHistory rows."""
     try:
-        preferred_id = int(os.getenv("FACEBOOK_ACTIVITY_USER_ID", "1"))
-        u = session.get(User, preferred_id)
-        if u:
-            return u.id
-    except (ValueError, TypeError):
-        pass
-    first_user = session.exec(select(User).limit(1)).first()
-    return first_user.id if first_user else None
+        return get_system_user_id(session)
+    except Exception:
+        return None
 
 
 @router.get("/facebook/messenger")

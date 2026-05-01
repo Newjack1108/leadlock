@@ -257,6 +257,13 @@ class SmsCreate(BaseModel):
     lead_id: Optional[int] = None
 
 
+class SmsSenderKind(str, Enum):
+    CUSTOMER = "customer"
+    SMS_BOT = "sms_bot"
+    SYSTEM = "system"
+    USER = "user"
+
+
 class SmsResponse(BaseModel):
     id: int
     customer_id: int
@@ -272,6 +279,7 @@ class SmsResponse(BaseModel):
     created_by_id: Optional[int] = None
     created_at: datetime
     created_by_name: Optional[str] = None
+    sender_kind: SmsSenderKind
 
 
 class SmsScheduledCreate(BaseModel):

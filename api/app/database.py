@@ -2007,6 +2007,14 @@ def create_db_and_tables():
 
     try:
         with Session(engine) as session:
+            from app.system_user_service import get_or_create_system_user
+
+            get_or_create_system_user(session)
+    except Exception as e:
+        print(f"System user ensure skipped: {e}", file=sys.stderr, flush=True)
+
+    try:
+        with Session(engine) as session:
             from app.archive_service import apply_auto_archive
 
             r = apply_auto_archive(session)

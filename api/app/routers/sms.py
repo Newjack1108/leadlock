@@ -28,7 +28,9 @@ from app.schemas import (
     MessagesMarkReadResult,
     MessageIdsMarkUnread,
     MessagesMarkUnreadResult,
+    SmsSenderKind,
 )
+from app.system_user_service import get_system_user_id
 from app.sms_service import (
     send_sms,
     normalize_phone,
@@ -39,7 +41,22 @@ from app.sms_service import (
 router = APIRouter(prefix="/api/sms", tags=["sms"])
 
 
-def _sms_to_response(msg: SmsMessage, created_by_name: Optional[str] = None) -> SmsResponse:
+def _sender_kind(msg: SmsMessage, system_user_id: Optional[int]) -> SmsSenderKind:
+    if msg.direction == SmsDirection.RECEIVED:
+        return SmsSenderKind.CUSTOMER
+    if msg.created_by_id is None:
+        return SmsSenderKind.SMS_BOT
+    if system_user_id is not None and msg.created_by_id == system_user_id:
+        return SmsSenderKind.SYSTEM
+    return SmsSenderKind.USER
+
+
+def _sms_to_response(
+    msg: SmsMessage,
+    created_by_name: Optional[str] = None,
+    *,
+    sender_kind: SmsSenderKind,
+) -> SmsResponse:
     return SmsResponse(
         id=msg.id,
         customer_id=msg.customer_id,
@@ -55,6 +72,7 @@ def _sms_to_response(msg: SmsMessage, created_by_name: Optional[str] = None) -> 
         created_by_id=msg.created_by_id,
         created_at=msg.created_at,
         created_by_name=created_by_name,
+        sender_kind=sender_kind,
     )
 
 
@@ -127,7 +145,7 @@ async def send_sms_to_customer(
     session.add(activity)
     session.commit()
 
-    return _sms_to_response(msg, current_user.full_name)
+    return _sms_to_response(msg, current_user.full_name, sender_kind=SmsSenderKind.USER)
 
 
 @router.get("/customers/{customer_id}", response_model=List[SmsResponse])
@@ -148,13 +166,17 @@ async def get_customer_sms(
         .order_by(SmsMessage.created_at.desc())
     )
     messages = list(session.exec(statement).all())
+    try:
+        system_uid: Optional[int] = get_system_user_id(session)
+    except Exception:
+        system_uid = None
     result = []
     for msg in messages:
         name = None
         if msg.created_by_id:
             u = session.get(User, msg.created_by_id)
             name = u.full_name if u else None
-        result.append(_sms_to_response(msg, name))
+        result.append(_sms_to_response(msg, name, sender_kind=_sender_kind(msg, system_uid)))
     return result
 
 
@@ -433,4 +455,8 @@ async def get_sms(
     if msg.created_by_id:
         u = session.get(User, msg.created_by_id)
         name = u.full_name if u else None
-    return _sms_to_response(msg, name)
+    try:
+        system_uid: Optional[int] = get_system_user_id(session)
+    except Exception:
+        system_uid = None
+    return _sms_to_response(msg, name, sender_kind=_sender_kind(msg, system_uid))

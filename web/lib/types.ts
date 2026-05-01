@@ -536,6 +536,13 @@ export enum SmsDirection {
   RECEIVED = "RECEIVED",
 }
 
+export enum SmsSenderKind {
+  CUSTOMER = "customer",
+  SMS_BOT = "sms_bot",
+  SYSTEM = "system",
+  USER = "user",
+}
+
 export interface SmsMessage {
   id: number;
   customer_id: number;
@@ -551,6 +558,7 @@ export interface SmsMessage {
   created_by_id?: number;
   created_at: string;
   created_by_name?: string;
+  sender_kind?: SmsSenderKind;
 }
 
 export interface UnreadSmsMessageItem {
