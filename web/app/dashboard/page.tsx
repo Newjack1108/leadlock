@@ -23,6 +23,7 @@ import api, {
   downloadWeeklySummaryReportPdf,
 } from '@/lib/api';
 import { DashboardStats, StaleSummary, CompanySettings, UnreadSmsSummary, UnreadMessengerSummary, LeadLocationItem, DiscountTemplate, DashboardCommunicationTotals } from '@/lib/types';
+import { getInstallationLeadTimeRows, hasAnyInstallationLeadTime } from '@/lib/companyLeadTimeDisplay';
 import { toast } from 'sonner';
 import { TrendingUp, Users, CheckCircle2, Trophy, Bell, ArrowRight, Clock, MessageSquare, FileDown, BarChart3, Target, MessageCircle, Calendar, DoorClosed, LayoutDashboard } from 'lucide-react';
 import StatusPieChart from '@/components/StatusPieChart';
@@ -154,20 +155,27 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Installation lead time – clear indicator for sales */}
-        {companySettings?.installation_lead_time && (
+        {/* Installation lead times – clear indicator for sales */}
+        {hasAnyInstallationLeadTime(companySettings) && (
           <div className="mb-8 grid grid-cols-1 gap-4 lg:grid-cols-2">
             <Card className="border-primary/30 bg-primary/5">
               <CardContent className="py-4">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
                     <Clock className="h-5 w-5 text-primary" />
                   </div>
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">
-                      Current installation lead time
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-muted-foreground mb-2">
+                      Installation lead time (by product type)
                     </p>
-                    <p className="text-2xl font-bold">{companySettings.installation_lead_time}</p>
+                    <ul className="space-y-1.5">
+                      {getInstallationLeadTimeRows(companySettings!).map((row) => (
+                        <li key={row.label} className="flex flex-wrap items-baseline gap-x-2 gap-y-0">
+                          <span className="text-sm text-muted-foreground">{row.label}</span>
+                          <span className="text-lg font-bold">{row.value}</span>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 </div>
                 <Link href="/settings/company" className="mt-4 inline-block">

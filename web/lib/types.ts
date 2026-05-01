@@ -442,6 +442,9 @@ export interface CompanySettings {
   default_email_signature?: string;
   hourly_install_rate?: number;
   installation_lead_time?: InstallationLeadTime;
+  installation_lead_time_stables?: InstallationLeadTime;
+  installation_lead_time_sheds?: InstallationLeadTime;
+  installation_lead_time_cabins?: InstallationLeadTime;
   distance_before_overnight_miles?: number;
   cost_per_mile?: number;
   hotel_allowance_per_night?: number;

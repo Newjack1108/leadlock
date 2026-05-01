@@ -987,6 +987,53 @@ def create_db_and_tables():
                     if "already exists" not in error_str and "duplicate" not in error_str:
                         print(f"Warning: Could not add installation_lead_time column: {col_error}", file=sys.stderr, flush=True)
 
+            # Per-product-type installation lead times (same enum storage as installation_lead_time)
+            for col_name in (
+                "installation_lead_time_stables",
+                "installation_lead_time_sheds",
+                "installation_lead_time_cabins",
+            ):
+                company_columns = [col["name"] for col in inspector.get_columns("companysettings")]
+                if col_name not in company_columns:
+                    print(f"Adding {col_name} column to companysettings table...", file=sys.stderr, flush=True)
+                    try:
+                        with engine.begin() as conn:
+                            conn.execute(
+                                text(f"ALTER TABLE companysettings ADD COLUMN {col_name} VARCHAR(20)")
+                            )
+                        print(f"Added {col_name} column to companysettings table", file=sys.stderr, flush=True)
+                    except Exception as col_error:
+                        error_str = str(col_error).lower()
+                        if "already exists" not in error_str and "duplicate" not in error_str:
+                            print(
+                                f"Warning: Could not add {col_name} column: {col_error}",
+                                file=sys.stderr,
+                                flush=True,
+                            )
+            # Backfill per-type from legacy when all three are still null
+            try:
+                with engine.begin() as conn:
+                    conn.execute(
+                        text(
+                            """
+                            UPDATE companysettings SET
+                                installation_lead_time_stables = installation_lead_time,
+                                installation_lead_time_sheds = installation_lead_time,
+                                installation_lead_time_cabins = installation_lead_time
+                            WHERE installation_lead_time IS NOT NULL
+                              AND installation_lead_time_stables IS NULL
+                              AND installation_lead_time_sheds IS NULL
+                              AND installation_lead_time_cabins IS NULL
+                            """
+                        )
+                    )
+            except Exception as bf_err:
+                print(
+                    f"Warning: installation lead time per-type backfill skipped: {bf_err}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+
             # Logo URL (uploaded image URL for quote PDFs)
             company_columns = [col['name'] for col in inspector.get_columns("companysettings")]
             if "logo_url" not in company_columns:

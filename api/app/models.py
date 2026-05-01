@@ -432,7 +432,10 @@ class CompanySettings(SQLModel, table=True):
     email_disclaimer: Optional[str] = None  # Standard disclaimer appended to all outgoing emails (HTML)
     default_email_signature: Optional[str] = None  # Used when sending without a user_id (HTML); per-user signature overrides when user_id is set
     hourly_install_rate: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(10, 2)))  # Hourly rate for installation cost calculation
-    installation_lead_time: Optional[InstallationLeadTime] = Field(default=None)  # Current lead time; amended by production, visible to sales
+    installation_lead_time: Optional[InstallationLeadTime] = Field(default=None)  # Legacy fallback when per-type unset or quote type unknown
+    installation_lead_time_stables: Optional[InstallationLeadTime] = Field(default=None)
+    installation_lead_time_sheds: Optional[InstallationLeadTime] = Field(default=None)
+    installation_lead_time_cabins: Optional[InstallationLeadTime] = Field(default=None)
     # Installation & travel (mileage, overnight, 2-man team)
     distance_before_overnight_miles: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(10, 2)))  # Stay away if distance > this
     cost_per_mile: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(10, 2)))  # Applied to return distance

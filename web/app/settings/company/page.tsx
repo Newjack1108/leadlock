@@ -32,6 +32,14 @@ const WEEKDAYS: Array<{ key: WeekdayKey; label: string }> = [
   { key: 'sun', label: 'Sunday' },
 ];
 
+const INSTALLATION_LEAD_TIME_OPTIONS: Array<{ value: InstallationLeadTime; label: string }> = [
+  { value: InstallationLeadTime.ONE_TWO_WEEKS, label: '1–2 weeks' },
+  { value: InstallationLeadTime.TWO_THREE_WEEKS, label: '2–3 weeks' },
+  { value: InstallationLeadTime.THREE_FOUR_WEEKS, label: '3–4 weeks' },
+  { value: InstallationLeadTime.FOUR_FIVE_WEEKS, label: '4–5 weeks' },
+  { value: InstallationLeadTime.FIVE_SIX_WEEKS, label: '5–6 weeks' },
+];
+
 export default function CompanySettingsPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -77,7 +85,9 @@ export default function CompanySettingsPage() {
     default_terms_and_conditions: '',
     email_disclaimer: '',
     default_email_signature: '',
-    installation_lead_time: '' as InstallationLeadTime | '',
+    installation_lead_time_stables: '' as InstallationLeadTime | '',
+    installation_lead_time_sheds: '' as InstallationLeadTime | '',
+    installation_lead_time_cabins: '' as InstallationLeadTime | '',
     hourly_install_rate: '',
     distance_before_overnight_miles: '',
     cost_per_mile: '',
@@ -137,7 +147,18 @@ export default function CompanySettingsPage() {
         default_terms_and_conditions: response.data.default_terms_and_conditions || '',
         email_disclaimer: response.data.email_disclaimer || '',
         default_email_signature: response.data.default_email_signature || '',
-        installation_lead_time: response.data.installation_lead_time || '',
+        installation_lead_time_stables:
+          response.data.installation_lead_time_stables ||
+          response.data.installation_lead_time ||
+          '',
+        installation_lead_time_sheds:
+          response.data.installation_lead_time_sheds ||
+          response.data.installation_lead_time ||
+          '',
+        installation_lead_time_cabins:
+          response.data.installation_lead_time_cabins ||
+          response.data.installation_lead_time ||
+          '',
         hourly_install_rate: response.data.hourly_install_rate != null ? String(response.data.hourly_install_rate) : '',
         distance_before_overnight_miles: response.data.distance_before_overnight_miles != null ? String(response.data.distance_before_overnight_miles) : '',
         cost_per_mile: response.data.cost_per_mile != null ? String(response.data.cost_per_mile) : '',
@@ -193,7 +214,9 @@ export default function CompanySettingsPage() {
       setSaving(true);
       const payload: Record<string, unknown> = {
         ...formData,
-        installation_lead_time: formData.installation_lead_time || undefined,
+        installation_lead_time_stables: formData.installation_lead_time_stables || undefined,
+        installation_lead_time_sheds: formData.installation_lead_time_sheds || undefined,
+        installation_lead_time_cabins: formData.installation_lead_time_cabins || undefined,
         hourly_install_rate: formData.hourly_install_rate ? parseFloat(formData.hourly_install_rate) : undefined,
         distance_before_overnight_miles: formData.distance_before_overnight_miles ? parseFloat(formData.distance_before_overnight_miles) : undefined,
         cost_per_mile: formData.cost_per_mile ? parseFloat(formData.cost_per_mile) : undefined,
@@ -577,27 +600,45 @@ export default function CompanySettingsPage() {
               </div>
             </div>
 
-            <div className="rounded-lg p-4 bg-violet-50/30 dark:bg-violet-950/20 border-l-4 border-l-violet-200 dark:border-l-violet-800 mt-6 space-y-2">
-              <h3 className="text-lg font-medium">Installation lead time</h3>
-              <Select
-                value={formData.installation_lead_time || ''}
-                onValueChange={(v) => setFormData({ ...formData, installation_lead_time: v ? (v as InstallationLeadTime) : '' })}
-                disabled={saving}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select lead time" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={InstallationLeadTime.ONE_TWO_WEEKS}>1–2 weeks</SelectItem>
-                  <SelectItem value={InstallationLeadTime.TWO_THREE_WEEKS}>2–3 weeks</SelectItem>
-                  <SelectItem value={InstallationLeadTime.THREE_FOUR_WEEKS}>3–4 weeks</SelectItem>
-                  <SelectItem value={InstallationLeadTime.FOUR_FIVE_WEEKS}>4–5 weeks</SelectItem>
-                  <SelectItem value={InstallationLeadTime.FIVE_SIX_WEEKS}>5–6 weeks</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="rounded-lg p-4 bg-violet-50/30 dark:bg-violet-950/20 border-l-4 border-l-violet-200 dark:border-l-violet-800 mt-6 space-y-4">
+              <h3 className="text-lg font-medium">Installation lead time by product type</h3>
               <p className="text-sm text-muted-foreground">
-                Amended by production. Shown clearly on the dashboard for sales.
+                Amended by production. Shown on the dashboard for sales. Quotes use the time for the lead line (or product categories on the quote).
               </p>
+              <div className="grid gap-4 sm:grid-cols-3">
+                {(
+                  [
+                    { key: 'installation_lead_time_stables' as const, label: 'Stables' },
+                    { key: 'installation_lead_time_sheds' as const, label: 'Sheds' },
+                    { key: 'installation_lead_time_cabins' as const, label: 'Cabins' },
+                  ] as const
+                ).map(({ key, label }) => (
+                  <div key={key} className="space-y-2">
+                    <Label>{label}</Label>
+                    <Select
+                      value={formData[key] || ''}
+                      onValueChange={(v) =>
+                        setFormData({
+                          ...formData,
+                          [key]: v ? (v as InstallationLeadTime) : '',
+                        })
+                      }
+                      disabled={saving}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select lead time" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {INSTALLATION_LEAD_TIME_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ))}
+              </div>
             </div>
 
             <div className="rounded-lg p-4 bg-indigo-50/30 dark:bg-indigo-950/20 border-l-4 border-l-indigo-200 dark:border-l-indigo-800 mt-6 space-y-4">

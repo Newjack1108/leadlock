@@ -1052,6 +1052,9 @@ class CompanySettingsCreate(BaseModel):
     default_email_signature: Optional[str] = None  # HTML; used for sends without a user_id
     hourly_install_rate: Optional[Decimal] = None
     installation_lead_time: Optional[InstallationLeadTime] = None
+    installation_lead_time_stables: Optional[InstallationLeadTime] = None
+    installation_lead_time_sheds: Optional[InstallationLeadTime] = None
+    installation_lead_time_cabins: Optional[InstallationLeadTime] = None
     distance_before_overnight_miles: Optional[Decimal] = None
     cost_per_mile: Optional[Decimal] = None
     hotel_allowance_per_night: Optional[Decimal] = None
@@ -1095,6 +1098,9 @@ class CompanySettingsUpdate(BaseModel):
     default_email_signature: Optional[str] = None
     hourly_install_rate: Optional[Decimal] = None
     installation_lead_time: Optional[InstallationLeadTime] = None
+    installation_lead_time_stables: Optional[InstallationLeadTime] = None
+    installation_lead_time_sheds: Optional[InstallationLeadTime] = None
+    installation_lead_time_cabins: Optional[InstallationLeadTime] = None
     distance_before_overnight_miles: Optional[Decimal] = None
     cost_per_mile: Optional[Decimal] = None
     hotel_allowance_per_night: Optional[Decimal] = None
@@ -1139,6 +1145,9 @@ class CompanySettingsResponse(BaseModel):
     default_email_signature: Optional[str] = None
     hourly_install_rate: Optional[Decimal] = None
     installation_lead_time: Optional[InstallationLeadTime] = None
+    installation_lead_time_stables: Optional[InstallationLeadTime] = None
+    installation_lead_time_sheds: Optional[InstallationLeadTime] = None
+    installation_lead_time_cabins: Optional[InstallationLeadTime] = None
     distance_before_overnight_miles: Optional[Decimal] = None
     cost_per_mile: Optional[Decimal] = None
     hotel_allowance_per_night: Optional[Decimal] = None

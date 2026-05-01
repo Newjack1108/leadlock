@@ -30,6 +30,7 @@ import type {
   LeadLocationItem,
   DiscountTemplate,
 } from '@/lib/types';
+import { getInstallationLeadTimeRows, hasAnyInstallationLeadTime } from '@/lib/companyLeadTimeDisplay';
 import { toast } from 'sonner';
 import {
   FileText,
@@ -199,19 +200,26 @@ export default function CloserDashboardPage() {
               </CardContent>
             </Card>
           </div>
-        ) : companySettings?.installation_lead_time ? (
+        ) : hasAnyInstallationLeadTime(companySettings) ? (
           <div className="shrink-0 mb-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
             <Card className="border-primary/30 bg-primary/5">
               <CardContent className="py-3 px-4">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
                     <Clock className="h-4 w-4 text-primary" />
                   </div>
-                  <div>
-                    <p className="text-xs font-medium text-muted-foreground">
-                      Current installation lead time
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-medium text-muted-foreground mb-1.5">
+                      Installation lead time (by product type)
                     </p>
-                    <p className="text-lg font-bold">{companySettings.installation_lead_time}</p>
+                    <ul className="space-y-1">
+                      {getInstallationLeadTimeRows(companySettings!).map((row) => (
+                        <li key={row.label} className="flex flex-wrap items-baseline gap-x-2 text-sm">
+                          <span className="text-muted-foreground">{row.label}</span>
+                          <span className="font-bold">{row.value}</span>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 </div>
               </CardContent>
