@@ -1250,7 +1250,7 @@ function CreateQuoteContent() {
             )}
 
             {/* Discounts Selection */}
-            <Card>
+            <Card className="border-violet-200 bg-violet-50 dark:border-violet-800 dark:bg-violet-950/30">
               <CardHeader>
                 <CardTitle>Discounts & Giveaways</CardTitle>
               </CardHeader>
@@ -1293,7 +1293,7 @@ function CreateQuoteContent() {
                         return (
                           <div
                             key={discountId}
-                            className="flex items-center justify-between p-3 border rounded-md"
+                            className="flex items-center justify-between rounded-md border border-violet-200/80 bg-white/80 p-3 dark:border-violet-800/60 dark:bg-background/60"
                           >
                             <div className="flex-1">
                               <p className="font-medium">

@@ -39,6 +39,7 @@ import {
   SmsDirection,
   SmsSenderKind,
   Customer,
+  Lead,
   SmsScheduled,
   ScheduledSmsStatus,
   SmsTemplate,
@@ -115,8 +116,20 @@ export default function CustomerSmsPage() {
     try {
       const response = await api.get(`/api/customers/${customerId}`);
       setCustomer(response.data);
-      setComposeToPhone(response.data.phone || '');
-      setScheduleToPhone(response.data.phone || '');
+      let phone = (response.data.phone || '').trim();
+      if (!phone) {
+        try {
+          const leadsRes = await api.get<Lead[]>(`/api/customers/${customerId}/leads`);
+          const fromLead = leadsRes.data
+            .map((l) => (l.phone || '').trim())
+            .find((p) => p.length > 0);
+          if (fromLead) phone = fromLead;
+        } catch {
+          /* ignore */
+        }
+      }
+      setComposeToPhone(phone);
+      setScheduleToPhone(phone);
     } catch (error: unknown) {
       toast.error('Failed to load customer');
     }
@@ -370,7 +383,6 @@ export default function CustomerSmsPage() {
               <Button
                 variant="outline"
                 onClick={() => setScheduleDialogOpen(true)}
-                disabled={!hasCustomerPhone}
               >
                 <CalendarClock className="h-4 w-4 mr-2" />
                 Schedule message
@@ -448,7 +460,8 @@ export default function CustomerSmsPage() {
                   </div>
                   {!hasCustomerPhone && (
                     <p className="text-xs text-muted-foreground">
-                      SMS and SMS automations are disabled until this customer has a phone number.
+                      Bot controls need a phone number on the customer profile. You can still send and schedule
+                      messages below using a linked lead’s number or by entering a number manually.
                     </p>
                   )}
                 </div>
@@ -459,7 +472,6 @@ export default function CustomerSmsPage() {
                     value={composeToPhone}
                     onChange={(e) => setComposeToPhone(e.target.value)}
                     placeholder="+44 7700 900000"
-                    disabled={!hasCustomerPhone}
                   />
                 </div>
                 <div>
@@ -475,7 +487,7 @@ export default function CustomerSmsPage() {
                   <Select
                     value={selectedComposeTemplateId}
                     onValueChange={handleComposeTemplateChange}
-                    disabled={loadingComposeTemplate || !hasCustomerPhone}
+                    disabled={loadingComposeTemplate}
                   >
                     <SelectTrigger className="w-full">
                       <SelectValue placeholder="No template" />
@@ -501,10 +513,12 @@ export default function CustomerSmsPage() {
                     onChange={(e) => setComposeBody(e.target.value)}
                     placeholder="Your message..."
                     rows={3}
-                    disabled={!hasCustomerPhone}
                   />
                 </div>
-                <Button onClick={handleSend} disabled={sending || !hasCustomerPhone}>
+                <Button
+                  onClick={handleSend}
+                  disabled={sending || !composeToPhone.trim() || !composeBody.trim()}
+                >
                   <Send className="h-4 w-4 mr-2" />
                   {sending ? 'Sending...' : 'Send'}
                 </Button>
@@ -673,7 +687,6 @@ export default function CustomerSmsPage() {
                 value={scheduleToPhone}
                 onChange={(e) => setScheduleToPhone(e.target.value)}
                 placeholder="+44 7700 900000"
-                disabled={!hasCustomerPhone}
               />
             </div>
             <div>
@@ -681,7 +694,7 @@ export default function CustomerSmsPage() {
               <Select
                 value={selectedScheduleTemplateId}
                 onValueChange={handleScheduleTemplateChange}
-                disabled={loadingScheduleTemplate || !hasCustomerPhone}
+                disabled={loadingScheduleTemplate}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="No template" />
@@ -707,7 +720,6 @@ export default function CustomerSmsPage() {
                 onChange={(e) => setScheduleBody(e.target.value)}
                 placeholder="Your message..."
                 rows={3}
-                disabled={!hasCustomerPhone}
               />
             </div>
             <div>
@@ -717,7 +729,6 @@ export default function CustomerSmsPage() {
                 type="datetime-local"
                 value={scheduleDatetime}
                 onChange={(e) => setScheduleDatetime(e.target.value)}
-                disabled={!hasCustomerPhone}
               />
             </div>
           </div>
@@ -725,7 +736,15 @@ export default function CustomerSmsPage() {
             <Button variant="outline" onClick={() => setScheduleDialogOpen(false)}>
               Close
             </Button>
-            <Button onClick={handleSchedule} disabled={scheduling || !hasCustomerPhone}>
+            <Button
+              onClick={handleSchedule}
+              disabled={
+                scheduling ||
+                !scheduleToPhone.trim() ||
+                !scheduleBody.trim() ||
+                !scheduleDatetime
+              }
+            >
               {scheduling ? 'Scheduling...' : 'Schedule'}
             </Button>
           </DialogFooter>

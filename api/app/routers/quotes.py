@@ -57,7 +57,12 @@ from app.routers.emails import (
 )
 from app.customer_view_links import customer_view_path_segment
 from app.email_service import is_email_configured, build_activity_email_notes
-from app.sms_service import send_sms, normalize_phone, is_unsubscribed_recipient_error
+from app.sms_service import (
+    send_sms,
+    normalize_phone,
+    is_unsubscribed_recipient_error,
+    resolve_sms_to_phone,
+)
 from app.quote_pdf_service import generate_quote_pdf
 from app.available_optional_extras import get_available_optional_extras_for_quote
 from app.reminder_service import get_last_activity_date, dismiss_open_reminders_for_quote
@@ -1749,11 +1754,16 @@ async def post_quote_send_sms(
         include_available_extras=bool(req.include_available_extras),
     )
 
-    to_phone = (req.to_phone or "").strip() or (customer.phone or "").strip()
+    to_phone = resolve_sms_to_phone(
+        session,
+        customer,
+        explicit_to=(req.to_phone or "").strip() or None,
+        lead_id=quote.lead_id,
+    )
     if not to_phone:
         raise HTTPException(
             status_code=400,
-            detail="No phone number; set to_phone in the request or add a phone on the customer.",
+            detail="No phone number; set to_phone in the request, add a phone on the customer, or ensure the quote’s lead has a phone.",
         )
 
     if (req.body or "").strip():

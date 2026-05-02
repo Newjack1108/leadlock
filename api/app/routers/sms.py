@@ -13,7 +13,6 @@ from app.models import (
     ScheduledSms,
     ScheduledSmsStatus,
     Customer,
-    Lead,
     User,
     Activity,
     ActivityType,
@@ -36,6 +35,7 @@ from app.sms_service import (
     normalize_phone,
     validate_outbound_phone,
     is_unsubscribed_recipient_error,
+    resolve_sms_to_phone,
 )
 
 router = APIRouter(prefix="/api/sms", tags=["sms"])
@@ -87,20 +87,18 @@ async def send_sms_to_customer(
     customer = session.exec(statement).first()
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
-    if not (customer.phone or "").strip():
+
+    to_phone = resolve_sms_to_phone(
+        session,
+        customer,
+        explicit_to=data.to_phone,
+        lead_id=data.lead_id,
+    )
+    if not to_phone:
         raise HTTPException(
             status_code=400,
-            detail="SMS is disabled for this customer until a phone number is added",
+            detail="No phone number; enter a number, add one on the customer or linked lead, or pass lead_id.",
         )
-
-    to_phone = data.to_phone or (customer.phone if customer.phone else None)
-    if data.lead_id and not to_phone:
-        statement = select(Lead).where(Lead.id == data.lead_id)
-        lead = session.exec(statement).first()
-        if lead and lead.phone:
-            to_phone = lead.phone
-    if not to_phone:
-        raise HTTPException(status_code=400, detail="No phone number; set to_phone or customer/lead phone")
 
     success, sid, error = send_sms(to_phone, data.body)
     if not success:
@@ -321,11 +319,6 @@ async def create_scheduled_sms(
     customer = session.exec(statement).first()
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
-    if not (customer.phone or "").strip():
-        raise HTTPException(
-            status_code=400,
-            detail="SMS automations are disabled for this customer until a phone number is added",
-        )
     is_valid, normalized_to_phone, phone_error = validate_outbound_phone(data.to_phone)
     if not is_valid:
         raise HTTPException(status_code=400, detail=phone_error or "Invalid phone number")

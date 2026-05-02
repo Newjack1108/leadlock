@@ -6,6 +6,9 @@ import re
 from typing import Optional, Tuple
 
 from dotenv import load_dotenv
+from sqlmodel import Session, select
+
+from app.models import Customer, Lead
 
 load_dotenv()
 
@@ -55,6 +58,42 @@ def get_twilio_config() -> Tuple[Optional[str], Optional[str], Optional[str]]:
     token = os.getenv("TWILIO_AUTH_TOKEN")
     from_phone = os.getenv("TWILIO_PHONE_NUMBER")
     return sid, token, from_phone
+
+
+def resolve_sms_to_phone(
+    session: Session,
+    customer: Customer,
+    *,
+    explicit_to: Optional[str] = None,
+    lead_id: Optional[int] = None,
+) -> Optional[str]:
+    """
+    Pick the outbound destination number: explicit override, customer profile,
+    then the given lead (if it belongs to this customer), then any linked lead
+    with a phone (most recently updated first).
+    """
+    t = (explicit_to or "").strip()
+    if t:
+        return t
+    t = (customer.phone or "").strip()
+    if t:
+        return t
+    if lead_id is not None:
+        lead = session.get(Lead, lead_id)
+        if lead is not None and lead.customer_id == customer.id:
+            p = (lead.phone or "").strip()
+            if p:
+                return p
+    statement = (
+        select(Lead)
+        .where(Lead.customer_id == customer.id)
+        .order_by(Lead.updated_at.desc())
+    )
+    for lead in session.exec(statement).all():
+        p = (lead.phone or "").strip()
+        if p:
+            return p
+    return None
 
 
 def is_unsubscribed_recipient_error(error_message: Optional[str]) -> bool:
