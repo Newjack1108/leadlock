@@ -355,8 +355,13 @@ def build_quote_response(
     lead_quotes_sent_count: Optional[int] = None,
     customer_replied_since_quote_sent: bool = False,
     inbound_count_since_quote_sent: int = 0,
+    draft_save_response: bool = False,
 ) -> QuoteResponse:
-    """Build a QuoteResponse with items and discounts."""
+    """Build a QuoteResponse with items and discounts.
+
+    When draft_save_response is True (PUT draft autosave), skip expensive aggregates that
+    the editor does not need to refresh on every keystroke (activity scan, email open sum).
+    """
     discount_statement = select(QuoteDiscount).where(QuoteDiscount.quote_id == quote.id)
     quote_discounts = session.exec(discount_statement).all()
     customer_name = None
@@ -366,7 +371,8 @@ def build_quote_response(
     if quote.customer_id:
         customer = session.exec(select(Customer).where(Customer.id == quote.customer_id)).first()
         customer_name = customer.name if customer else None
-        customer_last_interacted_at = get_last_activity_date(quote.customer_id, session)
+        if not draft_save_response:
+            customer_last_interacted_at = get_last_activity_date(quote.customer_id, session)
     elif quote.dealer_customer_name:
         customer_name = quote.dealer_customer_name
     if quote.lead_id:
@@ -380,11 +386,14 @@ def build_quote_response(
     deposit_amount_inc_vat = quote.deposit_amount  # Stored as inc VAT
     balance_amount_inc_vat = quote.balance_amount  # Stored as inc VAT
 
-    total_open_count = session.exec(
-        select(func.coalesce(func.sum(QuoteEmail.open_count), 0)).where(QuoteEmail.quote_id == quote.id)
-    ).first() or 0
-    if hasattr(total_open_count, "__int__"):
-        total_open_count = int(total_open_count)
+    if draft_save_response:
+        total_open_count = 0
+    else:
+        total_open_count = session.exec(
+            select(func.coalesce(func.sum(QuoteEmail.open_count), 0)).where(QuoteEmail.quote_id == quote.id)
+        ).first() or 0
+        if hasattr(total_open_count, "__int__"):
+            total_open_count = int(total_open_count)
 
     order_id = None
     if quote.status == QuoteStatus.ACCEPTED:
@@ -1625,7 +1634,7 @@ def _update_draft_quote_impl(
     session.refresh(quote)
     statement = select(QuoteItem).where(QuoteItem.quote_id == quote_id).order_by(QuoteItem.sort_order)
     quote_items = list(session.exec(statement).all())
-    return build_quote_response(quote, quote_items, session)
+    return build_quote_response(quote, quote_items, session, draft_save_response=True)
 
 
 @router.get("/customers/{customer_id}", response_model=List[QuoteResponse])

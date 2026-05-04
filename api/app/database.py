@@ -768,7 +768,19 @@ def create_db_and_tables():
                     print(f"Error migrating Activity table: {e}", file=sys.stderr, flush=True)
                     import traceback
                     print(traceback.format_exc(), file=sys.stderr, flush=True)
-        
+
+        # Step 4b: Index activity.customer_id (get_last_activity_date, customer timelines)
+        if has_activity_table:
+            try:
+                with engine.begin() as conn:
+                    conn.execute(
+                        sql_text("CREATE INDEX IF NOT EXISTS ix_activity_customer_id ON activity (customer_id)")
+                    )
+            except Exception as e:
+                err = str(e).lower()
+                if "already exists" not in err and "duplicate" not in err:
+                    print(f"Warning: could not create ix_activity_customer_id: {e}", file=sys.stderr, flush=True)
+
         # Step 5: Migrate Quote table: lead_id -> customer_id
         if has_quote_table:
             quote_columns = [col['name'] for col in inspector.get_columns("quote")]
