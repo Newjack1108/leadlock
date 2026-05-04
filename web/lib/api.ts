@@ -982,7 +982,10 @@ export const updateDraftQuote = async (quoteId: number, quoteData: {
   include_available_optional_extras?: boolean;
   include_delivery_installation_contact_note?: boolean;
 }) => {
-  const response = await api.put(`/api/quotes/${quoteId}/draft`, quoteData);
+  const response = await api.put(`/api/quotes/${quoteId}/draft`, quoteData, {
+    // Draft saves can be large (many lines, discounts) and slower on remote DB; default 15s is too tight.
+    timeout: 120_000,
+  });
   return response.data;
 };
 

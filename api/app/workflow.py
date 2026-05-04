@@ -172,25 +172,50 @@ def check_sla_overdue(lead: Lead, session: Session) -> Optional[str]:
     return None
 
 
-def sync_customer_phone_from_lead_on_qualify(session: Session, lead: Lead) -> None:
+def sync_customer_contact_from_lead_on_qualify(session: Session, lead: Lead) -> None:
     """
-    Copy the lead's phone onto the linked customer when the lead is (or becomes) qualified.
+    Copy lead contact fields onto the linked customer when the lead is (or becomes) qualified.
 
-    Facebook and similar imports attach customer_id immediately with the raw form phone; staff
-    often correct the number on the lead before qualifying. The customer profile should reflect
-    that corrected value for SMS and quoting.
+    Facebook and similar imports attach customer_id immediately with raw form data; staff often
+    correct name, email, phone, or postcode on the lead before qualifying. The customer profile
+    should match the lead for CRM and outreach.
+
+    Phone is only updated when the lead has a non-empty phone after strip, so clearing the lead
+    phone does not wipe a known-good customer number used for SMS and quoting.
     """
     if not lead.customer_id:
-        return
-    phone = (lead.phone or "").strip()
-    if not phone:
         return
     customer = session.get(Customer, lead.customer_id)
     if not customer:
         return
-    customer.phone = phone
-    customer.updated_at = datetime.utcnow()
-    session.add(customer)
+
+    def _norm_optional(s: Optional[str]) -> Optional[str]:
+        t = (s or "").strip()
+        return t if t else None
+
+    new_name = (lead.name or "").strip() or customer.name
+    new_email = _norm_optional(lead.email)
+    new_postcode = _norm_optional(lead.postcode)
+    phone_stripped = (lead.phone or "").strip()
+    new_phone = phone_stripped if phone_stripped else None
+
+    dirty = False
+    if customer.name != new_name:
+        customer.name = new_name
+        dirty = True
+    if customer.email != new_email:
+        customer.email = new_email
+        dirty = True
+    if customer.postcode != new_postcode:
+        customer.postcode = new_postcode
+        dirty = True
+    if new_phone is not None and customer.phone != new_phone:
+        customer.phone = new_phone
+        dirty = True
+
+    if dirty:
+        customer.updated_at = datetime.utcnow()
+        session.add(customer)
 
 
 def auto_transition_lead_status(
@@ -234,7 +259,7 @@ def auto_transition_lead_status(
     session.add(lead)
 
     if new_status == LeadStatus.QUALIFIED:
-        sync_customer_phone_from_lead_on_qualify(session, lead)
+        sync_customer_contact_from_lead_on_qualify(session, lead)
 
     # Create status history record
     from app.models import StatusHistory

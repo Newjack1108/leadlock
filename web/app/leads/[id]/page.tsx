@@ -217,8 +217,19 @@ export default function LeadDetailPage() {
 
   const handleQualify = async () => {
     if (!allowedTransitions.includes('QUALIFIED')) return;
+    if (!lead) return;
     setQualifyLoading(true);
     try {
+      const name = (lead.name || '').trim() || 'Lead';
+      const emailTrim = (lead.email || '').trim();
+      const phoneTrim = (lead.phone || '').trim();
+      const postcodeTrim = (lead.postcode || '').trim();
+      await api.patch(`/api/leads/${leadId}`, {
+        name,
+        email: emailTrim || null,
+        phone: phoneTrim || null,
+        postcode: postcodeTrim || null,
+      });
       await api.post(`/api/leads/${leadId}/transition`, { new_status: 'QUALIFIED' });
       toast.success('Lead qualified');
       router.push('/leads?status=QUALIFIED');
