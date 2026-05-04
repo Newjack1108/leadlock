@@ -4,7 +4,7 @@ from pydantic import ValidationError
 from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import Response
 from sqlmodel import Session, select, or_, and_
-from sqlalchemy import func, true, String as SAString
+from sqlalchemy import func, true, String as SAString, delete, update
 from typing import Dict, List, Literal, Optional, Tuple
 from app.database import get_session
 from app.models import (
@@ -1481,23 +1481,20 @@ def _update_draft_quote_impl(
             detail=f"Only draft quotes can be edited. This quote has status: {quote.status}"
         )
     
-    # Delete existing items and discounts for this quote.
+    # Delete existing items and discounts for this quote (single transaction; flush for FK order).
     # 1. Delete discounts first (QuoteDiscount.quote_item_id references QuoteItem)
-    # 2. Null out parent_quote_item_id to avoid FK violation when deleting items (autoflush can reorder deletes)
-    discount_statement = select(QuoteDiscount).where(QuoteDiscount.quote_id == quote_id)
-    for discount in session.exec(discount_statement).all():
-        session.delete(discount)
+    # 2. Null parent_quote_item_id then bulk-delete items (avoids per-row ORM deletes)
+    session.exec(delete(QuoteDiscount).where(QuoteDiscount.quote_id == quote_id))
     session.flush()
-    existing_items = list(session.exec(select(QuoteItem).where(QuoteItem.quote_id == quote_id)).all())
-    for item in existing_items:
-        if item.parent_quote_item_id is not None:
-            item.parent_quote_item_id = None
-            session.add(item)
+    session.exec(
+        update(QuoteItem)
+        .where(QuoteItem.quote_id == quote_id)
+        .values(parent_quote_item_id=None)
+    )
     session.flush()
-    for item in existing_items:
-        session.delete(item)
-    session.commit()
-    
+    session.exec(delete(QuoteItem).where(QuoteItem.quote_id == quote_id))
+    session.flush()
+
     # Build new items (same logic as create)
     subtotal = Decimal(0)
     items = []
@@ -1524,9 +1521,9 @@ def _update_draft_quote_impl(
     
     for item in items:
         session.add(item)
-    session.commit()
-    
-    # Refresh to get item IDs, then set parent_quote_item_id
+    session.flush()
+
+    # Resolve new item IDs, then set parent_quote_item_id
     statement = select(QuoteItem).where(QuoteItem.quote_id == quote_id).order_by(QuoteItem.sort_order)
     quote_items = list(session.exec(statement).all())
     for i, db_item in enumerate(quote_items):
@@ -1537,7 +1534,7 @@ def _update_draft_quote_impl(
                 db_item.parent_quote_item_id = quote_items[parent_index].id
                 session.add(db_item)
     if quote_items and any(getattr(quote_data.items[i], "parent_index", None) is not None for i in range(min(len(quote_data.items), len(quote_items)))):
-        session.commit()
+        session.flush()
         statement = select(QuoteItem).where(QuoteItem.quote_id == quote_id).order_by(QuoteItem.sort_order)
         quote_items = list(session.exec(statement).all())
     
@@ -1597,9 +1594,8 @@ def _update_draft_quote_impl(
                 apply_discount_to_quote(quote, discount_template, quote_items, session, current_user)
             for item in quote_items:
                 session.add(item)
-    
-    session.commit()
-    session.refresh(quote)
+
+    session.flush()
     statement = select(QuoteItem).where(QuoteItem.quote_id == quote_id)
     quote_items = list(session.exec(statement).all())
     item_discount_total = sum(item.discount_amount for item in quote_items)
@@ -1628,7 +1624,7 @@ def _update_draft_quote_impl(
     session.commit()
     session.refresh(quote)
     statement = select(QuoteItem).where(QuoteItem.quote_id == quote_id).order_by(QuoteItem.sort_order)
-    quote_items = session.exec(statement).all()
+    quote_items = list(session.exec(statement).all())
     return build_quote_response(quote, quote_items, session)
 
 

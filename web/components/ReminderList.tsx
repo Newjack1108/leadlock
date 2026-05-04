@@ -6,7 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Reminder, ReminderPriority, SuggestedAction, ReminderType } from '@/lib/types';
 import { 
-  getReminders, dismissReminder, actOnReminder,
+  getReminders,
+  dismissReminder,
+  actOnReminder,
+  invalidateStaleSummaryCache,
   generateReminders 
 } from '@/lib/api';
 import { toast } from 'sonner';
@@ -120,6 +123,7 @@ export default function ReminderList({
   const handleDismiss = async (reminderId: number) => {
     try {
       await dismissReminder(reminderId);
+      invalidateStaleSummaryCache();
       toast.success('Reminder dismissed');
       fetchReminders();
       onReminderAction?.();
@@ -132,6 +136,7 @@ export default function ReminderList({
   const handleAct = async (reminderId: number, action: SuggestedAction) => {
     try {
       await actOnReminder(reminderId, action);
+      invalidateStaleSummaryCache();
       toast.success('Reminder marked as acted upon');
       fetchReminders();
       onReminderAction?.();
@@ -145,6 +150,7 @@ export default function ReminderList({
     try {
       setGenerating(true);
       const result = await generateReminders();
+      invalidateStaleSummaryCache();
       toast.success(`Generated ${result.count} reminders`);
       fetchReminders();
     } catch (error: any) {

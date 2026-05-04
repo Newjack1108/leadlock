@@ -8,7 +8,7 @@ import CreateTaskDialog from '@/components/CreateTaskDialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { getStaleSummary, generateReminders } from '@/lib/api';
+import { getStaleSummary, generateReminders, invalidateStaleSummaryCache } from '@/lib/api';
 import { ReminderPriority, ReminderType, StaleSummary } from '@/lib/types';
 import { toast } from 'sonner';
 import { RefreshCw, ChevronDown, ChevronUp, ListTodo } from 'lucide-react';
@@ -47,6 +47,7 @@ export default function RemindersPage() {
     try {
       setGenerating(true);
       const result = await generateReminders();
+      invalidateStaleSummaryCache();
       toast.success(`Generated ${result.count} reminders`);
       fetchData();
       setRefreshTrigger((t) => t + 1);

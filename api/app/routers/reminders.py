@@ -4,6 +4,7 @@ API endpoints for reminders and stale item management.
 import re
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, select, and_, or_, func, col
+from sqlalchemy import case
 from typing import List, Optional, Dict
 from app.database import get_session
 from app.auth import get_current_user
@@ -131,20 +132,33 @@ def _reminder_to_response(
     reminder: Reminder,
     today: date_type,
     uid_map: Dict[int, User],
+    *,
+    lead_by_id: Optional[Dict[int, Lead]] = None,
+    quote_by_id: Optional[Dict[int, Quote]] = None,
+    customer_by_id: Optional[Dict[int, Customer]] = None,
 ) -> ReminderResponse:
     lead_name = None
     quote_number = None
     customer_name = None
     if reminder.lead_id:
-        lead = session.exec(select(Lead).where(Lead.id == reminder.lead_id)).first()
+        if lead_by_id is not None:
+            lead = lead_by_id.get(reminder.lead_id)
+        else:
+            lead = session.exec(select(Lead).where(Lead.id == reminder.lead_id)).first()
         if lead:
             lead_name = lead.name
     if reminder.quote_id:
-        quote = session.exec(select(Quote).where(Quote.id == reminder.quote_id)).first()
+        if quote_by_id is not None:
+            quote = quote_by_id.get(reminder.quote_id)
+        else:
+            quote = session.exec(select(Quote).where(Quote.id == reminder.quote_id)).first()
         if quote:
             quote_number = quote.quote_number
     if reminder.customer_id:
-        customer = session.exec(select(Customer).where(Customer.id == reminder.customer_id)).first()
+        if customer_by_id is not None:
+            customer = customer_by_id.get(reminder.customer_id)
+        else:
+            customer = session.exec(select(Customer).where(Customer.id == reminder.customer_id)).first()
         if customer:
             customer_name = customer.name
 
@@ -321,7 +335,34 @@ async def get_reminders(
         users = session.exec(select(User).where(User.id.in_(user_ids))).all()
         uid_map = {u.id: u for u in users}
 
-    result = [_reminder_to_response(session, r, today, uid_map) for r in reminders]
+    lead_ids = {r.lead_id for r in reminders if r.lead_id}
+    quote_ids = {r.quote_id for r in reminders if r.quote_id}
+    customer_ids = {r.customer_id for r in reminders if r.customer_id}
+    lead_by_id: Dict[int, Lead] = {}
+    if lead_ids:
+        leads = session.exec(select(Lead).where(Lead.id.in_(lead_ids))).all()
+        lead_by_id = {lead.id: lead for lead in leads if lead.id is not None}
+    quote_by_id: Dict[int, Quote] = {}
+    if quote_ids:
+        quotes = session.exec(select(Quote).where(Quote.id.in_(quote_ids))).all()
+        quote_by_id = {q.id: q for q in quotes if q.id is not None}
+    customer_by_id: Dict[int, Customer] = {}
+    if customer_ids:
+        customers = session.exec(select(Customer).where(Customer.id.in_(customer_ids))).all()
+        customer_by_id = {c.id: c for c in customers if c.id is not None}
+
+    result = [
+        _reminder_to_response(
+            session,
+            r,
+            today,
+            uid_map,
+            lead_by_id=lead_by_id,
+            quote_by_id=quote_by_id,
+            customer_by_id=customer_by_id,
+        )
+        for r in reminders
+    ]
 
     priority_order = {
         ReminderPriority.URGENT: 0,
@@ -348,46 +389,49 @@ async def get_stale_summary(
 ):
     """Get summary of stale items and reminders (per role; Directors see all)."""
     visibility = _reminder_visibility_filter(current_user)
+    base_conds = [
+        Reminder.dismissed_at.is_(None),
+        Reminder.acted_upon_at.is_(None),
+    ]
+    if visibility is not None:
+        base_conds.append(visibility)
 
-    def _count_where(*conds):
-        all_conds = list(conds)
-        if visibility is not None:
-            all_conds.append(visibility)
-        return session.exec(select(func.count(Reminder.id)).where(and_(*all_conds))).one()
-
-    urgent_count = _count_where(
-        Reminder.priority == ReminderPriority.URGENT,
-        Reminder.dismissed_at.is_(None),
-        Reminder.acted_upon_at.is_(None)
+    quote_stale_types = (
+        ReminderType.QUOTE_STALE,
+        ReminderType.QUOTE_EXPIRED,
+        ReminderType.QUOTE_EXPIRING,
+        ReminderType.QUOTE_NOT_OPENED,
+        ReminderType.QUOTE_OPENED_NO_REPLY,
     )
-    high_count = _count_where(
-        Reminder.priority == ReminderPriority.HIGH,
-        Reminder.dismissed_at.is_(None),
-        Reminder.acted_upon_at.is_(None)
-    )
-    medium_count = _count_where(
-        Reminder.priority == ReminderPriority.MEDIUM,
-        Reminder.dismissed_at.is_(None),
-        Reminder.acted_upon_at.is_(None)
-    )
-    low_count = _count_where(
-        Reminder.priority == ReminderPriority.LOW,
-        Reminder.dismissed_at.is_(None),
-        Reminder.acted_upon_at.is_(None)
-    )
+    agg_stmt = select(
+        func.coalesce(
+            func.sum(case((Reminder.priority == ReminderPriority.URGENT, 1), else_=0)), 0
+        ),
+        func.coalesce(
+            func.sum(case((Reminder.priority == ReminderPriority.HIGH, 1), else_=0)), 0
+        ),
+        func.coalesce(
+            func.sum(case((Reminder.priority == ReminderPriority.MEDIUM, 1), else_=0)), 0
+        ),
+        func.coalesce(
+            func.sum(case((Reminder.priority == ReminderPriority.LOW, 1), else_=0)), 0
+        ),
+        func.coalesce(
+            func.sum(case((Reminder.reminder_type == ReminderType.LEAD_STALE, 1), else_=0)), 0
+        ),
+        func.coalesce(
+            func.sum(case((Reminder.reminder_type.in_(quote_stale_types), 1), else_=0)), 0
+        ),
+    ).where(and_(*base_conds))
+    row = session.exec(agg_stmt).one()
+    urgent_count = int(row[0] or 0)
+    high_count = int(row[1] or 0)
+    medium_count = int(row[2] or 0)
+    low_count = int(row[3] or 0)
     total_reminders = urgent_count + high_count + medium_count + low_count
+    stale_leads_count = int(row[4] or 0)
+    stale_quotes_count = int(row[5] or 0)
 
-    stale_leads_count = _count_where(
-        Reminder.reminder_type == ReminderType.LEAD_STALE,
-        Reminder.dismissed_at.is_(None),
-        Reminder.acted_upon_at.is_(None)
-    )
-    stale_quotes_count = _count_where(
-        Reminder.reminder_type.in_([ReminderType.QUOTE_STALE, ReminderType.QUOTE_EXPIRED, ReminderType.QUOTE_EXPIRING, ReminderType.QUOTE_NOT_OPENED, ReminderType.QUOTE_OPENED_NO_REPLY]),
-        Reminder.dismissed_at.is_(None),
-        Reminder.acted_upon_at.is_(None)
-    )
-    
     return StaleSummaryResponse(
         total_reminders=total_reminders,
         urgent_count=urgent_count,

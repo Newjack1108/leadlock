@@ -1696,6 +1696,22 @@ def create_db_and_tables():
                     if "already exists" not in error_str and "duplicate" not in error_str:
                         print(f"Warning: could not add created_by_id to reminder: {e}", file=sys.stderr, flush=True)
         
+        # Step 9f: Partial index for active reminder lists and stale-summary style filters
+        if has_reminder_table or inspector.has_table("reminder"):
+            try:
+                with engine.begin() as conn:
+                    conn.execute(
+                        sql_text(
+                            "CREATE INDEX IF NOT EXISTS ix_reminder_active_list "
+                            "ON reminder (assigned_to_id, reminder_type, priority) "
+                            "WHERE dismissed_at IS NULL AND acted_upon_at IS NULL"
+                        )
+                    )
+            except Exception as e:
+                err = str(e).lower()
+                if "already exists" not in err and "duplicate" not in err:
+                    print(f"Warning: could not create ix_reminder_active_list: {e}", file=sys.stderr, flush=True)
+
         # Step 10: Add installation_hours to Product table
         has_product_table = inspector.has_table("product")
         if has_product_table:

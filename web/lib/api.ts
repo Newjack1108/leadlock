@@ -14,6 +14,7 @@ import {
   type QuoteTemperature,
   type QuoteStatus,
   type QuoteListPayload,
+  type StaleSummary,
 } from '@/lib/types';
 import { getTelUrl } from '@/lib/utils';
 
@@ -1178,9 +1179,35 @@ export const getLoginQuote = async (): Promise<{ quote: string; source: 'ai' | '
   return response.data;
 };
 
-export const getStaleSummary = async () => {
-  const response = await api.get('/api/reminders/stale-summary');
-  return response.data;
+let staleSummaryInFlight: Promise<StaleSummary> | null = null;
+let staleSummaryCache: { data: StaleSummary; expiresAt: number } | null = null;
+const STALE_SUMMARY_TTL_MS = 12_000;
+
+/** Clear client cache after mutations so header counts refresh immediately. */
+export const invalidateStaleSummaryCache = () => {
+  staleSummaryCache = null;
+  staleSummaryInFlight = null;
+};
+
+export const getStaleSummary = async (): Promise<StaleSummary> => {
+  const now = Date.now();
+  if (staleSummaryCache && now < staleSummaryCache.expiresAt) {
+    return staleSummaryCache.data;
+  }
+  if (staleSummaryInFlight) {
+    return staleSummaryInFlight;
+  }
+  staleSummaryInFlight = (async () => {
+    try {
+      const response = await api.get('/api/reminders/stale-summary');
+      const data = response.data as StaleSummary;
+      staleSummaryCache = { data, expiresAt: Date.now() + STALE_SUMMARY_TTL_MS };
+      return data;
+    } finally {
+      staleSummaryInFlight = null;
+    }
+  })();
+  return staleSummaryInFlight;
 };
 
 export const dismissReminder = async (reminderId: number, reason?: string) => {
