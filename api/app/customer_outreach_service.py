@@ -33,6 +33,7 @@ from app.models import (
     EmailTemplate,
     Lead,
     LeadStatus,
+    Order,
     Quote,
     ReminderRule,
     SmsMessage,
@@ -49,6 +50,8 @@ from app.sms_service import (
     is_unsubscribed_recipient_error,
 )
 from app.sms_template_service import render_sms_template
+
+_CUSTOMER_OUTREACH_OPTOUT_REASON = "Customer opted out of automated reminder messages"
 
 
 def _generate_thread_id(message_id: Optional[str], in_reply_to: Optional[str]) -> str:
@@ -174,6 +177,36 @@ def _quote_email_variables(quote: Quote) -> dict:
     }
 
 
+def _customer_opted_out_of_rule_outreach(session: Session, customer_id: int) -> bool:
+    """Fresh existence check so we do not rely on a possibly stale Customer in the session identity map."""
+    stmt = (
+        select(Customer.id)
+        .where(
+            Customer.id == customer_id,
+            Customer.automated_reminder_outreach_opt_out.is_(True),
+        )
+        .limit(1)
+    )
+    return session.exec(stmt).first() is not None
+
+
+def _quote_outreach_superseded_by_later_order(session: Session, quote: Quote, customer_id: int) -> bool:
+    """
+    True if the customer already has an order placed on or after this quote's outreach reference time
+    (sent_at, else created_at), so stale SENT quotes should not keep triggering rule outreach.
+    """
+    ref = quote.sent_at or quote.created_at
+    if ref is None:
+        return False
+    stmt = (
+        select(Order.id)
+        .join(Quote, Quote.id == Order.quote_id)
+        .where(Quote.customer_id == customer_id, Order.created_at >= ref)
+        .limit(1)
+    )
+    return session.exec(stmt).first() is not None
+
+
 def _send_outreach_sms(
     session: Session,
     *,
@@ -184,6 +217,8 @@ def _send_outreach_sms(
     actor: User,
     company: Optional[CompanySettings],
 ) -> Tuple[bool, Optional[str], Optional[str]]:
+    if customer.id is not None and _customer_opted_out_of_rule_outreach(session, customer.id):
+        return False, None, _CUSTOMER_OUTREACH_OPTOUT_REASON
     tid = rule.customer_outreach_sms_template_id
     if not tid:
         return False, None, "No SMS template"
@@ -240,6 +275,8 @@ def _send_outreach_email(
     quote: Optional[Quote],
     actor: User,
 ) -> Tuple[bool, Optional[str], Optional[str]]:
+    if customer.id is not None and _customer_opted_out_of_rule_outreach(session, customer.id):
+        return False, None, _CUSTOMER_OUTREACH_OPTOUT_REASON
     tid = rule.customer_outreach_email_template_id
     if not tid:
         return False, None, "No email template"
@@ -315,7 +352,7 @@ def _deliver_lead_customer_outreach_once(
     customer = session.get(Customer, lead.customer_id)
     if not customer:
         return False
-    if getattr(customer, "automated_reminder_outreach_opt_out", False):
+    if _customer_opted_out_of_rule_outreach(session, lead.customer_id):
         print(
             f"Customer outreach: skip lead {lead.id} rule {rule.id}: "
             f"customer {customer.id} opted out of automated reminder messages",
@@ -367,6 +404,8 @@ def _deliver_lead_customer_outreach_once(
         return False
 
     if not ok:
+        if err_msg == _CUSTOMER_OUTREACH_OPTOUT_REASON:
+            return False
         if err_msg:
             if ch == CustomerOutreachChannel.SMS.value and is_unsubscribed_recipient_error(err_msg):
                 customer.automated_reminder_outreach_opt_out = True
@@ -509,16 +548,24 @@ def run_customer_outreach_cycle(session: Session) -> int:
             continue
         if _cooldown_blocks(session, rule, lead_id=None, quote_id=quote.id):
             continue
-        customer = session.get(Customer, quote.customer_id)
-        if not customer:
-            continue
-        if getattr(customer, "automated_reminder_outreach_opt_out", False):
+        if _customer_opted_out_of_rule_outreach(session, quote.customer_id):
             print(
                 f"Customer outreach: skip quote {quote.id} rule {rule.id}: "
-                f"customer {customer.id} opted out of automated reminder messages",
+                f"customer {quote.customer_id} opted out of automated reminder messages",
                 file=sys.stderr,
                 flush=True,
             )
+            continue
+        if _quote_outreach_superseded_by_later_order(session, quote, quote.customer_id):
+            print(
+                f"Customer outreach: skip quote {quote.id} rule {rule.id}: "
+                f"customer {quote.customer_id} has a later order; stale quote outreach suppressed",
+                file=sys.stderr,
+                flush=True,
+            )
+            continue
+        customer = session.get(Customer, quote.customer_id)
+        if not customer:
             continue
         lead = session.get(Lead, quote.lead_id) if quote.lead_id else None
         actor_id = _resolve_actor_user_id(session, lead, quote)
@@ -563,6 +610,8 @@ def run_customer_outreach_cycle(session: Session) -> int:
             continue
 
         if not ok:
+            if err_msg == _CUSTOMER_OUTREACH_OPTOUT_REASON:
+                continue
             if err_msg:
                 if ch == CustomerOutreachChannel.SMS.value and is_unsubscribed_recipient_error(err_msg):
                     customer.automated_reminder_outreach_opt_out = True
