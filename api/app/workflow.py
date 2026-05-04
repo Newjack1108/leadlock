@@ -172,6 +172,27 @@ def check_sla_overdue(lead: Lead, session: Session) -> Optional[str]:
     return None
 
 
+def sync_customer_phone_from_lead_on_qualify(session: Session, lead: Lead) -> None:
+    """
+    Copy the lead's phone onto the linked customer when the lead is (or becomes) qualified.
+
+    Facebook and similar imports attach customer_id immediately with the raw form phone; staff
+    often correct the number on the lead before qualifying. The customer profile should reflect
+    that corrected value for SMS and quoting.
+    """
+    if not lead.customer_id:
+        return
+    phone = (lead.phone or "").strip()
+    if not phone:
+        return
+    customer = session.get(Customer, lead.customer_id)
+    if not customer:
+        return
+    customer.phone = phone
+    customer.updated_at = datetime.utcnow()
+    session.add(customer)
+
+
 def auto_transition_lead_status(
     lead_id: int,
     new_status: LeadStatus,
@@ -211,7 +232,10 @@ def auto_transition_lead_status(
     lead.status = new_status
     lead.updated_at = datetime.utcnow()
     session.add(lead)
-    
+
+    if new_status == LeadStatus.QUALIFIED:
+        sync_customer_phone_from_lead_on_qualify(session, lead)
+
     # Create status history record
     from app.models import StatusHistory
     status_history = StatusHistory(

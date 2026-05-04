@@ -35,7 +35,12 @@ from app.schemas import (
     ActivityCreate, ActivityResponse, StatusHistoryResponse, CustomerResponse, customer_to_response, QuoteResponse,
     FacebookAdvertProfileResponse,
 )
-from app.workflow import can_transition, check_sla_overdue, check_quote_prerequisites
+from app.workflow import (
+    can_transition,
+    check_sla_overdue,
+    check_quote_prerequisites,
+    sync_customer_phone_from_lead_on_qualify,
+)
 from app.quote_delete import delete_quote_cascade
 from app.lead_delete import delete_lead_cascade
 from app.constants import QUOTE_LIST_EXCLUDED_STATUSES, LIST_PAGE_SIZE_DEFAULT, LIST_PAGE_SIZE_MAX
@@ -603,7 +608,10 @@ async def update_lead(
 
     for field, value in update_data.items():
         setattr(lead, field, value)
-    
+
+    if lead.status == LeadStatus.QUALIFIED and lead.customer_id and "phone" in update_data:
+        sync_customer_phone_from_lead_on_qualify(session, lead)
+
     lead.updated_at = datetime.utcnow()
     session.add(lead)
     session.commit()
@@ -659,6 +667,9 @@ async def transition_lead_status(
     if transition.new_status == LeadStatus.QUALIFIED and not lead.customer_id:
         customer = find_or_create_customer(lead, session)
         lead.customer_id = customer.id
+
+    if transition.new_status == LeadStatus.QUALIFIED:
+        sync_customer_phone_from_lead_on_qualify(session, lead)
 
     if transition.new_status == LeadStatus.CLOSED:
         draft_stmt = select(Quote).where(

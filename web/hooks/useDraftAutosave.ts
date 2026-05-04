@@ -44,9 +44,9 @@ export function useDraftAutosave(options: {
         await updateDraftQuote(id, payload);
         lastSavedKeyRef.current = key;
         setSaveStatus('saved');
-      } catch {
+      } catch (err) {
         setSaveStatus('error');
-        throw new Error('Failed to save draft');
+        throw err;
       }
     }
   }, [quoteId, enabled]);
