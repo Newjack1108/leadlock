@@ -209,6 +209,12 @@ def on_startup():
     except Exception as e:
         print(f"SMS STOP backfill failed: {e}", file=sys.stderr, flush=True)
 
+    # Background workers: only start when WORKER_MODE is not set (API-only mode).
+    # When WORKER_MODE=true the dedicated worker service runs these instead.
+    if os.getenv("WORKER_MODE", "").lower() == "true":
+        print("WORKER_MODE=true: skipping background workers (IMAP, SMS, outreach) in API process", file=sys.stderr, flush=True)
+        return
+
     # Start IMAP polling background task (optional - don't crash if import/config fails)
     import threading
     import time
