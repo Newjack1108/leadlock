@@ -28,6 +28,9 @@ const api = axios.create({
   timeout: 15000, // 15s - fail fast if API is down
 });
 
+/** Compose, quote email, reply, heavy quote writes: provider + DB often exceed 15s on Railway */
+export const EMAIL_AND_UPLOAD_TIMEOUT_MS = 120_000;
+
 // Add token to requests
 api.interceptors.request.use((config) => {
   if (typeof window !== 'undefined') {
@@ -106,6 +109,7 @@ export const sendEmail = async (emailData: {
   }
   // Must not set Content-Type when sending FormData - let browser set multipart/form-data with boundary
   const response = await api.post('/api/emails', formData, {
+    timeout: EMAIL_AND_UPLOAD_TIMEOUT_MS,
     transformRequest: [(data: unknown, headers?: Record<string, unknown>) => {
       if (data instanceof FormData && headers) delete (headers as Record<string, unknown>)['Content-Type'];
       return data;
@@ -165,6 +169,7 @@ export const replyToEmail = async (emailId: number, replyData: {
   }
   // Must not set Content-Type when sending FormData - let browser set multipart/form-data with boundary
   const response = await api.post(`/api/emails/${emailId}/reply`, formData, {
+    timeout: EMAIL_AND_UPLOAD_TIMEOUT_MS,
     transformRequest: [(data: unknown, headers?: Record<string, unknown>) => {
       if (data instanceof FormData && headers) delete (headers as Record<string, unknown>)['Content-Type'];
       return data;
@@ -445,7 +450,7 @@ export const sendQuoteEmail = async (
     }
   }
   const response = await api.post(`/api/quotes/${quoteId}/send-email`, formData, {
-    timeout: attachments?.length ? 60000 : 15000,
+    timeout: EMAIL_AND_UPLOAD_TIMEOUT_MS,
     transformRequest: [(data: unknown, headers?: Record<string, unknown>) => {
       if (data instanceof FormData && headers) delete (headers as Record<string, unknown>)['Content-Type'];
       return data;
@@ -818,8 +823,17 @@ export const downloadDealerQuotePdf = async (quoteId: number) => {
   setTimeout(() => window.URL.revokeObjectURL(url), 100);
 };
 
+export const patchQuote = async (quoteId: number, data: Record<string, unknown>) => {
+  const response = await api.patch(`/api/quotes/${quoteId}`, data, {
+    timeout: EMAIL_AND_UPLOAD_TIMEOUT_MS,
+  });
+  return response.data;
+};
+
 export const acceptQuote = async (quoteId: number) => {
-  const response = await api.patch(`/api/quotes/${quoteId}`, { status: 'ACCEPTED' });
+  const response = await api.patch(`/api/quotes/${quoteId}`, { status: 'ACCEPTED' }, {
+    timeout: EMAIL_AND_UPLOAD_TIMEOUT_MS,
+  });
   return response.data;
 };
 
@@ -983,8 +997,7 @@ export const updateDraftQuote = async (quoteId: number, quoteData: {
   include_delivery_installation_contact_note?: boolean;
 }) => {
   const response = await api.put(`/api/quotes/${quoteId}/draft`, quoteData, {
-    // Draft saves can be large (many lines, discounts) and slower on remote DB; default 15s is too tight.
-    timeout: 120_000,
+    timeout: EMAIL_AND_UPLOAD_TIMEOUT_MS,
   });
   return response.data;
 };

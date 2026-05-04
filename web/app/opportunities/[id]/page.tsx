@@ -25,7 +25,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { ArrowLeft, Save, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
-import api from '@/lib/api';
+import api, { patchQuote } from '@/lib/api';
 import { Quote, OpportunityStage, LossCategory, Customer, QuoteTemperature } from '@/lib/types';
 import CallNotesDialog from '@/components/CallNotesDialog';
 import { toast } from 'sonner';
@@ -134,7 +134,7 @@ export default function OpportunityDetailPage() {
         temperature: formData.temperature,
       };
 
-      await api.patch(`/api/quotes/${quoteId}`, updateData);
+      await patchQuote(quoteId, updateData);
       toast.success('Opportunity updated successfully');
       fetchOpportunity();
     } catch (error: any) {
