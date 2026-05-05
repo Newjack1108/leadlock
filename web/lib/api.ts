@@ -5,6 +5,9 @@ import {
   type CustomerCommunicationStats,
   type DashboardCommunicationTotals,
   type DealerProfile,
+  type DealerSummary,
+  type DealerDiscountPolicyAdminPayload,
+  type DealerDiscountPolicyAdminResponse,
   type DealerAllowedDiscountPolicy,
   type LeadHandoverPdfOptions,
   type OutreachSendListResponse,
@@ -785,6 +788,26 @@ export const getDealerProfile = async (): Promise<DealerProfile> => {
 
 export const getDealerDiscountPolicy = async (): Promise<DealerAllowedDiscountPolicy> => {
   const response = await api.get('/api/dealer-portal/discount-policy');
+  return response.data;
+};
+
+export const getDealersForSettings = async (): Promise<DealerSummary[]> => {
+  const response = await api.get('/api/settings/dealers');
+  return response.data;
+};
+
+export const getDealerDiscountPolicyForAdmin = async (
+  dealerId: number
+): Promise<DealerDiscountPolicyAdminResponse> => {
+  const response = await api.get(`/api/settings/dealers/${dealerId}/discount-policy`);
+  return response.data;
+};
+
+export const updateDealerDiscountPolicyForAdmin = async (
+  dealerId: number,
+  payload: DealerDiscountPolicyAdminPayload
+): Promise<DealerDiscountPolicyAdminResponse> => {
+  const response = await api.put(`/api/settings/dealers/${dealerId}/discount-policy`, payload);
   return response.data;
 };
 

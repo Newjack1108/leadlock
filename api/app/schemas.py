@@ -1827,6 +1827,32 @@ class DealerAllowedDiscountPolicyResponse(BaseModel):
     allowed_discount_template_ids: List[int] = Field(default_factory=list)
 
 
+class DealerSummaryResponse(BaseModel):
+    id: int
+    name: str
+    company_name: Optional[str] = None
+    is_active: bool
+
+
+class DealerDiscountPolicyAdminUpdate(BaseModel):
+    mode: DealerDiscountMode = DealerDiscountMode.TEMPLATE
+    allow_fixed_amount: bool = False
+    allow_percentage: bool = False
+    max_discount_percentage: Optional[Decimal] = None
+    max_discount_amount: Optional[Decimal] = None
+    allowed_discount_template_ids: List[int] = Field(default_factory=list)
+
+
+class DealerDiscountPolicyAdminResponse(BaseModel):
+    dealer_id: int
+    mode: DealerDiscountMode
+    allow_fixed_amount: bool
+    allow_percentage: bool
+    max_discount_percentage: Optional[Decimal] = None
+    max_discount_amount: Optional[Decimal] = None
+    allowed_discount_template_ids: List[int] = Field(default_factory=list)
+
+
 class DealerProfileResponse(BaseModel):
     id: int
     name: str

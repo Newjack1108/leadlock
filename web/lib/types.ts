@@ -1374,6 +1374,26 @@ export interface DealerAllowedDiscountPolicy {
   allowed_discount_template_ids: number[];
 }
 
+export interface DealerSummary {
+  id: number;
+  name: string;
+  company_name?: string | null;
+  is_active: boolean;
+}
+
+export interface DealerDiscountPolicyAdminPayload {
+  mode: string;
+  allow_fixed_amount: boolean;
+  allow_percentage: boolean;
+  max_discount_percentage?: number | null;
+  max_discount_amount?: number | null;
+  allowed_discount_template_ids: number[];
+}
+
+export interface DealerDiscountPolicyAdminResponse extends DealerDiscountPolicyAdminPayload {
+  dealer_id: number;
+}
+
 export interface DealerProfile {
   id: number;
   name: string;

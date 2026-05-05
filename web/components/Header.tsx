@@ -478,6 +478,12 @@ export default function Header() {
                       Discounts & Giveaways
                     </DropdownMenuItem>
                   </Link>
+                  <Link href="/settings/dealers-discounts">
+                    <DropdownMenuItem className="cursor-pointer">
+                      <Settings className="h-4 w-4 mr-2" />
+                      Dealer Discounts
+                    </DropdownMenuItem>
+                  </Link>
                 </>
               )}
               <DropdownMenuSeparator />
@@ -824,6 +830,19 @@ export default function Header() {
                       <span className="flex items-center gap-2">
                         <Gift className="h-4 w-4 shrink-0" />
                         Discounts & Giveaways
+                      </span>
+                    </Link>
+                    <Link
+                      href="/settings/dealers-discounts"
+                      onClick={closeMobile}
+                      className={cn(
+                        mobileNavLinkClass,
+                        pathname?.startsWith('/settings/dealers-discounts') && 'bg-accent'
+                      )}
+                    >
+                      <span className="flex items-center gap-2">
+                        <Settings className="h-4 w-4 shrink-0" />
+                        Dealer Discounts
                       </span>
                     </Link>
                   </>
