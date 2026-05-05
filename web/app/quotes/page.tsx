@@ -22,11 +22,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import api, { getQuotes, previewQuotePdf } from '@/lib/api';
+import api, { cancelDraftQuote, getQuotes, previewQuotePdf } from '@/lib/api';
 import { LeadType, Quote, QuoteStatus, QuoteTemperature, OpportunityStage } from '@/lib/types';
 import { toast } from 'sonner';
 import Link from 'next/link';
-import { FileText, Eye, Pencil, List, LayoutGrid, ShoppingCart, SendHorizontal, MessageCircle, MinusCircle } from 'lucide-react';
+import { FileText, Eye, Pencil, List, LayoutGrid, ShoppingCart, SendHorizontal, MessageCircle, MinusCircle, Trash2 } from 'lucide-react';
 
 const statusColors: Record<QuoteStatus, string> = {
   DRAFT: 'bg-gray-100 text-gray-700',
@@ -188,6 +188,9 @@ function QuotesPageContent() {
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
   const [quotePendingClose, setQuotePendingClose] = useState<Quote | null>(null);
   const [markingClose, setMarkingClose] = useState(false);
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [quotePendingCancel, setQuotePendingCancel] = useState<Quote | null>(null);
+  const [cancellingDraft, setCancellingDraft] = useState(false);
 
   // Sync filter from URL (back/forward, dashboard links, shared URLs)
   useEffect(() => {
@@ -259,6 +262,27 @@ function QuotesPageContent() {
       setMarkingClose(false);
     }
   }, [quotePendingClose, fetchQuotes]);
+
+  const openCancelDraftDialog = useCallback((quote: Quote) => {
+    setQuotePendingCancel(quote);
+    setCancelDialogOpen(true);
+  }, []);
+
+  const handleCancelDraftQuote = useCallback(async () => {
+    if (!quotePendingCancel) return;
+    try {
+      setCancellingDraft(true);
+      await cancelDraftQuote(quotePendingCancel.id);
+      toast.success('Draft quote cancelled.');
+      setCancelDialogOpen(false);
+      setQuotePendingCancel(null);
+      await fetchQuotes();
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || 'Failed to cancel draft quote');
+    } finally {
+      setCancellingDraft(false);
+    }
+  }, [quotePendingCancel, fetchQuotes]);
 
   // Auto-refresh when user returns to this tab/window
   useEffect(() => {
@@ -496,6 +520,17 @@ function QuotesPageContent() {
                               Edit
                             </Button>
                           )}
+                          {quote.status === 'DRAFT' && (
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => openCancelDraftDialog(quote)}
+                              disabled={cancellingDraft && quotePendingCancel?.id === quote.id}
+                            >
+                              <Trash2 className="h-4 w-4 mr-1" />
+                              Cancel Draft
+                            </Button>
+                          )}
                           <Button
                             variant="outline"
                             size="sm"
@@ -617,6 +652,17 @@ function QuotesPageContent() {
                           Edit
                         </Button>
                       )}
+                      {quote.status === 'DRAFT' && (
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => openCancelDraftDialog(quote)}
+                          disabled={cancellingDraft && quotePendingCancel?.id === quote.id}
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Cancel Draft
+                        </Button>
+                      )}
                       <Button
                         variant="outline"
                         size="sm"
@@ -713,6 +759,44 @@ function QuotesPageContent() {
               </Button>
               <Button onClick={() => void handleCloseQuote()} disabled={markingClose || !quotePendingClose}>
                 {markingClose ? 'Closing...' : 'Close Quote'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog
+          open={cancelDialogOpen}
+          onOpenChange={(open) => {
+            if (!cancellingDraft) {
+              setCancelDialogOpen(open);
+              if (!open) setQuotePendingCancel(null);
+            }
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Cancel Draft</DialogTitle>
+              <DialogDescription>
+                Are you sure? This cannot be undone. The draft quote will be permanently deleted.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setCancelDialogOpen(false);
+                  setQuotePendingCancel(null);
+                }}
+                disabled={cancellingDraft}
+              >
+                Keep Draft
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => void handleCancelDraftQuote()}
+                disabled={cancellingDraft || !quotePendingCancel}
+              >
+                {cancellingDraft ? 'Cancelling...' : 'Cancel Draft'}
               </Button>
             </DialogFooter>
           </DialogContent>
