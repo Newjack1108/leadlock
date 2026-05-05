@@ -39,6 +39,8 @@ export default function NewDealerQuotePage() {
   const [extrasByProductId, setExtrasByProductId] = useState<Record<number, Product[]>>({});
   const [availableDiscounts, setAvailableDiscounts] = useState<DiscountTemplate[]>([]);
   const [selectedDiscountIds, setSelectedDiscountIds] = useState<number[]>([]);
+  const [discountsLoading, setDiscountsLoading] = useState(true);
+  const [discountsConfigured, setDiscountsConfigured] = useState(true);
   const [saving, setSaving] = useState(false);
 
   const [estDeliveryOnly, setEstDeliveryOnly] = useState<DeliveryInstallEstimateResponse | null>(null);
@@ -61,6 +63,7 @@ export default function NewDealerQuotePage() {
 
   useEffect(() => {
     const loadDiscounts = async () => {
+      setDiscountsLoading(true);
       try {
         const [policy, activeDiscounts] = await Promise.all([
           getDealerDiscountPolicy(),
@@ -68,14 +71,18 @@ export default function NewDealerQuotePage() {
         ]);
         const allowed = new Set(policy.allowed_discount_template_ids ?? []);
         setAvailableDiscounts(activeDiscounts.filter((discount: DiscountTemplate) => allowed.has(discount.id)));
+        setDiscountsConfigured(true);
       } catch (err: unknown) {
-        // If policy is not configured for this dealer, just hide discount selection.
         setAvailableDiscounts([]);
         setSelectedDiscountIds([]);
         const detail = getApiErrorDetail(err);
-        if (!detail.toLowerCase().includes('not configured')) {
+        const notConfigured = detail.toLowerCase().includes('not configured');
+        setDiscountsConfigured(!notConfigured);
+        if (!notConfigured) {
           toast.error(detail || 'Could not load dealer discounts');
         }
+      } finally {
+        setDiscountsLoading(false);
       }
     };
     void loadDiscounts();
@@ -500,11 +507,26 @@ export default function NewDealerQuotePage() {
               {!rows.length && <p className="text-sm text-muted-foreground">Select at least one product.</p>}
             </div>
 
-            {!!availableDiscounts.length && (
-              <div className="space-y-2">
-                <Label>Available discounts</Label>
-                <div className="space-y-2 rounded border p-3">
-                  {availableDiscounts.map((discount) => {
+            <div className="space-y-2">
+              <Label>Available discounts</Label>
+              <div className="space-y-2 rounded border p-3">
+                {discountsLoading && (
+                  <p className="text-sm text-muted-foreground">Loading dealer discounts...</p>
+                )}
+
+                {!discountsLoading && !discountsConfigured && (
+                  <p className="text-sm text-muted-foreground">
+                    No discounts configured for your dealer. Contact your admin.
+                  </p>
+                )}
+
+                {!discountsLoading && discountsConfigured && !availableDiscounts.length && (
+                  <p className="text-sm text-muted-foreground">No active allowed discounts available.</p>
+                )}
+
+                {!discountsLoading &&
+                  discountsConfigured &&
+                  availableDiscounts.map((discount) => {
                     const checked = selectedDiscountIds.includes(discount.id);
                     return (
                       <label key={discount.id} className="flex items-center justify-between gap-3 text-sm">
@@ -531,9 +553,8 @@ export default function NewDealerQuotePage() {
                       </label>
                     );
                   })}
-                </div>
               </div>
-            )}
+            </div>
 
             <div className="flex items-center justify-between border-t pt-4">
               <p className="text-sm font-medium">Estimated subtotal: £{total.toFixed(2)}</p>
