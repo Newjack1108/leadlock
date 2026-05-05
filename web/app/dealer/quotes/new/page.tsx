@@ -15,6 +15,7 @@ import {
   getDealerProducts,
   getDiscountTemplates,
 } from '@/lib/api';
+import { ProductCategory } from '@/lib/types';
 import type {
   DealerDeliveryEstimateInclusion,
   DeliveryInstallEstimateResponse,
@@ -47,7 +48,9 @@ export default function NewDealerQuotePage() {
 
   useEffect(() => {
     getDealerProducts()
-      .then((data: Product[]) => setProducts(data))
+      .then((data: Product[]) =>
+        setProducts(data.filter((product) => product.category === ProductCategory.STABLES))
+      )
       .catch((err: unknown) => {
         setProducts([]);
         toast.error(getApiErrorDetail(err) || 'Could not load products. Check your account or try again.');

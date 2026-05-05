@@ -20,6 +20,7 @@ from app.models import (
     DealerDiscountPolicy,
     DiscountTemplate,
     Product,
+    ProductCategory,
     ProductOptionalExtra,
     Quote,
     QuoteDiscount,
@@ -210,6 +211,7 @@ async def get_dealer_products(
             Product.is_active == True,
             Product.allow_trade_dealer_sale == True,
             Product.is_extra == False,
+            Product.category == ProductCategory.STABLES,
         )
         .order_by(Product.name.asc())
     ).all()
@@ -347,6 +349,8 @@ async def create_dealer_quote(
             )
         if not product.allow_trade_dealer_sale:
             raise HTTPException(status_code=403, detail="Product not available for trade dealer sale")
+        if product.category != ProductCategory.STABLES:
+            raise HTTPException(status_code=403, detail="Only stables are available in dealer quotes")
 
         quantity = Decimal(str(line.quantity))
         line_total = Decimal(str(product.base_price)) * quantity
