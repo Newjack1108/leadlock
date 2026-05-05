@@ -14,6 +14,7 @@ import {
   getDealerDiscountPolicy,
   getDealerProducts,
   getDiscountTemplates,
+  getProductOptionalExtras,
 } from '@/lib/api';
 import { ProductCategory } from '@/lib/types';
 import type {
@@ -35,6 +36,7 @@ export default function NewDealerQuotePage() {
   const [customerAddress, setCustomerAddress] = useState('');
   const [customerPostcode, setCustomerPostcode] = useState('');
   const [rows, setRows] = useState<ProductRow[]>([]);
+  const [extrasByProductId, setExtrasByProductId] = useState<Record<number, Product[]>>({});
   const [availableDiscounts, setAvailableDiscounts] = useState<DiscountTemplate[]>([]);
   const [selectedDiscountIds, setSelectedDiscountIds] = useState<number[]>([]);
   const [saving, setSaving] = useState(false);
@@ -78,6 +80,36 @@ export default function NewDealerQuotePage() {
     };
     void loadDiscounts();
   }, []);
+
+  useEffect(() => {
+    const productIds = rows.map((r) => r.product_id);
+    if (!productIds.length) {
+      setExtrasByProductId({});
+      return;
+    }
+    let cancelled = false;
+    const loadExtras = async () => {
+      const entries = await Promise.all(
+        productIds.map(async (productId) => {
+          try {
+            const extras = (await getProductOptionalExtras(productId)) as Product[];
+            const dealerAllowed = extras.filter(
+              (extra) => extra.is_active && extra.is_extra && extra.allow_trade_dealer_sale
+            );
+            return [productId, dealerAllowed] as const;
+          } catch {
+            return [productId, []] as const;
+          }
+        })
+      );
+      if (cancelled) return;
+      setExtrasByProductId(Object.fromEntries(entries));
+    };
+    void loadExtras();
+    return () => {
+      cancelled = true;
+    };
+  }, [rows]);
 
   const installHours = useMemo(() => {
     return rows.reduce((total, row) => {
@@ -151,12 +183,12 @@ export default function NewDealerQuotePage() {
     return rows.reduce((sum, row) => {
       const product = products.find((p) => p.id === row.product_id);
       if (!product) return sum;
-      const extrasTotal = (product.optional_extras ?? [])
+      const extrasTotal = (extrasByProductId[row.product_id] ?? [])
         .filter((extra) => row.selected_extra_ids.includes(extra.id))
         .reduce((extraSum, extra) => extraSum + Number(extra.base_price) * row.quantity, 0);
       return sum + Number(product.base_price) * row.quantity + extrasTotal;
     }, 0);
-  }, [rows, products]);
+  }, [rows, products, extrasByProductId]);
 
   const addProduct = (id: number) => {
     if (rows.some((r) => r.product_id === id)) return;
@@ -408,7 +440,8 @@ export default function NewDealerQuotePage() {
               {rows.map((row) => {
                 const product = products.find((p) => p.id === row.product_id);
                 if (!product) return null;
-                const selectedExtras = (product.optional_extras ?? []).filter((extra) =>
+                const rowExtras = extrasByProductId[row.product_id] ?? [];
+                const selectedExtras = rowExtras.filter((extra) =>
                   row.selected_extra_ids.includes(extra.id)
                 );
                 const extrasTotal = selectedExtras.reduce(
@@ -433,11 +466,11 @@ export default function NewDealerQuotePage() {
                         Remove
                       </Button>
                     </div>
-                    {!!product.optional_extras?.length && (
+                    {!!rowExtras.length && (
                       <div className="rounded-md border border-dashed px-3 py-2">
                         <p className="text-xs font-medium text-muted-foreground mb-2">Optional extras</p>
                         <div className="space-y-2">
-                          {product.optional_extras.map((extra) => {
+                          {rowExtras.map((extra) => {
                             const checked = row.selected_extra_ids.includes(extra.id);
                             return (
                               <label key={extra.id} className="flex items-center justify-between gap-3 text-sm">
@@ -457,6 +490,9 @@ export default function NewDealerQuotePage() {
                           })}
                         </div>
                       </div>
+                    )}
+                    {!rowExtras.length && (
+                      <p className="text-xs text-muted-foreground">No optional extras available for this product.</p>
                     )}
                   </div>
                 );
