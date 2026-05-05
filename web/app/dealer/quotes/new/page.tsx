@@ -7,11 +7,23 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { createDealerQuote, estimateDeliveryInstall, getApiErrorDetail, getDealerProducts } from '@/lib/api';
-import type { DealerDeliveryEstimateInclusion, DeliveryInstallEstimateResponse, Product } from '@/lib/types';
+import {
+  createDealerQuote,
+  estimateDeliveryInstall,
+  getApiErrorDetail,
+  getDealerDiscountPolicy,
+  getDealerProducts,
+  getDiscountTemplates,
+} from '@/lib/api';
+import type {
+  DealerDeliveryEstimateInclusion,
+  DeliveryInstallEstimateResponse,
+  DiscountTemplate,
+  Product,
+} from '@/lib/types';
 import { toast } from 'sonner';
 
-type ProductRow = { product_id: number; quantity: number };
+type ProductRow = { product_id: number; quantity: number; selected_extra_ids: number[] };
 
 export default function NewDealerQuotePage() {
   const router = useRouter();
@@ -22,6 +34,8 @@ export default function NewDealerQuotePage() {
   const [customerAddress, setCustomerAddress] = useState('');
   const [customerPostcode, setCustomerPostcode] = useState('');
   const [rows, setRows] = useState<ProductRow[]>([]);
+  const [availableDiscounts, setAvailableDiscounts] = useState<DiscountTemplate[]>([]);
+  const [selectedDiscountIds, setSelectedDiscountIds] = useState<number[]>([]);
   const [saving, setSaving] = useState(false);
 
   const [estDeliveryOnly, setEstDeliveryOnly] = useState<DeliveryInstallEstimateResponse | null>(null);
@@ -38,6 +52,28 @@ export default function NewDealerQuotePage() {
         setProducts([]);
         toast.error(getApiErrorDetail(err) || 'Could not load products. Check your account or try again.');
       });
+  }, []);
+
+  useEffect(() => {
+    const loadDiscounts = async () => {
+      try {
+        const [policy, activeDiscounts] = await Promise.all([
+          getDealerDiscountPolicy(),
+          getDiscountTemplates(true),
+        ]);
+        const allowed = new Set(policy.allowed_discount_template_ids ?? []);
+        setAvailableDiscounts(activeDiscounts.filter((discount: DiscountTemplate) => allowed.has(discount.id)));
+      } catch (err: unknown) {
+        // If policy is not configured for this dealer, just hide discount selection.
+        setAvailableDiscounts([]);
+        setSelectedDiscountIds([]);
+        const detail = getApiErrorDetail(err);
+        if (!detail.toLowerCase().includes('not configured')) {
+          toast.error(detail || 'Could not load dealer discounts');
+        }
+      }
+    };
+    void loadDiscounts();
   }, []);
 
   const installHours = useMemo(() => {
@@ -112,13 +148,16 @@ export default function NewDealerQuotePage() {
     return rows.reduce((sum, row) => {
       const product = products.find((p) => p.id === row.product_id);
       if (!product) return sum;
-      return sum + Number(product.base_price) * row.quantity;
+      const extrasTotal = (product.optional_extras ?? [])
+        .filter((extra) => row.selected_extra_ids.includes(extra.id))
+        .reduce((extraSum, extra) => extraSum + Number(extra.base_price) * row.quantity, 0);
+      return sum + Number(product.base_price) * row.quantity + extrasTotal;
     }, 0);
   }, [rows, products]);
 
   const addProduct = (id: number) => {
     if (rows.some((r) => r.product_id === id)) return;
-    setRows((prev) => [...prev, { product_id: id, quantity: 1 }]);
+    setRows((prev) => [...prev, { product_id: id, quantity: 1, selected_extra_ids: [] }]);
   };
 
   const updateQty = (product_id: number, quantity: number) => {
@@ -127,6 +166,18 @@ export default function NewDealerQuotePage() {
 
   const removeRow = (product_id: number) => {
     setRows((prev) => prev.filter((r) => r.product_id !== product_id));
+  };
+
+  const toggleExtra = (product_id: number, extra_id: number, checked: boolean) => {
+    setRows((prev) =>
+      prev.map((r) => {
+        if (r.product_id !== product_id) return r;
+        const selected = checked
+          ? Array.from(new Set([...r.selected_extra_ids, extra_id]))
+          : r.selected_extra_ids.filter((id) => id !== extra_id);
+        return { ...r, selected_extra_ids: selected };
+      })
+    );
   };
 
   /** Keep submit handler synchronous so React does not surface an unhandled rejection from an async `onSubmit`. */
@@ -140,8 +191,12 @@ export default function NewDealerQuotePage() {
         customer_address: customerAddress.trim() || undefined,
         customer_postcode: pcTrim || undefined,
         delivery_estimate_inclusion: inclusion,
-        discount_template_ids: [],
-        product_items: rows.map((r) => ({ product_id: r.product_id, quantity: r.quantity })),
+        discount_template_ids: selectedDiscountIds,
+        product_items: rows.map((r) => ({
+          product_id: r.product_id,
+          quantity: r.quantity,
+          selected_extra_ids: r.selected_extra_ids,
+        })),
       });
       await router.push(`/dealer/quotes/${quote.id}`);
     } catch (err: unknown) {
@@ -350,25 +405,96 @@ export default function NewDealerQuotePage() {
               {rows.map((row) => {
                 const product = products.find((p) => p.id === row.product_id);
                 if (!product) return null;
+                const selectedExtras = (product.optional_extras ?? []).filter((extra) =>
+                  row.selected_extra_ids.includes(extra.id)
+                );
+                const extrasTotal = selectedExtras.reduce(
+                  (extraSum, extra) => extraSum + Number(extra.base_price) * row.quantity,
+                  0
+                );
                 return (
-                  <div key={row.product_id} className="flex items-center gap-3 rounded border p-3">
-                    <div className="flex-1 text-sm">{product.name}</div>
-                    <Input
-                      type="number"
-                      min={1}
-                      className="w-24"
-                      value={row.quantity}
-                      onChange={(e) => updateQty(row.product_id, Math.max(1, Number(e.target.value)))}
-                    />
-                    <div className="w-28 text-right text-sm">£{(Number(product.base_price) * row.quantity).toFixed(2)}</div>
-                    <Button type="button" variant="ghost" onClick={() => removeRow(row.product_id)}>
-                      Remove
-                    </Button>
+                  <div key={row.product_id} className="space-y-3 rounded border p-3">
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 text-sm">{product.name}</div>
+                      <Input
+                        type="number"
+                        min={1}
+                        className="w-24"
+                        value={row.quantity}
+                        onChange={(e) => updateQty(row.product_id, Math.max(1, Number(e.target.value)))}
+                      />
+                      <div className="w-28 text-right text-sm">
+                        £{(Number(product.base_price) * row.quantity + extrasTotal).toFixed(2)}
+                      </div>
+                      <Button type="button" variant="ghost" onClick={() => removeRow(row.product_id)}>
+                        Remove
+                      </Button>
+                    </div>
+                    {!!product.optional_extras?.length && (
+                      <div className="rounded-md border border-dashed px-3 py-2">
+                        <p className="text-xs font-medium text-muted-foreground mb-2">Optional extras</p>
+                        <div className="space-y-2">
+                          {product.optional_extras.map((extra) => {
+                            const checked = row.selected_extra_ids.includes(extra.id);
+                            return (
+                              <label key={extra.id} className="flex items-center justify-between gap-3 text-sm">
+                                <span className="flex items-center gap-2">
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={(e) => toggleExtra(row.product_id, extra.id, e.target.checked)}
+                                  />
+                                  {extra.name}
+                                </span>
+                                <span className="text-muted-foreground">
+                                  +£{(Number(extra.base_price) * row.quantity).toFixed(2)}
+                                </span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}
               {!rows.length && <p className="text-sm text-muted-foreground">Select at least one product.</p>}
             </div>
+
+            {!!availableDiscounts.length && (
+              <div className="space-y-2">
+                <Label>Available discounts</Label>
+                <div className="space-y-2 rounded border p-3">
+                  {availableDiscounts.map((discount) => {
+                    const checked = selectedDiscountIds.includes(discount.id);
+                    return (
+                      <label key={discount.id} className="flex items-center justify-between gap-3 text-sm">
+                        <span className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) =>
+                              setSelectedDiscountIds((prev) =>
+                                e.target.checked
+                                  ? Array.from(new Set([...prev, discount.id]))
+                                  : prev.filter((id) => id !== discount.id)
+                              )
+                            }
+                          />
+                          {discount.name}
+                        </span>
+                        <span className="text-muted-foreground">
+                          {discount.discount_type === 'PERCENTAGE'
+                            ? `${discount.discount_value}%`
+                            : `£${discount.discount_value}`}{' '}
+                          off {discount.scope === 'PRODUCT' ? 'building items' : 'entire quote'}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             <div className="flex items-center justify-between border-t pt-4">
               <p className="text-sm font-medium">Estimated subtotal: £{total.toFixed(2)}</p>

@@ -203,7 +203,8 @@ async def get_dealer_products(
     current_user: User = Depends(require_dealer_user),
 ):
     _get_dealer_or_404(session, current_user.dealer_id)
-    rows = session.exec(
+    rows = list(
+        session.exec(
         select(Product)
         .where(
             Product.is_active == True,
@@ -212,8 +213,41 @@ async def get_dealer_products(
         )
         .order_by(Product.name.asc())
     ).all()
+    )
+    product_ids = [product.id for product in rows]
+    extras_by_product: dict[int, List[ProductResponse]] = {product_id: [] for product_id in product_ids}
+
+    if product_ids:
+        linked_extras = session.exec(
+            select(ProductOptionalExtra, Product)
+            .join(Product, ProductOptionalExtra.optional_extra_id == Product.id)
+            .where(
+                ProductOptionalExtra.product_id.in_(product_ids),
+                Product.is_active == True,
+                Product.is_extra == True,
+                Product.allow_trade_dealer_sale == True,
+            )
+            .order_by(Product.name.asc())
+        ).all()
+        for link, extra in linked_extras:
+            extras_by_product[link.product_id].append(
+                ProductResponse(
+                    **{
+                        **extra.dict(),
+                        "is_production_synced": extra.production_product_id is not None,
+                        "optional_extras": None,
+                    }
+                )
+            )
+
     return [
-        ProductResponse(**{**product.dict(), "is_production_synced": product.production_product_id is not None})
+        ProductResponse(
+            **{
+                **product.dict(),
+                "is_production_synced": product.production_product_id is not None,
+                "optional_extras": extras_by_product.get(product.id) or None,
+            }
+        )
         for product in rows
     ]
 

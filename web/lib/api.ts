@@ -5,6 +5,7 @@ import {
   type CustomerCommunicationStats,
   type DashboardCommunicationTotals,
   type DealerProfile,
+  type DealerAllowedDiscountPolicy,
   type LeadHandoverPdfOptions,
   type OutreachSendListResponse,
   type OutreachSendTargetType,
@@ -779,6 +780,11 @@ export const getDealerProducts = async () => {
 
 export const getDealerProfile = async (): Promise<DealerProfile> => {
   const response = await api.get('/api/dealer-portal/profile');
+  return response.data;
+};
+
+export const getDealerDiscountPolicy = async (): Promise<DealerAllowedDiscountPolicy> => {
+  const response = await api.get('/api/dealer-portal/discount-policy');
   return response.data;
 };
 

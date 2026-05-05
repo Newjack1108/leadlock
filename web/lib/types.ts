@@ -1365,6 +1365,15 @@ export interface DealerQuoteCreatePayload {
   discount_template_ids?: number[];
 }
 
+export interface DealerAllowedDiscountPolicy {
+  mode: string;
+  allow_fixed_amount: boolean;
+  allow_percentage: boolean;
+  max_discount_percentage?: number | null;
+  max_discount_amount?: number | null;
+  allowed_discount_template_ids: number[];
+}
+
 export interface DealerProfile {
   id: number;
   name: string;
