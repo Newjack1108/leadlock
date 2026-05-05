@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy.pool import StaticPool
-from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel import Session, SQLModel, create_engine, select
 
 from app.customer_outreach_service import try_customer_outreach_for_new_lead
 from app.models import (
@@ -150,3 +150,170 @@ def test_find_or_create_matches_normalized_phone():
         lead = Lead(name="Alex", phone="07700900456", email=None, status=LeadStatus.NEW)
         customer = find_or_create_customer(lead, session)
         assert customer.id == existing.id
+
+
+def test_try_customer_outreach_for_new_lead_suppressed_during_quiet_hours(monkeypatch):
+    engine = _engine()
+    calls = {"n": 0}
+
+    def fake_deliver(session, *, company, lead, rule):
+        calls["n"] += 1
+        return True
+
+    monkeypatch.setattr(
+        "app.customer_outreach_service._deliver_lead_customer_outreach_once",
+        fake_deliver,
+    )
+    monkeypatch.setattr(
+        "app.customer_outreach_service._is_within_outreach_quiet_hours",
+        lambda company: True,
+    )
+
+    with Session(engine) as session:
+        user = User(
+            email=f"u-quiet-{uuid.uuid4().hex}@example.com",
+            hashed_password="x",
+            full_name="Owner",
+            role=UserRole.DIRECTOR,
+        )
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+
+        tmpl = SmsTemplate(
+            name="Quiet",
+            body_template="Hi {{ customer.name }}",
+            created_by_id=user.id,
+        )
+        session.add(tmpl)
+        session.commit()
+        session.refresh(tmpl)
+
+        customer = Customer(
+            customer_number=f"CUST-{uuid.uuid4().hex[:8]}",
+            name="Pat",
+            phone="+447700900321",
+            email="pat@example.com",
+        )
+        session.add(customer)
+        session.commit()
+        session.refresh(customer)
+
+        rule = ReminderRule(
+            rule_name=f"ON_CREATE_QUIET_{int(datetime.utcnow().timestamp() * 1000)}",
+            entity_type="LEAD",
+            status=LeadStatus.NEW.value,
+            threshold_minutes=999999,
+            check_type="LAST_ACTIVITY",
+            is_active=True,
+            priority=ReminderPriority.HIGH,
+            suggested_action=SuggestedAction.FOLLOW_UP,
+            customer_outreach_channel=CustomerOutreachChannel.SMS.value,
+            customer_outreach_sms_template_id=tmpl.id,
+            customer_outreach_cooldown_days=14,
+            customer_outreach_on_lead_create=True,
+        )
+        session.add(rule)
+        session.commit()
+
+        lead = Lead(
+            name="Pat",
+            status=LeadStatus.NEW,
+            customer_id=customer.id,
+            assigned_to_id=user.id,
+            phone="+447700900321",
+        )
+        session.add(lead)
+        session.commit()
+        session.refresh(lead)
+
+        n = try_customer_outreach_for_new_lead(session, lead)
+
+    assert n == 0
+    assert calls["n"] == 0
+
+
+def test_try_customer_outreach_for_new_lead_blocks_when_opt_out_flips_before_dispatch(monkeypatch):
+    engine = _engine()
+    send_calls = {"count": 0}
+    opt_out_checks = {"count": 0}
+
+    def fake_send_sms(*args, **kwargs):
+        send_calls["count"] += 1
+        return True, "SM_SHOULD_NOT_SEND", None
+
+    def fake_opt_out_check(_session, _customer_id):
+        opt_out_checks["count"] += 1
+        # First pre-check false, second dispatch-time check true.
+        return opt_out_checks["count"] >= 2
+
+    monkeypatch.setattr("app.customer_outreach_service.send_sms", fake_send_sms)
+    monkeypatch.setattr(
+        "app.customer_outreach_service._customer_opted_out_of_rule_outreach",
+        fake_opt_out_check,
+    )
+
+    with Session(engine) as session:
+        user = User(
+            email=f"u-flip-{uuid.uuid4().hex}@example.com",
+            hashed_password="x",
+            full_name="Owner",
+            role=UserRole.DIRECTOR,
+        )
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+
+        tmpl = SmsTemplate(
+            name="Flip",
+            body_template="Hi {{ customer.name }}",
+            created_by_id=user.id,
+        )
+        session.add(tmpl)
+        session.commit()
+        session.refresh(tmpl)
+
+        customer = Customer(
+            customer_number=f"CUST-{uuid.uuid4().hex[:8]}",
+            name="Pat",
+            phone="+447700900321",
+            email="pat@example.com",
+        )
+        session.add(customer)
+        session.commit()
+        session.refresh(customer)
+
+        rule = ReminderRule(
+            rule_name=f"ON_CREATE_FLIP_{int(datetime.utcnow().timestamp() * 1000)}",
+            entity_type="LEAD",
+            status=LeadStatus.NEW.value,
+            threshold_minutes=999999,
+            check_type="LAST_ACTIVITY",
+            is_active=True,
+            priority=ReminderPriority.HIGH,
+            suggested_action=SuggestedAction.FOLLOW_UP,
+            customer_outreach_channel=CustomerOutreachChannel.SMS.value,
+            customer_outreach_sms_template_id=tmpl.id,
+            customer_outreach_cooldown_days=14,
+            customer_outreach_on_lead_create=True,
+        )
+        session.add(rule)
+        session.commit()
+
+        lead = Lead(
+            name="Pat",
+            status=LeadStatus.NEW,
+            customer_id=customer.id,
+            assigned_to_id=user.id,
+            phone="+447700900321",
+        )
+        session.add(lead)
+        session.commit()
+        session.refresh(lead)
+
+        n = try_customer_outreach_for_new_lead(session, lead)
+        sends = list(session.exec(select(CustomerOutreachSend)).all())
+
+    assert n == 0
+    assert send_calls["count"] == 0
+    assert len(sends) == 0

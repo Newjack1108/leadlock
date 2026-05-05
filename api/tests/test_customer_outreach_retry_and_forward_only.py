@@ -326,3 +326,59 @@ def test_stale_quote_outreach_sends_when_no_later_order(monkeypatch):
     assert calls["count"] == 1
     assert len(sends) == 1
     assert sends[0].status == "SENT"
+
+
+def test_outreach_cycle_suppressed_during_quiet_hours(monkeypatch):
+    engine = _engine()
+    now = datetime.utcnow()
+    calls = {"count": 0}
+
+    def fake_send_sms(*args, **kwargs):
+        calls["count"] += 1
+        return True, "SM_QUIET_HOURS", None
+
+    monkeypatch.setattr("app.customer_outreach_service._send_outreach_sms", fake_send_sms)
+    monkeypatch.setattr(
+        "app.customer_outreach_service._is_within_outreach_quiet_hours",
+        lambda company: True,
+    )
+
+    with Session(engine) as session:
+        _seed_lead_sms_rule(session, enabled_from=None, lead_updated_at=now)
+        sent_count = run_customer_outreach_cycle(session)
+        sends = list(session.exec(select(CustomerOutreachSend)).all())
+
+    assert sent_count == 0
+    assert calls["count"] == 0
+    assert len(sends) == 0
+
+
+def test_outreach_cycle_blocks_when_opt_out_flips_before_dispatch(monkeypatch):
+    engine = _engine()
+    now = datetime.utcnow()
+    send_calls = {"count": 0}
+    opt_out_checks = {"count": 0}
+
+    def fake_opt_out_check(_session, _customer_id):
+        opt_out_checks["count"] += 1
+        # First check allows progress; second (dispatch-time) check blocks.
+        return opt_out_checks["count"] >= 2
+
+    def fake_send_sms(*args, **kwargs):
+        send_calls["count"] += 1
+        return True, "SM_SHOULD_NOT_SEND", None
+
+    monkeypatch.setattr(
+        "app.customer_outreach_service._customer_opted_out_of_rule_outreach",
+        fake_opt_out_check,
+    )
+    monkeypatch.setattr("app.customer_outreach_service.send_sms", fake_send_sms)
+
+    with Session(engine) as session:
+        _seed_lead_sms_rule(session, enabled_from=None, lead_updated_at=now)
+        sent_count = run_customer_outreach_cycle(session)
+        sends = list(session.exec(select(CustomerOutreachSend)).all())
+
+    assert sent_count == 0
+    assert send_calls["count"] == 0
+    assert len(sends) == 0

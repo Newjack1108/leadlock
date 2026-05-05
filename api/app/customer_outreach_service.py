@@ -13,8 +13,9 @@ from __future__ import annotations
 import os
 import sys
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Tuple
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import desc
 from sqlmodel import Session, select, col
@@ -52,6 +53,8 @@ from app.sms_service import (
 from app.sms_template_service import render_sms_template
 
 _CUSTOMER_OUTREACH_OPTOUT_REASON = "Customer opted out of automated reminder messages"
+_OUTREACH_QUIET_HOURS_START = 23  # 23:00 local
+_OUTREACH_QUIET_HOURS_END = 6  # 06:00 local
 
 
 def _generate_thread_id(message_id: Optional[str], in_reply_to: Optional[str]) -> str:
@@ -67,6 +70,42 @@ def _rule_outreach_ready(rule: ReminderRule) -> bool:
     if ch == CustomerOutreachChannel.EMAIL.value:
         return bool(rule.customer_outreach_email_template_id)
     return False
+
+
+def _log_outreach_suppression(
+    *,
+    reason: str,
+    rule_id: Optional[int],
+    customer_id: Optional[int],
+    lead_id: Optional[int],
+    quote_id: Optional[int],
+) -> None:
+    print(
+        "Customer outreach suppressed: "
+        f"reason={reason} rule_id={rule_id} customer_id={customer_id} "
+        f"lead_id={lead_id} quote_id={quote_id} ts_utc={datetime.utcnow().isoformat()}",
+        file=sys.stderr,
+        flush=True,
+    )
+
+
+def _is_within_outreach_quiet_hours(company: Optional[CompanySettings]) -> bool:
+    """
+    Block automated reminder outreach between 23:00 and 06:00 local company time.
+    Falls back to Europe/London when timezone is missing/invalid.
+    """
+    timezone_name = "Europe/London"
+    if company and company.sms_bot_timezone and company.sms_bot_timezone.strip():
+        timezone_name = company.sms_bot_timezone.strip()
+
+    now_utc = datetime.now(timezone.utc)
+    try:
+        local_hour = now_utc.astimezone(ZoneInfo(timezone_name)).hour
+    except Exception:
+        # Safe fallback: if timezone parsing fails, apply quiet hours in UTC.
+        local_hour = now_utc.hour
+
+    return local_hour >= _OUTREACH_QUIET_HOURS_START or local_hour < _OUTREACH_QUIET_HOURS_END
 
 
 def _cooldown_blocks(
@@ -238,6 +277,8 @@ def _send_outreach_sms(
         )
 
     body = render_sms_template(template, customer, user=actor, company_settings=company)
+    if customer.id is not None and _customer_opted_out_of_rule_outreach(session, customer.id):
+        return False, None, _CUSTOMER_OUTREACH_OPTOUT_REASON
     success, twilio_sid, err = send_sms(to_phone, body)
     if not success:
         return False, None, err or "send_sms failed"
@@ -296,6 +337,8 @@ def _send_outreach_email(
     subject, body_html = render_email_template(template, customer, custom_variables=extra or None)
     body_text = _html_to_plain(body_html) if body_html else None
 
+    if customer.id is not None and _customer_opted_out_of_rule_outreach(session, customer.id):
+        return False, None, _CUSTOMER_OUTREACH_OPTOUT_REASON
     success, message_id, err, sent_html, sent_text = send_email(
         to_email=to_email,
         subject=subject,
@@ -405,6 +448,13 @@ def _deliver_lead_customer_outreach_once(
 
     if not ok:
         if err_msg == _CUSTOMER_OUTREACH_OPTOUT_REASON:
+            _log_outreach_suppression(
+                reason="opt_out_enabled",
+                rule_id=rule.id,
+                customer_id=customer.id,
+                lead_id=lead.id,
+                quote_id=None,
+            )
             return False
         if err_msg:
             if ch == CustomerOutreachChannel.SMS.value and is_unsubscribed_recipient_error(err_msg):
@@ -455,6 +505,8 @@ def try_customer_outreach_for_new_lead(session: Session, lead: Lead) -> int:
     if not lead.id:
         return 0
     company = session.exec(select(CompanySettings).limit(1)).first()
+    if _is_within_outreach_quiet_hours(company):
+        return 0
     statement = (
         select(ReminderRule)
         .where(
@@ -499,6 +551,8 @@ def run_customer_outreach_cycle(session: Session) -> int:
     Returns number of successful sends.
     """
     company = session.exec(select(CompanySettings).limit(1)).first()
+    if _is_within_outreach_quiet_hours(company):
+        return 0
 
     sent_count = 0
     stale_leads = detect_stale_leads(session)
@@ -549,11 +603,12 @@ def run_customer_outreach_cycle(session: Session) -> int:
         if _cooldown_blocks(session, rule, lead_id=None, quote_id=quote.id):
             continue
         if _customer_opted_out_of_rule_outreach(session, quote.customer_id):
-            print(
-                f"Customer outreach: skip quote {quote.id} rule {rule.id}: "
-                f"customer {quote.customer_id} opted out of automated reminder messages",
-                file=sys.stderr,
-                flush=True,
+            _log_outreach_suppression(
+                reason="opt_out_enabled",
+                rule_id=rule.id,
+                customer_id=quote.customer_id,
+                lead_id=quote.lead_id,
+                quote_id=quote.id,
             )
             continue
         if _quote_outreach_superseded_by_later_order(session, quote, quote.customer_id):
@@ -611,6 +666,13 @@ def run_customer_outreach_cycle(session: Session) -> int:
 
         if not ok:
             if err_msg == _CUSTOMER_OUTREACH_OPTOUT_REASON:
+                _log_outreach_suppression(
+                    reason="opt_out_enabled",
+                    rule_id=rule.id,
+                    customer_id=customer.id,
+                    lead_id=quote.lead_id,
+                    quote_id=quote.id,
+                )
                 continue
             if err_msg:
                 if ch == CustomerOutreachChannel.SMS.value and is_unsubscribed_recipient_error(err_msg):
