@@ -950,6 +950,14 @@ class ReminderRule(SQLModel, table=True):
     customer_outreach_on_lead_create: bool = Field(default=False)
 
 
+class DeletedReminderRuleName(SQLModel, table=True):
+    """Records reminder rule_names the user explicitly deleted, so the startup
+    backfill in database.py does not re-create them on the next restart."""
+
+    rule_name: str = Field(primary_key=True, index=True)
+    deleted_at: datetime = Field(default_factory=datetime.utcnow)
+
+
 class CustomerOutreachSend(SQLModel, table=True):
     """Log of automated customer SMS/email sends for cooldown and audit."""
     id: Optional[int] = Field(default=None, primary_key=True)

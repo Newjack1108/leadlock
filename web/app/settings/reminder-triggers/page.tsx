@@ -602,7 +602,8 @@ export default function ReminderTriggersPage() {
             <Card>
               <CardContent>
                 <p className="text-sm text-muted-foreground py-4">
-                  No reminder rules loaded. Restart the API server to backfill default rules from the database migration.
+                  No reminder rules loaded. Default rules are seeded on first run; deleted defaults are not re-created.
+                  To restore a deleted default, re-create it manually with the original name.
                 </p>
               </CardContent>
             </Card>

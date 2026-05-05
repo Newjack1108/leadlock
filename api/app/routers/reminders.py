@@ -14,6 +14,7 @@ from app.models import (
     ReminderType, ReminderPriority, SuggestedAction, LeadStatus, QuoteStatus,
     CustomerOutreachChannel,
     CustomerOutreachSend,
+    DeletedReminderRuleName,
 )
 from app.schemas import (
     ReminderResponse, ReminderDismissRequest, ReminderActRequest,
@@ -662,6 +663,9 @@ async def create_reminder_rule(
         customer_outreach_on_lead_create=on_create,
     )
     session.add(rule)
+    suppress = session.get(DeletedReminderRuleName, rule_name)
+    if suppress:
+        session.delete(suppress)
     session.commit()
     session.refresh(rule)
     return _reminder_rule_to_response(rule)
@@ -799,6 +803,17 @@ async def delete_reminder_rule(
     if not rule:
         raise HTTPException(status_code=404, detail="Reminder rule not found")
 
+    # Clean up outreach audit rows first so FK constraints do not block delete.
+    sends = session.exec(
+        select(CustomerOutreachSend).where(CustomerOutreachSend.reminder_rule_id == rule.id)
+    ).all()
+    for send in sends:
+        session.delete(send)
+
+    name = rule.rule_name
     session.delete(rule)
+    existing_suppress = session.get(DeletedReminderRuleName, name)
+    if not existing_suppress:
+        session.add(DeletedReminderRuleName(rule_name=name))
     session.commit()
     return {"message": "Reminder rule deleted", "id": rule_id}

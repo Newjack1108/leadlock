@@ -6,6 +6,11 @@ import api from '@/lib/api';
 export default function Home() {
   useEffect(() => {
     let cancelled = false;
+    const clearAuthStorage = () => {
+      if (typeof window === 'undefined') return;
+      localStorage.removeItem('token');
+      document.cookie = 'token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    };
 
     const redirectByRole = async () => {
       try {
@@ -14,13 +19,12 @@ export default function Home() {
         // double navigation can strand iOS Safari (e.g. opening from a bookmark).
         const response = await api.get('/api/auth/me', {
           validateStatus: (status) => status === 200 || status === 401,
+          skipAuthRedirect: true,
         });
         if (cancelled) return;
 
         if (response.status === 401) {
-          if (typeof window !== 'undefined') {
-            localStorage.removeItem('token');
-          }
+          clearAuthStorage();
           window.location.replace('/login');
           return;
         }
@@ -35,6 +39,7 @@ export default function Home() {
         window.location.replace(path);
       } catch {
         if (!cancelled) {
+          clearAuthStorage();
           window.location.replace('/login');
         }
       }

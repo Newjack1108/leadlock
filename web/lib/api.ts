@@ -1,4 +1,5 @@
 import axios from 'axios';
+import type { AxiosRequestConfig } from 'axios';
 import {
   ActivityType,
   type CustomerCommunicationStats,
@@ -19,6 +20,16 @@ import {
 import { getTelUrl } from '@/lib/utils';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+declare module 'axios' {
+  interface AxiosRequestConfig {
+    /**
+     * When true, skip the global 401 redirect handler and let the caller
+     * decide how to recover from unauthorized responses.
+     */
+    skipAuthRedirect?: boolean;
+  }
+}
 
 const api = axios.create({
   baseURL: API_URL,
@@ -46,7 +57,8 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    const requestConfig = (error?.config ?? {}) as AxiosRequestConfig;
+    if (error.response?.status === 401 && !requestConfig.skipAuthRedirect) {
       if (typeof window !== 'undefined') {
         localStorage.removeItem('token');
         window.location.href = '/login';
