@@ -14,11 +14,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import api, { getQuotes, previewQuotePdf } from '@/lib/api';
 import { LeadType, Quote, QuoteStatus, QuoteTemperature, OpportunityStage } from '@/lib/types';
 import { toast } from 'sonner';
 import Link from 'next/link';
-import { FileText, Eye, Pencil, List, LayoutGrid, ShoppingCart, SendHorizontal, MessageCircle } from 'lucide-react';
+import { FileText, Eye, Pencil, List, LayoutGrid, ShoppingCart, SendHorizontal, MessageCircle, MinusCircle } from 'lucide-react';
 
 const statusColors: Record<QuoteStatus, string> = {
   DRAFT: 'bg-gray-100 text-gray-700',
@@ -159,6 +167,10 @@ function getDisplayLeadType(leadType?: LeadType | null): LeadType | null {
   return leadType;
 }
 
+function quoteIsClosable(quote: Quote): boolean {
+  return quote.status === QuoteStatus.SENT || quote.status === QuoteStatus.VIEWED;
+}
+
 function QuotesPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -173,6 +185,9 @@ function QuotesPageContent() {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [includeArchived, setIncludeArchived] = useState(false);
+  const [closeDialogOpen, setCloseDialogOpen] = useState(false);
+  const [quotePendingClose, setQuotePendingClose] = useState<Quote | null>(null);
+  const [markingClose, setMarkingClose] = useState(false);
 
   // Sync filter from URL (back/forward, dashboard links, shared URLs)
   useEffect(() => {
@@ -223,6 +238,27 @@ function QuotesPageContent() {
   useEffect(() => {
     fetchQuotes();
   }, [fetchQuotes]);
+
+  const openCloseDialog = useCallback((quote: Quote) => {
+    setQuotePendingClose(quote);
+    setCloseDialogOpen(true);
+  }, []);
+
+  const handleCloseQuote = useCallback(async () => {
+    if (!quotePendingClose) return;
+    try {
+      setMarkingClose(true);
+      await api.post(`/api/quotes/opportunities/${quotePendingClose.id}/close`, {});
+      toast.success('Quote closed. Lead status unchanged (another quote may have won).');
+      setCloseDialogOpen(false);
+      setQuotePendingClose(null);
+      await fetchQuotes();
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || 'Failed to close quote');
+    } finally {
+      setMarkingClose(false);
+    }
+  }, [quotePendingClose, fetchQuotes]);
 
   // Auto-refresh when user returns to this tab/window
   useEffect(() => {
@@ -474,6 +510,17 @@ function QuotesPageContent() {
                             <Eye className="h-4 w-4 mr-1" />
                             Download PDF
                           </Button>
+                          {quoteIsClosable(quote) && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => openCloseDialog(quote)}
+                              disabled={markingClose && quotePendingClose?.id === quote.id}
+                            >
+                              <MinusCircle className="h-4 w-4 mr-1" />
+                              Close
+                            </Button>
+                          )}
                           <Button
                             variant="default"
                             size="sm"
@@ -584,6 +631,17 @@ function QuotesPageContent() {
                         <Eye className="h-4 w-4 mr-2" />
                         Download PDF
                       </Button>
+                      {quoteIsClosable(quote) && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openCloseDialog(quote)}
+                          disabled={markingClose && quotePendingClose?.id === quote.id}
+                        >
+                          <MinusCircle className="h-4 w-4 mr-2" />
+                          Close
+                        </Button>
+                      )}
                       <Button
                         variant="default"
                         size="sm"
@@ -625,6 +683,40 @@ function QuotesPageContent() {
             </div>
           </div>
         )}
+
+        <Dialog
+          open={closeDialogOpen}
+          onOpenChange={(open) => {
+            if (!markingClose) {
+              setCloseDialogOpen(open);
+              if (!open) setQuotePendingClose(null);
+            }
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Close Quote</DialogTitle>
+              <DialogDescription>
+                Close this quote without changing the lead status. Use when another quote from the same lead may have won.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setCloseDialogOpen(false);
+                  setQuotePendingClose(null);
+                }}
+                disabled={markingClose}
+              >
+                Cancel
+              </Button>
+              <Button onClick={() => void handleCloseQuote()} disabled={markingClose || !quotePendingClose}>
+                {markingClose ? 'Closing...' : 'Close Quote'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </main>
     </div>
   );
