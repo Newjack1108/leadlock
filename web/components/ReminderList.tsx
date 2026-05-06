@@ -15,7 +15,7 @@ import {
 import { toast } from 'sonner';
 import { 
   RefreshCw, X, CheckCircle2, Mail, Phone, 
-  FileText, ArrowRight, AlertCircle 
+  FileText, ArrowRight, AlertCircle, MailCheck, AlertTriangle 
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
@@ -351,6 +351,37 @@ export default function ReminderList({
                       </Badge>
                       {reminder.reminder_type === ReminderType.USER_TASK && (
                         <Badge variant="outline">Task</Badge>
+                      )}
+                      {reminder.auto_outreach_status === 'SENT' && (
+                        <Badge
+                          className="bg-emerald-600 text-white font-bold border-emerald-700 hover:bg-emerald-600 shadow-sm"
+                          title={
+                            reminder.auto_outreach_rule_name
+                              ? `Rule: ${reminder.auto_outreach_rule_name.replace(/_/g, ' ')}`
+                              : undefined
+                          }
+                        >
+                          <MailCheck className="h-3 w-3 mr-1 shrink-0" />
+                          Auto-reply sent
+                          {reminder.auto_outreach_channel ? ` · ${reminder.auto_outreach_channel}` : ''}
+                          {reminder.auto_outreach_sent_at
+                            ? ` · ${new Date(reminder.auto_outreach_sent_at).toLocaleDateString('en-GB')}`
+                            : ''}
+                        </Badge>
+                      )}
+                      {reminder.auto_outreach_status === 'FAILED' && (
+                        <Badge
+                          className="bg-red-600 text-white font-bold border-red-700 hover:bg-red-600 shadow-sm"
+                          title={
+                            [reminder.auto_outreach_failure_reason, reminder.auto_outreach_rule_name]
+                              .filter(Boolean)
+                              .join(' — ') || undefined
+                          }
+                        >
+                          <AlertTriangle className="h-3 w-3 mr-1 shrink-0" />
+                          Auto-reply failed
+                          {reminder.auto_outreach_channel ? ` · ${reminder.auto_outreach_channel}` : ''}
+                        </Badge>
                       )}
                       <span className="font-semibold">{reminder.title}</span>
                     </div>

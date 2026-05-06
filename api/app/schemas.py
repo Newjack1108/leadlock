@@ -1639,6 +1639,12 @@ class ReminderResponse(BaseModel):
     created_by_id: Optional[int] = None
     created_by_name: Optional[str] = None
     assigned_to_name: Optional[str] = None
+    # Latest customer auto-outreach (SMS/email) for this reminder's lead or quote
+    auto_outreach_status: Optional[str] = None
+    auto_outreach_channel: Optional[str] = None
+    auto_outreach_sent_at: Optional[datetime] = None
+    auto_outreach_failure_reason: Optional[str] = None
+    auto_outreach_rule_name: Optional[str] = None
 
 
 class UserTaskCreate(BaseModel):

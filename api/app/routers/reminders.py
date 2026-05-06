@@ -5,7 +5,7 @@ import re
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, select, and_, or_, func, col
 from sqlalchemy import case
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Tuple
 from app.database import get_session
 from app.auth import get_current_user
 from datetime import date as date_type, datetime, timedelta
@@ -33,6 +33,54 @@ _QUOTE_CHECK_TYPES = frozenset({
     "SENT_DATE", "VALID_UNTIL", "STATUS_DURATION", "SENT_NOT_OPENED", "OPENED_NO_REPLY",
 })
 _USER_TASK_NEAR_DUE_DAYS = 1
+
+
+def _load_latest_outreach_by_target(
+    session: Session, reminders: List[Reminder]
+) -> Dict[Tuple[str, int], Tuple[CustomerOutreachSend, str]]:
+    """
+    Latest CustomerOutreachSend per reminder target: quote reminders match by quote_id;
+    lead-only reminders match sends with that lead_id and quote_id IS NULL.
+    """
+    quote_ids = {r.quote_id for r in reminders if r.quote_id}
+    lead_only_ids = {r.lead_id for r in reminders if r.lead_id and not r.quote_id}
+    if not quote_ids and not lead_only_ids:
+        return {}
+
+    if quote_ids and lead_only_ids:
+        where_clause = or_(
+            CustomerOutreachSend.quote_id.in_(quote_ids),
+            and_(
+                CustomerOutreachSend.lead_id.in_(lead_only_ids),
+                CustomerOutreachSend.quote_id.is_(None),
+            ),
+        )
+    elif quote_ids:
+        where_clause = CustomerOutreachSend.quote_id.in_(quote_ids)
+    else:
+        where_clause = and_(
+            CustomerOutreachSend.lead_id.in_(lead_only_ids),
+            CustomerOutreachSend.quote_id.is_(None),
+        )
+
+    rows = session.exec(
+        select(CustomerOutreachSend, ReminderRule.rule_name)
+        .join(ReminderRule, ReminderRule.id == CustomerOutreachSend.reminder_rule_id)
+        .where(where_clause)
+        .order_by(col(CustomerOutreachSend.sent_at).desc(), col(CustomerOutreachSend.id).desc())
+    ).all()
+
+    result: Dict[Tuple[str, int], Tuple[CustomerOutreachSend, str]] = {}
+    for send, rule_name in rows:
+        if send.quote_id is not None and send.quote_id in quote_ids:
+            k: Tuple[str, int] = ("q", send.quote_id)
+        elif send.lead_id is not None and send.quote_id is None and send.lead_id in lead_only_ids:
+            k = ("l", send.lead_id)
+        else:
+            continue
+        if k not in result:
+            result[k] = (send, rule_name)
+    return result
 
 
 def _normalize_outreach_fields(
@@ -137,6 +185,7 @@ def _reminder_to_response(
     lead_by_id: Optional[Dict[int, Lead]] = None,
     quote_by_id: Optional[Dict[int, Quote]] = None,
     customer_by_id: Optional[Dict[int, Customer]] = None,
+    outreach_by_target: Optional[Dict[Tuple[str, int], Tuple[CustomerOutreachSend, str]]] = None,
 ) -> ReminderResponse:
     lead_name = None
     quote_number = None
@@ -173,6 +222,27 @@ def _reminder_to_response(
     eff_days = _effective_days_stale(reminder, today)
     eff_pri = _effective_priority(reminder, today)
 
+    auto_status: Optional[str] = None
+    auto_channel: Optional[str] = None
+    auto_sent_at: Optional[datetime] = None
+    auto_fail: Optional[str] = None
+    auto_rule: Optional[str] = None
+    if outreach_by_target:
+        target_key: Optional[Tuple[str, int]] = None
+        if reminder.quote_id:
+            target_key = ("q", reminder.quote_id)
+        elif reminder.lead_id:
+            target_key = ("l", reminder.lead_id)
+        if target_key:
+            tup = outreach_by_target.get(target_key)
+            if tup:
+                send, rule_name = tup
+                auto_status = getattr(send, "status", None) or "SENT"
+                auto_channel = send.channel
+                auto_sent_at = send.sent_at
+                auto_fail = getattr(send, "failure_reason", None)
+                auto_rule = rule_name
+
     return ReminderResponse(
         id=reminder.id,
         reminder_type=reminder.reminder_type,
@@ -195,6 +265,11 @@ def _reminder_to_response(
         created_by_id=reminder.created_by_id,
         created_by_name=cb_name,
         assigned_to_name=assigned_to_name,
+        auto_outreach_status=auto_status,
+        auto_outreach_channel=auto_channel,
+        auto_outreach_sent_at=auto_sent_at,
+        auto_outreach_failure_reason=auto_fail,
+        auto_outreach_rule_name=auto_rule,
     )
 
 
@@ -352,6 +427,8 @@ async def get_reminders(
         customers = session.exec(select(Customer).where(Customer.id.in_(customer_ids))).all()
         customer_by_id = {c.id: c for c in customers if c.id is not None}
 
+    outreach_by_target = _load_latest_outreach_by_target(session, list(reminders))
+
     result = [
         _reminder_to_response(
             session,
@@ -361,6 +438,7 @@ async def get_reminders(
             lead_by_id=lead_by_id,
             quote_by_id=quote_by_id,
             customer_by_id=customer_by_id,
+            outreach_by_target=outreach_by_target,
         )
         for r in reminders
     ]

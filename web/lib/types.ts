@@ -1208,6 +1208,12 @@ export interface Reminder {
   created_by_id?: number;
   created_by_name?: string;
   assigned_to_name?: string;
+  /** Latest customer auto-outreach (SMS/email) for this reminder's lead or quote */
+  auto_outreach_status?: string | null;
+  auto_outreach_channel?: string | null;
+  auto_outreach_sent_at?: string | null;
+  auto_outreach_failure_reason?: string | null;
+  auto_outreach_rule_name?: string | null;
 }
 
 export interface AssignableUser {
