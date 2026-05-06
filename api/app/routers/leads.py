@@ -541,15 +541,16 @@ async def create_lead(
         lead = Lead(**lead_data.dict())
         lead.assigned_to_id = current_user.id
 
-        # Manual entry leads auto-qualify
-        if lead.lead_source == LeadSource.MANUAL_ENTRY:
+        # Manual entry leads auto-qualify; closers' in-app creates always qualify so they appear
+        # on QUALIFIED+ tabs regardless of selected lead_source (e.g. REFERRAL).
+        if lead.lead_source == LeadSource.MANUAL_ENTRY or current_user.role == UserRole.CLOSER:
             lead.status = LeadStatus.QUALIFIED
 
         session.add(lead)
         session.commit()
         session.refresh(lead)
 
-        # Create or link customer when manual lead is auto-qualified
+        # Create or link customer when lead is auto-qualified
         if lead.status == LeadStatus.QUALIFIED and not lead.customer_id:
             customer = find_or_create_customer(lead, session)
             lead.customer_id = customer.id
@@ -559,6 +560,9 @@ async def create_lead(
             # Auto-create opportunity for quotable qualified lead
             from app.workflow import auto_create_opportunity
             auto_create_opportunity(customer.id, lead.id, session, current_user.id)
+
+        if lead.status == LeadStatus.QUALIFIED and lead.customer_id:
+            sync_customer_contact_from_lead_on_qualify(session, lead)
 
         # Create initial status history
         status_history = StatusHistory(
