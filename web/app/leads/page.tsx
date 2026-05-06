@@ -17,7 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Lock, Unlock, Clock, Search, Plus, Eye, MessageCircleReply } from 'lucide-react';
+import { Lock, Unlock, Clock, Search, Plus, Eye, MessageCircleReply, Trash2 } from 'lucide-react';
 import api from '@/lib/api';
 import { formatDateTime } from '@/lib/utils';
 import { Lead, LeadStatus, LeadType, LeadSource, QuoteTemperature } from '@/lib/types';
@@ -120,9 +120,13 @@ function LeadsPageContent() {
     lead_type: LeadType.UNKNOWN,
     lead_source: LeadSource.MANUAL_ENTRY,
   });
+  const [removingSpamId, setRemovingSpamId] = useState<number | null>(null);
 
   const isNinoxLead = (lead: Lead) =>
     lead.lead_source === LeadSource.NINOX || lead.customer?.source_system === 'Ninox';
+
+  const canRemoveSpamLead = (lead: Lead) =>
+    (userRole === 'DIRECTOR' || userRole === 'SALES_MANAGER') && !lead.customer_id;
 
   // Auth + role-based URL defaults, then sync filters — must complete before first /api/leads fetch.
   useEffect(() => {
@@ -264,6 +268,27 @@ function LeadsPageContent() {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRemoveSpamLead = async (leadId: number) => {
+    if (
+      !window.confirm(
+        'Permanently remove this lead as spam or junk? It will be deleted (not marked as lost), so reports and dashboards will not count it. This cannot be undone.'
+      )
+    ) {
+      return;
+    }
+    setRemovingSpamId(leadId);
+    try {
+      await api.delete(`/api/leads/${leadId}`);
+      toast.success('Lead removed');
+      await fetchLeads();
+    } catch (error: any) {
+      const d = error.response?.data?.detail;
+      toast.error(typeof d === 'string' ? d : d?.message || 'Failed to remove lead');
+    } finally {
+      setRemovingSpamId(null);
     }
   };
 
@@ -476,8 +501,8 @@ function LeadsPageContent() {
               <Link key={lead.id} href={`/leads/${lead.id}`}>
                 <Card className="hover:border-primary/50 transition-colors cursor-pointer">
                   <CardContent className="p-6">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap items-center gap-3 mb-2">
                           <h3 className="text-lg font-semibold">{lead.name}</h3>
                           {lead.archived_at && (
@@ -566,6 +591,23 @@ function LeadsPageContent() {
                           </span>
                         </div>
                       </div>
+                      {statusFilter === LeadStatus.NEW && canRemoveSpamLead(lead) && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-1 border-destructive/50 text-destructive hover:bg-destructive/10 shrink-0"
+                          title="Delete junk/spam without counting as lost"
+                          disabled={removingSpamId === lead.id}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            void handleRemoveSpamLead(lead.id);
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          {removingSpamId === lead.id ? 'Removing...' : 'Remove spam'}
+                        </Button>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
