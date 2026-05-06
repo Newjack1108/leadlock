@@ -343,45 +343,14 @@ export default function ReminderList({
                 onClick={detailHref ? () => openReminderDetail(reminder) : undefined}
                 onKeyDown={detailHref ? (e) => onReminderBodyKeyDown(e, reminder) : undefined}
               >
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <Badge variant={reminder.priority === ReminderPriority.URGENT ? 'destructive' : 'secondary'}>
                         {reminder.priority}
                       </Badge>
                       {reminder.reminder_type === ReminderType.USER_TASK && (
                         <Badge variant="outline">Task</Badge>
-                      )}
-                      {reminder.auto_outreach_status === 'SENT' && (
-                        <Badge
-                          className="bg-emerald-600 text-white font-bold border-emerald-700 hover:bg-emerald-600 shadow-sm"
-                          title={
-                            reminder.auto_outreach_rule_name
-                              ? `Rule: ${reminder.auto_outreach_rule_name.replace(/_/g, ' ')}`
-                              : undefined
-                          }
-                        >
-                          <MailCheck className="h-3 w-3 mr-1 shrink-0" />
-                          Auto-reply sent
-                          {reminder.auto_outreach_channel ? ` · ${reminder.auto_outreach_channel}` : ''}
-                          {reminder.auto_outreach_sent_at
-                            ? ` · ${new Date(reminder.auto_outreach_sent_at).toLocaleDateString('en-GB')}`
-                            : ''}
-                        </Badge>
-                      )}
-                      {reminder.auto_outreach_status === 'FAILED' && (
-                        <Badge
-                          className="bg-red-600 text-white font-bold border-red-700 hover:bg-red-600 shadow-sm"
-                          title={
-                            [reminder.auto_outreach_failure_reason, reminder.auto_outreach_rule_name]
-                              .filter(Boolean)
-                              .join(' — ') || undefined
-                          }
-                        >
-                          <AlertTriangle className="h-3 w-3 mr-1 shrink-0" />
-                          Auto-reply failed
-                          {reminder.auto_outreach_channel ? ` · ${reminder.auto_outreach_channel}` : ''}
-                        </Badge>
                       )}
                       <span className="font-semibold">{reminder.title}</span>
                     </div>
@@ -417,6 +386,41 @@ export default function ReminderList({
                       )}
                     </div>
                   </div>
+                  {(reminder.auto_outreach_status === 'SENT' || reminder.auto_outreach_status === 'FAILED') && (
+                    <div className="shrink-0 flex items-start">
+                      {reminder.auto_outreach_status === 'SENT' && (
+                        <Badge
+                          className="bg-emerald-600 text-white font-bold border-emerald-700 hover:bg-emerald-600 shadow-sm"
+                          title={
+                            reminder.auto_outreach_rule_name
+                              ? `Rule: ${reminder.auto_outreach_rule_name.replace(/_/g, ' ')}`
+                              : undefined
+                          }
+                        >
+                          <MailCheck className="h-3 w-3 mr-1 shrink-0" />
+                          Auto-reply sent
+                          {reminder.auto_outreach_channel ? ` · ${reminder.auto_outreach_channel}` : ''}
+                          {reminder.auto_outreach_sent_at
+                            ? ` · ${new Date(reminder.auto_outreach_sent_at).toLocaleDateString('en-GB')}`
+                            : ''}
+                        </Badge>
+                      )}
+                      {reminder.auto_outreach_status === 'FAILED' && (
+                        <Badge
+                          className="bg-red-600 text-white font-bold border-red-700 hover:bg-red-600 shadow-sm"
+                          title={
+                            [reminder.auto_outreach_failure_reason, reminder.auto_outreach_rule_name]
+                              .filter(Boolean)
+                              .join(' — ') || undefined
+                          }
+                        >
+                          <AlertTriangle className="h-3 w-3 mr-1 shrink-0" />
+                          Auto-reply failed
+                          {reminder.auto_outreach_channel ? ` · ${reminder.auto_outreach_channel}` : ''}
+                        </Badge>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
               {showActions && !isDoneMode && (
