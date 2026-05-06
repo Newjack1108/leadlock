@@ -28,6 +28,8 @@ from app.models import (
     QuoteTemperature,
     FacebookAdvertProfile,
     UserRole,
+    ReminderRule,
+    CustomerOutreachChannel,
 )
 from app.auth import get_current_user, require_role
 from app.schemas import (
@@ -109,6 +111,31 @@ def _merge_lead_into_customer_if_sparse(customer: Customer, lead: Lead, session:
         session.add(customer)
         session.commit()
         session.refresh(customer)
+
+
+def _has_ready_on_create_outreach_rule_for_status(session: Session, status: LeadStatus) -> bool:
+    """True when any active LEAD rule can send immediately on creation for this status."""
+    statement = (
+        select(ReminderRule.id)
+        .where(
+            ReminderRule.entity_type == "LEAD",
+            ReminderRule.is_active == True,  # noqa: E712
+            ReminderRule.customer_outreach_on_lead_create == True,  # noqa: E712
+            ReminderRule.status == status.value,
+            or_(
+                and_(
+                    ReminderRule.customer_outreach_channel == CustomerOutreachChannel.SMS.value,
+                    ReminderRule.customer_outreach_sms_template_id.isnot(None),
+                ),
+                and_(
+                    ReminderRule.customer_outreach_channel == CustomerOutreachChannel.EMAIL.value,
+                    ReminderRule.customer_outreach_email_template_id.isnot(None),
+                ),
+            ),
+        )
+        .limit(1)
+    )
+    return session.exec(statement).first() is not None
 
 
 def find_or_create_customer(lead: Lead, session: Session) -> Customer:
@@ -549,6 +576,19 @@ async def create_lead(
         session.add(lead)
         session.commit()
         session.refresh(lead)
+
+        # NEW leads do not normally create a customer. For immediate "on new lead" outreach,
+        # ensure we can resolve a recipient by linking/creating a customer when contact data exists.
+        if (
+            not lead.customer_id
+            and (lead.email or lead.phone)
+            and _has_ready_on_create_outreach_rule_for_status(session, lead.status)
+        ):
+            customer = find_or_create_customer(lead, session)
+            lead.customer_id = customer.id
+            session.add(lead)
+            session.commit()
+            session.refresh(lead)
 
         # Create or link customer when lead is auto-qualified
         if lead.status == LeadStatus.QUALIFIED and not lead.customer_id:
