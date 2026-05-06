@@ -4,7 +4,7 @@ Background evaluation: send customer SMS/email when reminder rules match stale l
 Lead outreach prerequisites (stale worker and immediate-on-create):
 - Linked Customer (``lead.customer_id``); webhook intake creates/links via ``find_or_create_customer``.
 - SMS recipient: ``customer.phone``, falling back to ``lead.phone`` when the template sends for that lead.
-- Actor user (SMTP, template variables): ``CUSTOMER_OUTREACH_ACTOR_USER_ID``, ``WEBHOOK_DEFAULT_USER_ID``, or assignee/quote owner.
+- Actor user (SMTP, template variables): ``CUSTOMER_OUTREACH_ACTOR_USER_ID``, ``WEBHOOK_DEFAULT_USER_ID``, assignee/quote owner, then System user (``get_system_user_id``). Email outreach may still require ``CUSTOMER_OUTREACH_ACTOR_USER_ID`` if the System account has no mail configured.
 - Activity and stored message ``created_by_id`` use the System user (``app.system_user_service``).
 - Long-running API process running the customer outreach thread (see ``CUSTOMER_OUTREACH_INTERVAL``); immediate sends run inline on lead create.
 """
@@ -14,10 +14,10 @@ import os
 import sys
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import desc
+from sqlalchemy import and_, desc, not_, or_
 from sqlmodel import Session, select, col
 
 from app.email_service import send_email, is_email_configured, _html_to_plain, build_activity_email_notes
@@ -53,8 +53,34 @@ from app.sms_service import (
 from app.sms_template_service import render_sms_template
 
 _CUSTOMER_OUTREACH_OPTOUT_REASON = "Customer opted out of automated reminder messages"
+_OUTREACH_NO_ACTOR_REASON = (
+    "No outreach actor user (set CUSTOMER_OUTREACH_ACTOR_USER_ID or WEBHOOK_DEFAULT_USER_ID, assign the "
+    "lead/quote, or ensure System user exists)"
+)
+_OUTREACH_QUIET_HOURS_REASON = (
+    "Skipped during outreach quiet hours (23:00-06:00 local company timezone)"
+)
+QUIET_HOURS_AUDIT_PREFIX = "QUIET_HOURS_AUDIT:"
 _OUTREACH_QUIET_HOURS_START = 23  # 23:00 local
 _OUTREACH_QUIET_HOURS_END = 6  # 06:00 local
+
+
+def _meaningful_customer_outreach_attempt_clause():
+    """
+    Rows logged only for visibility during quiet hours must not block cooldown or de-dupe.
+    Prefix quiet-hours stubs with QUIET_HOURS_AUDIT: and exclude them here.
+    """
+    prefix_pattern = f"{QUIET_HOURS_AUDIT_PREFIX}%"
+    return or_(
+        CustomerOutreachSend.status == "SENT",
+        and_(
+            CustomerOutreachSend.status == "FAILED",
+            or_(
+                CustomerOutreachSend.failure_reason.is_(None),
+                not_(CustomerOutreachSend.failure_reason.like(prefix_pattern)),
+            ),
+        ),
+    )
 
 
 def _generate_thread_id(message_id: Optional[str], in_reply_to: Optional[str]) -> str:
@@ -125,6 +151,7 @@ def _cooldown_blocks(
         statement = statement.where(CustomerOutreachSend.lead_id == lead_id)
     else:
         statement = statement.where(CustomerOutreachSend.quote_id == quote_id)
+    statement = statement.where(_meaningful_customer_outreach_attempt_clause())
     statement = statement.order_by(desc(CustomerOutreachSend.sent_at)).limit(1)
     last = session.exec(statement).first()
     if not last:
@@ -151,6 +178,7 @@ def _attempt_already_recorded(
         )
     else:
         statement = statement.where(CustomerOutreachSend.quote_id == quote_id)
+    statement = statement.where(_meaningful_customer_outreach_attempt_clause())
     return session.exec(statement.limit(1)).first() is not None
 
 
@@ -202,7 +230,10 @@ def _resolve_actor_user_id(session: Session, lead: Optional[Lead], quote: Option
         if quote.owner_id:
             return quote.owner_id
         return quote.created_by_id
-    return None
+    try:
+        return get_system_user_id(session)
+    except Exception:
+        return None
 
 
 def _quote_email_variables(quote: Quote) -> dict:
@@ -410,9 +441,42 @@ def _deliver_lead_customer_outreach_once(
             file=sys.stderr,
             flush=True,
         )
+        session.add(
+            CustomerOutreachSend(
+                reminder_rule_id=rule.id,
+                customer_id=customer.id,
+                channel=ch,
+                lead_id=lead.id,
+                quote_id=None,
+                external_message_id=None,
+                status="FAILED",
+                failure_reason=_OUTREACH_NO_ACTOR_REASON[:1000],
+                sent_at=datetime.utcnow(),
+            )
+        )
+        session.commit()
         return False
     actor = session.get(User, actor_id)
     if not actor:
+        print(
+            f"Customer outreach: skip lead {lead.id} rule {rule.id}: actor user missing id={actor_id}",
+            file=sys.stderr,
+            flush=True,
+        )
+        session.add(
+            CustomerOutreachSend(
+                reminder_rule_id=rule.id,
+                customer_id=customer.id,
+                channel=ch,
+                lead_id=lead.id,
+                quote_id=None,
+                external_message_id=None,
+                status="FAILED",
+                failure_reason=_OUTREACH_NO_ACTOR_REASON[:1000],
+                sent_at=datetime.utcnow(),
+            )
+        )
+        session.commit()
         return False
 
     external_id: Optional[str] = None
@@ -505,8 +569,6 @@ def try_customer_outreach_for_new_lead(session: Session, lead: Lead) -> int:
     if not lead.id:
         return 0
     company = session.exec(select(CompanySettings).limit(1)).first()
-    if _is_within_outreach_quiet_hours(company):
-        return 0
     statement = (
         select(ReminderRule)
         .where(
@@ -517,7 +579,7 @@ def try_customer_outreach_for_new_lead(session: Session, lead: Lead) -> int:
         .order_by(ReminderRule.id)
     )
     rules = session.exec(statement).all()
-    sent_count = 0
+    eligible: List[Tuple[ReminderRule, str]] = []
     for rule in rules:
         if not rule.status:
             continue
@@ -539,6 +601,39 @@ def try_customer_outreach_for_new_lead(session: Session, lead: Lead) -> int:
             continue
         if _cooldown_blocks(session, rule, lead_id=lead.id, quote_id=None):
             continue
+        eligible.append((rule, ch))
+
+    if _is_within_outreach_quiet_hours(company):
+        if eligible:
+            now_ts = datetime.utcnow()
+            for rule, ch in eligible:
+                session.add(
+                    CustomerOutreachSend(
+                        reminder_rule_id=rule.id,
+                        customer_id=lead.customer_id,
+                        channel=ch,
+                        lead_id=lead.id,
+                        quote_id=None,
+                        external_message_id=None,
+                        status="FAILED",
+                        failure_reason=(
+                            f"{QUIET_HOURS_AUDIT_PREFIX} {_OUTREACH_QUIET_HOURS_REASON}"
+                        )[:1000],
+                        sent_at=now_ts,
+                    )
+                )
+            session.commit()
+            _log_outreach_suppression(
+                reason="quiet_hours",
+                rule_id=None,
+                customer_id=lead.customer_id,
+                lead_id=lead.id,
+                quote_id=None,
+            )
+        return 0
+
+    sent_count = 0
+    for rule, _ch in eligible:
         if _deliver_lead_customer_outreach_once(session, company=company, lead=lead, rule=rule):
             sent_count += 1
     return sent_count
