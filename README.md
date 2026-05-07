@@ -327,7 +327,6 @@ Colors are defined in `web/app/globals.css`.
 
 ### Dashboard
 - `GET /api/dashboard/stats` - Get dashboard statistics
-- `GET /api/dashboard/stuck-leads` - Get stuck leads
 
 ## Development
 

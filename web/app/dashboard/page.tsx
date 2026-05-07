@@ -37,7 +37,6 @@ export default function DashboardPage() {
   const router = useRouter();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [companySettings, setCompanySettings] = useState<CompanySettings | null>(null);
-  const [stuckLeads, setStuckLeads] = useState<any[]>([]);
   const [staleSummary, setStaleSummary] = useState<StaleSummary | null>(null);
   const [unreadSms, setUnreadSms] = useState<UnreadSmsSummary | null>(null);
   const [unreadMessenger, setUnreadMessenger] = useState<UnreadMessengerSummary | null>(null);
@@ -63,9 +62,8 @@ export default function DashboardPage() {
         return;
       }
 
-      const [statsRes, stuckRes, staleRes, companyRes, unreadSmsRes, unreadMessengerRes, locationsRes, discountsRes, communicationRes] = await Promise.all([
+      const [statsRes, staleRes, companyRes, unreadSmsRes, unreadMessengerRes, locationsRes, discountsRes, communicationRes] = await Promise.all([
         api.get('/api/dashboard/stats', { params: datePeriod === 'all' ? {} : { period: datePeriod } }),
-        api.get('/api/dashboard/stuck-leads'),
         getStaleSummary().catch(() => null), // Don't fail if reminders not available
         getCompanySettings().catch(() => null), // Don't fail if settings not set up yet
         getUnreadSms().catch(() => ({ count: 0, messages: [] })),
@@ -75,7 +73,6 @@ export default function DashboardPage() {
         getDashboardCommunicationTotals(datePeriod).catch(() => null),
       ]);
       setStats(statsRes.data);
-      setStuckLeads(stuckRes.data);
       setStaleSummary(staleRes);
       setCompanySettings(companyRes ?? null);
       setUnreadSms(unreadSmsRes ?? { count: 0, messages: [] });
@@ -652,33 +649,6 @@ export default function DashboardPage() {
           <ReminderList limit={5} showActions={true} />
         </div>
 
-        {/* Stuck Leads */}
-        {stuckLeads.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Stuck Leads</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {stuckLeads.map((lead) => (
-                  <div
-                    key={lead.id}
-                    onClick={() => router.push(`/leads/${lead.id}`)}
-                    className="flex items-center justify-between p-3 rounded-lg bg-card border border-border cursor-pointer hover:bg-muted transition-colors"
-                  >
-                    <div>
-                      <p className="font-medium">{lead.name}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {lead.status} • {lead.days_old} days old
-                      </p>
-                    </div>
-                    <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
       </main>
     </div>
   );

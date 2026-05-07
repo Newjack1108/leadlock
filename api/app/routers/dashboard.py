@@ -364,34 +364,6 @@ async def get_lead_locations(
             )
     return out
 
-
-@router.get("/stuck-leads")
-async def get_stuck_leads(
-    session: Session = Depends(get_session),
-    current_user = Depends(require_non_dealer_user)
-):
-    """Get oldest lead per status that hasn't been updated recently."""
-    stuck_leads = []
-    terminal_stuck_exclude = {LeadStatus.WON, LeadStatus.LOST, LeadStatus.CLOSED}
-
-    for status in LeadStatus:
-        if status in terminal_stuck_exclude:
-            continue
-        statement = select(Lead).where(Lead.status == status).order_by(Lead.updated_at.asc()).limit(1)
-        lead = session.exec(statement).first()
-        if lead:
-            days_old = (datetime.utcnow() - lead.updated_at).days
-            stuck_leads.append({
-                "id": lead.id,
-                "name": lead.name,
-                "status": lead.status.value,
-                "days_old": days_old,
-                "updated_at": lead.updated_at.isoformat()
-            })
-    
-    return stuck_leads
-
-
 @router.get("/unread-sms", response_model=UnreadSmsSummary)
 async def get_unread_sms(
     session: Session = Depends(get_session),
