@@ -617,6 +617,7 @@ async def create_lead_from_customer(
     lead = Lead(
         name=customer.name,
         email=customer.email,
+        wrong_email_address=bool(getattr(customer, "wrong_email_address", False)),
         phone=customer.phone,
         postcode=customer.postcode,
         status=LeadStatus.QUALIFIED,

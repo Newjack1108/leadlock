@@ -60,6 +60,7 @@ _OUTREACH_NO_ACTOR_REASON = (
 _OUTREACH_QUIET_HOURS_REASON = (
     "Skipped during outreach quiet hours (23:00-06:00 local company timezone)"
 )
+_OUTREACH_WRONG_EMAIL_REASON = "Marked as wrong email address"
 QUIET_HOURS_AUDIT_PREFIX = "QUIET_HOURS_AUDIT:"
 _OUTREACH_QUIET_HOURS_START = 23  # 23:00 local
 _OUTREACH_QUIET_HOURS_END = 6  # 06:00 local
@@ -260,6 +261,35 @@ def _customer_opted_out_of_rule_outreach(session: Session, customer_id: int) -> 
     return session.exec(stmt).first() is not None
 
 
+def _wrong_email_marked_for_outreach(
+    session: Session,
+    *,
+    customer_id: int,
+    lead_id: Optional[int],
+) -> bool:
+    customer_stmt = (
+        select(Customer.id)
+        .where(
+            Customer.id == customer_id,
+            Customer.wrong_email_address.is_(True),
+        )
+        .limit(1)
+    )
+    if session.exec(customer_stmt).first() is not None:
+        return True
+    if lead_id is None:
+        return False
+    lead_stmt = (
+        select(Lead.id)
+        .where(
+            Lead.id == lead_id,
+            Lead.wrong_email_address.is_(True),
+        )
+        .limit(1)
+    )
+    return session.exec(lead_stmt).first() is not None
+
+
 def _quote_outreach_superseded_by_later_order(session: Session, quote: Quote, customer_id: int) -> bool:
     """
     True if the customer already has an order placed on or after this quote's outreach reference time
@@ -349,6 +379,12 @@ def _send_outreach_email(
 ) -> Tuple[bool, Optional[str], Optional[str]]:
     if customer.id is not None and _customer_opted_out_of_rule_outreach(session, customer.id):
         return False, None, _CUSTOMER_OUTREACH_OPTOUT_REASON
+    if customer.id is not None and _wrong_email_marked_for_outreach(
+        session,
+        customer_id=customer.id,
+        lead_id=lead.id if lead else None,
+    ):
+        return False, None, _OUTREACH_WRONG_EMAIL_REASON
     tid = rule.customer_outreach_email_template_id
     if not tid:
         return False, None, "No email template"
@@ -370,6 +406,12 @@ def _send_outreach_email(
 
     if customer.id is not None and _customer_opted_out_of_rule_outreach(session, customer.id):
         return False, None, _CUSTOMER_OUTREACH_OPTOUT_REASON
+    if customer.id is not None and _wrong_email_marked_for_outreach(
+        session,
+        customer_id=customer.id,
+        lead_id=lead.id if lead else None,
+    ):
+        return False, None, _OUTREACH_WRONG_EMAIL_REASON
     success, message_id, err, sent_html, sent_text = send_email(
         to_email=to_email,
         subject=subject,
@@ -514,6 +556,15 @@ def _deliver_lead_customer_outreach_once(
         if err_msg == _CUSTOMER_OUTREACH_OPTOUT_REASON:
             _log_outreach_suppression(
                 reason="opt_out_enabled",
+                rule_id=rule.id,
+                customer_id=customer.id,
+                lead_id=lead.id,
+                quote_id=None,
+            )
+            return False
+        if err_msg == _OUTREACH_WRONG_EMAIL_REASON:
+            _log_outreach_suppression(
+                reason="wrong_email_marked",
                 rule_id=rule.id,
                 customer_id=customer.id,
                 lead_id=lead.id,
@@ -706,6 +757,19 @@ def run_customer_outreach_cycle(session: Session) -> int:
                 quote_id=quote.id,
             )
             continue
+        if ch == CustomerOutreachChannel.EMAIL.value and _wrong_email_marked_for_outreach(
+            session,
+            customer_id=quote.customer_id,
+            lead_id=quote.lead_id,
+        ):
+            _log_outreach_suppression(
+                reason="wrong_email_marked",
+                rule_id=rule.id,
+                customer_id=quote.customer_id,
+                lead_id=quote.lead_id,
+                quote_id=quote.id,
+            )
+            continue
         if _quote_outreach_superseded_by_later_order(session, quote, quote.customer_id):
             print(
                 f"Customer outreach: skip quote {quote.id} rule {rule.id}: "
@@ -763,6 +827,15 @@ def run_customer_outreach_cycle(session: Session) -> int:
             if err_msg == _CUSTOMER_OUTREACH_OPTOUT_REASON:
                 _log_outreach_suppression(
                     reason="opt_out_enabled",
+                    rule_id=rule.id,
+                    customer_id=customer.id,
+                    lead_id=quote.lead_id,
+                    quote_id=quote.id,
+                )
+                continue
+            if err_msg == _OUTREACH_WRONG_EMAIL_REASON:
+                _log_outreach_suppression(
+                    reason="wrong_email_marked",
                     rule_id=rule.id,
                     customer_id=customer.id,
                     lead_id=quote.lead_id,

@@ -151,6 +151,8 @@ class Customer(SQLModel, table=True):
     sms_bot_stopped: bool = Field(default=False)
     # Stops automated SMS/email from reminder-rule outreach worker only (not manual staff sends)
     automated_reminder_outreach_opt_out: bool = Field(default=False)
+    # Marked when staff know email address is invalid and automated email outreach should be suppressed.
+    wrong_email_address: bool = Field(default=False)
     # After a [BOT_HANDOVER] outbound, suppress auto-replies to inbound received before this UTC time (Twilio retries / clock skew).
     sms_bot_suppress_auto_reply_before_utc: Optional[datetime] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -183,6 +185,8 @@ class Lead(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str
     email: Optional[str] = None
+    # Marked when staff know this lead email is invalid and automated email outreach should be suppressed.
+    wrong_email_address: bool = Field(default=False)
     phone: Optional[str] = None
     postcode: Optional[str] = None
     description: Optional[str] = None

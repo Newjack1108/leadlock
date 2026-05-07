@@ -212,6 +212,10 @@ def sync_customer_contact_from_lead_on_qualify(session: Session, lead: Lead) -> 
     if new_phone is not None and customer.phone != new_phone:
         customer.phone = new_phone
         dirty = True
+    # Keep customer-level wrong-email marker aligned when staff mark it on a qualified lead.
+    if customer.wrong_email_address != bool(getattr(lead, "wrong_email_address", False)):
+        customer.wrong_email_address = bool(getattr(lead, "wrong_email_address", False))
+        dirty = True
 
     if dirty:
         customer.updated_at = datetime.utcnow()

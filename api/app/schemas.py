@@ -134,6 +134,7 @@ class CustomerUpdate(BaseModel):
     postcode: Optional[str] = None
     country: Optional[str] = None
     automated_reminder_outreach_opt_out: Optional[bool] = None
+    wrong_email_address: Optional[bool] = None
 
 
 class CustomerResponse(BaseModel):
@@ -152,6 +153,7 @@ class CustomerResponse(BaseModel):
     sms_bot_paused_until: Optional[datetime] = None
     sms_bot_stopped: bool = False
     automated_reminder_outreach_opt_out: bool = False
+    wrong_email_address: bool = False
     created_at: datetime
     updated_at: datetime
     messenger_psid: Optional[str] = None
@@ -177,6 +179,7 @@ def customer_to_response(customer: Customer) -> CustomerResponse:
         automated_reminder_outreach_opt_out=bool(
             getattr(customer, "automated_reminder_outreach_opt_out", False)
         ),
+        wrong_email_address=bool(getattr(customer, "wrong_email_address", False)),
         created_at=customer.created_at,
         updated_at=customer.updated_at,
         messenger_psid=customer.messenger_psid,
@@ -514,6 +517,7 @@ class LeadCreate(BaseModel):
     last_name: Optional[str] = None
     full_name: Optional[str] = None
     email: Optional[str] = None
+    wrong_email_address: Optional[bool] = False
     phone: Optional[str] = None
     phone_number: Optional[str] = None
     postcode: Optional[str] = None
@@ -551,6 +555,7 @@ class CustomerLeadCreate(BaseModel):
 class LeadUpdate(BaseModel):
     name: Optional[str] = None
     email: Optional[str] = None
+    wrong_email_address: Optional[bool] = None
     phone: Optional[str] = None
     postcode: Optional[str] = None
     description: Optional[str] = None
@@ -591,6 +596,7 @@ class LeadResponse(BaseModel):
     id: int
     name: str
     email: Optional[str]
+    wrong_email_address: bool = False
     phone: Optional[str]
     postcode: Optional[str]
     description: Optional[str]

@@ -114,6 +114,7 @@ function LeadsPageContent() {
   const [newLead, setNewLead] = useState({
     name: '',
     email: '',
+    wrong_email_address: false,
     phone: '',
     postcode: '',
     description: '',
@@ -303,6 +304,7 @@ function LeadsPageContent() {
       await api.post('/api/leads', {
         name: newLead.name.trim(),
         email: newLead.email.trim() || undefined,
+        wrong_email_address: !!newLead.wrong_email_address,
         phone: newLead.phone.trim() || undefined,
         postcode: newLead.postcode.trim() || undefined,
         description: newLead.description.trim() || undefined,
@@ -312,7 +314,7 @@ function LeadsPageContent() {
       
       toast.success('Lead created successfully');
       setCreateDialogOpen(false);
-      setNewLead({ name: '', email: '', phone: '', postcode: '', description: '', lead_type: LeadType.UNKNOWN, lead_source: LeadSource.MANUAL_ENTRY });
+      setNewLead({ name: '', email: '', wrong_email_address: false, phone: '', postcode: '', description: '', lead_type: LeadType.UNKNOWN, lead_source: LeadSource.MANUAL_ENTRY });
       await fetchLeads(1);
     } catch (error: any) {
       toast.error(error.response?.data?.detail || 'Failed to create lead');
@@ -675,6 +677,16 @@ function LeadsPageContent() {
                   placeholder="john@example.com"
                   disabled={creating}
                 />
+                <label className="inline-flex items-center gap-2 text-sm font-bold text-foreground">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-input"
+                    checked={!!newLead.wrong_email_address}
+                    onChange={(e) => setNewLead({ ...newLead, wrong_email_address: e.target.checked })}
+                    disabled={creating}
+                  />
+                  Wrong email address (stop automated emails)
+                </label>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="phone">Phone</Label>
@@ -747,7 +759,7 @@ function LeadsPageContent() {
                 variant="outline"
                 onClick={() => {
                   setCreateDialogOpen(false);
-                  setNewLead({ name: '', email: '', phone: '', postcode: '', description: '', lead_type: LeadType.UNKNOWN, lead_source: LeadSource.MANUAL_ENTRY });
+                  setNewLead({ name: '', email: '', wrong_email_address: false, phone: '', postcode: '', description: '', lead_type: LeadType.UNKNOWN, lead_source: LeadSource.MANUAL_ENTRY });
                 }}
                 disabled={creating}
               >

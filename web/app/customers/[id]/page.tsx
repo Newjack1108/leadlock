@@ -328,6 +328,23 @@ export default function CustomerDetailPage() {
     }
   };
 
+  const handleWrongEmailAddress = async (wrongEmail: boolean) => {
+    try {
+      await api.patch(`/api/customers/${customerId}`, {
+        wrong_email_address: wrongEmail,
+      });
+      setCustomer((prev) => (prev ? { ...prev, wrong_email_address: wrongEmail } : null));
+      toast.success(
+        wrongEmail
+          ? 'Wrong email flag enabled. Automated emails will be suppressed.'
+          : 'Wrong email flag removed. Automated emails can send again.'
+      );
+      fetchHistory();
+    } catch {
+      toast.error('Failed to update wrong email setting');
+    }
+  };
+
   const handleDeleteCustomer = async () => {
     if (
       !window.confirm(
@@ -474,6 +491,15 @@ export default function CustomerDetailPage() {
                         onChange={(e) => handleFieldChange('email', e.target.value)}
                         onBlur={(e) => handleUpdateCustomer('email', e.target.value)}
                       />
+                      <label className="mt-2 inline-flex items-center gap-2 text-sm font-bold text-foreground">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-input"
+                          checked={!!customer.wrong_email_address}
+                          onChange={(e) => handleWrongEmailAddress(e.target.checked)}
+                        />
+                        Wrong email address (stop automated emails)
+                      </label>
                     </div>
                     <div>
                       <Label>Phone <span className="text-destructive">*</span></Label>

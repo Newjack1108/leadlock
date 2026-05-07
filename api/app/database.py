@@ -663,6 +663,34 @@ def create_db_and_tables():
                             file=sys.stderr,
                             flush=True,
                         )
+            customer_columns = [col["name"] for col in inspector.get_columns("customer")]
+            if "wrong_email_address" not in customer_columns:
+                print(
+                    "Adding wrong_email_address column to customer table...",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(
+                            text(
+                                "ALTER TABLE customer ADD COLUMN wrong_email_address "
+                                "BOOLEAN DEFAULT FALSE NOT NULL"
+                            )
+                        )
+                    print(
+                        "Added wrong_email_address column to customer table",
+                        file=sys.stderr,
+                        flush=True,
+                    )
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(
+                            f"Error adding wrong_email_address to customer: {e}",
+                            file=sys.stderr,
+                            flush=True,
+                        )
         if has_lead_table:
             lead_columns = [col['name'] for col in inspector.get_columns("lead")]
             if "messenger_psid" not in lead_columns:
@@ -684,6 +712,22 @@ def create_db_and_tables():
                 with engine.begin() as conn:
                     conn.execute(text("ALTER TABLE lead ADD COLUMN customer_id INTEGER"))
                 print("Added customer_id to lead table", file=sys.stderr, flush=True)
+            lead_columns = [col['name'] for col in inspector.get_columns("lead")]
+            if "wrong_email_address" not in lead_columns:
+                print("Adding wrong_email_address column to lead table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(
+                            text(
+                                "ALTER TABLE lead ADD COLUMN wrong_email_address "
+                                "BOOLEAN DEFAULT FALSE NOT NULL"
+                            )
+                        )
+                    print("Added wrong_email_address to lead table", file=sys.stderr, flush=True)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Error adding wrong_email_address to lead: {e}", file=sys.stderr, flush=True)
         
         # Step 2: Migrate existing qualified leads to Customer records
         if has_lead_table and has_customer_table:

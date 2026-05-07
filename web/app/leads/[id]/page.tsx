@@ -471,6 +471,18 @@ export default function LeadDetailPage() {
                       onChange={(e) => handleFieldChange('email', e.target.value)}
                       onBlur={(e) => handleUpdateLead('email', e.target.value)}
                     />
+                    <label className="mt-2 inline-flex items-center gap-2 text-sm font-bold text-foreground">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-input"
+                        checked={!!lead.wrong_email_address}
+                        onChange={(e) => {
+                          handleFieldChange('wrong_email_address', e.target.checked);
+                          handleUpdateLead('wrong_email_address', e.target.checked);
+                        }}
+                      />
+                      Wrong email address (stop automated emails)
+                    </label>
                   </div>
                   <div>
                     <Label>Phone</Label>

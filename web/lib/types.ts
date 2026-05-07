@@ -150,6 +150,8 @@ export interface Customer {
   sms_bot_stopped?: boolean;
   /** When true, background reminder-rule SMS/email is not sent (manual staff messages still allowed). */
   automated_reminder_outreach_opt_out?: boolean;
+  /** When true, this address is known bad and automated emails should be suppressed. */
+  wrong_email_address?: boolean;
   created_at: string;
   updated_at: string;
   messenger_psid?: string | null;
@@ -173,6 +175,7 @@ export interface Lead {
   id: number;
   name: string;
   email?: string;
+  wrong_email_address?: boolean;
   phone?: string;
   postcode?: string;
   description?: string;

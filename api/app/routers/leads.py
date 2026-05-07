@@ -44,7 +44,7 @@ from app.workflow import (
     sync_customer_contact_from_lead_on_qualify,
 )
 
-_LEAD_CUSTOMER_SYNC_FIELDS = frozenset({"name", "email", "phone", "postcode"})
+_LEAD_CUSTOMER_SYNC_FIELDS = frozenset({"name", "email", "wrong_email_address", "phone", "postcode"})
 from app.quote_delete import delete_quote_cascade
 from app.lead_delete import delete_lead_cascade
 from app.constants import QUOTE_LIST_EXCLUDED_STATUSES, LIST_PAGE_SIZE_DEFAULT, LIST_PAGE_SIZE_MAX
@@ -107,6 +107,11 @@ def _merge_lead_into_customer_if_sparse(customer: Customer, lead: Lead, session:
     if lead.postcode and not (customer.postcode or "").strip():
         customer.postcode = lead.postcode
         dirty = True
+    if bool(getattr(lead, "wrong_email_address", False)) and not bool(
+        getattr(customer, "wrong_email_address", False)
+    ):
+        customer.wrong_email_address = True
+        dirty = True
     if dirty:
         session.add(customer)
         session.commit()
@@ -166,6 +171,7 @@ def find_or_create_customer(lead: Lead, session: Session) -> Customer:
         customer_number=generate_customer_number(session),
         name=lead.name,
         email=lead.email,
+        wrong_email_address=bool(getattr(lead, "wrong_email_address", False)),
         phone=lead.phone,
         postcode=lead.postcode,
         customer_since=datetime.utcnow()
@@ -394,6 +400,7 @@ def enrich_lead_response(
         id=lead.id,
         name=lead.name,
         email=lead.email,
+        wrong_email_address=bool(getattr(lead, "wrong_email_address", False)),
         phone=lead.phone,
         postcode=lead.postcode,
         description=lead.description,
