@@ -1,8 +1,9 @@
-"""Cloudinary-backed file storage for order plans (PDFs and images).
+"""Cloudinary-backed file storage for customer / quote / order files.
 
-Files are organised under ``orders/{order_id}/`` in Cloudinary so they are easy
-to manage in the dashboard. Unlike product images we never fall back to local
-disk — Railway disks are ephemeral and plan files must persist.
+All files for a customer live under ``customers/{customer_id}/`` in Cloudinary
+regardless of which context (customer profile, quote or order) they were
+uploaded from. Unlike product images we never fall back to local disk —
+Railway disks are ephemeral and these files must persist.
 """
 
 import os
@@ -42,10 +43,10 @@ def _ensure_configured() -> None:
         raise HTTPException(status_code=500, detail="Cloudinary is not configured")
 
 
-async def upload_order_file_to_cloudinary(
-    file: UploadFile, order_id: int
+async def upload_customer_file_to_cloudinary(
+    file: UploadFile, customer_id: int
 ) -> Dict[str, Any]:
-    """Upload a single PDF/JPG/PNG to Cloudinary under ``orders/{order_id}``.
+    """Upload a single PDF/JPG/PNG to Cloudinary under ``customers/{customer_id}``.
 
     Returns a dict with ``secure_url``, ``public_id``, ``resource_type``,
     ``format`` and ``bytes`` taken from Cloudinary's response.
@@ -71,7 +72,7 @@ async def upload_order_file_to_cloudinary(
     try:
         upload_result = cloudinary.uploader.upload(
             contents,
-            folder=f"orders/{order_id}",
+            folder=f"customers/{customer_id}",
             resource_type="auto",
             use_filename=True,
             unique_filename=True,
@@ -88,7 +89,7 @@ async def upload_order_file_to_cloudinary(
     }
 
 
-def delete_order_file_from_cloudinary(public_id: str, resource_type: str) -> None:
+def delete_customer_file_from_cloudinary(public_id: str, resource_type: str) -> None:
     """Best-effort delete from Cloudinary; missing assets are not an error."""
     if not CLOUDINARY_AVAILABLE:
         return

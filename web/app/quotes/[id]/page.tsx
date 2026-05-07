@@ -22,6 +22,7 @@ import {
 import { QUOTE_BALANCE_BEFORE_DELIVERY_NOTE } from '@/lib/quoteCopy';
 import SendQuoteEmailDialog from '@/components/SendQuoteEmailDialog';
 import CallNotesDialog from '@/components/CallNotesDialog';
+import FilesCard from '@/components/FilesCard';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { formatDateTime } from '@/lib/utils';
@@ -539,6 +540,9 @@ export default function QuoteDetailPage() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Plans & Documents */}
+            <FilesCard context="quote" id={quoteId} />
 
             {/* Applied Discounts */}
             {quote.discounts && quote.discounts.length > 0 && (

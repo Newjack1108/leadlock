@@ -865,21 +865,30 @@ class AccessSheetRequest(SQLModel, table=True):
     order: "Order" = Relationship(back_populates="access_sheet_requests")
 
 
-class OrderFileKind(str, Enum):
+class CustomerFileKind(str, Enum):
     PLAN = "PLAN"
     PHOTO = "PHOTO"
     OTHER = "OTHER"
 
 
-class OrderFile(SQLModel, table=True):
-    """File attached to an order (PDF/JPG/PNG plans, photos, etc).
+class CustomerFile(SQLModel, table=True):
+    """File anchored to a customer, optionally scoped to a quote and/or order.
 
-    Files are stored in Cloudinary; this row holds the metadata and the
-    ``secure_url`` used to fetch/download in the UI.
+    Storage is Cloudinary (folder ``customers/{customer_id}``); this row holds
+    the metadata and the ``secure_url`` used to fetch/download in the UI.
+    Visibility rules:
+      - Customer profile: ``customer_id`` matches AND both ``quote_id`` and
+        ``order_id`` are NULL.
+      - Quote page: ``quote_id`` matches.
+      - Order page: ``order_id`` matches.
+    On quote acceptance, ``order_id`` is set on the existing row so the same
+    file appears on both quote and order without duplication.
     """
     id: Optional[int] = Field(default=None, primary_key=True)
-    order_id: int = Field(foreign_key="customer_order.id", index=True)
-    kind: OrderFileKind = Field(default=OrderFileKind.PLAN)
+    customer_id: int = Field(foreign_key="customer.id", index=True)
+    quote_id: Optional[int] = Field(default=None, foreign_key="quote.id", index=True)
+    order_id: Optional[int] = Field(default=None, foreign_key="customer_order.id", index=True)
+    kind: CustomerFileKind = Field(default=CustomerFileKind.PLAN)
     original_filename: str
     content_type: str
     size_bytes: int

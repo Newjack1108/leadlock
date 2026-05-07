@@ -10,7 +10,7 @@ from starlette.responses import Response
 from app.json_datetime import json_dumps_utf8, normalize_json_datetimes
 from app.database import create_db_and_tables, engine
 from sqlmodel import Session, select
-from app.routers import auth, leads, dashboard, reports, webhooks, products, settings, quotes, customers, emails, email_templates, quote_templates, sms_templates, reminders, discounts, discount_requests, sms, messenger, public, delivery_install, orders, order_files, users, sales_documents, facebook_adverts, dealer_portal, dealer_discount_admin
+from app.routers import auth, leads, dashboard, reports, webhooks, products, settings, quotes, customers, emails, email_templates, quote_templates, sms_templates, reminders, discounts, discount_requests, sms, messenger, public, delivery_install, orders, customer_files, users, sales_documents, facebook_adverts, dealer_portal, dealer_discount_admin
 from app.models import User
 import os
 import traceback
@@ -164,7 +164,7 @@ app.include_router(sms.router)
 app.include_router(messenger.router)
 app.include_router(delivery_install.router)
 app.include_router(orders.router)
-app.include_router(order_files.router)
+app.include_router(customer_files.router)
 app.include_router(users.router)
 app.include_router(sales_documents.router)
 app.include_router(public.router)
@@ -179,6 +179,14 @@ def on_startup():
     print("=" * 50, file=sys.stderr, flush=True)
     print("Starting database initialization...", file=sys.stderr, flush=True)
     print("=" * 50, file=sys.stderr, flush=True)
+    # One-time cleanup: drop the legacy ``orderfile`` table that briefly shipped
+    # in commit 75ebac1 before being unified into ``customerfile``. Idempotent.
+    try:
+        from sqlalchemy import text
+        with engine.begin() as conn:
+            conn.execute(text("DROP TABLE IF EXISTS orderfile"))
+    except Exception as e:
+        print(f"Legacy orderfile drop skipped: {e}", file=sys.stderr, flush=True)
     try:
         create_db_and_tables()
         print("Database initialization complete", file=sys.stderr, flush=True)

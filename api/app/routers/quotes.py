@@ -31,6 +31,7 @@ from app.models import (
     QuoteDiscount,
     DiscountType,
     DiscountScope,
+    CustomerFile,
     Order,
     OrderItem,
     QuoteItemLineType,
@@ -709,6 +710,12 @@ def create_order_from_quote(quote: Quote, session: Session, created_by_id: int) 
             is_custom=qi.is_custom,
         )
         session.add(order_item)
+    # Inherit any files attached to the quote so they appear on the order too.
+    for cf in session.exec(
+        select(CustomerFile).where(CustomerFile.quote_id == quote.id)
+    ).all():
+        cf.order_id = order.id
+        session.add(cf)
     return order
 
 

@@ -10,7 +10,7 @@ from app.models import (
     LeadType, LeadSource, EmailDirection, ReminderPriority, ReminderType,
     SuggestedAction, OpportunityStage, LossCategory, InstallationLeadTime,
     SmsDirection, ScheduledSmsStatus, MessengerDirection, QuoteItemLineType, SmsBotMode, DealerDiscountMode,
-    OrderFileKind,
+    CustomerFileKind,
 )
 
 
@@ -1547,11 +1547,13 @@ class OrderResponse(BaseModel):
     access_sheet: Optional[AccessSheetResponse] = None
 
 
-class OrderFileResponse(BaseModel):
-    """File attached to an order (PDF/JPG/PNG)."""
+class CustomerFileResponse(BaseModel):
+    """File anchored to a customer, optionally scoped to a quote and/or order."""
     id: int
-    order_id: int
-    kind: OrderFileKind
+    customer_id: int
+    quote_id: Optional[int] = None
+    order_id: Optional[int] = None
+    kind: CustomerFileKind
     original_filename: str
     content_type: str
     size_bytes: int

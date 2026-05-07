@@ -12,26 +12,50 @@ import {
 } from '@/components/ui/select';
 import { Download, FileText, Image as ImageIcon, Trash2, Upload } from 'lucide-react';
 import {
-  deleteOrderFile,
+  deleteCustomerFile,
+  listCustomerFiles,
   listOrderFiles,
+  listQuoteFiles,
+  uploadCustomerFile,
   uploadOrderFile,
+  uploadQuoteFile,
 } from '@/lib/api';
-import { OrderFile, OrderFileKind } from '@/lib/types';
+import { CustomerFile, CustomerFileKind } from '@/lib/types';
 import { toast } from 'sonner';
 import { formatDateTime } from '@/lib/utils';
 
-interface OrderFilesCardProps {
-  orderId: number;
+export type FilesContext = 'customer' | 'quote' | 'order';
+
+interface FilesCardProps {
+  context: FilesContext;
+  id: number;
+  title?: string;
+  description?: string;
 }
 
 const ACCEPT = 'application/pdf,image/jpeg,image/png';
 const ACCEPTED_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/png']);
 const MAX_BYTES = 25 * 1024 * 1024;
 
-const KIND_LABELS: Record<OrderFileKind, string> = {
-  [OrderFileKind.PLAN]: 'Plan',
-  [OrderFileKind.PHOTO]: 'Photo',
-  [OrderFileKind.OTHER]: 'Other',
+const KIND_LABELS: Record<CustomerFileKind, string> = {
+  [CustomerFileKind.PLAN]: 'Plan',
+  [CustomerFileKind.PHOTO]: 'Photo',
+  [CustomerFileKind.OTHER]: 'Other',
+};
+
+const DEFAULT_TITLE: Record<FilesContext, string> = {
+  customer: 'Files',
+  quote: 'Plans & Documents',
+  order: 'Plans & Documents',
+};
+
+const DEFAULT_DESCRIPTION: Record<FilesContext, string> = {
+  customer:
+    'Documents that apply to the customer (e.g. ID, site survey). Quote and order plans are kept on those pages.',
+  quote:
+    'Building plans for this quote. Auto-attach to the order if accepted.',
+  order:
+    'Plans and photos for this order. Files uploaded to the originating quote appear here too.',
 };
 
 function formatFileSize(bytes: number): string {
@@ -44,12 +68,29 @@ function isImageContentType(contentType: string): boolean {
   return contentType.startsWith('image/');
 }
 
-export default function OrderFilesCard({ orderId }: OrderFilesCardProps) {
-  const [files, setFiles] = useState<OrderFile[]>([]);
+async function listFor(context: FilesContext, id: number): Promise<CustomerFile[]> {
+  if (context === 'customer') return listCustomerFiles(id);
+  if (context === 'quote') return listQuoteFiles(id);
+  return listOrderFiles(id);
+}
+
+async function uploadFor(
+  context: FilesContext,
+  id: number,
+  file: File,
+  kind: CustomerFileKind
+): Promise<CustomerFile> {
+  if (context === 'customer') return uploadCustomerFile(id, file, kind);
+  if (context === 'quote') return uploadQuoteFile(id, file, kind);
+  return uploadOrderFile(id, file, kind);
+}
+
+export default function FilesCard({ context, id, title, description }: FilesCardProps) {
+  const [files, setFiles] = useState<CustomerFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
-  const [kind, setKind] = useState<OrderFileKind>(OrderFileKind.PLAN);
+  const [kind, setKind] = useState<CustomerFileKind>(CustomerFileKind.PLAN);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -58,7 +99,7 @@ export default function OrderFilesCard({ orderId }: OrderFilesCardProps) {
     const load = async () => {
       try {
         setLoading(true);
-        const data = await listOrderFiles(orderId);
+        const data = await listFor(context, id);
         if (!cancelled) setFiles(data);
       } catch {
         if (!cancelled) toast.error('Failed to load files');
@@ -70,7 +111,7 @@ export default function OrderFilesCard({ orderId }: OrderFilesCardProps) {
     return () => {
       cancelled = true;
     };
-  }, [orderId]);
+  }, [context, id]);
 
   const validateFile = (file: File): boolean => {
     if (!ACCEPTED_TYPES.has(file.type)) {
@@ -89,10 +130,10 @@ export default function OrderFilesCard({ orderId }: OrderFilesCardProps) {
     if (list.length === 0) return;
     setUploading(true);
     try {
-      const uploaded: OrderFile[] = [];
+      const uploaded: CustomerFile[] = [];
       for (const f of list) {
         try {
-          const created = await uploadOrderFile(orderId, f, kind);
+          const created = await uploadFor(context, id, f, kind);
           uploaded.push(created);
         } catch (error: unknown) {
           const detail =
@@ -139,13 +180,13 @@ export default function OrderFilesCard({ orderId }: OrderFilesCardProps) {
     }
   };
 
-  const handleDelete = async (file: OrderFile) => {
+  const handleDelete = async (file: CustomerFile) => {
     if (!window.confirm(`Delete "${file.original_filename}"? This cannot be undone.`)) {
       return;
     }
     setDeletingId(file.id);
     try {
-      await deleteOrderFile(orderId, file.id);
+      await deleteCustomerFile(file.id);
       setFiles((prev) => prev.filter((f) => f.id !== file.id));
       toast.success('File removed');
     } catch (error: unknown) {
@@ -157,14 +198,14 @@ export default function OrderFilesCard({ orderId }: OrderFilesCardProps) {
     }
   };
 
+  const cardTitle = title ?? DEFAULT_TITLE[context];
+  const cardDescription = description ?? DEFAULT_DESCRIPTION[context];
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Plans &amp; Documents</CardTitle>
-        <p className="text-sm text-muted-foreground">
-          Upload PDF or JPG/PNG plans and photos for this order. Files are visible to all
-          internal users.
-        </p>
+        <CardTitle>{cardTitle}</CardTitle>
+        <p className="text-sm text-muted-foreground">{cardDescription}</p>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
@@ -172,14 +213,14 @@ export default function OrderFilesCard({ orderId }: OrderFilesCardProps) {
             <label className="text-xs text-muted-foreground uppercase tracking-wide">
               File type
             </label>
-            <Select value={kind} onValueChange={(v) => setKind(v as OrderFileKind)}>
+            <Select value={kind} onValueChange={(v) => setKind(v as CustomerFileKind)}>
               <SelectTrigger className="w-full sm:w-[180px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={OrderFileKind.PLAN}>Plan</SelectItem>
-                <SelectItem value={OrderFileKind.PHOTO}>Photo</SelectItem>
-                <SelectItem value={OrderFileKind.OTHER}>Other</SelectItem>
+                <SelectItem value={CustomerFileKind.PLAN}>Plan</SelectItem>
+                <SelectItem value={CustomerFileKind.PHOTO}>Photo</SelectItem>
+                <SelectItem value={CustomerFileKind.OTHER}>Other</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -240,7 +281,7 @@ export default function OrderFilesCard({ orderId }: OrderFilesCardProps) {
           <div className="text-center py-6 text-sm text-muted-foreground">Loading files…</div>
         ) : files.length === 0 ? (
           <div className="text-center py-6 text-sm text-muted-foreground">
-            No plans uploaded yet — drop PDFs or images here.
+            No files yet — drop PDFs or images here.
           </div>
         ) : (
           <div className="border rounded-md divide-y">

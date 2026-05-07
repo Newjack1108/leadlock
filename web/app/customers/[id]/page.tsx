@@ -57,6 +57,7 @@ import CallNotesDialog from '@/components/CallNotesDialog';
 import AddManualActivityDialog from '@/components/AddManualActivityDialog';
 import NinoxBadge from '@/components/NinoxBadge';
 import CustomerCommunicationBarChart from '@/components/CustomerCommunicationBarChart';
+import FilesCard from '@/components/FilesCard';
 import { toast } from 'sonner';
 
 const activityIcons: Record<ActivityType, any> = {
@@ -890,6 +891,9 @@ export default function CustomerDetailPage() {
               </CardContent>
             </Card>
             </div>
+
+            {/* Customer-level files */}
+            <FilesCard context="customer" id={customerId} />
 
             {/* Websites Visited Card */}
             <Card>

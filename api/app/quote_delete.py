@@ -3,6 +3,7 @@
 from sqlmodel import Session, select
 
 from app.models import (
+    CustomerFile,
     CustomerOutreachSend,
     DiscountRequest,
     Quote,
@@ -11,6 +12,7 @@ from app.models import (
     QuoteItem,
     Reminder,
 )
+from app.customer_file_service import delete_customer_file_from_cloudinary
 
 
 def delete_quote_cascade(session: Session, quote_id: int) -> None:
@@ -26,6 +28,16 @@ def delete_quote_cascade(session: Session, quote_id: int) -> None:
     session.flush()
     for discount in session.exec(select(QuoteDiscount).where(QuoteDiscount.quote_id == quote_id)).all():
         session.delete(discount)
+    session.flush()
+    for cf in session.exec(select(CustomerFile).where(CustomerFile.quote_id == quote_id)).all():
+        # If the file is also linked to an order, leave it attached to the
+        # order; otherwise delete it (and best-effort remove the Cloudinary asset).
+        if cf.order_id is None:
+            delete_customer_file_from_cloudinary(cf.cloudinary_public_id, cf.cloudinary_resource_type)
+            session.delete(cf)
+        else:
+            cf.quote_id = None
+            session.add(cf)
     session.flush()
     existing_items = list(session.exec(select(QuoteItem).where(QuoteItem.quote_id == quote_id)).all())
     for item in existing_items:

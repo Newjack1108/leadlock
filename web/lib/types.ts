@@ -919,16 +919,18 @@ export interface Order {
   access_sheet?: AccessSheet | null;
 }
 
-export enum OrderFileKind {
+export enum CustomerFileKind {
   PLAN = "PLAN",
   PHOTO = "PHOTO",
   OTHER = "OTHER",
 }
 
-export interface OrderFile {
+export interface CustomerFile {
   id: number;
-  order_id: number;
-  kind: OrderFileKind;
+  customer_id: number;
+  quote_id?: number | null;
+  order_id?: number | null;
+  kind: CustomerFileKind;
   original_filename: string;
   content_type: string;
   size_bytes: number;

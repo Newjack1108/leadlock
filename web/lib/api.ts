@@ -990,20 +990,69 @@ export const sendOrderToProduction = async (orderId: number): Promise<{ success:
   return response.data;
 };
 
-/** List files attached to an order (PDFs / JPGs / PNGs). Auth required. */
+type _CustomerFile = import('@/lib/types').CustomerFile;
+type _CustomerFileKind = import('@/lib/types').CustomerFileKind;
+
+/** List customer-level files (no quote/order context). Auth required. */
+export const listCustomerFiles = async (
+  customerId: number
+): Promise<_CustomerFile[]> => {
+  const response = await api.get(`/api/customers/${customerId}/files`);
+  return response.data;
+};
+
+/** Upload a customer-level file (no quote/order context). Auth required. */
+export const uploadCustomerFile = async (
+  customerId: number,
+  file: File,
+  kind?: _CustomerFileKind
+): Promise<_CustomerFile> => {
+  const formData = new FormData();
+  formData.append('file', file);
+  if (kind) formData.append('kind', kind);
+  const response = await api.post(`/api/customers/${customerId}/files`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return response.data;
+};
+
+/** List files attached to a quote. Auth required. */
+export const listQuoteFiles = async (
+  quoteId: number
+): Promise<_CustomerFile[]> => {
+  const response = await api.get(`/api/quotes/${quoteId}/files`);
+  return response.data;
+};
+
+/** Upload a file to a quote (auto-attaches to the order on acceptance). */
+export const uploadQuoteFile = async (
+  quoteId: number,
+  file: File,
+  kind?: _CustomerFileKind
+): Promise<_CustomerFile> => {
+  const formData = new FormData();
+  formData.append('file', file);
+  if (kind) formData.append('kind', kind);
+  const response = await api.post(`/api/quotes/${quoteId}/files`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return response.data;
+};
+
+/** List files attached to an order (includes files inherited from the quote). */
 export const listOrderFiles = async (
   orderId: number
-): Promise<import('@/lib/types').OrderFile[]> => {
+): Promise<_CustomerFile[]> => {
   const response = await api.get(`/api/orders/${orderId}/files`);
   return response.data;
 };
 
-/** Upload a plan/photo/other file to an order. Auth required. */
+/** Upload a file directly to an order (no quote link). */
 export const uploadOrderFile = async (
   orderId: number,
   file: File,
-  kind?: import('@/lib/types').OrderFileKind
-): Promise<import('@/lib/types').OrderFile> => {
+  kind?: _CustomerFileKind
+): Promise<_CustomerFile> => {
   const formData = new FormData();
   formData.append('file', file);
   if (kind) formData.append('kind', kind);
@@ -1013,9 +1062,9 @@ export const uploadOrderFile = async (
   return response.data;
 };
 
-/** Delete a file from an order (also removes from Cloudinary). Auth required. */
-export const deleteOrderFile = async (orderId: number, fileId: number): Promise<void> => {
-  await api.delete(`/api/orders/${orderId}/files/${fileId}`);
+/** Delete a customer/quote/order file (also removes from Cloudinary). */
+export const deleteCustomerFile = async (fileId: number): Promise<void> => {
+  await api.delete(`/api/customer-files/${fileId}`);
 };
 
 /** Public: Get access sheet form context by token (no auth). */
