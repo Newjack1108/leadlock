@@ -35,6 +35,7 @@ import {
 import ComposeEmailDialog from '@/components/ComposeEmailDialog';
 import SendQuoteEmailDialog from '@/components/SendQuoteEmailDialog';
 import NinoxBadge from '@/components/NinoxBadge';
+import OrderFilesCard from '@/components/OrderFilesCard';
 
 function formatCurrency(amount: number, currency: string = 'GBP'): string {
   return new Intl.NumberFormat('en-GB', {
@@ -572,6 +573,9 @@ export default function OrderDetailPage() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Plans & Documents */}
+            <OrderFilesCard orderId={orderId} />
 
             {/* Access Sheet */}
             <Card>

@@ -919,6 +919,25 @@ export interface Order {
   access_sheet?: AccessSheet | null;
 }
 
+export enum OrderFileKind {
+  PLAN = "PLAN",
+  PHOTO = "PHOTO",
+  OTHER = "OTHER",
+}
+
+export interface OrderFile {
+  id: number;
+  order_id: number;
+  kind: OrderFileKind;
+  original_filename: string;
+  content_type: string;
+  size_bytes: number;
+  secure_url: string;
+  uploaded_by_id: number;
+  uploaded_by_name?: string | null;
+  created_at: string;
+}
+
 export interface Quote {
   id: number;
   customer_id: number | null;

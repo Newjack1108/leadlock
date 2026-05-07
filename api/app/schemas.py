@@ -10,6 +10,7 @@ from app.models import (
     LeadType, LeadSource, EmailDirection, ReminderPriority, ReminderType,
     SuggestedAction, OpportunityStage, LossCategory, InstallationLeadTime,
     SmsDirection, ScheduledSmsStatus, MessengerDirection, QuoteItemLineType, SmsBotMode, DealerDiscountMode,
+    OrderFileKind,
 )
 
 
@@ -1544,6 +1545,20 @@ class OrderResponse(BaseModel):
     is_ninox_origin: bool = False
     items: List[OrderItemResponse] = []
     access_sheet: Optional[AccessSheetResponse] = None
+
+
+class OrderFileResponse(BaseModel):
+    """File attached to an order (PDF/JPG/PNG)."""
+    id: int
+    order_id: int
+    kind: OrderFileKind
+    original_filename: str
+    content_type: str
+    size_bytes: int
+    secure_url: str
+    uploaded_by_id: int
+    uploaded_by_name: Optional[str] = None
+    created_at: datetime
 
 
 class AccessSheetContextResponse(BaseModel):

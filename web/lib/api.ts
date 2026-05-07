@@ -990,6 +990,34 @@ export const sendOrderToProduction = async (orderId: number): Promise<{ success:
   return response.data;
 };
 
+/** List files attached to an order (PDFs / JPGs / PNGs). Auth required. */
+export const listOrderFiles = async (
+  orderId: number
+): Promise<import('@/lib/types').OrderFile[]> => {
+  const response = await api.get(`/api/orders/${orderId}/files`);
+  return response.data;
+};
+
+/** Upload a plan/photo/other file to an order. Auth required. */
+export const uploadOrderFile = async (
+  orderId: number,
+  file: File,
+  kind?: import('@/lib/types').OrderFileKind
+): Promise<import('@/lib/types').OrderFile> => {
+  const formData = new FormData();
+  formData.append('file', file);
+  if (kind) formData.append('kind', kind);
+  const response = await api.post(`/api/orders/${orderId}/files`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return response.data;
+};
+
+/** Delete a file from an order (also removes from Cloudinary). Auth required. */
+export const deleteOrderFile = async (orderId: number, fileId: number): Promise<void> => {
+  await api.delete(`/api/orders/${orderId}/files/${fileId}`);
+};
+
 /** Public: Get access sheet form context by token (no auth). */
 export const getAccessSheetContext = async (token: string): Promise<{
   customer_name: string;

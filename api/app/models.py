@@ -865,6 +865,31 @@ class AccessSheetRequest(SQLModel, table=True):
     order: "Order" = Relationship(back_populates="access_sheet_requests")
 
 
+class OrderFileKind(str, Enum):
+    PLAN = "PLAN"
+    PHOTO = "PHOTO"
+    OTHER = "OTHER"
+
+
+class OrderFile(SQLModel, table=True):
+    """File attached to an order (PDF/JPG/PNG plans, photos, etc).
+
+    Files are stored in Cloudinary; this row holds the metadata and the
+    ``secure_url`` used to fetch/download in the UI.
+    """
+    id: Optional[int] = Field(default=None, primary_key=True)
+    order_id: int = Field(foreign_key="customer_order.id", index=True)
+    kind: OrderFileKind = Field(default=OrderFileKind.PLAN)
+    original_filename: str
+    content_type: str
+    size_bytes: int
+    cloudinary_public_id: str = Field(index=True)
+    cloudinary_resource_type: str  # "image" for JPG/PNG, "raw" or "image" for PDF
+    secure_url: str
+    uploaded_by_id: int = Field(foreign_key="user.id")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
 class ReminderPriority(str, Enum):
     LOW = "LOW"
     MEDIUM = "MEDIUM"
