@@ -297,35 +297,14 @@ def _ensure_png_or_jpeg_bytes(data: bytes) -> Optional[bytes]:
 
 
 def _resolve_logo(company_settings: CompanySettings) -> Tuple[Optional[str], Optional[bytes]]:
-    """Resolve logo: same source as header (logo1.jpg from static/public), then company logo_url fallback."""
+    """Resolve logo: prefer uploaded company logo_url, then fallback to logo1.* defaults."""
     logo_path: Optional[str] = None
     logo_bytes: Optional[bytes] = None
     JPEG_MAGIC = b"\xff\xd8\xff"
     PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
     _debug = os.getenv("DEBUG", "false").lower() == "true"
 
-    # 1. Use same logo as header: logo1.jpg / logo1.png from static or web/public (bundled in Docker)
-    primary_filename = company_settings.logo_filename or "logo1.jpg"
-    base_dirs = [
-        Path(__file__).parent.parent / "static",
-        Path("static"),
-        Path(__file__).parent.parent.parent / "web" / "public",
-    ]
-    for fn in [primary_filename, "logo1.png", "logo1.jpg", "logo.png"]:
-        for base in base_dirs:
-            p = base / fn
-            if p.exists():
-                try:
-                    with open(p, "rb") as f:
-                        data = f.read()
-                    if data and len(data) >= 50 and (data.startswith(JPEG_MAGIC) or data.startswith(PNG_MAGIC)):
-                        return (None, data)
-                except Exception:
-                    pass
-        if os.path.exists(fn):
-            return (str(fn), None)
-
-    # 2. Fallback: company logo_url (Cloudinary or /static/)
+    # 1. Preferred: company logo_url (this is what "Header logo (quote/invoice PDFs)" writes)
     logo_url = (company_settings.logo_url or "").strip()
     if logo_url:
         if logo_url.startswith("http://") or logo_url.startswith("https://"):
@@ -367,7 +346,28 @@ def _resolve_logo(company_settings: CompanySettings) -> Tuple[Optional[str], Opt
                 except Exception:
                     pass
 
-    # 3. URL fallback (frontend serves logo1.jpg like header)
+    # 2. Fallback: legacy/static logo filename behavior (logo1.jpg, etc.)
+    primary_filename = company_settings.logo_filename or "logo1.jpg"
+    base_dirs = [
+        Path(__file__).parent.parent / "static",
+        Path("static"),
+        Path(__file__).parent.parent.parent / "web" / "public",
+    ]
+    for fn in [primary_filename, "logo1.png", "logo1.jpg", "logo.png"]:
+        for base in base_dirs:
+            p = base / fn
+            if p.exists():
+                try:
+                    with open(p, "rb") as f:
+                        data = f.read()
+                    if data and len(data) >= 50 and (data.startswith(JPEG_MAGIC) or data.startswith(PNG_MAGIC)):
+                        return (None, data)
+                except Exception:
+                    pass
+        if os.path.exists(fn):
+            return (str(fn), None)
+
+    # 3. URL fallback (frontend serves logo1.jpg)
     filenames_to_try = ["logo1.jpg", "logo1.png", "logo.png"]
     # Set LOGO_URL on the API service to the full image URL (e.g. https://your-frontend.up.railway.app/logo1.jpg)
     # or FRONTEND_URL to the frontend origin (e.g. https://your-frontend.up.railway.app).
