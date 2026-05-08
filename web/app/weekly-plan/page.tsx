@@ -305,7 +305,7 @@ export default function WeeklyPlanPage() {
                         border: '1px solid var(--border)',
                         borderRadius: 'var(--radius)',
                       }}
-                      formatter={(value: number) => [Number(value).toFixed(1), 'Avg likelihood']}
+                      formatter={(value: number | undefined) => [Number(value ?? 0).toFixed(1), 'Avg likelihood']}
                     />
                     <Line
                       type="monotone"
