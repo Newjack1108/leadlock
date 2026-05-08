@@ -36,6 +36,7 @@ from app.models import (
     OrderItem,
     QuoteItemLineType,
     DiscountRequest,
+    DiscountRequestStatus,
     SmsMessage,
     SmsDirection,
     MessengerMessage,
@@ -1573,7 +1574,7 @@ def _update_draft_quote_impl(
     if quote_data.include_delivery_installation_contact_note is not None:
         quote.include_delivery_installation_contact_note = quote_data.include_delivery_installation_contact_note
 
-    # Apply discounts if provided
+    # Apply template discounts selected in the editor.
     if quote_data.discount_template_ids:
         assert_templates_not_expired_for_apply(session, quote_data.discount_template_ids)
         for template_id in quote_data.discount_template_ids:
@@ -1610,6 +1611,31 @@ def _update_draft_quote_impl(
                 apply_discount_to_quote(quote, discount_template, quote_items, session, current_user)
             for item in quote_items:
                 session.add(item)
+
+    # Reapply approved custom discount requests for this quote.
+    # These discounts are persisted independently of discount_template_ids and
+    # would otherwise be lost when draft save rebuilds QuoteDiscount rows.
+    approved_requests = list(
+        session.exec(
+            select(DiscountRequest).where(
+                DiscountRequest.quote_id == quote_id,
+                DiscountRequest.status == DiscountRequestStatus.APPROVED,
+            )
+        ).all()
+    )
+    for dr in approved_requests:
+        apply_custom_discount_to_quote(
+            quote,
+            dr.discount_type,
+            dr.discount_value,
+            dr.scope,
+            f"Custom discount (Request #{dr.id})",
+            quote_items,
+            session,
+            current_user,
+        )
+        for item in quote_items:
+            session.add(item)
 
     session.flush()
     statement = select(QuoteItem).where(QuoteItem.quote_id == quote_id)
