@@ -90,6 +90,8 @@ def _weekly_plan_item_to_response(
         order_likelihood_score=item.order_likelihood_score,
         order_likelihood_confidence=item.order_likelihood_confidence,
         order_likelihood_reasons=item.order_likelihood_reasons or [],
+        likelihood_explanation=item.likelihood_explanation,
+        recommended_next_steps=item.recommended_next_steps or [],
         reason_codes=item.reason_codes or [],
         recommended_action=item.recommended_action,
         channel=item.channel,

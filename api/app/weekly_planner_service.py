@@ -188,6 +188,40 @@ def _heuristic_order_likelihood(
     return score, confidence, reasons
 
 
+def _fallback_narrative(
+    *,
+    customer_name: str,
+    action: SuggestedAction,
+    channel: str,
+    likelihood_score: Decimal,
+    reasons: List[str],
+) -> Tuple[str, List[str]]:
+    score_val = int(round(float(likelihood_score)))
+    if score_val >= 75:
+        band = "high"
+    elif score_val >= 50:
+        band = "medium"
+    else:
+        band = "low"
+    why = ", ".join(reasons[:3]) if reasons else "recent activity and quote context"
+    explanation = (
+        f"{customer_name or 'Customer'} currently has a {band} likelihood to order "
+        f"(score {score_val}/100) based on {why}."
+    )
+    next_steps = [
+        f"Use {channel} first with a concise follow-up and clear call-to-action.",
+        "Ask one qualifying question to unblock the next decision.",
+        "Set a dated next action and review status within 48 hours.",
+    ]
+    if action == SuggestedAction.PHONE_CALL:
+        next_steps[0] = "Place a call first; if no answer, follow with a short SMS summary."
+    elif action == SuggestedAction.REVIEW_QUOTE:
+        next_steps[0] = "Review the quote options and send a refreshed version if needed."
+    elif action == SuggestedAction.RESEND_QUOTE:
+        next_steps[0] = "Resend the quote with a short recap of value and a response deadline."
+    return explanation, next_steps
+
+
 def _ai_order_likelihood_from_text(
     *,
     customer_name: str,
@@ -195,16 +229,18 @@ def _ai_order_likelihood_from_text(
     recent_texts: List[str],
     fallback_score: Decimal,
     fallback_reasons: List[str],
-) -> Tuple[Decimal, Decimal, List[str], str]:
+) -> Tuple[Decimal, Decimal, List[str], str, Optional[str], Optional[List[str]]]:
     api_key = os.getenv("OPENAI_API_KEY", "").strip()
     if not api_key or not recent_texts:
-        return fallback_score, Decimal("0.65"), fallback_reasons, "heuristic-v1"
+        return fallback_score, Decimal("0.65"), fallback_reasons, "heuristic-v1", None, None
 
     model = os.getenv("OPENAI_WEEKLY_PLAN_MODEL", "").strip() or "gpt-4.1-mini"
     text_blob = "\n---\n".join([t[:350] for t in recent_texts[:8]])
     instructions = (
         "You score sales likelihood from customer communication snippets. "
-        "Return strict JSON only with keys score (0-100 integer), confidence (0-1 float), reasons (array of <=5 short snake_case strings). "
+        "Return strict JSON only with keys score (0-100 integer), confidence (0-1 float), "
+        "reasons (array of <=5 short snake_case strings), explanation (single concise paragraph), "
+        "next_steps (array of 3 concise action steps). "
         "No markdown."
     )
     user_prompt = (
@@ -232,17 +268,27 @@ def _ai_order_likelihood_from_text(
         score = int(parsed.get("score", int(fallback_score)))
         conf = float(parsed.get("confidence", 0.7))
         reasons = parsed.get("reasons") or fallback_reasons
+        explanation = parsed.get("explanation")
+        next_steps = parsed.get("next_steps")
         if not isinstance(reasons, list):
             reasons = fallback_reasons
+        if not isinstance(explanation, str) or not explanation.strip():
+            explanation = None
+        if not isinstance(next_steps, list):
+            next_steps = None
+        else:
+            next_steps = [str(step).strip() for step in next_steps if str(step).strip()][:3]
         clean_reasons = [re.sub(r"[^a-z0-9_]", "_", str(r).lower())[:50] for r in reasons[:5]]
         return (
             Decimal(max(0, min(100, score))),
             Decimal(str(max(0.0, min(1.0, conf)))),
             clean_reasons,
             f"ai-{model}",
+            explanation.strip()[:1200] if explanation else None,
+            next_steps,
         )
     except Exception:
-        return fallback_score, Decimal("0.65"), fallback_reasons, "heuristic-v1"
+        return fallback_score, Decimal("0.65"), fallback_reasons, "heuristic-v1", None, None
 
 
 def _week_start_utc(today: Optional[date] = None) -> date:
@@ -336,13 +382,21 @@ def generate_weekly_plan(
             days_stale=days_stale,
             recent_texts=recent_texts,
         )
-        likelihood_score, likelihood_conf, likelihood_reasons, _source = _ai_order_likelihood_from_text(
+        likelihood_score, likelihood_conf, likelihood_reasons, _source, explanation, next_steps = _ai_order_likelihood_from_text(
             customer_name=customer_name,
             quote_number=None,
             recent_texts=recent_texts,
             fallback_score=heuristic_score,
             fallback_reasons=heuristic_reasons,
         )
+        if not explanation or not next_steps:
+            explanation, next_steps = _fallback_narrative(
+                customer_name=customer_name,
+                action=action,
+                channel=channel,
+                likelihood_score=likelihood_score,
+                reasons=likelihood_reasons,
+            )
         final_score = _blend_final_priority(min(Decimal("100"), score), likelihood_score)
         plan_items.append(
             WeeklyPlanItem(
@@ -355,6 +409,8 @@ def generate_weekly_plan(
                 order_likelihood_score=likelihood_score,
                 order_likelihood_confidence=likelihood_conf if likelihood_conf else heuristic_conf,
                 order_likelihood_reasons=likelihood_reasons,
+                likelihood_explanation=explanation,
+                recommended_next_steps=next_steps or [],
                 reason_codes=reason_codes,
                 recommended_action=action,
                 channel=channel,
@@ -391,13 +447,21 @@ def generate_weekly_plan(
             days_stale=days_stale,
             recent_texts=recent_texts,
         )
-        likelihood_score, likelihood_conf, likelihood_reasons, _source = _ai_order_likelihood_from_text(
+        likelihood_score, likelihood_conf, likelihood_reasons, _source, explanation, next_steps = _ai_order_likelihood_from_text(
             customer_name=customer_name,
             quote_number=quote.quote_number,
             recent_texts=recent_texts,
             fallback_score=heuristic_score,
             fallback_reasons=heuristic_reasons,
         )
+        if not explanation or not next_steps:
+            explanation, next_steps = _fallback_narrative(
+                customer_name=customer_name,
+                action=action,
+                channel=channel,
+                likelihood_score=likelihood_score,
+                reasons=likelihood_reasons,
+            )
         final_score = _blend_final_priority(min(Decimal("100"), score), likelihood_score)
         plan_items.append(
             WeeklyPlanItem(
@@ -411,6 +475,8 @@ def generate_weekly_plan(
                 order_likelihood_score=likelihood_score,
                 order_likelihood_confidence=likelihood_conf if likelihood_conf else heuristic_conf,
                 order_likelihood_reasons=likelihood_reasons,
+                likelihood_explanation=explanation,
+                recommended_next_steps=next_steps or [],
                 reason_codes=reason_codes,
                 recommended_action=action,
                 channel=channel,
@@ -442,13 +508,21 @@ def generate_weekly_plan(
             days_stale=days_overdue,
             recent_texts=recent_texts,
         )
-        likelihood_score, likelihood_conf, likelihood_reasons, _source = _ai_order_likelihood_from_text(
+        likelihood_score, likelihood_conf, likelihood_reasons, _source, explanation, next_steps = _ai_order_likelihood_from_text(
             customer_name=customer_name,
             quote_number=opp.quote_number,
             recent_texts=recent_texts,
             fallback_score=heuristic_score,
             fallback_reasons=heuristic_reasons,
         )
+        if not explanation or not next_steps:
+            explanation, next_steps = _fallback_narrative(
+                customer_name=customer_name,
+                action=action,
+                channel=channel,
+                likelihood_score=likelihood_score,
+                reasons=likelihood_reasons,
+            )
         final_score = _blend_final_priority(min(Decimal("100"), score), likelihood_score)
         plan_items.append(
             WeeklyPlanItem(
@@ -462,6 +536,8 @@ def generate_weekly_plan(
                 order_likelihood_score=likelihood_score,
                 order_likelihood_confidence=likelihood_conf if likelihood_conf else heuristic_conf,
                 order_likelihood_reasons=likelihood_reasons,
+                likelihood_explanation=explanation,
+                recommended_next_steps=next_steps or [],
                 reason_codes=reason_codes,
                 recommended_action=action,
                 channel=channel,

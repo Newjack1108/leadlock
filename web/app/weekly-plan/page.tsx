@@ -347,6 +347,21 @@ export default function WeeklyPlanPage() {
                   {(item.order_likelihood_reasons || []).length > 0 ? (
                     <div className="text-xs text-muted-foreground">AI/heuristic: {(item.order_likelihood_reasons || []).join(', ')}</div>
                   ) : null}
+                  {item.likelihood_explanation ? (
+                    <div className="text-sm bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200/40 dark:border-blue-800/40 rounded p-2">
+                      <span className="font-medium">Likelihood summary:</span> {item.likelihood_explanation}
+                    </div>
+                  ) : null}
+                  {(item.recommended_next_steps || []).length > 0 ? (
+                    <div className="text-sm border rounded p-2">
+                      <div className="font-medium mb-1">Recommended next steps</div>
+                      <ul className="list-disc pl-5 space-y-1 text-muted-foreground">
+                        {(item.recommended_next_steps || []).map((step, idx) => (
+                          <li key={`${item.id}-step-${idx}`}>{step}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
                   {item.suggested_message ? (
                     <div className="text-sm bg-muted/50 rounded p-2">{item.suggested_message}</div>
                   ) : null}

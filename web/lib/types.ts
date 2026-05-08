@@ -1367,6 +1367,8 @@ export interface WeeklyPlanItem {
   order_likelihood_score: number;
   order_likelihood_confidence: number;
   order_likelihood_reasons: string[];
+  likelihood_explanation?: string | null;
+  recommended_next_steps: string[];
   reason_codes: string[];
   recommended_action: SuggestedAction;
   channel?: string | null;

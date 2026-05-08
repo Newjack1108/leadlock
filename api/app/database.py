@@ -300,6 +300,8 @@ def _ensure_weekly_planner_schema(engine) -> None:
             conn.execute(text("ALTER TABLE weeklyplanitem ADD COLUMN IF NOT EXISTS order_likelihood_score NUMERIC(6, 2) DEFAULT 0"))
             conn.execute(text("ALTER TABLE weeklyplanitem ADD COLUMN IF NOT EXISTS order_likelihood_confidence NUMERIC(5, 2) DEFAULT 0"))
             conn.execute(text("ALTER TABLE weeklyplanitem ADD COLUMN IF NOT EXISTS order_likelihood_reasons JSON"))
+            conn.execute(text("ALTER TABLE weeklyplanitem ADD COLUMN IF NOT EXISTS likelihood_explanation TEXT"))
+            conn.execute(text("ALTER TABLE weeklyplanitem ADD COLUMN IF NOT EXISTS recommended_next_steps JSON"))
         print("Weekly planner schema ensured", file=sys.stderr, flush=True)
     except Exception as e:
         print(f"Warning: could not ensure weekly planner schema: {e}", file=sys.stderr, flush=True)

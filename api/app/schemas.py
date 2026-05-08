@@ -1810,6 +1810,8 @@ class WeeklyPlanItemResponse(BaseModel):
     order_likelihood_score: Decimal
     order_likelihood_confidence: Decimal
     order_likelihood_reasons: List[str] = []
+    likelihood_explanation: Optional[str] = None
+    recommended_next_steps: List[str] = []
     reason_codes: List[str] = []
     recommended_action: SuggestedAction
     channel: Optional[str] = None

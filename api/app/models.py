@@ -1048,6 +1048,8 @@ class WeeklyPlanItem(SQLModel, table=True):
     order_likelihood_score: Decimal = Field(default=0, sa_column=Column(Numeric(6, 2)))
     order_likelihood_confidence: Decimal = Field(default=0, sa_column=Column(Numeric(5, 2)))
     order_likelihood_reasons: List[str] = Field(default_factory=list, sa_column=Column(JSON))
+    likelihood_explanation: Optional[str] = None
+    recommended_next_steps: List[str] = Field(default_factory=list, sa_column=Column(JSON))
     reason_codes: List[str] = Field(default_factory=list, sa_column=Column(JSON))
     recommended_action: SuggestedAction
     channel: Optional[str] = None  # SMS|EMAIL|CALL|REQUOTE
