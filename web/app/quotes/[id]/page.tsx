@@ -6,7 +6,7 @@ import Header from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import api, { getQuote, previewQuotePdf, getDiscountRequestsForQuote, getQuoteViewLink, acceptQuote, cancelDraftQuote, duplicateQuoteToDraft } from '@/lib/api';
+import api, { getQuote, previewQuotePdf, getDiscountRequestsForQuote, getQuoteViewLink, acceptQuote, cancelDraftQuote, duplicateQuoteToDraft, deleteDiscountRequest } from '@/lib/api';
 import {
   Quote,
   QuoteItem,
@@ -76,6 +76,7 @@ export default function QuoteDetailPage() {
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
+  const [removingDiscountRequestId, setRemovingDiscountRequestId] = useState<number | null>(null);
 
   useEffect(() => {
     if (quoteId) {
@@ -182,6 +183,20 @@ export default function QuoteDetailPage() {
       toast.error(typeof d === 'string' ? d : error.message || 'Failed to duplicate quote');
     } finally {
       setDuplicating(false);
+    }
+  };
+
+  const handleRemoveDiscountRequest = async (requestId: number) => {
+    try {
+      setRemovingDiscountRequestId(requestId);
+      await deleteDiscountRequest(requestId);
+      toast.success('Discount request removed');
+      await fetchDiscountRequests();
+    } catch (error: any) {
+      const msg = error.response?.data?.detail || error.message || 'Failed to remove discount request';
+      toast.error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+    } finally {
+      setRemovingDiscountRequestId(null);
     }
   };
 
@@ -613,7 +628,7 @@ export default function QuoteDetailPage() {
                     {discountRequests.map((dr) => (
                       <div
                         key={dr.id}
-                        className="flex items-center justify-between p-3 border rounded-md text-sm"
+                        className="flex items-center justify-between gap-3 p-3 border rounded-md text-sm"
                       >
                         <div>
                           <span className="font-medium">
@@ -629,17 +644,30 @@ export default function QuoteDetailPage() {
                             <p className="text-destructive text-xs mt-1">{dr.rejection_reason}</p>
                           )}
                         </div>
-                        <Badge
-                          variant={
-                            dr.status === DiscountRequestStatus.APPROVED
-                              ? 'default'
-                              : dr.status === DiscountRequestStatus.REJECTED
-                                ? 'destructive'
-                                : 'secondary'
-                          }
-                        >
-                          {dr.status}
-                        </Badge>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <Badge
+                            variant={
+                              dr.status === DiscountRequestStatus.APPROVED
+                                ? 'default'
+                                : dr.status === DiscountRequestStatus.REJECTED
+                                  ? 'destructive'
+                                  : 'secondary'
+                            }
+                          >
+                            {dr.status}
+                          </Badge>
+                          {quote.status === 'DRAFT' && dr.status === DiscountRequestStatus.PENDING && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              disabled={removingDiscountRequestId === dr.id}
+                              onClick={() => void handleRemoveDiscountRequest(dr.id)}
+                            >
+                              {removingDiscountRequestId === dr.id ? 'Removing...' : 'Remove'}
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
