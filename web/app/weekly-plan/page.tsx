@@ -94,6 +94,7 @@ export default function WeeklyPlanPage() {
   const filteredItems = useMemo(() => {
     if (!plan?.items) return [];
     return plan.items.filter((item) => {
+      if (statusFilter === 'all' && item.status === WeeklyPlanItemStatus.COMPLETED) return false;
       if (ownerFilter !== 'all' && String(item.assigned_to_id || '') !== ownerFilter) return false;
       if (channelFilter !== 'all' && (item.channel || 'NONE') !== channelFilter) return false;
       if (statusFilter !== 'all' && item.status !== statusFilter) return false;
@@ -165,8 +166,19 @@ export default function WeeklyPlanPage() {
     try {
       setBusyItemId(item.id);
       await updateWeeklyPlanItem(item.id, payload);
+      if (payload.status === WeeklyPlanItemStatus.COMPLETED) {
+        setPlan((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            items: prev.items.filter((it) => it.id !== item.id),
+          };
+        });
+      }
       toast.success(successMessage);
-      await loadData();
+      if (payload.status !== WeeklyPlanItemStatus.COMPLETED) {
+        await loadData();
+      }
     } catch {
       toast.error('Failed to update outcome');
     } finally {
