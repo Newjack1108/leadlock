@@ -1807,6 +1807,9 @@ class WeeklyPlanItemResponse(BaseModel):
     lead_name: Optional[str] = None
     priority_score: Decimal
     confidence: Decimal
+    order_likelihood_score: Decimal
+    order_likelihood_confidence: Decimal
+    order_likelihood_reasons: List[str] = []
     reason_codes: List[str] = []
     recommended_action: SuggestedAction
     channel: Optional[str] = None

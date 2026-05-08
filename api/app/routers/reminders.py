@@ -87,6 +87,9 @@ def _weekly_plan_item_to_response(
         lead_name=lead.name if lead else None,
         priority_score=item.priority_score,
         confidence=item.confidence,
+        order_likelihood_score=item.order_likelihood_score,
+        order_likelihood_confidence=item.order_likelihood_confidence,
+        order_likelihood_reasons=item.order_likelihood_reasons or [],
         reason_codes=item.reason_codes or [],
         recommended_action=item.recommended_action,
         channel=item.channel,
@@ -749,6 +752,46 @@ async def get_weekly_plan_metrics(
     if not metrics:
         raise HTTPException(status_code=404, detail="Weekly plan run not found")
     return metrics
+
+
+@router.get("/weekly-plan/trend")
+async def get_weekly_plan_trend(
+    weeks: int = Query(8, ge=2, le=26),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    runs = session.exec(
+        select(WeeklyPlanRun)
+        .order_by(col(WeeklyPlanRun.week_start).desc(), col(WeeklyPlanRun.generated_at).desc())
+        .limit(weeks * 2)
+    ).all()
+    if not runs:
+        return {"items": []}
+
+    # Keep the newest run per week_start.
+    latest_by_week: Dict[date_type, WeeklyPlanRun] = {}
+    for run in runs:
+        if run.week_start not in latest_by_week:
+            latest_by_week[run.week_start] = run
+
+    selected = list(latest_by_week.values())[:weeks]
+    selected.sort(key=lambda r: r.week_start)
+    items = []
+    for run in selected:
+        avg_likelihood = session.exec(
+            select(func.avg(WeeklyPlanItem.order_likelihood_score)).where(
+                WeeklyPlanItem.plan_run_id == run.id,
+            )
+        ).one()
+        items.append(
+            {
+                "run_id": run.id,
+                "week_start": run.week_start.isoformat(),
+                "average_order_likelihood": float(avg_likelihood or 0),
+                "total_items": run.total_items,
+            }
+        )
+    return {"items": items}
 
 
 @router.get("/rules", response_model=List[ReminderRuleResponse])

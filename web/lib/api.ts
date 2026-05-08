@@ -1397,6 +1397,18 @@ export const getWeeklyPlanMetrics = async (runId: number): Promise<Record<string
   return response.data;
 };
 
+export const getWeeklyPlanTrend = async (weeks = 8): Promise<{
+  items: Array<{
+    run_id: number;
+    week_start: string;
+    average_order_likelihood: number;
+    total_items: number;
+  }>;
+}> => {
+  const response = await api.get('/api/reminders/weekly-plan/trend', { params: { weeks } });
+  return response.data;
+};
+
 // Customer History API functions
 export const getCustomerHistory = async (customerId: number) => {
   const response = await api.get(`/api/customers/${customerId}/history`);

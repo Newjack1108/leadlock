@@ -1364,6 +1364,9 @@ export interface WeeklyPlanItem {
   lead_name?: string | null;
   priority_score: number;
   confidence: number;
+  order_likelihood_score: number;
+  order_likelihood_confidence: number;
+  order_likelihood_reasons: string[];
   reason_codes: string[];
   recommended_action: SuggestedAction;
   channel?: string | null;

@@ -1045,6 +1045,9 @@ class WeeklyPlanItem(SQLModel, table=True):
     assigned_to_id: Optional[int] = Field(default=None, foreign_key="user.id", index=True)
     priority_score: Decimal = Field(default=0, sa_column=Column(Numeric(6, 2)))
     confidence: Decimal = Field(default=0, sa_column=Column(Numeric(5, 2)))
+    order_likelihood_score: Decimal = Field(default=0, sa_column=Column(Numeric(6, 2)))
+    order_likelihood_confidence: Decimal = Field(default=0, sa_column=Column(Numeric(5, 2)))
+    order_likelihood_reasons: List[str] = Field(default_factory=list, sa_column=Column(JSON))
     reason_codes: List[str] = Field(default_factory=list, sa_column=Column(JSON))
     recommended_action: SuggestedAction
     channel: Optional[str] = None  # SMS|EMAIL|CALL|REQUOTE

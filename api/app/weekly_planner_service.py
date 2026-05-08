@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import json
+import os
+import re
 from datetime import date, datetime, timedelta
 from decimal import Decimal
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
+import httpx
 from sqlmodel import Session, and_, desc, func, select
 
 from app.customer_outreach_service import _is_within_outreach_quiet_hours
@@ -16,13 +20,13 @@ from app.models import (
     Email,
     EmailDirection,
     Lead,
-    LeadStatus,
+    MessengerDirection,
+    MessengerMessage,
     Quote,
-    QuoteStatus,
     ReminderPriority,
-    SuggestedAction,
     SmsDirection,
     SmsMessage,
+    SuggestedAction,
     User,
     WeeklyPlanItem,
     WeeklyPlanItemStatus,
@@ -37,6 +41,208 @@ from app.reminder_service import (
 )
 from app.sms_service import normalize_phone, send_sms
 from app.system_user_service import get_system_user_id
+
+POSITIVE_BUY_SIGNALS = (
+    "ready to order",
+    "let's proceed",
+    "lets proceed",
+    "happy to go ahead",
+    "go ahead",
+    "book it in",
+    "pay deposit",
+    "accept quote",
+    "looks good",
+    "sounds good",
+)
+
+NEGATIVE_BUY_SIGNALS = (
+    "too expensive",
+    "too much",
+    "can't afford",
+    "cannot afford",
+    "hold off",
+    "not now",
+    "later in the year",
+    "next year",
+    "shopping around",
+    "using someone else",
+    "gone with another",
+)
+
+
+def _extract_text_from_responses_api(data: dict) -> str:
+    direct = (data.get("output_text") or "").strip()
+    if direct:
+        return direct
+    out = data.get("output")
+    if not isinstance(out, list):
+        return ""
+    parts: list[str] = []
+    for item in out:
+        if not isinstance(item, dict):
+            continue
+        if item.get("type") != "message" or item.get("role") != "assistant":
+            continue
+        for block in item.get("content") or []:
+            if not isinstance(block, dict):
+                continue
+            if block.get("type") not in ("output_text", "text", None):
+                continue
+            txt = (block.get("text") or "").strip()
+            if txt:
+                parts.append(txt)
+    return "\n".join(parts).strip()
+
+
+def _text_signal_counts(texts: List[str]) -> Tuple[int, int]:
+    positive = 0
+    negative = 0
+    for raw in texts:
+        t = raw.lower()
+        if any(sig in t for sig in POSITIVE_BUY_SIGNALS):
+            positive += 1
+        if any(sig in t for sig in NEGATIVE_BUY_SIGNALS):
+            negative += 1
+    return positive, negative
+
+
+def _collect_customer_recent_text(session: Session, customer_id: int) -> List[str]:
+    texts: List[str] = []
+    inbound_emails = session.exec(
+        select(Email)
+        .where(Email.customer_id == customer_id, Email.direction == EmailDirection.RECEIVED)
+        .order_by(desc(Email.received_at), desc(Email.created_at))
+        .limit(5)
+    ).all()
+    for email in inbound_emails:
+        val = (email.body_text or email.body_html or "").strip()
+        if val:
+            texts.append(val[:500])
+
+    inbound_sms = session.exec(
+        select(SmsMessage)
+        .where(SmsMessage.customer_id == customer_id, SmsMessage.direction == SmsDirection.RECEIVED)
+        .order_by(desc(SmsMessage.received_at), desc(SmsMessage.created_at))
+        .limit(5)
+    ).all()
+    for sms in inbound_sms:
+        val = (sms.body or "").strip()
+        if val:
+            texts.append(val[:300])
+
+    inbound_messenger = session.exec(
+        select(MessengerMessage)
+        .where(
+            MessengerMessage.customer_id == customer_id,
+            MessengerMessage.direction == MessengerDirection.RECEIVED,
+        )
+        .order_by(desc(MessengerMessage.received_at), desc(MessengerMessage.created_at))
+        .limit(4)
+    ).all()
+    for message in inbound_messenger:
+        val = (message.body or "").strip()
+        if val:
+            texts.append(val[:300])
+    return texts
+
+
+def _heuristic_order_likelihood(
+    *,
+    quote: Optional[Quote],
+    days_stale: int,
+    recent_texts: List[str],
+) -> Tuple[Decimal, Decimal, List[str]]:
+    score = Decimal("50")
+    reasons: List[str] = []
+    if quote:
+        if quote.close_probability is not None:
+            score += Decimal(quote.close_probability) * Decimal("0.2")
+            reasons.append("close_probability_signal")
+        if quote.total_amount is not None and Decimal(quote.total_amount) >= Decimal("8000"):
+            score += Decimal("4")
+            reasons.append("higher_value_deal")
+        if quote.viewed_at is not None:
+            score += Decimal("6")
+            reasons.append("quote_viewed")
+        if quote.sent_at is not None and quote.viewed_at is None and days_stale >= 5:
+            score -= Decimal("8")
+            reasons.append("sent_not_opened")
+
+    pos, neg = _text_signal_counts(recent_texts)
+    if pos:
+        score += Decimal(min(20, pos * 5))
+        reasons.append("positive_buy_intent")
+    if neg:
+        score -= Decimal(min(25, neg * 6))
+        reasons.append("objection_or_delay_language")
+
+    if days_stale >= 14:
+        score -= Decimal("12")
+        reasons.append("high_staleness_decay")
+    elif days_stale >= 7:
+        score -= Decimal("5")
+        reasons.append("moderate_staleness_decay")
+
+    score = max(Decimal("1"), min(Decimal("99"), score))
+    confidence = Decimal("0.65")
+    return score, confidence, reasons
+
+
+def _ai_order_likelihood_from_text(
+    *,
+    customer_name: str,
+    quote_number: Optional[str],
+    recent_texts: List[str],
+    fallback_score: Decimal,
+    fallback_reasons: List[str],
+) -> Tuple[Decimal, Decimal, List[str], str]:
+    api_key = os.getenv("OPENAI_API_KEY", "").strip()
+    if not api_key or not recent_texts:
+        return fallback_score, Decimal("0.65"), fallback_reasons, "heuristic-v1"
+
+    model = os.getenv("OPENAI_WEEKLY_PLAN_MODEL", "").strip() or "gpt-4.1-mini"
+    text_blob = "\n---\n".join([t[:350] for t in recent_texts[:8]])
+    instructions = (
+        "You score sales likelihood from customer communication snippets. "
+        "Return strict JSON only with keys score (0-100 integer), confidence (0-1 float), reasons (array of <=5 short snake_case strings). "
+        "No markdown."
+    )
+    user_prompt = (
+        f"Customer: {customer_name or 'Customer'}\n"
+        f"Quote: {quote_number or 'N/A'}\n"
+        f"Recent inbound communication snippets:\n{text_blob}\n"
+        "Estimate short-term ordering likelihood."
+    )
+    payload = {
+        "model": model,
+        "input": [
+            {"role": "system", "content": [{"type": "input_text", "text": instructions}]},
+            {"role": "user", "content": [{"type": "input_text", "text": user_prompt}]},
+        ],
+        "metadata": {"feature": "weekly_order_likelihood"},
+    }
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            response = client.post("https://api.openai.com/v1/responses", headers=headers, json=payload)
+            response.raise_for_status()
+            data = response.json()
+        out = _extract_text_from_responses_api(data if isinstance(data, dict) else {})
+        parsed = json.loads(out)
+        score = int(parsed.get("score", int(fallback_score)))
+        conf = float(parsed.get("confidence", 0.7))
+        reasons = parsed.get("reasons") or fallback_reasons
+        if not isinstance(reasons, list):
+            reasons = fallback_reasons
+        clean_reasons = [re.sub(r"[^a-z0-9_]", "_", str(r).lower())[:50] for r in reasons[:5]]
+        return (
+            Decimal(max(0, min(100, score))),
+            Decimal(str(max(0.0, min(1.0, conf)))),
+            clean_reasons,
+            f"ai-{model}",
+        )
+    except Exception:
+        return fallback_score, Decimal("0.65"), fallback_reasons, "heuristic-v1"
 
 
 def _week_start_utc(today: Optional[date] = None) -> date:
@@ -84,6 +290,11 @@ def _default_message(action: SuggestedAction, customer_name: str, quote_number: 
     return f"Hi {customer_name}, just a quick follow-up from the team."
 
 
+def _blend_final_priority(base_priority_score: Decimal, likelihood_score: Decimal) -> Decimal:
+    blended = (base_priority_score * Decimal("0.65")) + (likelihood_score * Decimal("0.35"))
+    return max(Decimal("1"), min(Decimal("100"), blended))
+
+
 def generate_weekly_plan(
     session: Session,
     *,
@@ -96,7 +307,7 @@ def generate_weekly_plan(
         week_start=week_start,
         generated_by_id=generated_by_id,
         scope=WeeklyPlanScope.FULL_PIPELINE,
-        model_version="deterministic-v1",
+        model_version="hybrid-likelihood-v1",
     )
     session.add(run)
     session.flush()
@@ -119,14 +330,31 @@ def generate_weekly_plan(
         channel = "CALL" if action == SuggestedAction.PHONE_CALL else "EMAIL"
         auto_eligible = action in (SuggestedAction.FOLLOW_UP, SuggestedAction.CONTACT_CUSTOMER) and channel == "EMAIL"
         customer_name = lead.name or "there"
+        recent_texts = _collect_customer_recent_text(session, lead.customer_id) if lead.customer_id else []
+        heuristic_score, heuristic_conf, heuristic_reasons = _heuristic_order_likelihood(
+            quote=None,
+            days_stale=days_stale,
+            recent_texts=recent_texts,
+        )
+        likelihood_score, likelihood_conf, likelihood_reasons, _source = _ai_order_likelihood_from_text(
+            customer_name=customer_name,
+            quote_number=None,
+            recent_texts=recent_texts,
+            fallback_score=heuristic_score,
+            fallback_reasons=heuristic_reasons,
+        )
+        final_score = _blend_final_priority(min(Decimal("100"), score), likelihood_score)
         plan_items.append(
             WeeklyPlanItem(
                 plan_run_id=run.id,
                 lead_id=lead.id,
                 customer_id=lead.customer_id,
                 assigned_to_id=lead.assigned_to_id,
-                priority_score=min(Decimal("100"), score),
-                confidence=Decimal("0.72"),
+                priority_score=final_score,
+                confidence=max(Decimal("0.60"), (Decimal("0.72") + likelihood_conf) / Decimal("2")),
+                order_likelihood_score=likelihood_score,
+                order_likelihood_confidence=likelihood_conf if likelihood_conf else heuristic_conf,
+                order_likelihood_reasons=likelihood_reasons,
                 reason_codes=reason_codes,
                 recommended_action=action,
                 channel=channel,
@@ -157,6 +385,20 @@ def generate_weekly_plan(
             customer = session.get(Customer, quote.customer_id)
             if customer and customer.name:
                 customer_name = customer.name
+        recent_texts = _collect_customer_recent_text(session, quote.customer_id) if quote.customer_id else []
+        heuristic_score, heuristic_conf, heuristic_reasons = _heuristic_order_likelihood(
+            quote=quote,
+            days_stale=days_stale,
+            recent_texts=recent_texts,
+        )
+        likelihood_score, likelihood_conf, likelihood_reasons, _source = _ai_order_likelihood_from_text(
+            customer_name=customer_name,
+            quote_number=quote.quote_number,
+            recent_texts=recent_texts,
+            fallback_score=heuristic_score,
+            fallback_reasons=heuristic_reasons,
+        )
+        final_score = _blend_final_priority(min(Decimal("100"), score), likelihood_score)
         plan_items.append(
             WeeklyPlanItem(
                 plan_run_id=run.id,
@@ -164,8 +406,11 @@ def generate_weekly_plan(
                 lead_id=quote.lead_id,
                 customer_id=quote.customer_id,
                 assigned_to_id=quote.owner_id or quote.created_by_id,
-                priority_score=min(Decimal("100"), score),
-                confidence=Decimal("0.8"),
+                priority_score=final_score,
+                confidence=max(Decimal("0.65"), (Decimal("0.80") + likelihood_conf) / Decimal("2")),
+                order_likelihood_score=likelihood_score,
+                order_likelihood_confidence=likelihood_conf if likelihood_conf else heuristic_conf,
+                order_likelihood_reasons=likelihood_reasons,
                 reason_codes=reason_codes,
                 recommended_action=action,
                 channel=channel,
@@ -191,6 +436,20 @@ def generate_weekly_plan(
             customer = session.get(Customer, opp.customer_id)
             if customer and customer.name:
                 customer_name = customer.name
+        recent_texts = _collect_customer_recent_text(session, opp.customer_id) if opp.customer_id else []
+        heuristic_score, heuristic_conf, heuristic_reasons = _heuristic_order_likelihood(
+            quote=opp,
+            days_stale=days_overdue,
+            recent_texts=recent_texts,
+        )
+        likelihood_score, likelihood_conf, likelihood_reasons, _source = _ai_order_likelihood_from_text(
+            customer_name=customer_name,
+            quote_number=opp.quote_number,
+            recent_texts=recent_texts,
+            fallback_score=heuristic_score,
+            fallback_reasons=heuristic_reasons,
+        )
+        final_score = _blend_final_priority(min(Decimal("100"), score), likelihood_score)
         plan_items.append(
             WeeklyPlanItem(
                 plan_run_id=run.id,
@@ -198,8 +457,11 @@ def generate_weekly_plan(
                 lead_id=opp.lead_id,
                 customer_id=opp.customer_id,
                 assigned_to_id=opp.owner_id or opp.created_by_id,
-                priority_score=min(Decimal("100"), score),
-                confidence=Decimal("0.75"),
+                priority_score=final_score,
+                confidence=max(Decimal("0.60"), (Decimal("0.75") + likelihood_conf) / Decimal("2")),
+                order_likelihood_score=likelihood_score,
+                order_likelihood_confidence=likelihood_conf if likelihood_conf else heuristic_conf,
+                order_likelihood_reasons=likelihood_reasons,
                 reason_codes=reason_codes,
                 recommended_action=action,
                 channel=channel,
@@ -400,6 +662,11 @@ def get_plan_metrics(session: Session, run_id: int) -> dict:
             WeeklyPlanItem.response_received.is_(True),
         )
     ).one()
+    avg_likelihood = session.exec(
+        select(func.avg(WeeklyPlanItem.order_likelihood_score)).where(
+            WeeklyPlanItem.plan_run_id == run_id,
+        )
+    ).one()
     return {
         "run_id": run.id,
         "week_start": run.week_start,
@@ -408,5 +675,6 @@ def get_plan_metrics(session: Session, run_id: int) -> dict:
         "auto_sent_items": run.auto_sent_items,
         "completed_items": int(done or 0),
         "response_received_items": int(replied or 0),
+        "average_order_likelihood": float(avg_likelihood or 0),
         "completion_rate_pct": float((Decimal(done or 0) / Decimal(total) * Decimal("100")) if total else Decimal("0")),
     }

@@ -288,6 +288,23 @@ def _ensure_dealer_portal_schema(engine) -> None:
         print(f"Warning: could not ensure dealer schema: {e}", file=sys.stderr, flush=True)
 
 
+def _ensure_weekly_planner_schema(engine) -> None:
+    """Ensure newly added weekly planner columns exist on existing databases."""
+    import sys
+
+    try:
+        insp = inspect(engine)
+        if not insp.has_table("weeklyplanitem"):
+            return
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE weeklyplanitem ADD COLUMN IF NOT EXISTS order_likelihood_score NUMERIC(6, 2) DEFAULT 0"))
+            conn.execute(text("ALTER TABLE weeklyplanitem ADD COLUMN IF NOT EXISTS order_likelihood_confidence NUMERIC(5, 2) DEFAULT 0"))
+            conn.execute(text("ALTER TABLE weeklyplanitem ADD COLUMN IF NOT EXISTS order_likelihood_reasons JSON"))
+        print("Weekly planner schema ensured", file=sys.stderr, flush=True)
+    except Exception as e:
+        print(f"Warning: could not ensure weekly planner schema: {e}", file=sys.stderr, flush=True)
+
+
 def backfill_default_reminder_rules(session: Session) -> None:
     """Insert any canonical default ReminderRule rows missing by rule_name (fixes partial legacy seeds).
 
@@ -421,6 +438,7 @@ def create_db_and_tables():
     _ensure_facebook_advert_schema(engine)
     _ensure_archive_columns(engine)
     _ensure_dealer_portal_schema(engine)
+    _ensure_weekly_planner_schema(engine)
 
     # Migration logic for Customer model separation
     try:

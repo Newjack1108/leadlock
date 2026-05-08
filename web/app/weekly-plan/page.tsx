@@ -12,11 +12,21 @@ import {
   getAssignableUsers,
   getLatestWeeklyPlan,
   getWeeklyPlanMetrics,
+  getWeeklyPlanTrend,
   updateWeeklyPlanItem,
 } from '@/lib/api';
 import { WeeklyPlanItem, WeeklyPlanItemStatus, WeeklyPlanListResponse } from '@/lib/types';
 import { CheckCircle2, RefreshCw, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from 'recharts';
 
 type AssignableUser = { id: number; full_name: string; email: string };
 
@@ -27,11 +37,13 @@ export default function WeeklyPlanPage() {
   const [loadingRun, setLoadingRun] = useState(false);
   const [plan, setPlan] = useState<WeeklyPlanListResponse | null>(null);
   const [metrics, setMetrics] = useState<Record<string, unknown> | null>(null);
+  const [trend, setTrend] = useState<Array<{ week_start: string; average_order_likelihood: number }>>([]);
   const [users, setUsers] = useState<AssignableUser[]>([]);
 
   const [ownerFilter, setOwnerFilter] = useState<string>('all');
   const [channelFilter, setChannelFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [likelihoodFilter, setLikelihoodFilter] = useState<string>('all');
 
   const loadData = async () => {
     try {
@@ -43,10 +55,20 @@ export default function WeeklyPlanPage() {
       setPlan(latestPlan);
       setUsers(assignableUsers || []);
       if (latestPlan?.run?.id) {
-        const metricsResult = await getWeeklyPlanMetrics(latestPlan.run.id).catch(() => null);
+        const [metricsResult, trendResult] = await Promise.all([
+          getWeeklyPlanMetrics(latestPlan.run.id).catch(() => null),
+          getWeeklyPlanTrend(8).catch(() => ({ items: [] })),
+        ]);
         setMetrics(metricsResult);
+        setTrend(
+          (trendResult?.items || []).map((item) => ({
+            week_start: item.week_start,
+            average_order_likelihood: Number(item.average_order_likelihood || 0),
+          }))
+        );
       } else {
         setMetrics(null);
+        setTrend([]);
       }
     } catch (error: any) {
       if (error?.response?.status === 401) {
@@ -70,9 +92,10 @@ export default function WeeklyPlanPage() {
       if (ownerFilter !== 'all' && String(item.assigned_to_id || '') !== ownerFilter) return false;
       if (channelFilter !== 'all' && (item.channel || 'NONE') !== channelFilter) return false;
       if (statusFilter !== 'all' && item.status !== statusFilter) return false;
+      if (likelihoodFilter !== 'all' && Number(item.order_likelihood_score || 0) < Number(likelihoodFilter)) return false;
       return true;
     });
-  }, [plan, ownerFilter, channelFilter, statusFilter]);
+  }, [plan, ownerFilter, channelFilter, statusFilter, likelihoodFilter]);
 
   const channels = useMemo(() => {
     const unique = new Set<string>();
@@ -161,7 +184,7 @@ export default function WeeklyPlanPage() {
         </div>
 
         {plan?.run && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium">Week Start</CardTitle>
@@ -186,6 +209,14 @@ export default function WeeklyPlanPage() {
               </CardHeader>
               <CardContent className="text-xl font-semibold">
                 {Number(metrics?.completion_rate_pct || 0).toFixed(1)}%
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Avg Likelihood</CardTitle>
+              </CardHeader>
+              <CardContent className="text-xl font-semibold">
+                {Number(metrics?.average_order_likelihood || 0).toFixed(1)}
               </CardContent>
             </Card>
           </div>
@@ -235,6 +266,58 @@ export default function WeeklyPlanPage() {
                 ))}
               </SelectContent>
             </Select>
+            <Select value={likelihoodFilter} onValueChange={setLikelihoodFilter}>
+              <SelectTrigger className="w-[220px]">
+                <SelectValue placeholder="Min likelihood" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All likelihoods</SelectItem>
+                <SelectItem value="25">Likelihood 25+</SelectItem>
+                <SelectItem value="50">Likelihood 50+</SelectItem>
+                <SelectItem value="70">Likelihood 70+</SelectItem>
+                <SelectItem value="85">Likelihood 85+</SelectItem>
+              </SelectContent>
+            </Select>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Likelihood Trend (Week-over-Week Avg)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {trend.length < 2 ? (
+              <p className="text-sm text-muted-foreground">Not enough weekly runs yet to render trend.</p>
+            ) : (
+              <div className="w-full" style={{ height: 180 }}>
+                <ResponsiveContainer width="100%" height={180}>
+                  <LineChart data={trend}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <XAxis
+                      dataKey="week_start"
+                      tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }}
+                      tickFormatter={(value) => String(value).slice(5)}
+                    />
+                    <YAxis domain={[0, 100]} tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }} />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: 'var(--card)',
+                        border: '1px solid var(--border)',
+                        borderRadius: 'var(--radius)',
+                      }}
+                      formatter={(value: number) => [Number(value).toFixed(1), 'Avg likelihood']}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="average_order_likelihood"
+                      stroke="#2563eb"
+                      strokeWidth={2}
+                      dot={{ r: 3 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -257,7 +340,13 @@ export default function WeeklyPlanPage() {
                       {item.assigned_to_name || 'Unassigned'} · {item.customer_name || item.lead_name || item.quote_number || 'Unknown target'}
                     </div>
                   </div>
+                  <div className="text-xs">
+                    Likelihood {Number(item.order_likelihood_score || 0).toFixed(1)} (conf {Number(item.order_likelihood_confidence || 0).toFixed(2)})
+                  </div>
                   <div className="text-xs text-muted-foreground">{(item.reason_codes || []).join(', ')}</div>
+                  {(item.order_likelihood_reasons || []).length > 0 ? (
+                    <div className="text-xs text-muted-foreground">AI/heuristic: {(item.order_likelihood_reasons || []).join(', ')}</div>
+                  ) : null}
                   {item.suggested_message ? (
                     <div className="text-sm bg-muted/50 rounded p-2">{item.suggested_message}</div>
                   ) : null}
