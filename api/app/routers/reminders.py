@@ -646,7 +646,7 @@ async def generate_reminders_endpoint(
 
 
 @router.post("/weekly-plan/generate", response_model=WeeklyPlanRunResponse)
-async def generate_weekly_plan_endpoint(
+def generate_weekly_plan_endpoint(
     auto_execute: bool = Query(True),
     dry_run: bool = Query(False),
     session: Session = Depends(get_session),
@@ -662,7 +662,7 @@ async def generate_weekly_plan_endpoint(
 
 
 @router.post("/weekly-plan/{run_id}/execute-auto")
-async def execute_weekly_plan_auto(
+def execute_weekly_plan_auto(
     run_id: int,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),

@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   executeWeeklyPlanAuto,
   generateWeeklyPlan,
+  getApiErrorDetail,
   getAssignableUsers,
   getLatestWeeklyPlan,
   getWeeklyPlanMetrics,
@@ -109,8 +110,8 @@ export default function WeeklyPlanPage() {
       const run = await generateWeeklyPlan({ auto_execute: true, dry_run: false });
       toast.success(`Weekly plan generated (${run.total_items} items)`);
       await loadData();
-    } catch {
-      toast.error('Failed to generate weekly plan');
+    } catch (error) {
+      toast.error(getApiErrorDetail(error) || 'Failed to generate weekly plan');
     } finally {
       setLoadingRun(false);
     }
@@ -123,8 +124,8 @@ export default function WeeklyPlanPage() {
       const result = await executeWeeklyPlanAuto(plan.run.id);
       toast.success(result.message);
       await loadData();
-    } catch {
-      toast.error('Failed to execute auto actions');
+    } catch (error) {
+      toast.error(getApiErrorDetail(error) || 'Failed to execute auto actions');
     } finally {
       setLoadingRun(false);
     }
