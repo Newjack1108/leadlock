@@ -219,7 +219,8 @@ export default function DiscountRequestsPage() {
                         >
                           {dr.status}
                         </Badge>
-                        {dr.status === DiscountRequestStatus.PENDING && (
+                        {(dr.status === DiscountRequestStatus.PENDING ||
+                          dr.status === DiscountRequestStatus.APPROVED) && (
                           <Button
                             size="sm"
                             variant="outline"

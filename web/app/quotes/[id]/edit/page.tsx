@@ -182,6 +182,7 @@ function EditQuoteContent() {
       await deleteDiscountRequest(requestId);
       toast.success('Discount request removed');
       await fetchDiscountRequests();
+      await fetchQuoteAndCustomer();
     } catch (error: any) {
       const msg = error.response?.data?.detail || error.message || 'Failed to remove discount request';
       toast.error(typeof msg === 'string' ? msg : JSON.stringify(msg));
@@ -1232,7 +1233,8 @@ function EditQuoteContent() {
                             >
                               {dr.status}
                             </Badge>
-                            {dr.status === DiscountRequestStatus.PENDING && (
+                            {(dr.status === DiscountRequestStatus.PENDING ||
+                              dr.status === DiscountRequestStatus.APPROVED) && (
                               <Button
                                 type="button"
                                 variant="ghost"

@@ -7,11 +7,13 @@ from app.models import (
     DiscountRequestStatus,
     Quote,
     QuoteItem,
+    QuoteDiscount,
     User,
     QuoteStatus,
     UserRole,
 )
 from app.auth import get_current_user, require_role
+from app.constants import VAT_RATE_DECIMAL
 from app.schemas import (
     DiscountRequestCreate,
     DiscountRequestResponse,
@@ -19,6 +21,7 @@ from app.schemas import (
 )
 from app.routers.quotes import apply_custom_discount_to_quote
 from datetime import datetime
+from decimal import Decimal
 
 router = APIRouter(prefix="/api", tags=["discount-requests"])
 
@@ -213,24 +216,92 @@ async def delete_discount_request(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    """Delete a pending discount request.
+    """Delete a pending/approved discount request.
 
-    Requesters can delete their own pending requests.
-    Approvers (DIRECTOR/SALES_MANAGER) can delete any pending request.
+    Requesters can delete their own requests.
+    Approvers (DIRECTOR/SALES_MANAGER) can delete any request.
+    For approved requests, remove the applied discount rows and recalculate
+    quote + item totals.
     """
     dr = session.get(DiscountRequest, request_id)
     if not dr:
         raise HTTPException(status_code=404, detail="Discount request not found")
-    if dr.status != DiscountRequestStatus.PENDING:
+    if dr.status not in (DiscountRequestStatus.PENDING, DiscountRequestStatus.APPROVED):
         raise HTTPException(
             status_code=400,
-            detail="Only pending requests can be deleted",
+            detail="Only pending or approved requests can be deleted",
         )
     can_approve = current_user.role in (UserRole.DIRECTOR, UserRole.SALES_MANAGER)
     if dr.requested_by_id != current_user.id and not can_approve:
         raise HTTPException(
             status_code=403,
-            detail="You can only delete your own pending discount requests",
+            detail="You can only delete your own discount requests",
         )
+
+    quote = session.get(Quote, dr.quote_id)
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    if quote.status != QuoteStatus.DRAFT:
+        raise HTTPException(
+            status_code=400,
+            detail="Discount requests can only be removed on draft quotes",
+        )
+
+    if dr.status == DiscountRequestStatus.APPROVED:
+        description = f"Custom discount (Request #{dr.id})"
+        applied_rows = list(
+            session.exec(
+                select(QuoteDiscount).where(
+                    QuoteDiscount.quote_id == quote.id,
+                    QuoteDiscount.template_id.is_(None),
+                    QuoteDiscount.description == description,
+                )
+            ).all()
+        )
+        for row in applied_rows:
+            session.delete(row)
+        session.flush()
+
+        quote_items = list(
+            session.exec(
+                select(QuoteItem).where(QuoteItem.quote_id == quote.id)
+            ).all()
+        )
+        for item in quote_items:
+            item_rows = list(
+                session.exec(
+                    select(QuoteDiscount).where(
+                        QuoteDiscount.quote_id == quote.id,
+                        QuoteDiscount.quote_item_id == item.id,
+                    )
+                ).all()
+            )
+            item.discount_amount = sum(d.discount_amount for d in item_rows)
+            item.final_line_total = item.line_total - item.discount_amount
+            if item.final_line_total < 0:
+                item.final_line_total = Decimal(0)
+            session.add(item)
+
+        item_discount_total = sum(item.discount_amount for item in quote_items)
+        quote_level_rows = list(
+            session.exec(
+                select(QuoteDiscount).where(
+                    QuoteDiscount.quote_id == quote.id,
+                    QuoteDiscount.quote_item_id.is_(None),
+                )
+            ).all()
+        )
+        quote_level_discount_total = sum(d.discount_amount for d in quote_level_rows)
+        quote.discount_total = item_discount_total + quote_level_discount_total
+        quote.total_amount = quote.subtotal - quote.discount_total
+        if quote.total_amount < 0:
+            quote.total_amount = Decimal(0)
+        total_inc_vat = quote.total_amount * (Decimal("1") + VAT_RATE_DECIMAL)
+        if quote.deposit_amount > total_inc_vat:
+            quote.deposit_amount = total_inc_vat
+        quote.balance_amount = total_inc_vat - quote.deposit_amount
+        quote.updated_at = datetime.utcnow()
+        session.add(quote)
+
     session.delete(dr)
     session.commit()
