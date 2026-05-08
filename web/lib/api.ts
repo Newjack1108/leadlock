@@ -27,7 +27,8 @@ import {
 } from '@/lib/types';
 import { getTelUrl } from '@/lib/utils';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+// Prefer same-origin API calls so Next.js rewrites can proxy to backend.
+const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 declare module 'axios' {
   interface AxiosRequestConfig {
@@ -492,7 +493,7 @@ export const getPublicCompanyLogo = async (): Promise<{ logo_url: string | null 
 };
 
 /** Base URL for API (same as axios baseURL). */
-export const getApiBaseUrl = () => process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+export const getApiBaseUrl = () => process.env.NEXT_PUBLIC_API_URL || '';
 
 /** Download quote PDF by public view token (no auth). Triggers browser download. */
 export const downloadPublicQuotePdf = async (viewToken: string) => {

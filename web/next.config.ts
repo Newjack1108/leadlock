@@ -1,5 +1,7 @@
 import type { NextConfig } from "next";
 
+const apiProxyTarget = process.env.API_PROXY_TARGET || process.env.NEXT_PUBLIC_API_URL || "";
+
 const nextConfig: NextConfig = {
   async redirects() {
     return [
@@ -7,6 +9,19 @@ const nextConfig: NextConfig = {
         source: "/favicon.ico",
         destination: "/icon.png",
         permanent: false,
+      },
+    ];
+  },
+  async rewrites() {
+    // Proxy frontend /api calls to FastAPI in production.
+    // Keep disabled when target is missing or already a relative path.
+    if (!apiProxyTarget || apiProxyTarget.startsWith("/")) {
+      return [];
+    }
+    return [
+      {
+        source: "/api/:path*",
+        destination: `${apiProxyTarget.replace(/\/+$/, "")}/api/:path*`,
       },
     ];
   },
