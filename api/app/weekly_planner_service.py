@@ -5,7 +5,7 @@ import os
 import re
 from datetime import date, datetime, timedelta
 from decimal import Decimal
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import httpx
 from jinja2 import Template as JinjaTemplate
@@ -367,6 +367,38 @@ def _resolve_weekly_template_message(
         return _default_message(action, customer_name, quote_number)
 
 
+def render_weekly_plan_item_message(
+    session: Session,
+    *,
+    action: SuggestedAction,
+    channel: str,
+    customer_id: Optional[int],
+    quote_id: Optional[int],
+    fallback_customer_name: str = "there",
+    customer_by_id: Optional[Dict[int, Customer]] = None,
+    quote_by_id: Optional[Dict[int, Quote]] = None,
+) -> str:
+    customer_name = fallback_customer_name
+    quote_number: Optional[str] = None
+
+    if customer_id:
+        customer = customer_by_id.get(customer_id) if customer_by_id is not None else session.get(Customer, customer_id)
+        if customer and customer.name:
+            customer_name = customer.name
+    if quote_id:
+        quote = quote_by_id.get(quote_id) if quote_by_id is not None else session.get(Quote, quote_id)
+        if quote and quote.quote_number:
+            quote_number = quote.quote_number
+
+    return _resolve_weekly_template_message(
+        session,
+        action=action,
+        channel=channel,
+        customer_name=customer_name,
+        quote_number=quote_number,
+    )
+
+
 def _blend_final_priority(base_priority_score: Decimal, likelihood_score: Decimal) -> Decimal:
     blended = (base_priority_score * Decimal("0.65")) + (likelihood_score * Decimal("0.35"))
     return max(Decimal("1"), min(Decimal("100"), blended))
@@ -446,12 +478,13 @@ def generate_weekly_plan(
                 recommended_action=action,
                 channel=channel,
                 auto_eligible=auto_eligible,
-                suggested_message=_resolve_weekly_template_message(
+                suggested_message=render_weekly_plan_item_message(
                     session,
                     action=action,
                     channel=channel,
-                    customer_name=customer_name,
-                    quote_number=None,
+                    customer_id=lead.customer_id,
+                    quote_id=None,
+                    fallback_customer_name=customer_name,
                 ),
                 due_date=datetime.utcnow().date() + timedelta(days=2),
             )
@@ -518,12 +551,13 @@ def generate_weekly_plan(
                 recommended_action=action,
                 channel=channel,
                 auto_eligible=auto_eligible,
-                suggested_message=_resolve_weekly_template_message(
+                suggested_message=render_weekly_plan_item_message(
                     session,
                     action=action,
                     channel=channel,
-                    customer_name=customer_name,
-                    quote_number=quote.quote_number,
+                    customer_id=quote.customer_id,
+                    quote_id=quote.id,
+                    fallback_customer_name=customer_name,
                 ),
                 due_date=datetime.utcnow().date() + timedelta(days=2),
             )
@@ -585,12 +619,13 @@ def generate_weekly_plan(
                 recommended_action=action,
                 channel=channel,
                 auto_eligible=channel == "EMAIL" and action == SuggestedAction.FOLLOW_UP,
-                suggested_message=_resolve_weekly_template_message(
+                suggested_message=render_weekly_plan_item_message(
                     session,
                     action=action,
                     channel=channel,
-                    customer_name=customer_name,
-                    quote_number=opp.quote_number,
+                    customer_id=opp.customer_id,
+                    quote_id=opp.id,
+                    fallback_customer_name=customer_name,
                 ),
                 due_date=datetime.utcnow().date() + timedelta(days=1),
             )

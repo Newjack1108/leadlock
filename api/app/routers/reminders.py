@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, select, and_, or_, func, col
 from sqlalchemy import case
 from typing import List, Optional, Dict, Tuple
-from jinja2 import Template as JinjaTemplate
+from jinja2 import Template as JinjaTemplate, TemplateError
 from app.database import get_session
 from app.auth import get_current_user
 from datetime import date as date_type, datetime, timedelta
@@ -45,6 +45,7 @@ from app.weekly_planner_service import (
     generate_weekly_plan,
     get_plan_metrics,
     mark_plan_item_outcome,
+    render_weekly_plan_item_message,
     send_weekly_plan_item,
     send_weekly_plan_items_bulk,
 )
@@ -775,6 +776,41 @@ def update_weekly_plan_template(
             detail=f"Template for {template.suggested_action.value}/{template.channel} already exists",
         )
     session.refresh(template)
+
+    matching_items = session.exec(
+        select(WeeklyPlanItem).where(
+            WeeklyPlanItem.recommended_action == template.suggested_action,
+            WeeklyPlanItem.channel == template.channel,
+            WeeklyPlanItem.status == WeeklyPlanItemStatus.PENDING_REVIEW,
+        )
+    ).all()
+    if matching_items:
+        customer_ids = {item.customer_id for item in matching_items if item.customer_id}
+        quote_ids = {item.quote_id for item in matching_items if item.quote_id}
+        customer_by_id: Dict[int, Customer] = {}
+        if customer_ids:
+            customers = session.exec(select(Customer).where(Customer.id.in_(customer_ids))).all()
+            customer_by_id = {customer.id: customer for customer in customers if customer.id is not None}
+        quote_by_id: Dict[int, Quote] = {}
+        if quote_ids:
+            quotes = session.exec(select(Quote).where(Quote.id.in_(quote_ids))).all()
+            quote_by_id = {quote.id: quote for quote in quotes if quote.id is not None}
+
+        now = datetime.utcnow()
+        for item in matching_items:
+            item.suggested_message = render_weekly_plan_item_message(
+                session,
+                action=item.recommended_action,
+                channel=item.channel or template.channel,
+                customer_id=item.customer_id,
+                quote_id=item.quote_id,
+                customer_by_id=customer_by_id,
+                quote_by_id=quote_by_id,
+            )
+            item.updated_at = now
+            session.add(item)
+        session.commit()
+
     owner = session.get(User, template.created_by_id)
     return _weekly_template_to_response(template, owner.full_name if owner else None)
 
@@ -808,8 +844,11 @@ def preview_weekly_plan_template(
     if not template:
         raise HTTPException(status_code=404, detail="Weekly plan template not found")
     ctx = _weekly_template_preview_context(payload.customer_name, payload.quote_number)
-    body = JinjaTemplate(template.body_template).render(**ctx)
-    subject = JinjaTemplate(template.subject_template).render(**ctx) if template.subject_template else None
+    try:
+        body = JinjaTemplate(template.body_template or "").render(**ctx)
+        subject = JinjaTemplate(template.subject_template).render(**ctx) if template.subject_template else None
+    except TemplateError as exc:
+        raise HTTPException(status_code=400, detail=f"Template render error: {exc}") from exc
     return WeeklyPlanTemplatePreviewResponse(subject=subject, body=body)
 
 
