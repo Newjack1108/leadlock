@@ -770,8 +770,8 @@ def send_weekly_plan_item(session: Session, item_id: int) -> Optional[WeeklyPlan
         session.commit()
         session.refresh(item)
         return item
-    if not item.auto_eligible:
-        item.execution_error = "Item is not eligible for SMS/EMAIL send"
+    if (item.channel or "").upper() not in {"EMAIL", "SMS"}:
+        item.execution_error = "Only EMAIL and SMS items can be sent manually"
         item.updated_at = datetime.utcnow()
         session.add(item)
         session.commit()

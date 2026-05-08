@@ -102,6 +102,11 @@ export default function WeeklyPlanPage() {
     });
   }, [plan, ownerFilter, channelFilter, statusFilter, likelihoodFilter]);
 
+  const isItemSendable = (item: WeeklyPlanItem) =>
+    item.status === WeeklyPlanItemStatus.PENDING_REVIEW && ['EMAIL', 'SMS'].includes((item.channel || '').toUpperCase());
+
+  const sendableFilteredItems = useMemo(() => filteredItems.filter(isItemSendable), [filteredItems]);
+
   const channels = useMemo(() => {
     const unique = new Set<string>();
     (plan?.items || []).forEach((item) => unique.add(item.channel || 'NONE'));
@@ -348,6 +353,11 @@ export default function WeeklyPlanPage() {
             <CardTitle>Prioritized Items ({filteredItems.length})</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
+            {filteredItems.length > 0 && sendableFilteredItems.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No sendable items under current filters. Only pending EMAIL/SMS items can be selected.
+              </p>
+            ) : null}
             {filteredItems.length === 0 ? (
               <p className="text-sm text-muted-foreground">No items match the selected filters.</p>
             ) : (
@@ -355,7 +365,7 @@ export default function WeeklyPlanPage() {
                 <div key={item.id} className="border rounded-md p-3 space-y-2">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="text-sm font-medium flex items-center gap-2">
-                      {item.auto_eligible && item.status === WeeklyPlanItemStatus.PENDING_REVIEW ? (
+                      {isItemSendable(item) ? (
                         <input
                           type="checkbox"
                           checked={selectedItemIds.includes(item.id)}
@@ -400,7 +410,7 @@ export default function WeeklyPlanPage() {
                     <div className="text-sm bg-muted/50 rounded p-2">{item.suggested_message}</div>
                   ) : null}
                   <div className="flex flex-wrap gap-2">
-                    {item.auto_eligible && item.status === WeeklyPlanItemStatus.PENDING_REVIEW ? (
+                    {isItemSendable(item) ? (
                       <Button
                         size="sm"
                         disabled={busyItemId === item.id}
