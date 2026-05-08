@@ -410,15 +410,18 @@ export default function WeeklyPlanPage() {
                     <div className="text-sm bg-muted/50 rounded p-2">{item.suggested_message}</div>
                   ) : null}
                   <div className="flex flex-wrap gap-2">
-                    {isItemSendable(item) ? (
-                      <Button
-                        size="sm"
-                        disabled={busyItemId === item.id}
-                        onClick={() => handleSendItem(item)}
-                      >
-                        Send now
-                      </Button>
-                    ) : null}
+                    <Button
+                      size="sm"
+                      disabled={busyItemId === item.id || !isItemSendable(item)}
+                      onClick={() => handleSendItem(item)}
+                      title={
+                        isItemSendable(item)
+                          ? 'Send this item now'
+                          : 'Only pending EMAIL/SMS items can be sent'
+                      }
+                    >
+                      Send now
+                    </Button>
                     <Button
                       size="sm"
                       variant="outline"
