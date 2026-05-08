@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import Header from '@/components/Header';
 import ReminderList from '@/components/ReminderList';
 import CreateTaskDialog from '@/components/CreateTaskDialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { getStaleSummary, generateReminders, invalidateStaleSummaryCache } from '@/lib/api';
+import { generateReminders, getStaleSummary, invalidateStaleSummaryCache } from '@/lib/api';
 import { ReminderPriority, ReminderType, StaleSummary } from '@/lib/types';
 import { toast } from 'sonner';
 import { RefreshCw, ChevronDown, ChevronUp, ListTodo } from 'lucide-react';
@@ -161,6 +162,9 @@ export default function RemindersPage() {
             </Select>
           </div>
           <div className="flex items-center gap-2">
+            <Link href="/weekly-plan">
+              <Button variant="outline">Weekly Plan</Button>
+            </Link>
             <Button variant="outline" onClick={() => setCreateTaskOpen(true)}>
               <ListTodo className="h-4 w-4 mr-2" />
               Create task

@@ -289,3 +289,37 @@ def start_background_workers() -> None:
         )
     except Exception as e:
         print("Customer outreach worker not started:", str(e), file=__import__("sys").stderr, flush=True)
+
+    def poll_weekly_planner() -> None:
+        from app.weekly_planner_service import generate_weekly_plan
+
+        poll_interval = int(os.getenv("WEEKLY_PLANNER_INTERVAL_SECONDS", str(6 * 3600)))
+        enabled = os.getenv("WEEKLY_PLANNER_ENABLED", "false").strip().lower() in ("1", "true", "yes", "on")
+        if not enabled:
+            return
+        while True:
+            try:
+                time.sleep(poll_interval)
+                with Session(engine) as session:
+                    run = generate_weekly_plan(
+                        session,
+                        generated_by_id=None,
+                        auto_execute=os.getenv("WEEKLY_PLANNER_AUTO_EXECUTE", "true").strip().lower() in ("1", "true", "yes", "on"),
+                        dry_run=os.getenv("WEEKLY_PLANNER_DRY_RUN", "false").strip().lower() in ("1", "true", "yes", "on"),
+                    )
+                    print(
+                        f"Weekly planner generated run={run.id} items={run.total_items} auto_sent={run.auto_sent_items}",
+                        file=__import__("sys").stderr,
+                        flush=True,
+                    )
+            except Exception as e:
+                print(f"Error in weekly planner worker: {e}", file=__import__("sys").stderr, flush=True)
+                time.sleep(60)
+
+    try:
+        if os.getenv("WEEKLY_PLANNER_ENABLED", "false").strip().lower() in ("1", "true", "yes", "on"):
+            planner_thread = threading.Thread(target=poll_weekly_planner, daemon=True)
+            planner_thread.start()
+            print("Weekly planner worker started", file=__import__("sys").stderr, flush=True)
+    except Exception as e:
+        print("Weekly planner worker not started:", str(e), file=__import__("sys").stderr, flush=True)

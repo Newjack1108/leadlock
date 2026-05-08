@@ -1010,6 +1010,62 @@ class CustomerOutreachSend(SQLModel, table=True):
     sent_at: datetime = Field(default_factory=datetime.utcnow)
 
 
+class WeeklyPlanItemStatus(str, Enum):
+    PENDING_REVIEW = "PENDING_REVIEW"
+    AUTO_SENT = "AUTO_SENT"
+    REJECTED = "REJECTED"
+    COMPLETED = "COMPLETED"
+    AUTO_FAILED = "AUTO_FAILED"
+
+
+class WeeklyPlanScope(str, Enum):
+    FULL_PIPELINE = "FULL_PIPELINE"
+
+
+class WeeklyPlanRun(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    week_start: date = Field(index=True)
+    generated_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    scope: WeeklyPlanScope = Field(default=WeeklyPlanScope.FULL_PIPELINE)
+    model_version: str = Field(default="deterministic-v1")
+    generated_by_id: Optional[int] = Field(default=None, foreign_key="user.id")
+    total_items: int = Field(default=0)
+    auto_eligible_items: int = Field(default=0)
+    auto_sent_items: int = Field(default=0)
+
+    generated_by: Optional["User"] = Relationship()
+
+
+class WeeklyPlanItem(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    plan_run_id: int = Field(foreign_key="weeklyplanrun.id", index=True)
+    lead_id: Optional[int] = Field(default=None, foreign_key="lead.id")
+    quote_id: Optional[int] = Field(default=None, foreign_key="quote.id")
+    customer_id: Optional[int] = Field(default=None, foreign_key="customer.id")
+    assigned_to_id: Optional[int] = Field(default=None, foreign_key="user.id", index=True)
+    priority_score: Decimal = Field(default=0, sa_column=Column(Numeric(6, 2)))
+    confidence: Decimal = Field(default=0, sa_column=Column(Numeric(5, 2)))
+    reason_codes: List[str] = Field(default_factory=list, sa_column=Column(JSON))
+    recommended_action: SuggestedAction
+    channel: Optional[str] = None  # SMS|EMAIL|CALL|REQUOTE
+    status: WeeklyPlanItemStatus = Field(default=WeeklyPlanItemStatus.PENDING_REVIEW, index=True)
+    auto_eligible: bool = Field(default=False)
+    suggested_message: Optional[str] = None
+    due_date: Optional[date] = None
+    executed_at: Optional[datetime] = None
+    execution_error: Optional[str] = None
+    outcome_result: Optional[str] = None
+    response_received: bool = Field(default=False)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+    plan_run: Optional["WeeklyPlanRun"] = Relationship()
+    lead: Optional["Lead"] = Relationship()
+    quote: Optional["Quote"] = Relationship()
+    customer: Optional["Customer"] = Relationship()
+    assigned_to: Optional["User"] = Relationship()
+
+
 class ProductOptionalExtra(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     product_id: int = Field(foreign_key="product.id")

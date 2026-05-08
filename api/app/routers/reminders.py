@@ -15,6 +15,9 @@ from app.models import (
     CustomerOutreachChannel,
     CustomerOutreachSend,
     DeletedReminderRuleName,
+    WeeklyPlanItem,
+    WeeklyPlanItemStatus,
+    WeeklyPlanRun,
 )
 from app.schemas import (
     ReminderResponse, ReminderDismissRequest, ReminderActRequest,
@@ -23,8 +26,18 @@ from app.schemas import (
     OutreachSendListResponse,
     OutreachSendListItemResponse,
     OutreachSendTargetType,
+    WeeklyPlanItemOutcomeUpdate,
+    WeeklyPlanItemResponse,
+    WeeklyPlanListResponse,
+    WeeklyPlanRunResponse,
 )
 from app.reminder_service import generate_reminders, calculate_priority
+from app.weekly_planner_service import (
+    execute_auto_eligible_items,
+    generate_weekly_plan,
+    get_plan_metrics,
+    mark_plan_item_outcome,
+)
 
 router = APIRouter(prefix="/api/reminders", tags=["reminders"])
 
@@ -33,6 +46,61 @@ _QUOTE_CHECK_TYPES = frozenset({
     "SENT_DATE", "VALID_UNTIL", "STATUS_DURATION", "SENT_NOT_OPENED", "OPENED_NO_REPLY",
 })
 _USER_TASK_NEAR_DUE_DAYS = 1
+
+
+def _weekly_plan_run_to_response(run: WeeklyPlanRun) -> WeeklyPlanRunResponse:
+    return WeeklyPlanRunResponse(
+        id=run.id,
+        week_start=run.week_start,
+        generated_at=run.generated_at,
+        scope=run.scope,
+        model_version=run.model_version,
+        generated_by_id=run.generated_by_id,
+        total_items=run.total_items,
+        auto_eligible_items=run.auto_eligible_items,
+        auto_sent_items=run.auto_sent_items,
+    )
+
+
+def _weekly_plan_item_to_response(
+    session: Session,
+    item: WeeklyPlanItem,
+    uid_map: Dict[int, User],
+    lead_by_id: Dict[int, Lead],
+    quote_by_id: Dict[int, Quote],
+    customer_by_id: Dict[int, Customer],
+) -> WeeklyPlanItemResponse:
+    assignee_name = uid_map[item.assigned_to_id].full_name if item.assigned_to_id in uid_map else None
+    lead = lead_by_id.get(item.lead_id) if item.lead_id else None
+    quote = quote_by_id.get(item.quote_id) if item.quote_id else None
+    customer = customer_by_id.get(item.customer_id) if item.customer_id else None
+    return WeeklyPlanItemResponse(
+        id=item.id,
+        plan_run_id=item.plan_run_id,
+        lead_id=item.lead_id,
+        quote_id=item.quote_id,
+        customer_id=item.customer_id,
+        assigned_to_id=item.assigned_to_id,
+        assigned_to_name=assignee_name,
+        customer_name=customer.name if customer else None,
+        quote_number=quote.quote_number if quote else None,
+        lead_name=lead.name if lead else None,
+        priority_score=item.priority_score,
+        confidence=item.confidence,
+        reason_codes=item.reason_codes or [],
+        recommended_action=item.recommended_action,
+        channel=item.channel,
+        status=item.status,
+        auto_eligible=item.auto_eligible,
+        suggested_message=item.suggested_message,
+        due_date=item.due_date,
+        executed_at=item.executed_at,
+        execution_error=item.execution_error,
+        outcome_result=item.outcome_result,
+        response_received=item.response_received,
+        created_at=item.created_at,
+        updated_at=item.updated_at,
+    )
 
 
 def _load_latest_outreach_by_target(
@@ -570,6 +638,117 @@ async def generate_reminders_endpoint(
     """Manually trigger reminder generation."""
     count = generate_reminders(session, current_user.id)
     return {"message": f"Generated {count} reminders", "count": count}
+
+
+@router.post("/weekly-plan/generate", response_model=WeeklyPlanRunResponse)
+async def generate_weekly_plan_endpoint(
+    auto_execute: bool = Query(True),
+    dry_run: bool = Query(False),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    run = generate_weekly_plan(
+        session,
+        generated_by_id=current_user.id,
+        auto_execute=auto_execute,
+        dry_run=dry_run,
+    )
+    return _weekly_plan_run_to_response(run)
+
+
+@router.post("/weekly-plan/{run_id}/execute-auto")
+async def execute_weekly_plan_auto(
+    run_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role != UserRole.DIRECTOR:
+        raise HTTPException(status_code=403, detail="Only directors can trigger automation")
+    sent = execute_auto_eligible_items(session, run_id)
+    return {"message": f"Auto-executed {sent} weekly plan item(s)", "sent_count": sent}
+
+
+@router.get("/weekly-plan/latest", response_model=WeeklyPlanListResponse)
+async def get_latest_weekly_plan(
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    run = session.exec(select(WeeklyPlanRun).order_by(col(WeeklyPlanRun.generated_at).desc()).limit(1)).first()
+    if not run:
+        raise HTTPException(status_code=404, detail="No weekly plan run found")
+    items = session.exec(
+        select(WeeklyPlanItem)
+        .where(WeeklyPlanItem.plan_run_id == run.id)
+        .order_by(col(WeeklyPlanItem.priority_score).desc(), col(WeeklyPlanItem.created_at).asc())
+    ).all()
+
+    user_ids = {item.assigned_to_id for item in items if item.assigned_to_id}
+    lead_ids = {item.lead_id for item in items if item.lead_id}
+    quote_ids = {item.quote_id for item in items if item.quote_id}
+    customer_ids = {item.customer_id for item in items if item.customer_id}
+    uid_map = {u.id: u for u in session.exec(select(User).where(User.id.in_(user_ids))).all()} if user_ids else {}
+    lead_by_id = {l.id: l for l in session.exec(select(Lead).where(Lead.id.in_(lead_ids))).all()} if lead_ids else {}
+    quote_by_id = {q.id: q for q in session.exec(select(Quote).where(Quote.id.in_(quote_ids))).all()} if quote_ids else {}
+    customer_by_id = {c.id: c for c in session.exec(select(Customer).where(Customer.id.in_(customer_ids))).all()} if customer_ids else {}
+
+    return WeeklyPlanListResponse(
+        run=_weekly_plan_run_to_response(run),
+        items=[
+            _weekly_plan_item_to_response(session, item, uid_map, lead_by_id, quote_by_id, customer_by_id)
+            for item in items
+        ],
+    )
+
+
+@router.patch("/weekly-plan/items/{item_id}", response_model=WeeklyPlanItemResponse)
+async def update_weekly_plan_item_outcome(
+    item_id: int,
+    payload: WeeklyPlanItemOutcomeUpdate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    item = mark_plan_item_outcome(
+        session,
+        item_id,
+        status=payload.status,
+        outcome_result=payload.outcome_result,
+        response_received=payload.response_received,
+    )
+    if not item:
+        raise HTTPException(status_code=404, detail="Weekly plan item not found")
+    uid_map = {}
+    if item.assigned_to_id:
+        assignee = session.get(User, item.assigned_to_id)
+        if assignee:
+            uid_map[assignee.id] = assignee
+    lead_by_id = {}
+    if item.lead_id:
+        lead = session.get(Lead, item.lead_id)
+        if lead:
+            lead_by_id[lead.id] = lead
+    quote_by_id = {}
+    if item.quote_id:
+        quote = session.get(Quote, item.quote_id)
+        if quote:
+            quote_by_id[quote.id] = quote
+    customer_by_id = {}
+    if item.customer_id:
+        customer = session.get(Customer, item.customer_id)
+        if customer:
+            customer_by_id[customer.id] = customer
+    return _weekly_plan_item_to_response(session, item, uid_map, lead_by_id, quote_by_id, customer_by_id)
+
+
+@router.get("/weekly-plan/{run_id}/metrics")
+async def get_weekly_plan_metrics(
+    run_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    metrics = get_plan_metrics(session, run_id)
+    if not metrics:
+        raise HTTPException(status_code=404, detail="Weekly plan run not found")
+    return metrics
 
 
 @router.get("/rules", response_model=List[ReminderRuleResponse])

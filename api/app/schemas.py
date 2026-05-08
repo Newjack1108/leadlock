@@ -10,7 +10,7 @@ from app.models import (
     LeadType, LeadSource, EmailDirection, ReminderPriority, ReminderType,
     SuggestedAction, OpportunityStage, LossCategory, InstallationLeadTime,
     SmsDirection, ScheduledSmsStatus, MessengerDirection, QuoteItemLineType, SmsBotMode, DealerDiscountMode,
-    CustomerFileKind,
+    CustomerFileKind, WeeklyPlanItemStatus, WeeklyPlanScope,
 )
 
 
@@ -1780,6 +1780,57 @@ class StaleSummaryResponse(BaseModel):
     low_count: int
     stale_leads_count: int
     stale_quotes_count: int
+
+
+class WeeklyPlanRunResponse(BaseModel):
+    id: int
+    week_start: date
+    generated_at: datetime
+    scope: WeeklyPlanScope
+    model_version: str
+    generated_by_id: Optional[int] = None
+    total_items: int
+    auto_eligible_items: int
+    auto_sent_items: int
+
+
+class WeeklyPlanItemResponse(BaseModel):
+    id: int
+    plan_run_id: int
+    lead_id: Optional[int] = None
+    quote_id: Optional[int] = None
+    customer_id: Optional[int] = None
+    assigned_to_id: Optional[int] = None
+    assigned_to_name: Optional[str] = None
+    customer_name: Optional[str] = None
+    quote_number: Optional[str] = None
+    lead_name: Optional[str] = None
+    priority_score: Decimal
+    confidence: Decimal
+    reason_codes: List[str] = []
+    recommended_action: SuggestedAction
+    channel: Optional[str] = None
+    status: WeeklyPlanItemStatus
+    auto_eligible: bool
+    suggested_message: Optional[str] = None
+    due_date: Optional[date] = None
+    executed_at: Optional[datetime] = None
+    execution_error: Optional[str] = None
+    outcome_result: Optional[str] = None
+    response_received: bool = False
+    created_at: datetime
+    updated_at: datetime
+
+
+class WeeklyPlanItemOutcomeUpdate(BaseModel):
+    status: Optional[WeeklyPlanItemStatus] = None
+    outcome_result: Optional[str] = None
+    response_received: Optional[bool] = None
+
+
+class WeeklyPlanListResponse(BaseModel):
+    run: WeeklyPlanRunResponse
+    items: List[WeeklyPlanItemResponse]
 
 
 class CustomerHistoryEventType(str, Enum):

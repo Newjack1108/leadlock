@@ -372,6 +372,22 @@ export default function Header() {
               </span>
             )}
           </Link>}
+          {!isDealer && (
+            <Link href="/weekly-plan">
+              <Button
+                variant={pathname?.startsWith('/weekly-plan') ? 'default' : 'ghost'}
+                size="sm"
+                className={
+                  pathname?.startsWith('/weekly-plan')
+                    ? 'text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                }
+              >
+                <LayoutDashboard className="h-4 w-4 mr-2" />
+                Weekly Plan
+              </Button>
+            </Link>
+          )}
           {!isDealer && <Link href="/sales-documents">
             <Button
               variant={pathname?.startsWith('/sales-documents') ? 'default' : 'ghost'}
@@ -676,6 +692,22 @@ export default function Header() {
                   </span>
                   <BadgePill count={reminderCount} />
                 </Link>}
+                {!isDealer && (
+                  <Link
+                    href="/weekly-plan"
+                    onClick={closeMobile}
+                    className={cn(
+                      mobileNavLinkClass,
+                      pathname?.startsWith('/weekly-plan') &&
+                        'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground'
+                    )}
+                  >
+                    <span className="flex items-center gap-2">
+                      <LayoutDashboard className="h-4 w-4 shrink-0" />
+                      Weekly Plan
+                    </span>
+                  </Link>
+                )}
                 {!isDealer && <Link
                   href="/sales-documents"
                   onClick={closeMobile}

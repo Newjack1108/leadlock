@@ -1331,6 +1331,59 @@ export interface OutreachSendListResponse {
   page_size: number;
 }
 
+export enum WeeklyPlanItemStatus {
+  PENDING_REVIEW = "PENDING_REVIEW",
+  AUTO_SENT = "AUTO_SENT",
+  REJECTED = "REJECTED",
+  COMPLETED = "COMPLETED",
+  AUTO_FAILED = "AUTO_FAILED",
+}
+
+export interface WeeklyPlanRun {
+  id: number;
+  week_start: string;
+  generated_at: string;
+  scope: string;
+  model_version: string;
+  generated_by_id?: number | null;
+  total_items: number;
+  auto_eligible_items: number;
+  auto_sent_items: number;
+}
+
+export interface WeeklyPlanItem {
+  id: number;
+  plan_run_id: number;
+  lead_id?: number | null;
+  quote_id?: number | null;
+  customer_id?: number | null;
+  assigned_to_id?: number | null;
+  assigned_to_name?: string | null;
+  customer_name?: string | null;
+  quote_number?: string | null;
+  lead_name?: string | null;
+  priority_score: number;
+  confidence: number;
+  reason_codes: string[];
+  recommended_action: SuggestedAction;
+  channel?: string | null;
+  status: WeeklyPlanItemStatus;
+  auto_eligible: boolean;
+  suggested_message?: string | null;
+  due_date?: string | null;
+  executed_at?: string | null;
+  execution_error?: string | null;
+  outcome_result?: string | null;
+  response_received: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WeeklyPlanListResponse {
+  run: WeeklyPlanRun;
+  items: WeeklyPlanItem[];
+}
+
 export enum CustomerHistoryEventType {
   ACTIVITY = "ACTIVITY",
   LEAD_STATUS_CHANGE = "LEAD_STATUS_CHANGE",

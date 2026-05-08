@@ -20,6 +20,10 @@ import {
   type QuoteStatus,
   type QuoteListPayload,
   type StaleSummary,
+  type WeeklyPlanListResponse,
+  type WeeklyPlanRun,
+  type WeeklyPlanItem,
+  type WeeklyPlanItemStatus,
 } from '@/lib/types';
 import { getTelUrl } from '@/lib/utils';
 
@@ -1359,6 +1363,37 @@ export const actOnReminder = async (reminderId: number, actionTaken: string, not
 
 export const generateReminders = async () => {
   const response = await api.post('/api/reminders/generate');
+  return response.data;
+};
+
+export const generateWeeklyPlan = async (params?: {
+  auto_execute?: boolean;
+  dry_run?: boolean;
+}): Promise<WeeklyPlanRun> => {
+  const response = await api.post('/api/reminders/weekly-plan/generate', null, { params });
+  return response.data;
+};
+
+export const getLatestWeeklyPlan = async (): Promise<WeeklyPlanListResponse> => {
+  const response = await api.get('/api/reminders/weekly-plan/latest');
+  return response.data;
+};
+
+export const executeWeeklyPlanAuto = async (runId: number): Promise<{ sent_count: number; message: string }> => {
+  const response = await api.post(`/api/reminders/weekly-plan/${runId}/execute-auto`);
+  return response.data;
+};
+
+export const updateWeeklyPlanItem = async (
+  itemId: number,
+  payload: { status?: WeeklyPlanItemStatus; outcome_result?: string; response_received?: boolean }
+): Promise<WeeklyPlanItem> => {
+  const response = await api.patch(`/api/reminders/weekly-plan/items/${itemId}`, payload);
+  return response.data;
+};
+
+export const getWeeklyPlanMetrics = async (runId: number): Promise<Record<string, unknown>> => {
+  const response = await api.get(`/api/reminders/weekly-plan/${runId}/metrics`);
   return response.data;
 };
 
