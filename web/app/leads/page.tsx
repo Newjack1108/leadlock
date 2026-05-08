@@ -96,7 +96,7 @@ function LeadsPageContent() {
     ? (leadSourceFromUrl as LeadSource)
     : 'ALL';
   const [userRole, setUserRole] = useState<string | null>(null);
-  /** When false, skip fetching so we never request ?status=ALL and then immediately ?status=NEW (director/manager default), which flashes all leads then empty. */
+  /** When false, skip fetching so role-based URL normalization completes before first fetch. */
   const [authReady, setAuthReady] = useState(false);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
@@ -161,9 +161,9 @@ function LeadsPageContent() {
           syncLeadSourceFromUrl(leadSource);
         } else if ((role === 'DIRECTOR' || role === 'SALES_MANAGER') && !status) {
           const params = new URLSearchParams(searchParams.toString());
-          params.set('status', LeadStatus.NEW);
+          params.set('status', 'ALL');
           router.replace(`/leads?${params.toString()}`);
-          setStatusFilter(LeadStatus.NEW);
+          setStatusFilter('ALL');
           syncLeadSourceFromUrl(leadSource);
         } else {
           if (status && Object.values(LeadStatus).includes(status as LeadStatus)) {
