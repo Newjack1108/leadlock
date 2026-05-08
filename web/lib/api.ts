@@ -1666,6 +1666,10 @@ export const rejectDiscountRequest = async (requestId: number, rejectionReason?:
   return response.data;
 };
 
+export const deleteDiscountRequest = async (requestId: number) => {
+  await api.delete(`/api/discount-requests/${requestId}`);
+};
+
 // Customer import/export (Company Settings)
 export const downloadCustomerImportExample = async () => {
   const response = await api.get('/api/settings/customers/import-example', {

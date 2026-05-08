@@ -205,3 +205,32 @@ async def reject_discount_request(
     session.commit()
     session.refresh(dr)
     return _build_response(dr, session)
+
+
+@router.delete("/discount-requests/{request_id}", status_code=204)
+async def delete_discount_request(
+    request_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Delete a pending discount request.
+
+    Requesters can delete their own pending requests.
+    Approvers (DIRECTOR/SALES_MANAGER) can delete any pending request.
+    """
+    dr = session.get(DiscountRequest, request_id)
+    if not dr:
+        raise HTTPException(status_code=404, detail="Discount request not found")
+    if dr.status != DiscountRequestStatus.PENDING:
+        raise HTTPException(
+            status_code=400,
+            detail="Only pending requests can be deleted",
+        )
+    can_approve = current_user.role in (UserRole.DIRECTOR, UserRole.SALES_MANAGER)
+    if dr.requested_by_id != current_user.id and not can_approve:
+        raise HTTPException(
+            status_code=403,
+            detail="You can only delete your own pending discount requests",
+        )
+    session.delete(dr)
+    session.commit()

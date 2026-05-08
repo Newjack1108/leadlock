@@ -19,6 +19,7 @@ import {
   getDiscountRequests,
   approveDiscountRequest,
   rejectDiscountRequest,
+  deleteDiscountRequest,
 } from '@/lib/api';
 import { DiscountRequest, DiscountType, DiscountScope, DiscountRequestStatus } from '@/lib/types';
 import { toast } from 'sonner';
@@ -36,6 +37,7 @@ export default function DiscountRequestsPage() {
   const [rejectionReason, setRejectionReason] = useState('');
   const [approvingId, setApprovingId] = useState<number | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const canApprove = userRole === 'DIRECTOR' || userRole === 'SALES_MANAGER';
 
@@ -109,6 +111,20 @@ export default function DiscountRequestsPage() {
       toast.error(typeof msg === 'string' ? msg : JSON.stringify(msg));
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    try {
+      setDeletingId(id);
+      await deleteDiscountRequest(id);
+      toast.success('Discount request removed');
+      await fetchRequests();
+    } catch (error: any) {
+      const msg = error.response?.data?.detail || error.message || 'Failed to remove request';
+      toast.error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -203,6 +219,16 @@ export default function DiscountRequestsPage() {
                         >
                           {dr.status}
                         </Badge>
+                        {dr.status === DiscountRequestStatus.PENDING && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={deletingId === dr.id}
+                            onClick={() => handleDelete(dr.id)}
+                          >
+                            {deletingId === dr.id ? 'Removing...' : 'Remove'}
+                          </Button>
+                        )}
                       </div>
                     ))}
                   </div>

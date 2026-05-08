@@ -20,6 +20,7 @@ import {
   getCompanySettings,
   getDiscountTemplates,
   getDiscountRequestsForQuote,
+  deleteDiscountRequest,
   estimateDeliveryInstall,
 } from '@/lib/api';
 import api from '@/lib/api';
@@ -140,6 +141,7 @@ function EditQuoteContent() {
   const [selectedDiscountIds, setSelectedDiscountIds] = useState<number[]>([]);
   const [discountRequests, setDiscountRequests] = useState<DiscountRequest[]>([]);
   const [requestDialogOpen, setRequestDialogOpen] = useState(false);
+  const [removingDiscountRequestId, setRemovingDiscountRequestId] = useState<number | null>(null);
   const [productDetails, setProductDetails] = useState<Record<number, Product>>({});
   const [allOptionalExtras, setAllOptionalExtras] = useState<Product[]>([]);
   const [extraPickerOpen, setExtraPickerOpen] = useState(false);
@@ -171,6 +173,20 @@ function EditQuoteContent() {
       setDiscountRequests(list);
     } catch {
       setDiscountRequests([]);
+    }
+  };
+
+  const handleRemoveDiscountRequest = async (requestId: number) => {
+    try {
+      setRemovingDiscountRequestId(requestId);
+      await deleteDiscountRequest(requestId);
+      toast.success('Discount request removed');
+      await fetchDiscountRequests();
+    } catch (error: any) {
+      const msg = error.response?.data?.detail || error.message || 'Failed to remove discount request';
+      toast.error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+    } finally {
+      setRemovingDiscountRequestId(null);
     }
   };
 
@@ -1191,7 +1207,7 @@ function EditQuoteContent() {
                       {discountRequests.map((dr) => (
                         <div
                           key={dr.id}
-                          className="flex items-center justify-between rounded-md border border-violet-200/80 bg-white/80 p-3 text-sm dark:border-violet-800/60 dark:bg-background/60"
+                          className="flex items-center justify-between gap-3 rounded-md border border-violet-200/80 bg-white/80 p-3 text-sm dark:border-violet-800/60 dark:bg-background/60"
                         >
                           <div>
                             <span className="font-medium">
@@ -1204,17 +1220,30 @@ function EditQuoteContent() {
                               <p className="text-muted-foreground mt-1">{dr.reason}</p>
                             )}
                           </div>
-                          <Badge
-                            variant={
-                              dr.status === DiscountRequestStatus.APPROVED
-                                ? 'default'
-                                : dr.status === DiscountRequestStatus.REJECTED
-                                  ? 'destructive'
-                                  : 'secondary'
-                            }
-                          >
-                            {dr.status}
-                          </Badge>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <Badge
+                              variant={
+                                dr.status === DiscountRequestStatus.APPROVED
+                                  ? 'default'
+                                  : dr.status === DiscountRequestStatus.REJECTED
+                                    ? 'destructive'
+                                    : 'secondary'
+                              }
+                            >
+                              {dr.status}
+                            </Badge>
+                            {dr.status === DiscountRequestStatus.PENDING && (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                disabled={removingDiscountRequestId === dr.id}
+                                onClick={() => void handleRemoveDiscountRequest(dr.id)}
+                              >
+                                {removingDiscountRequestId === dr.id ? 'Removing...' : 'Remove'}
+                              </Button>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>
