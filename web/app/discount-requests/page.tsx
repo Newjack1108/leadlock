@@ -277,6 +277,14 @@ export default function DiscountRequestsPage() {
                     <div className="flex items-center gap-2 shrink-0">
                       <Button
                         size="sm"
+                        variant="outline"
+                        onClick={() => handleDelete(dr.id)}
+                        disabled={deletingId === dr.id || approvingId != null || actionLoading}
+                      >
+                        {deletingId === dr.id ? 'Removing...' : 'Remove'}
+                      </Button>
+                      <Button
+                        size="sm"
                         onClick={() => handleApprove(dr.id)}
                         disabled={approvingId != null}
                       >
