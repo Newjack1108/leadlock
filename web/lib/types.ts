@@ -754,6 +754,54 @@ export interface EmailTemplatePreviewResponse {
   body_html: string;
 }
 
+
+export interface WeeklyPlanTemplate {
+  id: number;
+  name: string;
+  description?: string;
+  suggested_action: SuggestedAction;
+  channel: string;
+  subject_template?: string | null;
+  body_template: string;
+  is_active: boolean;
+  created_by_id: number;
+  created_at: string;
+  updated_at: string;
+  created_by_name?: string | null;
+}
+
+export interface WeeklyPlanTemplateCreate {
+  name: string;
+  description?: string;
+  suggested_action: SuggestedAction;
+  channel: string;
+  subject_template?: string;
+  body_template: string;
+  is_active?: boolean;
+}
+
+export interface WeeklyPlanTemplateUpdate {
+  name?: string;
+  description?: string;
+  suggested_action?: SuggestedAction;
+  channel?: string;
+  subject_template?: string;
+  body_template?: string;
+  is_active?: boolean;
+}
+
+export interface WeeklyPlanTemplatePreviewResponse {
+  subject?: string | null;
+  body: string;
+}
+
+export interface WeeklyPlanBulkSendResult {
+  message: string;
+  requested: number;
+  sent: number;
+  failed: number;
+}
+
 export interface QuoteTemplateAttachedDocument {
   id: number;
   name: string;

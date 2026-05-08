@@ -8,6 +8,7 @@ from decimal import Decimal
 from typing import List, Optional, Tuple
 
 import httpx
+from jinja2 import Template as JinjaTemplate
 from sqlmodel import Session, and_, desc, func, select
 
 from app.customer_outreach_service import _is_within_outreach_quiet_hours
@@ -32,6 +33,7 @@ from app.models import (
     WeeklyPlanItemStatus,
     WeeklyPlanRun,
     WeeklyPlanScope,
+    WeeklyPlanTemplate,
 )
 from app.reminder_service import (
     calculate_days_stale,
@@ -336,6 +338,35 @@ def _default_message(action: SuggestedAction, customer_name: str, quote_number: 
     return f"Hi {customer_name}, just a quick follow-up from the team."
 
 
+def _resolve_weekly_template_message(
+    session: Session,
+    *,
+    action: SuggestedAction,
+    channel: str,
+    customer_name: str,
+    quote_number: Optional[str],
+) -> str:
+    template = session.exec(
+        select(WeeklyPlanTemplate).where(
+            WeeklyPlanTemplate.suggested_action == action,
+            WeeklyPlanTemplate.channel == channel.upper(),
+            WeeklyPlanTemplate.is_active.is_(True),
+        )
+    ).first()
+    if not template:
+        return _default_message(action, customer_name, quote_number)
+    ctx = {
+        "customer": {"name": customer_name or "there"},
+        "quote": {"number": quote_number or ""},
+        "company": {"name": "LeadLock"},
+    }
+    try:
+        rendered = JinjaTemplate(template.body_template).render(**ctx).strip()
+        return rendered or _default_message(action, customer_name, quote_number)
+    except Exception:
+        return _default_message(action, customer_name, quote_number)
+
+
 def _blend_final_priority(base_priority_score: Decimal, likelihood_score: Decimal) -> Decimal:
     blended = (base_priority_score * Decimal("0.65")) + (likelihood_score * Decimal("0.35"))
     return max(Decimal("1"), min(Decimal("100"), blended))
@@ -415,7 +446,13 @@ def generate_weekly_plan(
                 recommended_action=action,
                 channel=channel,
                 auto_eligible=auto_eligible,
-                suggested_message=_default_message(action, customer_name, None),
+                suggested_message=_resolve_weekly_template_message(
+                    session,
+                    action=action,
+                    channel=channel,
+                    customer_name=customer_name,
+                    quote_number=None,
+                ),
                 due_date=datetime.utcnow().date() + timedelta(days=2),
             )
         )
@@ -481,7 +518,13 @@ def generate_weekly_plan(
                 recommended_action=action,
                 channel=channel,
                 auto_eligible=auto_eligible,
-                suggested_message=_default_message(action, customer_name, quote.quote_number),
+                suggested_message=_resolve_weekly_template_message(
+                    session,
+                    action=action,
+                    channel=channel,
+                    customer_name=customer_name,
+                    quote_number=quote.quote_number,
+                ),
                 due_date=datetime.utcnow().date() + timedelta(days=2),
             )
         )
@@ -542,7 +585,13 @@ def generate_weekly_plan(
                 recommended_action=action,
                 channel=channel,
                 auto_eligible=channel == "EMAIL" and action == SuggestedAction.FOLLOW_UP,
-                suggested_message=_default_message(action, customer_name, opp.quote_number),
+                suggested_message=_resolve_weekly_template_message(
+                    session,
+                    action=action,
+                    channel=channel,
+                    customer_name=customer_name,
+                    quote_number=opp.quote_number,
+                ),
                 due_date=datetime.utcnow().date() + timedelta(days=1),
             )
         )
@@ -586,115 +635,191 @@ def execute_auto_eligible_items(session: Session, run_id: int) -> int:
 
     sent_count = 0
     for item in items:
-        if not item.customer_id:
-            continue
-        customer = session.get(Customer, item.customer_id)
-        if not customer:
-            continue
-        if customer.automated_reminder_outreach_opt_out:
-            item.status = WeeklyPlanItemStatus.REJECTED
-            item.execution_error = "Customer opted out of automated reminder outreach"
-            item.updated_at = datetime.utcnow()
-            session.add(item)
-            continue
-        assignee = session.get(User, item.assigned_to_id) if item.assigned_to_id else None
-        actor_id = item.assigned_to_id or run.generated_by_id or get_system_user_id(session)
-        now = datetime.utcnow()
-
-        try:
-            if item.channel == "SMS":
-                phone = (customer.phone or "").strip()
-                if not phone:
-                    raise ValueError("Customer has no phone number")
-                success, sid, err = send_sms(phone, item.suggested_message or "Quick follow-up from the team.")
-                if not success:
-                    raise ValueError(err or "SMS send failed")
-                session.add(
-                    SmsMessage(
-                        customer_id=customer.id,
-                        lead_id=item.lead_id,
-                        direction=SmsDirection.SENT,
-                        from_phone="",
-                        to_phone=normalize_phone(phone),
-                        body=item.suggested_message or "",
-                        twilio_sid=sid,
-                        sent_at=now,
-                        created_by_id=actor_id,
-                    )
-                )
-                session.add(
-                    Activity(
-                        customer_id=customer.id,
-                        activity_type=ActivityType.SMS_SENT,
-                        notes=f"Weekly planner auto-SMS\n{item.suggested_message or ''}",
-                        created_by_id=actor_id,
-                    )
-                )
-            elif item.channel == "EMAIL":
-                to_email = (customer.email or "").strip()
-                if not to_email:
-                    raise ValueError("Customer has no email")
-                if not assignee or not is_email_configured(assignee.id):
-                    raise ValueError("Assignee email not configured")
-                subject = "Quick follow-up from LeadLock"
-                body_html = f"<p>{(item.suggested_message or 'Quick follow-up from the team.')}</p>"
-                success, message_id, err, sent_html, sent_text = send_email(
-                    to_email=to_email,
-                    subject=subject,
-                    body_html=body_html,
-                    body_text=_html_to_plain(body_html),
-                    user_id=assignee.id,
-                    customer_number=customer.customer_number,
-                )
-                if not success:
-                    raise ValueError(err or "Email send failed")
-                session.add(
-                    Email(
-                        customer_id=customer.id,
-                        message_id=message_id,
-                        direction=EmailDirection.SENT,
-                        from_email=assignee.email,
-                        to_email=to_email,
-                        subject=subject,
-                        body_html=sent_html or body_html,
-                        body_text=sent_text or _html_to_plain(body_html),
-                        sent_at=now,
-                        created_by_id=actor_id,
-                        thread_id=f"weekly-plan-{item.id}",
-                    )
-                )
-                session.add(
-                    Activity(
-                        customer_id=customer.id,
-                        activity_type=ActivityType.EMAIL_SENT,
-                        notes=build_activity_email_notes(
-                            "Weekly planner auto-email",
-                            subject,
-                            sent_text or _html_to_plain(body_html),
-                            sent_html or body_html,
-                        ),
-                        created_by_id=actor_id,
-                    )
-                )
-            else:
-                continue
-
-            item.status = WeeklyPlanItemStatus.AUTO_SENT
-            item.executed_at = now
-            item.execution_error = None
-            item.updated_at = now
+        if _dispatch_weekly_plan_item(session, run, item):
             sent_count += 1
-            session.add(item)
-        except Exception as exc:
-            item.status = WeeklyPlanItemStatus.AUTO_FAILED
-            item.execution_error = str(exc)[:1000]
-            item.updated_at = datetime.utcnow()
-            session.add(item)
 
     run.auto_sent_items = sent_count
     session.add(run)
     session.commit()
     return sent_count
+
+
+def _dispatch_weekly_plan_item(session: Session, run: WeeklyPlanRun, item: WeeklyPlanItem) -> bool:
+    if not item.customer_id:
+        item.status = WeeklyPlanItemStatus.AUTO_FAILED
+        item.execution_error = "Missing customer on weekly plan item"
+        item.updated_at = datetime.utcnow()
+        session.add(item)
+        return False
+    customer = session.get(Customer, item.customer_id)
+    if not customer:
+        item.status = WeeklyPlanItemStatus.AUTO_FAILED
+        item.execution_error = "Customer not found"
+        item.updated_at = datetime.utcnow()
+        session.add(item)
+        return False
+    if customer.automated_reminder_outreach_opt_out:
+        item.status = WeeklyPlanItemStatus.REJECTED
+        item.execution_error = "Customer opted out of automated reminder outreach"
+        item.updated_at = datetime.utcnow()
+        session.add(item)
+        return False
+    assignee = session.get(User, item.assigned_to_id) if item.assigned_to_id else None
+    actor_id = item.assigned_to_id or run.generated_by_id or get_system_user_id(session)
+    now = datetime.utcnow()
+    try:
+        if item.channel == "SMS":
+            phone = (customer.phone or "").strip()
+            if not phone:
+                raise ValueError("Customer has no phone number")
+            success, sid, err = send_sms(phone, item.suggested_message or "Quick follow-up from the team.")
+            if not success:
+                raise ValueError(err or "SMS send failed")
+            session.add(
+                SmsMessage(
+                    customer_id=customer.id,
+                    lead_id=item.lead_id,
+                    direction=SmsDirection.SENT,
+                    from_phone="",
+                    to_phone=normalize_phone(phone),
+                    body=item.suggested_message or "",
+                    twilio_sid=sid,
+                    sent_at=now,
+                    created_by_id=actor_id,
+                )
+            )
+            session.add(
+                Activity(
+                    customer_id=customer.id,
+                    activity_type=ActivityType.SMS_SENT,
+                    notes=f"Weekly planner manual SMS\n{item.suggested_message or ''}",
+                    created_by_id=actor_id,
+                )
+            )
+        elif item.channel == "EMAIL":
+            to_email = (customer.email or "").strip()
+            if not to_email:
+                raise ValueError("Customer has no email")
+            if not assignee or not is_email_configured(assignee.id):
+                raise ValueError("Assignee email not configured")
+            subject = "Quick follow-up from LeadLock"
+            body_html = f"<p>{(item.suggested_message or 'Quick follow-up from the team.')}</p>"
+            success, message_id, err, sent_html, sent_text = send_email(
+                to_email=to_email,
+                subject=subject,
+                body_html=body_html,
+                body_text=_html_to_plain(body_html),
+                user_id=assignee.id,
+                customer_number=customer.customer_number,
+            )
+            if not success:
+                raise ValueError(err or "Email send failed")
+            session.add(
+                Email(
+                    customer_id=customer.id,
+                    message_id=message_id,
+                    direction=EmailDirection.SENT,
+                    from_email=assignee.email,
+                    to_email=to_email,
+                    subject=subject,
+                    body_html=sent_html or body_html,
+                    body_text=sent_text or _html_to_plain(body_html),
+                    sent_at=now,
+                    created_by_id=actor_id,
+                    thread_id=f"weekly-plan-{item.id}",
+                )
+            )
+            session.add(
+                Activity(
+                    customer_id=customer.id,
+                    activity_type=ActivityType.EMAIL_SENT,
+                    notes=build_activity_email_notes(
+                        "Weekly planner manual email",
+                        subject,
+                        sent_text or _html_to_plain(body_html),
+                        sent_html or body_html,
+                    ),
+                    created_by_id=actor_id,
+                )
+            )
+        else:
+            raise ValueError("Only EMAIL and SMS channels can be sent")
+
+        item.status = WeeklyPlanItemStatus.AUTO_SENT
+        item.executed_at = now
+        item.execution_error = None
+        item.updated_at = now
+        session.add(item)
+        return True
+    except Exception as exc:
+        item.status = WeeklyPlanItemStatus.AUTO_FAILED
+        item.execution_error = str(exc)[:1000]
+        item.updated_at = datetime.utcnow()
+        session.add(item)
+        return False
+
+
+def send_weekly_plan_item(session: Session, item_id: int) -> Optional[WeeklyPlanItem]:
+    item = session.get(WeeklyPlanItem, item_id)
+    if not item:
+        return None
+    if item.status != WeeklyPlanItemStatus.PENDING_REVIEW:
+        item.execution_error = f"Item is {item.status.value} and cannot be sent"
+        item.updated_at = datetime.utcnow()
+        session.add(item)
+        session.commit()
+        session.refresh(item)
+        return item
+    if not item.auto_eligible:
+        item.execution_error = "Item is not eligible for SMS/EMAIL send"
+        item.updated_at = datetime.utcnow()
+        session.add(item)
+        session.commit()
+        session.refresh(item)
+        return item
+    run = session.get(WeeklyPlanRun, item.plan_run_id)
+    if not run:
+        item.status = WeeklyPlanItemStatus.AUTO_FAILED
+        item.execution_error = "Parent plan run not found"
+        item.updated_at = datetime.utcnow()
+        session.add(item)
+        session.commit()
+        session.refresh(item)
+        return item
+    company = session.exec(select(CompanySettings).limit(1)).first()
+    if _is_within_outreach_quiet_hours(company):
+        item.status = WeeklyPlanItemStatus.AUTO_FAILED
+        item.execution_error = "Blocked by quiet hours policy"
+        item.updated_at = datetime.utcnow()
+        session.add(item)
+        session.commit()
+        session.refresh(item)
+        return item
+    _dispatch_weekly_plan_item(session, run, item)
+    if item.status == WeeklyPlanItemStatus.AUTO_SENT:
+        run.auto_sent_items = int(run.auto_sent_items or 0) + 1
+        session.add(run)
+    session.commit()
+    session.refresh(item)
+    return item
+
+
+def send_weekly_plan_items_bulk(session: Session, item_ids: List[int]) -> dict:
+    if not item_ids:
+        return {"requested": 0, "sent": 0, "failed": 0}
+    sent = 0
+    failed = 0
+    deduped_ids = list(dict.fromkeys(item_ids))
+    for item_id in deduped_ids:
+        item = send_weekly_plan_item(session, item_id)
+        if not item:
+            failed += 1
+            continue
+        if item.status == WeeklyPlanItemStatus.AUTO_SENT:
+            sent += 1
+        else:
+            failed += 1
+    return {"requested": len(deduped_ids), "sent": sent, "failed": failed}
 
 
 def mark_plan_item_outcome(

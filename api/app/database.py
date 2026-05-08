@@ -307,6 +307,39 @@ def _ensure_weekly_planner_schema(engine) -> None:
         print(f"Warning: could not ensure weekly planner schema: {e}", file=sys.stderr, flush=True)
 
 
+def _ensure_weekly_plan_template_schema(engine) -> None:
+    """Ensure weekly plan template table exists on existing databases."""
+    import sys
+
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE IF NOT EXISTS weeklyplantemplate (
+                        id SERIAL PRIMARY KEY,
+                        name VARCHAR NOT NULL,
+                        description VARCHAR,
+                        suggested_action VARCHAR(50) NOT NULL,
+                        channel VARCHAR(20) NOT NULL,
+                        subject_template VARCHAR,
+                        body_template TEXT NOT NULL,
+                        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                        created_by_id INTEGER NOT NULL REFERENCES "user"(id),
+                        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        CONSTRAINT uq_weekly_plan_template_action_channel UNIQUE (suggested_action, channel)
+                    )
+                    """
+                )
+            )
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_weeklyplantemplate_channel ON weeklyplantemplate (channel)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_weeklyplantemplate_is_active ON weeklyplantemplate (is_active)"))
+        print("Weekly plan template schema ensured", file=sys.stderr, flush=True)
+    except Exception as e:
+        print(f"Warning: could not ensure weekly plan template schema: {e}", file=sys.stderr, flush=True)
+
+
 def backfill_default_reminder_rules(session: Session) -> None:
     """Insert any canonical default ReminderRule rows missing by rule_name (fixes partial legacy seeds).
 
@@ -441,6 +474,7 @@ def create_db_and_tables():
     _ensure_archive_columns(engine)
     _ensure_dealer_portal_schema(engine)
     _ensure_weekly_planner_schema(engine)
+    _ensure_weekly_plan_template_schema(engine)
 
     # Migration logic for Customer model separation
     try:

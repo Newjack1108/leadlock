@@ -482,6 +482,12 @@ export default function Header() {
                       SMS Templates
                     </DropdownMenuItem>
                   </Link>
+                  <Link href="/settings/weekly-plan-templates">
+                    <DropdownMenuItem className="cursor-pointer">
+                      <LayoutDashboard className="h-4 w-4 mr-2" />
+                      Weekly Plan Templates
+                    </DropdownMenuItem>
+                  </Link>
                   <Link href="/settings/reminder-triggers">
                     <DropdownMenuItem className="cursor-pointer">
                       <Bell className="h-4 w-4 mr-2" />
@@ -836,6 +842,19 @@ export default function Header() {
                       <span className="flex items-center gap-2">
                         <MessageSquare className="h-4 w-4 shrink-0" />
                         SMS Templates
+                      </span>
+                    </Link>
+                    <Link
+                      href="/settings/weekly-plan-templates"
+                      onClick={closeMobile}
+                      className={cn(
+                        mobileNavLinkClass,
+                        pathname?.startsWith('/settings/weekly-plan-templates') && 'bg-accent'
+                      )}
+                    >
+                      <span className="flex items-center gap-2">
+                        <LayoutDashboard className="h-4 w-4 shrink-0" />
+                        Weekly Plan Templates
                       </span>
                     </Link>
                     <Link

@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, select, and_, or_, func, col
 from sqlalchemy import case
 from typing import List, Optional, Dict, Tuple
+from jinja2 import Template as JinjaTemplate
 from app.database import get_session
 from app.auth import get_current_user
 from datetime import date as date_type, datetime, timedelta
@@ -18,6 +19,7 @@ from app.models import (
     WeeklyPlanItem,
     WeeklyPlanItemStatus,
     WeeklyPlanRun,
+    WeeklyPlanTemplate,
 )
 from app.schemas import (
     ReminderResponse, ReminderDismissRequest, ReminderActRequest,
@@ -30,6 +32,12 @@ from app.schemas import (
     WeeklyPlanItemResponse,
     WeeklyPlanListResponse,
     WeeklyPlanRunResponse,
+    WeeklyPlanTemplateCreate,
+    WeeklyPlanTemplatePreviewRequest,
+    WeeklyPlanTemplatePreviewResponse,
+    WeeklyPlanTemplateResponse,
+    WeeklyPlanTemplateUpdate,
+    WeeklyPlanBulkSendRequest,
 )
 from app.reminder_service import generate_reminders, calculate_priority
 from app.weekly_planner_service import (
@@ -37,6 +45,8 @@ from app.weekly_planner_service import (
     generate_weekly_plan,
     get_plan_metrics,
     mark_plan_item_outcome,
+    send_weekly_plan_item,
+    send_weekly_plan_items_bulk,
 )
 
 router = APIRouter(prefix="/api/reminders", tags=["reminders"])
@@ -106,6 +116,37 @@ def _weekly_plan_item_to_response(
         created_at=item.created_at,
         updated_at=item.updated_at,
     )
+
+
+def _weekly_template_to_response(template: WeeklyPlanTemplate, created_by_name: Optional[str]) -> WeeklyPlanTemplateResponse:
+    return WeeklyPlanTemplateResponse(
+        id=template.id,
+        name=template.name,
+        description=template.description,
+        suggested_action=template.suggested_action,
+        channel=template.channel,
+        subject_template=template.subject_template,
+        body_template=template.body_template,
+        is_active=template.is_active,
+        created_by_id=template.created_by_id,
+        created_at=template.created_at,
+        updated_at=template.updated_at,
+        created_by_name=created_by_name,
+    )
+
+
+def _weekly_template_preview_context(customer_name: Optional[str], quote_number: Optional[str]) -> dict:
+    return {
+        "customer": {
+            "name": (customer_name or "Sample Customer").strip() or "Sample Customer",
+        },
+        "quote": {
+            "number": (quote_number or "Q-12345").strip() or "Q-12345",
+        },
+        "company": {
+            "name": "LeadLock",
+        },
+    }
 
 
 def _load_latest_outreach_by_target(
@@ -645,9 +686,136 @@ async def generate_reminders_endpoint(
     return {"message": f"Generated {count} reminders", "count": count}
 
 
+@router.get("/weekly-plan/templates", response_model=List[WeeklyPlanTemplateResponse])
+def list_weekly_plan_templates(
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role != UserRole.DIRECTOR:
+        raise HTTPException(status_code=403, detail="Only directors can view weekly plan templates")
+    rows = session.exec(
+        select(WeeklyPlanTemplate, User)
+        .outerjoin(User, WeeklyPlanTemplate.created_by_id == User.id)
+        .order_by(col(WeeklyPlanTemplate.suggested_action), col(WeeklyPlanTemplate.channel))
+    ).all()
+    return [_weekly_template_to_response(t, u.full_name if u else None) for t, u in rows]
+
+
+@router.post("/weekly-plan/templates", response_model=WeeklyPlanTemplateResponse)
+def create_weekly_plan_template(
+    payload: WeeklyPlanTemplateCreate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role != UserRole.DIRECTOR:
+        raise HTTPException(status_code=403, detail="Only directors can create weekly plan templates")
+    channel = (payload.channel or "").strip().upper()
+    if channel not in {"EMAIL", "SMS", "CALL"}:
+        raise HTTPException(status_code=400, detail="channel must be EMAIL, SMS, or CALL")
+    template = WeeklyPlanTemplate(
+        name=payload.name.strip(),
+        description=payload.description,
+        suggested_action=payload.suggested_action,
+        channel=channel,
+        subject_template=(payload.subject_template or "").strip() or None,
+        body_template=payload.body_template,
+        is_active=bool(payload.is_active if payload.is_active is not None else True),
+        created_by_id=current_user.id,
+    )
+    session.add(template)
+    try:
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail=f"Template for {payload.suggested_action.value}/{channel} already exists",
+        )
+    session.refresh(template)
+    return _weekly_template_to_response(template, current_user.full_name)
+
+
+@router.put("/weekly-plan/templates/{template_id}", response_model=WeeklyPlanTemplateResponse)
+def update_weekly_plan_template(
+    template_id: int,
+    payload: WeeklyPlanTemplateUpdate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role != UserRole.DIRECTOR:
+        raise HTTPException(status_code=403, detail="Only directors can update weekly plan templates")
+    template = session.get(WeeklyPlanTemplate, template_id)
+    if not template:
+        raise HTTPException(status_code=404, detail="Weekly plan template not found")
+    if payload.name is not None:
+        template.name = payload.name.strip()
+    if payload.description is not None:
+        template.description = payload.description
+    if payload.suggested_action is not None:
+        template.suggested_action = payload.suggested_action
+    if payload.channel is not None:
+        channel = payload.channel.strip().upper()
+        if channel not in {"EMAIL", "SMS", "CALL"}:
+            raise HTTPException(status_code=400, detail="channel must be EMAIL, SMS, or CALL")
+        template.channel = channel
+    if payload.subject_template is not None:
+        template.subject_template = payload.subject_template.strip() or None
+    if payload.body_template is not None:
+        template.body_template = payload.body_template
+    if payload.is_active is not None:
+        template.is_active = payload.is_active
+    template.updated_at = datetime.utcnow()
+    session.add(template)
+    try:
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail=f"Template for {template.suggested_action.value}/{template.channel} already exists",
+        )
+    session.refresh(template)
+    owner = session.get(User, template.created_by_id)
+    return _weekly_template_to_response(template, owner.full_name if owner else None)
+
+
+@router.delete("/weekly-plan/templates/{template_id}")
+def delete_weekly_plan_template(
+    template_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role != UserRole.DIRECTOR:
+        raise HTTPException(status_code=403, detail="Only directors can delete weekly plan templates")
+    template = session.get(WeeklyPlanTemplate, template_id)
+    if not template:
+        raise HTTPException(status_code=404, detail="Weekly plan template not found")
+    session.delete(template)
+    session.commit()
+    return {"message": "Weekly plan template deleted"}
+
+
+@router.post("/weekly-plan/templates/{template_id}/preview", response_model=WeeklyPlanTemplatePreviewResponse)
+def preview_weekly_plan_template(
+    template_id: int,
+    payload: WeeklyPlanTemplatePreviewRequest,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role != UserRole.DIRECTOR:
+        raise HTTPException(status_code=403, detail="Only directors can preview weekly plan templates")
+    template = session.get(WeeklyPlanTemplate, template_id)
+    if not template:
+        raise HTTPException(status_code=404, detail="Weekly plan template not found")
+    ctx = _weekly_template_preview_context(payload.customer_name, payload.quote_number)
+    body = JinjaTemplate(template.body_template).render(**ctx)
+    subject = JinjaTemplate(template.subject_template).render(**ctx) if template.subject_template else None
+    return WeeklyPlanTemplatePreviewResponse(subject=subject, body=body)
+
+
 @router.post("/weekly-plan/generate", response_model=WeeklyPlanRunResponse)
 def generate_weekly_plan_endpoint(
-    auto_execute: bool = Query(True),
+    auto_execute: bool = Query(False),
     dry_run: bool = Query(False),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
@@ -742,6 +910,55 @@ async def update_weekly_plan_item_outcome(
         if customer:
             customer_by_id[customer.id] = customer
     return _weekly_plan_item_to_response(session, item, uid_map, lead_by_id, quote_by_id, customer_by_id)
+
+
+@router.post("/weekly-plan/items/{item_id}/send", response_model=WeeklyPlanItemResponse)
+def send_weekly_plan_single_item(
+    item_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role != UserRole.DIRECTOR:
+        raise HTTPException(status_code=403, detail="Only directors can send weekly plan actions")
+    item = send_weekly_plan_item(session, item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Weekly plan item not found")
+    uid_map: Dict[int, User] = {}
+    if item.assigned_to_id:
+        assignee = session.get(User, item.assigned_to_id)
+        if assignee:
+            uid_map[assignee.id] = assignee
+    lead_by_id: Dict[int, Lead] = {}
+    if item.lead_id:
+        lead = session.get(Lead, item.lead_id)
+        if lead:
+            lead_by_id[lead.id] = lead
+    quote_by_id: Dict[int, Quote] = {}
+    if item.quote_id:
+        quote = session.get(Quote, item.quote_id)
+        if quote:
+            quote_by_id[quote.id] = quote
+    customer_by_id: Dict[int, Customer] = {}
+    if item.customer_id:
+        customer = session.get(Customer, item.customer_id)
+        if customer:
+            customer_by_id[customer.id] = customer
+    return _weekly_plan_item_to_response(session, item, uid_map, lead_by_id, quote_by_id, customer_by_id)
+
+
+@router.post("/weekly-plan/items/send-bulk")
+def send_weekly_plan_items_in_bulk(
+    payload: WeeklyPlanBulkSendRequest,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role != UserRole.DIRECTOR:
+        raise HTTPException(status_code=403, detail="Only directors can send weekly plan actions")
+    result = send_weekly_plan_items_bulk(session, payload.item_ids or [])
+    return {
+        "message": f"Sent {result['sent']} of {result['requested']} selected item(s)",
+        **result,
+    }
 
 
 @router.get("/weekly-plan/{run_id}/metrics")

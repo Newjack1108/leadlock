@@ -7,11 +7,12 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
-  executeWeeklyPlanAuto,
   generateWeeklyPlan,
   getApiErrorDetail,
   getAssignableUsers,
   getLatestWeeklyPlan,
+  sendWeeklyPlanItem,
+  sendWeeklyPlanItemsBulk,
   getWeeklyPlanMetrics,
   getWeeklyPlanTrend,
   updateWeeklyPlanItem,
@@ -36,6 +37,7 @@ export default function WeeklyPlanPage() {
   const [loading, setLoading] = useState(true);
   const [busyItemId, setBusyItemId] = useState<number | null>(null);
   const [loadingRun, setLoadingRun] = useState(false);
+  const [sendingBulk, setSendingBulk] = useState(false);
   const [plan, setPlan] = useState<WeeklyPlanListResponse | null>(null);
   const [metrics, setMetrics] = useState<Record<string, unknown> | null>(null);
   const [trend, setTrend] = useState<Array<{ week_start: string; average_order_likelihood: number }>>([]);
@@ -45,6 +47,7 @@ export default function WeeklyPlanPage() {
   const [channelFilter, setChannelFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [likelihoodFilter, setLikelihoodFilter] = useState<string>('all');
+  const [selectedItemIds, setSelectedItemIds] = useState<number[]>([]);
 
   const loadData = async () => {
     try {
@@ -71,6 +74,7 @@ export default function WeeklyPlanPage() {
         setMetrics(null);
         setTrend([]);
       }
+      setSelectedItemIds([]);
     } catch (error: any) {
       if (error?.response?.status === 401) {
         router.push('/login');
@@ -107,7 +111,7 @@ export default function WeeklyPlanPage() {
   const handleGenerate = async () => {
     try {
       setLoadingRun(true);
-      const run = await generateWeeklyPlan({ auto_execute: true, dry_run: false });
+      const run = await generateWeeklyPlan({ auto_execute: false, dry_run: false });
       toast.success(`Weekly plan generated (${run.total_items} items)`);
       await loadData();
     } catch (error) {
@@ -117,17 +121,34 @@ export default function WeeklyPlanPage() {
     }
   };
 
-  const handleRunAuto = async () => {
-    if (!plan?.run?.id) return;
+  const handleSendSelected = async () => {
+    if (selectedItemIds.length === 0) return;
     try {
-      setLoadingRun(true);
-      const result = await executeWeeklyPlanAuto(plan.run.id);
+      setSendingBulk(true);
+      const result = await sendWeeklyPlanItemsBulk(selectedItemIds);
       toast.success(result.message);
       await loadData();
     } catch (error) {
-      toast.error(getApiErrorDetail(error) || 'Failed to execute auto actions');
+      toast.error(getApiErrorDetail(error) || 'Failed to send selected items');
     } finally {
-      setLoadingRun(false);
+      setSendingBulk(false);
+    }
+  };
+
+  const handleSendItem = async (item: WeeklyPlanItem) => {
+    try {
+      setBusyItemId(item.id);
+      const updated = await sendWeeklyPlanItem(item.id);
+      if (updated.status === WeeklyPlanItemStatus.AUTO_SENT) {
+        toast.success('Message sent');
+      } else {
+        toast.error(updated.execution_error || 'Failed to send item');
+      }
+      await loadData();
+    } catch (error) {
+      toast.error(getApiErrorDetail(error) || 'Failed to send item');
+    } finally {
+      setBusyItemId(null);
     }
   };
 
@@ -178,8 +199,8 @@ export default function WeeklyPlanPage() {
             <Button variant="outline" onClick={handleGenerate} disabled={loadingRun}>
               {loadingRun ? 'Generating...' : 'Generate Weekly Plan'}
             </Button>
-            <Button onClick={handleRunAuto} disabled={loadingRun || !plan?.run}>
-              Run Auto Actions
+            <Button onClick={handleSendSelected} disabled={sendingBulk || selectedItemIds.length === 0}>
+              {sendingBulk ? 'Sending...' : `Send Selected (${selectedItemIds.length})`}
             </Button>
           </div>
         </div>
@@ -333,7 +354,19 @@ export default function WeeklyPlanPage() {
               filteredItems.map((item) => (
                 <div key={item.id} className="border rounded-md p-3 space-y-2">
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="text-sm font-medium">
+                    <div className="text-sm font-medium flex items-center gap-2">
+                      {item.auto_eligible && item.status === WeeklyPlanItemStatus.PENDING_REVIEW ? (
+                        <input
+                          type="checkbox"
+                          checked={selectedItemIds.includes(item.id)}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setSelectedItemIds((prev) =>
+                              checked ? Array.from(new Set([...prev, item.id])) : prev.filter((id) => id !== item.id)
+                            );
+                          }}
+                        />
+                      ) : null}
                       Score {Number(item.priority_score).toFixed(1)} · {item.recommended_action}
                       {item.channel ? ` via ${item.channel}` : ''} · {item.status}
                     </div>
@@ -367,6 +400,15 @@ export default function WeeklyPlanPage() {
                     <div className="text-sm bg-muted/50 rounded p-2">{item.suggested_message}</div>
                   ) : null}
                   <div className="flex flex-wrap gap-2">
+                    {item.auto_eligible && item.status === WeeklyPlanItemStatus.PENDING_REVIEW ? (
+                      <Button
+                        size="sm"
+                        disabled={busyItemId === item.id}
+                        onClick={() => handleSendItem(item)}
+                      >
+                        Send now
+                      </Button>
+                    ) : null}
                     <Button
                       size="sm"
                       variant="outline"

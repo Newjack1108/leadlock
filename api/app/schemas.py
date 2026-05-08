@@ -1838,6 +1838,55 @@ class WeeklyPlanListResponse(BaseModel):
     items: List[WeeklyPlanItemResponse]
 
 
+class WeeklyPlanTemplateCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    suggested_action: SuggestedAction
+    channel: str
+    subject_template: Optional[str] = None
+    body_template: str
+    is_active: Optional[bool] = True
+
+
+class WeeklyPlanTemplateUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    suggested_action: Optional[SuggestedAction] = None
+    channel: Optional[str] = None
+    subject_template: Optional[str] = None
+    body_template: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class WeeklyPlanTemplateResponse(BaseModel):
+    id: int
+    name: str
+    description: Optional[str] = None
+    suggested_action: SuggestedAction
+    channel: str
+    subject_template: Optional[str] = None
+    body_template: str
+    is_active: bool
+    created_by_id: int
+    created_at: datetime
+    updated_at: datetime
+    created_by_name: Optional[str] = None
+
+
+class WeeklyPlanTemplatePreviewRequest(BaseModel):
+    customer_name: Optional[str] = None
+    quote_number: Optional[str] = None
+
+
+class WeeklyPlanTemplatePreviewResponse(BaseModel):
+    subject: Optional[str] = None
+    body: str
+
+
+class WeeklyPlanBulkSendRequest(BaseModel):
+    item_ids: List[int]
+
+
 class CustomerHistoryEventType(str, Enum):
     ACTIVITY = "ACTIVITY"
     LEAD_STATUS_CHANGE = "LEAD_STATUS_CHANGE"

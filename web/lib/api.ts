@@ -24,6 +24,11 @@ import {
   type WeeklyPlanRun,
   type WeeklyPlanItem,
   type WeeklyPlanItemStatus,
+  type WeeklyPlanTemplate,
+  type WeeklyPlanTemplateCreate,
+  type WeeklyPlanTemplateUpdate,
+  type WeeklyPlanTemplatePreviewResponse,
+  type WeeklyPlanBulkSendResult,
 } from '@/lib/types';
 import { getTelUrl } from '@/lib/utils';
 
@@ -1372,7 +1377,7 @@ export const generateWeeklyPlan = async (params?: {
   dry_run?: boolean;
 }): Promise<WeeklyPlanRun> => {
   const response = await api.post('/api/reminders/weekly-plan/generate', null, {
-    params,
+    params: { auto_execute: false, ...(params || {}) },
     timeout: 120_000,
   });
   return response.data;
@@ -1385,6 +1390,20 @@ export const getLatestWeeklyPlan = async (): Promise<WeeklyPlanListResponse> => 
 
 export const executeWeeklyPlanAuto = async (runId: number): Promise<{ sent_count: number; message: string }> => {
   const response = await api.post(`/api/reminders/weekly-plan/${runId}/execute-auto`, null, {
+    timeout: 120_000,
+  });
+  return response.data;
+};
+
+export const sendWeeklyPlanItem = async (itemId: number): Promise<WeeklyPlanItem> => {
+  const response = await api.post(`/api/reminders/weekly-plan/items/${itemId}/send`, null, {
+    timeout: 120_000,
+  });
+  return response.data;
+};
+
+export const sendWeeklyPlanItemsBulk = async (itemIds: number[]): Promise<WeeklyPlanBulkSendResult> => {
+  const response = await api.post('/api/reminders/weekly-plan/items/send-bulk', { item_ids: itemIds }, {
     timeout: 120_000,
   });
   return response.data;
@@ -1412,6 +1431,37 @@ export const getWeeklyPlanTrend = async (weeks = 8): Promise<{
   }>;
 }> => {
   const response = await api.get('/api/reminders/weekly-plan/trend', { params: { weeks } });
+  return response.data;
+};
+
+export const getWeeklyPlanTemplates = async (): Promise<WeeklyPlanTemplate[]> => {
+  const response = await api.get('/api/reminders/weekly-plan/templates');
+  return response.data;
+};
+
+export const createWeeklyPlanTemplate = async (payload: WeeklyPlanTemplateCreate): Promise<WeeklyPlanTemplate> => {
+  const response = await api.post('/api/reminders/weekly-plan/templates', payload);
+  return response.data;
+};
+
+export const updateWeeklyPlanTemplate = async (
+  templateId: number,
+  payload: WeeklyPlanTemplateUpdate
+): Promise<WeeklyPlanTemplate> => {
+  const response = await api.put(`/api/reminders/weekly-plan/templates/${templateId}`, payload);
+  return response.data;
+};
+
+export const deleteWeeklyPlanTemplate = async (templateId: number): Promise<{ message: string }> => {
+  const response = await api.delete(`/api/reminders/weekly-plan/templates/${templateId}`);
+  return response.data;
+};
+
+export const previewWeeklyPlanTemplate = async (
+  templateId: number,
+  payload?: { customer_name?: string; quote_number?: string }
+): Promise<WeeklyPlanTemplatePreviewResponse> => {
+  const response = await api.post(`/api/reminders/weekly-plan/templates/${templateId}/preview`, payload || {});
   return response.data;
 };
 

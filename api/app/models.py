@@ -1022,6 +1022,26 @@ class WeeklyPlanScope(str, Enum):
     FULL_PIPELINE = "FULL_PIPELINE"
 
 
+class WeeklyPlanTemplate(SQLModel, table=True):
+    __table_args__ = (
+        UniqueConstraint("suggested_action", "channel", name="uq_weekly_plan_template_action_channel"),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str
+    description: Optional[str] = None
+    suggested_action: SuggestedAction
+    channel: str = Field(index=True)  # EMAIL|SMS|CALL
+    subject_template: Optional[str] = None  # Used for EMAIL templates
+    body_template: str
+    is_active: bool = Field(default=True, index=True)
+    created_by_id: int = Field(foreign_key="user.id")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+    created_by: Optional["User"] = Relationship()
+
+
 class WeeklyPlanRun(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     week_start: date = Field(index=True)
