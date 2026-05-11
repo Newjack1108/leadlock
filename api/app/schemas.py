@@ -1695,6 +1695,17 @@ class ReminderActRequest(BaseModel):
     notes: Optional[str] = None
 
 
+class AutomatedReminderCleanupRequest(BaseModel):
+    priority: Optional[ReminderPriority] = None
+    reminder_type: Optional[ReminderType] = None
+    assigned_to_me: Optional[bool] = None
+
+
+class AutomatedReminderCleanupResponse(BaseModel):
+    deleted_count: int
+    deleted_ids: List[int]
+
+
 class ReminderRuleResponse(BaseModel):
     id: int
     rule_name: str

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Header from '@/components/Header';
@@ -9,16 +9,23 @@ import CreateTaskDialog from '@/components/CreateTaskDialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { generateReminders, getStaleSummary, invalidateStaleSummaryCache } from '@/lib/api';
+import {
+  cleanupAutomatedReminders,
+  generateReminders,
+  getApiErrorDetail,
+  getStaleSummary,
+  invalidateStaleSummaryCache,
+} from '@/lib/api';
 import { ReminderPriority, ReminderType, StaleSummary } from '@/lib/types';
 import { toast } from 'sonner';
-import { RefreshCw, ChevronDown, ChevronUp, ListTodo } from 'lucide-react';
+import { RefreshCw, ChevronDown, ChevronUp, ListTodo, Trash2 } from 'lucide-react';
 
 export default function RemindersPage() {
   const router = useRouter();
   const [summary, setSummary] = useState<StaleSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [cleaningAutomated, setCleaningAutomated] = useState(false);
   const [filterPriority, setFilterPriority] = useState<string>('all');
   const [filterType, setFilterType] = useState<string>('all');
   const [assignedScope, setAssignedScope] = useState<'mine' | 'all'>('all');
@@ -26,23 +33,23 @@ export default function RemindersPage() {
   const [doneExpanded, setDoneExpanded] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       const summaryData = await getStaleSummary();
       setSummary(summaryData);
-    } catch (error: any) {
-      if (error.response?.status === 401) {
+    } catch (error: unknown) {
+      if ((error as { response?: { status?: number } }).response?.status === 401) {
         router.push('/login');
       }
     } finally {
       setLoading(false);
     }
-  };
+  }, [router]);
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    void fetchData();
+  }, [fetchData]);
 
   const handleGenerate = async () => {
     try {
@@ -52,11 +59,40 @@ export default function RemindersPage() {
       toast.success(`Generated ${result.count} reminders`);
       fetchData();
       setRefreshTrigger((t) => t + 1);
-    } catch (error: any) {
-      toast.error('Failed to generate reminders');
+    } catch (error: unknown) {
+      toast.error(getApiErrorDetail(error) || 'Failed to generate reminders');
       console.error('Error generating reminders:', error);
     } finally {
       setGenerating(false);
+    }
+  };
+
+  const handleCleanupAutomated = async () => {
+    const confirmed = window.confirm(
+      'Permanently delete automated reminders in the current filtered view where auto outreach was sent or failed, and suppress them from being regenerated?'
+    );
+    if (!confirmed) return;
+
+    try {
+      setCleaningAutomated(true);
+      const result = await cleanupAutomatedReminders({
+        assigned_to_me: assignedScope === 'mine' ? true : undefined,
+        priority: filterPriority !== 'all' ? filterPriority : undefined,
+        reminder_type: filterType !== 'all' ? filterType : undefined,
+      });
+      invalidateStaleSummaryCache();
+      fetchData();
+      setRefreshTrigger((t) => t + 1);
+      if (result.deleted_count === 0) {
+        toast.success('No automated reminders matched the current filters');
+        return;
+      }
+      toast.success(`Removed ${result.deleted_count} automated reminder${result.deleted_count === 1 ? '' : 's'}`);
+    } catch (error: unknown) {
+      toast.error(getApiErrorDetail(error) || 'Failed to clean up automated reminders');
+      console.error('Error cleaning up automated reminders:', error);
+    } finally {
+      setCleaningAutomated(false);
     }
   };
 
@@ -168,6 +204,14 @@ export default function RemindersPage() {
             <Button variant="outline" onClick={() => setCreateTaskOpen(true)}>
               <ListTodo className="h-4 w-4 mr-2" />
               Create task
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleCleanupAutomated}
+              disabled={cleaningAutomated}
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              {cleaningAutomated ? 'Cleaning...' : 'Cleanup Auto-Replied'}
             </Button>
             <Button
               variant="outline"

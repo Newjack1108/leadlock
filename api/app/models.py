@@ -962,6 +962,35 @@ class Reminder(SQLModel, table=True):
     )
 
 
+class ReminderCleanupTargetKind(str, Enum):
+    LEAD = "LEAD"
+    QUOTE = "QUOTE"
+
+
+class AutomatedReminderCleanupSuppression(SQLModel, table=True):
+    __table_args__ = (
+        UniqueConstraint(
+            "target_kind",
+            "target_id",
+            "reminder_type",
+            name="uq_auto_reminder_cleanup_target_type",
+        ),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    target_kind: ReminderCleanupTargetKind = Field(index=True)
+    target_id: int = Field(index=True)
+    reminder_type: ReminderType = Field(index=True)
+    lead_id: Optional[int] = Field(default=None, foreign_key="lead.id")
+    quote_id: Optional[int] = Field(default=None, foreign_key="quote.id")
+    customer_id: Optional[int] = Field(default=None, foreign_key="customer.id")
+    last_auto_outreach_status: Optional[str] = None
+    last_auto_outreach_channel: Optional[str] = None
+    last_auto_outreach_sent_at: Optional[datetime] = None
+    cleaned_up_by_id: Optional[int] = Field(default=None, foreign_key="user.id")
+    cleaned_up_at: datetime = Field(default_factory=datetime.utcnow)
+
+
 class CustomerOutreachChannel(str, Enum):
     SMS = "SMS"
     EMAIL = "EMAIL"

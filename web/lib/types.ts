@@ -1304,6 +1304,11 @@ export interface StaleSummary {
   stale_quotes_count: number;
 }
 
+export interface AutomatedReminderCleanupResult {
+  deleted_count: number;
+  deleted_ids: number[];
+}
+
 export interface ReminderRule {
   id: number;
   rule_name: string;
@@ -1460,7 +1465,7 @@ export interface CustomerHistoryEvent {
   timestamp: string;
   title: string;
   description?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   created_by_name?: string;
   created_by_id?: number;
 }

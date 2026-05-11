@@ -19,6 +19,7 @@ import {
   type QuoteTemperature,
   type QuoteStatus,
   type QuoteListPayload,
+  type AutomatedReminderCleanupResult,
   type StaleSummary,
   type WeeklyPlanListResponse,
   type WeeklyPlanRun,
@@ -1378,6 +1379,15 @@ export const actOnReminder = async (reminderId: number, actionTaken: string, not
 
 export const generateReminders = async () => {
   const response = await api.post('/api/reminders/generate');
+  return response.data;
+};
+
+export const cleanupAutomatedReminders = async (params?: {
+  priority?: string;
+  reminder_type?: string;
+  assigned_to_me?: boolean;
+}): Promise<AutomatedReminderCleanupResult> => {
+  const response = await api.post('/api/reminders/cleanup-automated', params ?? {});
   return response.data;
 };
 

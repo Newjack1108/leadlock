@@ -15,7 +15,9 @@ from app.models import (
     ReminderType, ReminderPriority, SuggestedAction, LeadStatus, QuoteStatus,
     CustomerOutreachChannel,
     CustomerOutreachSend,
+    AutomatedReminderCleanupSuppression,
     DeletedReminderRuleName,
+    ReminderCleanupTargetKind,
     WeeklyPlanItem,
     WeeklyPlanItemStatus,
     WeeklyPlanRun,
@@ -23,6 +25,7 @@ from app.models import (
 )
 from app.schemas import (
     ReminderResponse, ReminderDismissRequest, ReminderActRequest,
+    AutomatedReminderCleanupRequest, AutomatedReminderCleanupResponse,
     ReminderRuleResponse, ReminderRuleUpdate, ReminderRuleCreate, StaleSummaryResponse,
     ManualReminderCreate, UserTaskCreate,
     OutreachSendListResponse,
@@ -39,7 +42,7 @@ from app.schemas import (
     WeeklyPlanTemplateUpdate,
     WeeklyPlanBulkSendRequest,
 )
-from app.reminder_service import generate_reminders, calculate_priority
+from app.reminder_service import generate_reminders, calculate_priority, get_reminder_cleanup_target
 from app.weekly_planner_service import (
     execute_auto_eligible_items,
     generate_weekly_plan,
@@ -291,6 +294,138 @@ def _effective_priority(reminder: Reminder, today: date_type) -> ReminderPriorit
     return calculate_priority(d, base)
 
 
+def _build_reminders_statement(
+    *,
+    current_user: User,
+    dismissed: Optional[bool] = False,
+    done: Optional[bool] = None,
+    priority: Optional[ReminderPriority] = None,
+    reminder_type: Optional[ReminderType] = None,
+    assigned_to_me: Optional[bool] = None,
+):
+    today = date_type.today()
+    statement = select(Reminder)
+    visibility = _reminder_visibility_filter(current_user)
+    if visibility is not None:
+        statement = statement.where(visibility)
+
+    if assigned_to_me is True:
+        statement = statement.where(Reminder.assigned_to_id == current_user.id)
+
+    if done is True:
+        statement = statement.where(
+            or_(
+                Reminder.acted_upon_at.isnot(None),
+                Reminder.dismissed_at.isnot(None),
+            )
+        )
+    elif dismissed is False:
+        statement = statement.where(Reminder.dismissed_at.is_(None))
+        statement = statement.where(Reminder.acted_upon_at.is_(None))
+    elif dismissed is True:
+        statement = statement.where(Reminder.dismissed_at.isnot(None))
+
+    if priority:
+        statement = statement.where(Reminder.priority == priority)
+
+    if reminder_type:
+        statement = statement.where(Reminder.reminder_type == reminder_type)
+
+    # Keep user tasks out of active reminder lists until they are near due.
+    if done is not True and dismissed is False:
+        near_due_cutoff = today + timedelta(days=_USER_TASK_NEAR_DUE_DAYS)
+        statement = statement.where(
+            or_(
+                Reminder.reminder_type != ReminderType.USER_TASK,
+                Reminder.due_date <= near_due_cutoff,
+            )
+        )
+    return statement
+
+
+def _reminder_target_key(reminder: Reminder) -> Optional[Tuple[str, int]]:
+    if reminder.quote_id:
+        return ("q", reminder.quote_id)
+    if reminder.lead_id:
+        return ("l", reminder.lead_id)
+    return None
+
+
+def _get_reminder_auto_outreach_fields(
+    reminder: Reminder,
+    outreach_by_target: Optional[Dict[Tuple[str, int], Tuple[CustomerOutreachSend, str]]],
+) -> Tuple[Optional[str], Optional[str], Optional[datetime], Optional[str], Optional[str]]:
+    auto_status: Optional[str] = None
+    auto_channel: Optional[str] = None
+    auto_sent_at: Optional[datetime] = None
+    auto_fail: Optional[str] = None
+    auto_rule: Optional[str] = None
+
+    if not outreach_by_target:
+        return auto_status, auto_channel, auto_sent_at, auto_fail, auto_rule
+
+    target_key = _reminder_target_key(reminder)
+    if target_key is None:
+        return auto_status, auto_channel, auto_sent_at, auto_fail, auto_rule
+
+    tup = outreach_by_target.get(target_key)
+    if tup:
+        send, rule_name = tup
+        auto_status = getattr(send, "status", None) or "SENT"
+        auto_channel = send.channel
+        auto_sent_at = send.sent_at
+        auto_fail = getattr(send, "failure_reason", None)
+        auto_rule = rule_name
+    return auto_status, auto_channel, auto_sent_at, auto_fail, auto_rule
+
+
+def _record_automated_cleanup_suppression(
+    session: Session,
+    *,
+    reminder: Reminder,
+    cleaned_up_by_id: int,
+    auto_status: Optional[str],
+    auto_channel: Optional[str],
+    auto_sent_at: Optional[datetime],
+) -> bool:
+    target = get_reminder_cleanup_target(
+        reminder_type=reminder.reminder_type,
+        lead_id=reminder.lead_id,
+        quote_id=reminder.quote_id,
+    )
+    if target is None:
+        return False
+
+    target_kind, target_id = target
+    suppression = session.exec(
+        select(AutomatedReminderCleanupSuppression).where(
+            AutomatedReminderCleanupSuppression.target_kind == target_kind,
+            AutomatedReminderCleanupSuppression.target_id == target_id,
+            AutomatedReminderCleanupSuppression.reminder_type == reminder.reminder_type,
+        )
+    ).first()
+    if suppression is None:
+        suppression = AutomatedReminderCleanupSuppression(
+            target_kind=target_kind,
+            target_id=target_id,
+            reminder_type=reminder.reminder_type,
+            lead_id=reminder.lead_id,
+            quote_id=reminder.quote_id,
+            customer_id=reminder.customer_id,
+        )
+
+    suppression.lead_id = reminder.lead_id
+    suppression.quote_id = reminder.quote_id
+    suppression.customer_id = reminder.customer_id
+    suppression.last_auto_outreach_status = auto_status
+    suppression.last_auto_outreach_channel = auto_channel
+    suppression.last_auto_outreach_sent_at = auto_sent_at
+    suppression.cleaned_up_by_id = cleaned_up_by_id
+    suppression.cleaned_up_at = datetime.utcnow()
+    session.add(suppression)
+    return True
+
+
 def _reminder_to_response(
     session: Session,
     reminder: Reminder,
@@ -337,26 +472,9 @@ def _reminder_to_response(
     eff_days = _effective_days_stale(reminder, today)
     eff_pri = _effective_priority(reminder, today)
 
-    auto_status: Optional[str] = None
-    auto_channel: Optional[str] = None
-    auto_sent_at: Optional[datetime] = None
-    auto_fail: Optional[str] = None
-    auto_rule: Optional[str] = None
-    if outreach_by_target:
-        target_key: Optional[Tuple[str, int]] = None
-        if reminder.quote_id:
-            target_key = ("q", reminder.quote_id)
-        elif reminder.lead_id:
-            target_key = ("l", reminder.lead_id)
-        if target_key:
-            tup = outreach_by_target.get(target_key)
-            if tup:
-                send, rule_name = tup
-                auto_status = getattr(send, "status", None) or "SENT"
-                auto_channel = send.channel
-                auto_sent_at = send.sent_at
-                auto_fail = getattr(send, "failure_reason", None)
-                auto_rule = rule_name
+    auto_status, auto_channel, auto_sent_at, auto_fail, auto_rule = _get_reminder_auto_outreach_fields(
+        reminder, outreach_by_target
+    )
 
     return ReminderResponse(
         id=reminder.id,
@@ -477,43 +595,14 @@ async def get_reminders(
 ):
     """Get active reminders for the current user (per role; Directors see all)."""
     today = date_type.today()
-    statement = select(Reminder)
-    visibility = _reminder_visibility_filter(current_user)
-    if visibility is not None:
-        statement = statement.where(visibility)
-
-    if assigned_to_me is True:
-        statement = statement.where(Reminder.assigned_to_id == current_user.id)
-
-    if done is True:
-        statement = statement.where(
-            or_(
-                Reminder.acted_upon_at.isnot(None),
-                Reminder.dismissed_at.isnot(None),
-            )
-        )
-    elif dismissed is False:
-        statement = statement.where(Reminder.dismissed_at.is_(None))
-        statement = statement.where(Reminder.acted_upon_at.is_(None))
-    elif dismissed is True:
-        statement = statement.where(Reminder.dismissed_at.isnot(None))
-    
-    if priority:
-        statement = statement.where(Reminder.priority == priority)
-    
-    if reminder_type:
-        statement = statement.where(Reminder.reminder_type == reminder_type)
-
-    # Keep user tasks out of active reminder lists until they are near due.
-    if done is not True and dismissed is False:
-        near_due_cutoff = today + timedelta(days=_USER_TASK_NEAR_DUE_DAYS)
-        statement = statement.where(
-            or_(
-                Reminder.reminder_type != ReminderType.USER_TASK,
-                Reminder.due_date <= near_due_cutoff,
-            )
-        )
-
+    statement = _build_reminders_statement(
+        current_user=current_user,
+        dismissed=dismissed,
+        done=done,
+        priority=priority,
+        reminder_type=reminder_type,
+        assigned_to_me=assigned_to_me,
+    )
     reminders = session.exec(statement).all()
 
     user_ids = set()
@@ -574,6 +663,53 @@ async def get_reminders(
 
     result.sort(key=sort_key)
     return result
+
+
+@router.post("/cleanup-automated", response_model=AutomatedReminderCleanupResponse)
+async def cleanup_automated_reminders(
+    payload: AutomatedReminderCleanupRequest,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Hard-delete visible active reminders that already have automated outreach and suppress regeneration."""
+    reminders = session.exec(
+        _build_reminders_statement(
+            current_user=current_user,
+            dismissed=False,
+            done=None,
+            priority=payload.priority,
+            reminder_type=payload.reminder_type,
+            assigned_to_me=payload.assigned_to_me,
+        )
+    ).all()
+
+    if not reminders:
+        return AutomatedReminderCleanupResponse(deleted_count=0, deleted_ids=[])
+
+    outreach_by_target = _load_latest_outreach_by_target(session, list(reminders))
+    deleted_ids: List[int] = []
+    for reminder in reminders:
+        auto_status, auto_channel, auto_sent_at, _auto_fail, _auto_rule = _get_reminder_auto_outreach_fields(
+            reminder, outreach_by_target
+        )
+        if auto_status not in {"SENT", "FAILED"}:
+            continue
+        if not _record_automated_cleanup_suppression(
+            session,
+            reminder=reminder,
+            cleaned_up_by_id=current_user.id,
+            auto_status=auto_status,
+            auto_channel=auto_channel,
+            auto_sent_at=auto_sent_at,
+        ):
+            continue
+        if reminder.id is not None:
+            deleted_ids.append(reminder.id)
+        session.delete(reminder)
+
+    if deleted_ids:
+        session.commit()
+    return AutomatedReminderCleanupResponse(deleted_count=len(deleted_ids), deleted_ids=deleted_ids)
 
 
 @router.get("/stale-summary", response_model=StaleSummaryResponse)

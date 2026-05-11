@@ -3,12 +3,45 @@ Service for detecting stale leads and quotes and generating reminders.
 """
 from sqlmodel import Session, select, func, and_, or_
 from datetime import datetime, timedelta
-from typing import List, Optional, Tuple
+from typing import List, Optional, Set, Tuple
 from app.models import (
     Lead, Quote, QuoteEmail, Activity, Reminder, ReminderRule, ReminderType,
-    ReminderPriority, SuggestedAction, LeadStatus, QuoteStatus, OpportunityStage
+    ReminderPriority, SuggestedAction, LeadStatus, QuoteStatus, OpportunityStage,
+    AutomatedReminderCleanupSuppression, ReminderCleanupTargetKind,
 )
 from app.constants import QUOTE_LIST_EXCLUDED_STATUSES
+
+
+def get_reminder_cleanup_target(
+    *, reminder_type: ReminderType, lead_id: Optional[int], quote_id: Optional[int]
+) -> Optional[Tuple[ReminderCleanupTargetKind, int]]:
+    if quote_id is not None:
+        return (ReminderCleanupTargetKind.QUOTE, quote_id)
+    if lead_id is not None:
+        return (ReminderCleanupTargetKind.LEAD, lead_id)
+    return None
+
+
+def _load_cleanup_suppression_keys(
+    session: Session,
+    *,
+    target_kind: ReminderCleanupTargetKind,
+    target_ids: Set[int],
+    reminder_types: Set[ReminderType],
+) -> Set[Tuple[int, ReminderType]]:
+    if not target_ids or not reminder_types:
+        return set()
+    rows = session.exec(
+        select(AutomatedReminderCleanupSuppression).where(
+            AutomatedReminderCleanupSuppression.target_kind == target_kind,
+            AutomatedReminderCleanupSuppression.target_id.in_(target_ids),
+            AutomatedReminderCleanupSuppression.reminder_type.in_(tuple(reminder_types)),
+        )
+    ).all()
+    return {
+        (row.target_id, row.reminder_type)
+        for row in rows
+    }
 
 
 def quote_excluded_from_stale_reminders(quote: Quote) -> bool:
@@ -371,8 +404,39 @@ def generate_reminders(session: Session, user_id: Optional[int] = None) -> int:
     
     # Detect stale leads
     stale_leads = detect_stale_leads(session)
+    stale_quotes = detect_stale_quotes(session)
+    stale_opportunities = detect_stale_opportunities(session)
+
+    lead_cleanup_suppressions = _load_cleanup_suppression_keys(
+        session,
+        target_kind=ReminderCleanupTargetKind.LEAD,
+        target_ids={lead.id for lead, _, _ in stale_leads if lead.id is not None},
+        reminder_types={ReminderType.LEAD_STALE},
+    )
+    quote_cleanup_suppressions = _load_cleanup_suppression_keys(
+        session,
+        target_kind=ReminderCleanupTargetKind.QUOTE,
+        target_ids={
+            quote.id
+            for quote, _, _ in stale_quotes
+            if quote.id is not None
+        } | {
+            opp.id
+            for opp, _, _ in stale_opportunities
+            if opp.id is not None
+        },
+        reminder_types={
+            ReminderType.QUOTE_STALE,
+            ReminderType.QUOTE_EXPIRING,
+            ReminderType.QUOTE_EXPIRED,
+            ReminderType.QUOTE_NOT_OPENED,
+            ReminderType.QUOTE_OPENED_NO_REPLY,
+        },
+    )
     
     for lead, rule, days_stale in stale_leads:
+        if lead.id is not None and (lead.id, ReminderType.LEAD_STALE) in lead_cleanup_suppressions:
+            continue
         # Check if reminder already exists for this lead and rule
         existing = session.exec(
             select(Reminder).where(
@@ -420,9 +484,6 @@ def generate_reminders(session: Session, user_id: Optional[int] = None) -> int:
         session.add(reminder)
         count += 1
     
-    # Detect stale quotes
-    stale_quotes = detect_stale_quotes(session)
-    
     for quote, rule, days_stale in stale_quotes:
         # Determine reminder type
         if rule.check_type == "VALID_UNTIL" and quote.valid_until and quote.valid_until < now:
@@ -435,6 +496,9 @@ def generate_reminders(session: Session, user_id: Optional[int] = None) -> int:
             reminder_type = ReminderType.QUOTE_STALE
         else:
             reminder_type = ReminderType.QUOTE_EXPIRING
+
+        if quote.id is not None and (quote.id, reminder_type) in quote_cleanup_suppressions:
+            continue
 
         # Check if reminder already exists for this quote, type, and rule (by message pattern or rule)
         existing = session.exec(
@@ -510,9 +574,6 @@ def generate_reminders(session: Session, user_id: Optional[int] = None) -> int:
         session.add(reminder)
         count += 1
     
-    # Detect stale opportunities
-    stale_opportunities = detect_stale_opportunities(session)
-    
     for opp, reason, days_overdue in stale_opportunities:
         # Determine reminder type and priority
         if reason == "OVERDUE_NEXT_ACTION":
@@ -546,6 +607,9 @@ def generate_reminders(session: Session, user_id: Optional[int] = None) -> int:
             title = f"No Activity: {opp.quote_number}"
             message = f"No activity logged for {days_overdue} days. Follow up required."
         else:
+            continue
+
+        if opp.id is not None and (opp.id, reminder_type) in quote_cleanup_suppressions:
             continue
         
         # Check if reminder already exists
