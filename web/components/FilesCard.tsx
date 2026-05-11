@@ -36,6 +36,7 @@ interface FilesCardProps {
 const ACCEPT = 'application/pdf,image/jpeg,image/png';
 const ACCEPTED_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/png']);
 const MAX_BYTES = 25 * 1024 * 1024;
+const GENERIC_PDF_TYPES = new Set(['', 'application/octet-stream', 'binary/octet-stream']);
 
 const KIND_LABELS: Record<CustomerFileKind, string> = {
   [CustomerFileKind.PLAN]: 'Plan',
@@ -66,6 +67,14 @@ function formatFileSize(bytes: number): string {
 
 function isImageContentType(contentType: string): boolean {
   return contentType.startsWith('image/');
+}
+
+function isAcceptedUploadType(file: File): boolean {
+  const contentType = (file.type || '').toLowerCase();
+  if (ACCEPTED_TYPES.has(contentType)) return true;
+
+  const filename = file.name.toLowerCase();
+  return filename.endsWith('.pdf') && GENERIC_PDF_TYPES.has(contentType);
 }
 
 async function listFor(context: FilesContext, id: number): Promise<CustomerFile[]> {
@@ -114,7 +123,7 @@ export default function FilesCard({ context, id, title, description }: FilesCard
   }, [context, id]);
 
   const validateFile = (file: File): boolean => {
-    if (!ACCEPTED_TYPES.has(file.type)) {
+    if (!isAcceptedUploadType(file)) {
       toast.error(`${file.name}: must be a PDF, JPG or PNG`);
       return false;
     }

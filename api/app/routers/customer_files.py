@@ -73,7 +73,7 @@ async def _persist_upload(
         order_id=order_id,
         kind=kind,
         original_filename=file.filename or "file",
-        content_type=(file.content_type or "").lower() or "application/octet-stream",
+        content_type=(upload.get("content_type") or (file.content_type or "").lower() or "application/octet-stream"),
         size_bytes=int(upload.get("bytes") or 0),
         cloudinary_public_id=upload["public_id"],
         cloudinary_resource_type=upload.get("resource_type") or "image",

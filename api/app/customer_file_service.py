@@ -28,7 +28,9 @@ if CLOUDINARY_AVAILABLE:
     )
 
 
-ALLOWED_MIME = {"application/pdf", "image/jpeg", "image/png"}
+PDF_MIME = "application/pdf"
+ALLOWED_IMAGE_MIME = {"image/jpeg", "image/png"}
+GENERIC_BINARY_MIME = {"", "application/octet-stream", "binary/octet-stream"}
 MAX_BYTES = 25 * 1024 * 1024  # 25 MB
 
 
@@ -43,6 +45,26 @@ def _ensure_configured() -> None:
         raise HTTPException(status_code=500, detail="Cloudinary is not configured")
 
 
+def _normalize_upload_content_type(file: UploadFile, contents: bytes) -> str:
+    content_type = (file.content_type or "").lower().strip()
+    if content_type in ALLOWED_IMAGE_MIME:
+        return content_type
+
+    filename = (file.filename or "").lower()
+    looks_like_pdf = contents.startswith(b"%PDF-")
+    if content_type == PDF_MIME:
+        return PDF_MIME
+    if looks_like_pdf:
+        return PDF_MIME
+    if filename.endswith(".pdf") and content_type in GENERIC_BINARY_MIME:
+        return PDF_MIME
+
+    raise HTTPException(
+        status_code=400,
+        detail="File must be a PDF, JPG or PNG",
+    )
+
+
 async def upload_customer_file_to_cloudinary(
     file: UploadFile, customer_id: int
 ) -> Dict[str, Any]:
@@ -53,13 +75,6 @@ async def upload_customer_file_to_cloudinary(
     """
     _ensure_configured()
 
-    content_type = (file.content_type or "").lower()
-    if content_type not in ALLOWED_MIME:
-        raise HTTPException(
-            status_code=400,
-            detail="File must be a PDF, JPG or PNG",
-        )
-
     contents = await file.read()
     if len(contents) > MAX_BYTES:
         raise HTTPException(
@@ -68,6 +83,7 @@ async def upload_customer_file_to_cloudinary(
         )
     if not contents:
         raise HTTPException(status_code=400, detail="Empty file")
+    content_type = _normalize_upload_content_type(file, contents)
 
     try:
         upload_result = cloudinary.uploader.upload(
@@ -86,6 +102,7 @@ async def upload_customer_file_to_cloudinary(
         "resource_type": upload_result.get("resource_type", "raw"),
         "format": upload_result.get("format"),
         "bytes": upload_result.get("bytes", len(contents)),
+        "content_type": content_type,
     }
 
 

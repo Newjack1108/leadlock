@@ -1021,7 +1021,10 @@ export const uploadCustomerFile = async (
   formData.append('file', file);
   if (kind) formData.append('kind', kind);
   const response = await api.post(`/api/customers/${customerId}/files`, formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
+    transformRequest: [(data: unknown, headers?: Record<string, unknown>) => {
+      if (data instanceof FormData && headers) delete (headers as Record<string, unknown>)['Content-Type'];
+      return data;
+    }],
   });
   return response.data;
 };
@@ -1044,7 +1047,10 @@ export const uploadQuoteFile = async (
   formData.append('file', file);
   if (kind) formData.append('kind', kind);
   const response = await api.post(`/api/quotes/${quoteId}/files`, formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
+    transformRequest: [(data: unknown, headers?: Record<string, unknown>) => {
+      if (data instanceof FormData && headers) delete (headers as Record<string, unknown>)['Content-Type'];
+      return data;
+    }],
   });
   return response.data;
 };
@@ -1067,7 +1073,10 @@ export const uploadOrderFile = async (
   formData.append('file', file);
   if (kind) formData.append('kind', kind);
   const response = await api.post(`/api/orders/${orderId}/files`, formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
+    transformRequest: [(data: unknown, headers?: Record<string, unknown>) => {
+      if (data instanceof FormData && headers) delete (headers as Record<string, unknown>)['Content-Type'];
+      return data;
+    }],
   });
   return response.data;
 };
