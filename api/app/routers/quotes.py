@@ -57,6 +57,7 @@ from app.routers.emails import (
     _normalize_upload_files,
     _sanitize_filename,
 )
+from app.sales_document_service import load_sales_document_bytes
 from app.customer_view_links import customer_view_path_segment
 from app.email_service import is_email_configured, build_activity_email_notes
 from app.sms_service import (
@@ -1942,16 +1943,17 @@ async def send_quote_email_endpoint(
             .order_by(QuoteTemplateSalesDocument.sort_order)
         )
         for _link, sales_doc in session.exec(template_docs_statement).all():
-            path = Path(sales_doc.file_path)
-            if not path.is_file():
+            try:
+                content = await load_sales_document_bytes(sales_doc)
+            except HTTPException as exc:
                 raise HTTPException(
                     status_code=400,
                     detail=(
-                        f"Quote template attachment file is missing on disk: "
-                        f"{sales_doc.name} ({sales_doc.filename}). Re-upload the document in Sales Documents or remove it from the template."
+                        f"Quote template attachment is unavailable: {sales_doc.name} "
+                        f"({sales_doc.filename}). {exc.detail}. Re-upload the document "
+                        f"in Sales Documents or remove it from the template."
                     ),
                 )
-            content = path.read_bytes()
             size = len(content)
             if size > MAX_ATTACHMENT_SIZE:
                 raise HTTPException(

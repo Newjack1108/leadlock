@@ -299,7 +299,9 @@ class SalesDocument(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str  # Display name (e.g. "2024 Price List")
     filename: str  # Original/stored filename
-    file_path: str  # Path on disk or cloud URL
+    file_path: str  # Legacy local path or durable remote URL
+    cloudinary_public_id: Optional[str] = Field(default=None, index=True)
+    cloudinary_resource_type: Optional[str] = None  # raw/image for Cloudinary-backed docs
     content_type: Optional[str] = None  # application/pdf, etc.
     file_size: Optional[int] = None
     category: Optional[str] = None  # e.g. "Price List", "Spec Sheet"

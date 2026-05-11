@@ -2,17 +2,19 @@
 Sales documents router: price lists, spec sheets, etc. for attaching to emails.
 """
 import os
-import uuid
-from pathlib import Path
 from typing import Optional, List
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse
 from sqlmodel import Session, select
 
 from app.database import get_session
 from app.models import SalesDocument, User, UserRole
 from app.auth import get_current_user, require_role
+from app.sales_document_service import (
+    build_sales_document_download_response,
+    delete_sales_document_storage,
+    store_sales_document_content,
+)
 
 
 router = APIRouter(prefix="/api/sales-documents", tags=["sales-documents"])
@@ -30,13 +32,6 @@ ALLOWED_CONTENT_TYPES = {
     "image/webp",
 }
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
-
-# Storage directory (relative to api/ folder)
-SALES_DOCUMENTS_DIR = Path(__file__).parent.parent.parent / "static" / "sales-documents"
-
-
-def _ensure_storage_dir():
-    SALES_DOCUMENTS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def _sanitize_filename(filename: Optional[str]) -> str:
@@ -97,21 +92,14 @@ async def upload_sales_document(
             detail="File type not allowed. Allowed: PDF, Excel, CSV, images.",
         )
 
-    _ensure_storage_dir()
-    ext = Path(file.filename).suffix or ".bin"
-    stored_filename = f"{uuid.uuid4()}{ext}"
-    file_path = SALES_DOCUMENTS_DIR / stored_filename
-
-    try:
-        with open(file_path, "wb") as f:
-            f.write(content)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to save file: {e}")
+    storage = store_sales_document_content(content, original_filename=file.filename)
 
     doc = SalesDocument(
         name=name.strip() or _sanitize_filename(file.filename),
         filename=_sanitize_filename(file.filename),
-        file_path=str(file_path),
+        file_path=storage["file_path"],
+        cloudinary_public_id=storage.get("cloudinary_public_id"),
+        cloudinary_resource_type=storage.get("cloudinary_resource_type"),
         content_type=content_type,
         file_size=len(content),
         category=category.strip() if category else None,
@@ -144,15 +132,7 @@ async def download_sales_document(
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    path = Path(doc.file_path)
-    if not path.exists():
-        raise HTTPException(status_code=404, detail="File not found on disk")
-
-    return FileResponse(
-        path,
-        media_type=doc.content_type or "application/octet-stream",
-        filename=doc.filename,
-    )
+    return await build_sales_document_download_response(doc)
 
 
 @router.delete("/{doc_id}")
@@ -167,13 +147,7 @@ async def delete_sales_document(
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    path = Path(doc.file_path)
-    if path.exists():
-        try:
-            path.unlink()
-        except Exception:
-            pass  # Still delete DB record
-
+    delete_sales_document_storage(doc)
     session.delete(doc)
     session.commit()
     return {"message": "Deleted"}

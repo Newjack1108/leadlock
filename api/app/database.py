@@ -340,6 +340,32 @@ def _ensure_weekly_plan_template_schema(engine) -> None:
         print(f"Warning: could not ensure weekly plan template schema: {e}", file=sys.stderr, flush=True)
 
 
+def _ensure_sales_document_storage_schema(engine) -> None:
+    """Ensure Cloudinary metadata columns exist for reusable sales documents."""
+    import sys
+
+    try:
+        inspector = inspect(engine)
+        if not inspector.has_table("salesdocument"):
+            return
+
+        columns = {col["name"] for col in inspector.get_columns("salesdocument")}
+        with engine.begin() as conn:
+            if "cloudinary_public_id" not in columns:
+                conn.execute(text("ALTER TABLE salesdocument ADD COLUMN cloudinary_public_id VARCHAR(255)"))
+            if "cloudinary_resource_type" not in columns:
+                conn.execute(text("ALTER TABLE salesdocument ADD COLUMN cloudinary_resource_type VARCHAR(50)"))
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_salesdocument_cloudinary_public_id "
+                    "ON salesdocument (cloudinary_public_id)"
+                )
+            )
+        print("Sales document storage schema ensured", file=sys.stderr, flush=True)
+    except Exception as e:
+        print(f"Warning: could not ensure sales document storage schema: {e}", file=sys.stderr, flush=True)
+
+
 def backfill_default_reminder_rules(session: Session) -> None:
     """Insert any canonical default ReminderRule rows missing by rule_name (fixes partial legacy seeds).
 
@@ -475,6 +501,7 @@ def create_db_and_tables():
     _ensure_dealer_portal_schema(engine)
     _ensure_weekly_planner_schema(engine)
     _ensure_weekly_plan_template_schema(engine)
+    _ensure_sales_document_storage_schema(engine)
 
     # Migration logic for Customer model separation
     try:
