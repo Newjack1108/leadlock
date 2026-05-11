@@ -1104,6 +1104,14 @@ export default function CustomerDetailPage() {
                       history.map((event, index) => {
                         const Icon = historyIcons[event.event_type] || History;
                         const color = historyColors[event.event_type] || 'text-muted-foreground';
+                        const quoteNumber =
+                          typeof event.metadata?.quote_number === 'string' ? event.metadata.quote_number : null;
+                        const leadName =
+                          typeof event.metadata?.lead_name === 'string' ? event.metadata.lead_name : null;
+                        const oldStatus =
+                          typeof event.metadata?.old_status === 'string' ? event.metadata.old_status : null;
+                        const newStatus =
+                          typeof event.metadata?.new_status === 'string' ? event.metadata.new_status : null;
                         return (
                           <div key={index} className="flex gap-3 relative items-start py-1">
                             <div className={`${color} flex-shrink-0`}>
@@ -1130,31 +1138,31 @@ export default function CustomerDetailPage() {
                               )}
                               {event.metadata && Object.keys(event.metadata).length > 0 && (
                                 <div className="flex gap-1 overflow-hidden whitespace-nowrap">
-                                  {event.metadata.quote_number && (
+                                  {quoteNumber && (
                                     <Badge
                                       variant="outline"
                                       className="text-xs shrink-0 max-w-[180px] truncate"
-                                      title={`Quote: ${event.metadata.quote_number}`}
+                                      title={`Quote: ${quoteNumber}`}
                                     >
-                                      Quote: {event.metadata.quote_number}
+                                      Quote: {quoteNumber}
                                     </Badge>
                                   )}
-                                  {event.metadata.lead_name && (
+                                  {leadName && (
                                     <Badge
                                       variant="outline"
                                       className="text-xs shrink-0 max-w-[180px] truncate"
-                                      title={`Lead: ${event.metadata.lead_name}`}
+                                      title={`Lead: ${leadName}`}
                                     >
-                                      Lead: {event.metadata.lead_name}
+                                      Lead: {leadName}
                                     </Badge>
                                   )}
-                                  {event.metadata.old_status && event.metadata.new_status && (
+                                  {oldStatus && newStatus && (
                                     <Badge
                                       variant="outline"
                                       className="text-xs shrink-0 max-w-[220px] truncate"
-                                      title={`${event.metadata.old_status} → ${event.metadata.new_status}`}
+                                      title={`${oldStatus} → ${newStatus}`}
                                     >
-                                      {event.metadata.old_status} → {event.metadata.new_status}
+                                      {oldStatus} → {newStatus}
                                     </Badge>
                                   )}
                                 </div>
