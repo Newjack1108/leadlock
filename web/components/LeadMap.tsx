@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet';
-import type { LeadLocationItem } from '@/lib/types';
+import type { DashboardPresetPeriod, LeadLocationItem } from '@/lib/types';
 import { getLeadLocations } from '@/lib/api';
 import {
   Dialog,
@@ -14,7 +14,8 @@ import { Button } from '@/components/ui/button';
 import { Maximize2 } from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
 
-type DatePeriod = 'all' | 'week' | 'month' | 'quarter' | 'year';
+type DatePeriod = DashboardPresetPeriod;
+type LeadMapPeriod = DatePeriod | 'custom';
 
 const PERIODS: { value: DatePeriod; label: string }[] = [
   { value: 'all', label: 'All' },
@@ -56,13 +57,14 @@ function MapMarkers({ locations }: { locations: LeadLocationItem[] }) {
 interface LeadMapProps {
   locations: LeadLocationItem[];
   loading?: boolean;
-  period?: DatePeriod;
+  period?: LeadMapPeriod;
+  periodLabel?: string;
   height?: number;
 }
 
-export default function LeadMap({ locations, loading = false, period = 'all', height = 300 }: LeadMapProps) {
+export default function LeadMap({ locations, loading = false, period = 'all', periodLabel, height = 300 }: LeadMapProps) {
   const [expanded, setExpanded] = useState(false);
-  const [modalPeriod, setModalPeriod] = useState<DatePeriod>(period);
+  const [modalPeriod, setModalPeriod] = useState<LeadMapPeriod>(period);
   const [modalLocations, setModalLocations] = useState<LeadLocationItem[]>(locations);
   const [modalLoading, setModalLoading] = useState(false);
 
@@ -78,7 +80,7 @@ export default function LeadMap({ locations, loading = false, period = 'all', he
     setModalPeriod(newPeriod);
     setModalLoading(true);
     try {
-      const res = await getLeadLocations(newPeriod === 'all' ? undefined : newPeriod);
+      const res = await getLeadLocations({ period: newPeriod });
       setModalLocations(Array.isArray(res) ? res : []);
     } catch {
       setModalLocations([]);
@@ -146,6 +148,11 @@ export default function LeadMap({ locations, loading = false, period = 'all', he
           <DialogHeader className="px-6 pt-6 pb-0">
             <DialogTitle>Lead Locations</DialogTitle>
             <div className="flex flex-wrap gap-2 pt-2">
+              {modalPeriod === 'custom' && (
+                <Button variant="default" size="sm" disabled type="button">
+                  Custom
+                </Button>
+              )}
               {PERIODS.map((p) => (
                 <Button
                   key={p.value}
@@ -159,6 +166,9 @@ export default function LeadMap({ locations, loading = false, period = 'all', he
                 </Button>
               ))}
             </div>
+            {modalPeriod === 'custom' && periodLabel && (
+              <p className="pt-2 text-sm text-muted-foreground">Showing: {periodLabel}</p>
+            )}
           </DialogHeader>
           <div className="flex-1 min-h-0 px-6 pb-6">
             {modalLoading ? (

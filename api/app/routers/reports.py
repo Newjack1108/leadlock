@@ -9,6 +9,7 @@ from fastapi.responses import Response
 from sqlmodel import Session, select, func
 from app.database import get_session
 from app.auth import get_current_user
+from app.date_ranges import ResolvedDateRange, get_date_range_for_period, resolve_date_range
 from app.models import (
     Lead, LeadStatus, LeadSource, LeadType,
     Quote, QuoteStatus, Order, OrderItem, Product,
@@ -36,28 +37,8 @@ from decimal import Decimal
 from typing import Optional
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
-VALID_REPORT_PERIODS = ("week", "month", "quarter", "year")
 UNKNOWN_ADVERT_PROFILE_NAME = "Unknown / Not tagged"
 UNKNOWN_PRODUCT_TYPE_NAME = "Unknown / uncategorised"
-
-
-def get_date_range_for_period(period: str) -> tuple[datetime, datetime]:
-    """Return (start, end) datetime for the given period (week, month, quarter, year)."""
-    now = datetime.utcnow()
-    end = now
-    if period == "week":
-        start_of_week = now - timedelta(days=now.weekday())
-        start = start_of_week.replace(hour=0, minute=0, second=0, microsecond=0)
-    elif period == "month":
-        start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    elif period == "quarter":
-        quarter_start_month = ((now.month - 1) // 3) * 3 + 1
-        start = now.replace(month=quarter_start_month, day=1, hour=0, minute=0, second=0, microsecond=0)
-    elif period == "year":
-        start = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
-    else:
-        start = datetime(1970, 1, 1)
-    return start, end
 
 
 def _get_company_name(session: Session) -> str:
@@ -65,12 +46,6 @@ def _get_company_name(session: Session) -> str:
     stmt = select(CompanySettings).limit(1)
     cs = session.exec(stmt).first()
     return (cs.trading_name or cs.company_name or "LeadLock") if cs else "LeadLock"
-
-
-def _normalise_period(period: Optional[str]) -> Optional[str]:
-    if period and period.lower() in VALID_REPORT_PERIODS:
-        return period.lower()
-    return None
 
 
 def _enum_value(value, default: str = "Unknown") -> str:
@@ -162,18 +137,18 @@ def _build_facebook_lead_conversion_breakdown(
 
 def _build_facebook_lead_conversion_report(
     session: Session,
-    period: Optional[str],
+    resolved_range: ResolvedDateRange,
 ) -> FacebookLeadConversionReport:
-    period_key = _normalise_period(period)
     lead_stmt = select(Lead).where(Lead.lead_source == LeadSource.FACEBOOK)
-    if period_key:
-        start, end = get_date_range_for_period(period_key)
-        lead_stmt = lead_stmt.where(Lead.created_at >= start).where(Lead.created_at <= end)
+    if resolved_range.period != "all":
+        lead_stmt = lead_stmt.where(Lead.created_at >= resolved_range.start).where(Lead.created_at <= resolved_range.end)
 
     leads = list(session.exec(lead_stmt.order_by(Lead.created_at.desc())).all())
     if not leads:
         return FacebookLeadConversionReport(
-            period=period_key,
+            period=resolved_range.period,
+            start_date=resolved_range.start,
+            end_date=resolved_range.end,
             generated_at=datetime.utcnow(),
             summary=FacebookLeadConversionSummary(
                 total_facebook_leads=0,
@@ -288,7 +263,9 @@ def _build_facebook_lead_conversion_report(
     won_without_order_leads = sum(1 for row in rows if row.won_without_order)
 
     return FacebookLeadConversionReport(
-        period=period_key,
+        period=resolved_range.period,
+        start_date=resolved_range.start,
+        end_date=resolved_range.end,
         generated_at=datetime.utcnow(),
         summary=FacebookLeadConversionSummary(
             total_facebook_leads=total_facebook_leads,
@@ -313,16 +290,18 @@ def _build_facebook_lead_conversion_report(
 async def get_pipeline_value_report(
     session: Session = Depends(get_session),
     current_user=Depends(get_current_user),
-    period: Optional[str] = Query(None, description="week, month, quarter, year. Omit for all-time."),
+    period: Optional[str] = Query(None, description="Period: all, week, month, quarter, year."),
+    start_date: Optional[str] = Query(None, description="Custom range start date (YYYY-MM-DD)."),
+    end_date: Optional[str] = Query(None, description="Custom range end date (YYYY-MM-DD)."),
 ):
     """Weighted pipeline by opportunity stage and close probability."""
+    resolved_range = resolve_date_range(period=period, start_date=start_date, end_date=end_date, default_period="all")
     quote_filter = Quote.status.in_([
         QuoteStatus.SENT, QuoteStatus.VIEWED, QuoteStatus.ACCEPTED,
         QuoteStatus.REJECTED, QuoteStatus.EXPIRED,
     ])
-    if period and period.lower() in ("week", "month", "quarter", "year"):
-        start, end = get_date_range_for_period(period.lower())
-        quote_filter = quote_filter & (Quote.sent_at >= start) & (Quote.sent_at <= end)
+    if resolved_range.period != "all":
+        quote_filter = quote_filter & (Quote.sent_at >= resolved_range.start) & (Quote.sent_at <= resolved_range.end)
 
     # Weighted value = total_amount * (close_probability/100), treating NULL prob as 0
     weighted_expr = Quote.total_amount * (func.coalesce(Quote.close_probability, 0) / 100)
@@ -364,7 +343,9 @@ async def get_pipeline_value_report(
             total_weighted += wv
 
     return PipelineValueReport(
-        period=period,
+        period=resolved_range.period,
+        start_date=resolved_range.start,
+        end_date=resolved_range.end,
         generated_at=datetime.utcnow(),
         stages=stages,
         total_value=total_value,
@@ -377,11 +358,21 @@ async def get_pipeline_value_pdf(
     session: Session = Depends(get_session),
     current_user=Depends(get_current_user),
     period: Optional[str] = Query(None),
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
 ):
     """Download Pipeline Value Report as PDF."""
-    report = await get_pipeline_value_report(session=session, current_user=current_user, period=period)
+    report = await get_pipeline_value_report(
+        session=session,
+        current_user=current_user,
+        period=period,
+        start_date=start_date,
+        end_date=end_date,
+    )
     data = {
         "period": report.period,
+        "start_date": report.start_date,
+        "end_date": report.end_date,
         "stages": [s.model_dump() for s in report.stages],
         "total_value": float(report.total_value),
         "total_weighted_value": float(report.total_weighted_value),
@@ -404,12 +395,14 @@ async def get_source_performance_report(
     session: Session = Depends(get_session),
     current_user=Depends(get_current_user),
     period: Optional[str] = Query(None),
+    start_date: Optional[str] = Query(None, description="Custom range start date (YYYY-MM-DD)."),
+    end_date: Optional[str] = Query(None, description="Custom range end date (YYYY-MM-DD)."),
 ):
     """Leads and conversion by lead_source."""
+    resolved_range = resolve_date_range(period=period, start_date=start_date, end_date=end_date, default_period="all")
     date_filter = None
-    if period and period.lower() in ("week", "month", "quarter", "year"):
-        start, end = get_date_range_for_period(period.lower())
-        date_filter = (Lead.created_at >= start) & (Lead.created_at <= end)
+    if resolved_range.period != "all":
+        date_filter = (Lead.created_at >= resolved_range.start) & (Lead.created_at <= resolved_range.end)
 
     stmt = (
         select(Lead.lead_source, func.count(Lead.id).label("cnt"))
@@ -450,7 +443,9 @@ async def get_source_performance_report(
 
     sources.sort(key=lambda x: x.leads_count, reverse=True)
     return SourcePerformanceReport(
-        period=period,
+        period=resolved_range.period,
+        start_date=resolved_range.start,
+        end_date=resolved_range.end,
         generated_at=datetime.utcnow(),
         sources=sources,
         total_leads=total_leads,
@@ -462,11 +457,21 @@ async def get_source_performance_pdf(
     session: Session = Depends(get_session),
     current_user=Depends(get_current_user),
     period: Optional[str] = Query(None),
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
 ):
     """Download Source Performance Report as PDF."""
-    report = await get_source_performance_report(session=session, current_user=current_user, period=period)
+    report = await get_source_performance_report(
+        session=session,
+        current_user=current_user,
+        period=period,
+        start_date=start_date,
+        end_date=end_date,
+    )
     data = {
         "period": report.period,
+        "start_date": report.start_date,
+        "end_date": report.end_date,
         "sources": [s.model_dump() for s in report.sources],
         "total_leads": report.total_leads,
     }
@@ -488,9 +493,12 @@ async def get_facebook_lead_conversion_report(
     session: Session = Depends(get_session),
     current_user=Depends(get_current_user),
     period: Optional[str] = Query(None),
+    start_date: Optional[str] = Query(None, description="Custom range start date (YYYY-MM-DD)."),
+    end_date: Optional[str] = Query(None, description="Custom range end date (YYYY-MM-DD)."),
 ):
     """Lead-to-order conversion and revenue for Facebook leads."""
-    return _build_facebook_lead_conversion_report(session, period)
+    resolved_range = resolve_date_range(period=period, start_date=start_date, end_date=end_date, default_period="all")
+    return _build_facebook_lead_conversion_report(session, resolved_range)
 
 
 @router.get("/facebook-lead-conversion.csv")
@@ -498,9 +506,12 @@ async def download_facebook_lead_conversion_report_csv(
     session: Session = Depends(get_session),
     current_user=Depends(get_current_user),
     period: Optional[str] = Query(None),
+    start_date: Optional[str] = Query(None, description="Custom range start date (YYYY-MM-DD)."),
+    end_date: Optional[str] = Query(None, description="Custom range end date (YYYY-MM-DD)."),
 ):
     """Download Facebook lead-to-order conversion report as CSV."""
-    report = _build_facebook_lead_conversion_report(session, period)
+    resolved_range = resolve_date_range(period=period, start_date=start_date, end_date=end_date, default_period="all")
+    report = _build_facebook_lead_conversion_report(session, resolved_range)
     output = io.StringIO(newline="")
     writer = csv.writer(output)
     writer.writerow([
@@ -629,15 +640,17 @@ async def get_quote_engagement_report(
     session: Session = Depends(get_session),
     current_user=Depends(get_current_user),
     period: Optional[str] = Query(None),
+    start_date: Optional[str] = Query(None, description="Custom range start date (YYYY-MM-DD)."),
+    end_date: Optional[str] = Query(None, description="Custom range end date (YYYY-MM-DD)."),
 ):
     """Sent vs viewed vs no reply."""
+    resolved_range = resolve_date_range(period=period, start_date=start_date, end_date=end_date, default_period="all")
     quote_filter = Quote.status.in_([
         QuoteStatus.SENT, QuoteStatus.VIEWED, QuoteStatus.ACCEPTED,
         QuoteStatus.REJECTED, QuoteStatus.EXPIRED,
     ])
-    if period and period.lower() in ("week", "month", "quarter", "year"):
-        start, end = get_date_range_for_period(period.lower())
-        quote_filter = quote_filter & (Quote.sent_at >= start) & (Quote.sent_at <= end)
+    if resolved_range.period != "all":
+        quote_filter = quote_filter & (Quote.sent_at >= resolved_range.start) & (Quote.sent_at <= resolved_range.end)
 
     sent_count = session.exec(select(func.count(Quote.id)).where(quote_filter)).one()
 
@@ -666,7 +679,9 @@ async def get_quote_engagement_report(
     ).one()
 
     return QuoteEngagementReport(
-        period=period,
+        period=resolved_range.period,
+        start_date=resolved_range.start,
+        end_date=resolved_range.end,
         generated_at=datetime.utcnow(),
         sent_count=sent_count,
         viewed_count=viewed_count,
@@ -682,9 +697,17 @@ async def get_quote_engagement_pdf(
     session: Session = Depends(get_session),
     current_user=Depends(get_current_user),
     period: Optional[str] = Query(None),
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
 ):
     """Download Quote Engagement Report as PDF."""
-    report = await get_quote_engagement_report(session=session, current_user=current_user, period=period)
+    report = await get_quote_engagement_report(
+        session=session,
+        current_user=current_user,
+        period=period,
+        start_date=start_date,
+        end_date=end_date,
+    )
     data = report.model_dump()
     company_name = _get_company_name(session)
     buffer = generate_quote_engagement_pdf(data, company_name)

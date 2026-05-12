@@ -760,6 +760,8 @@ class PipelineValueStageItem(BaseModel):
 
 class PipelineValueReport(BaseModel):
     period: Optional[str] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
     generated_at: datetime
     stages: List[PipelineValueStageItem] = []
     total_value: Decimal
@@ -776,6 +778,8 @@ class SourcePerformanceItem(BaseModel):
 
 class SourcePerformanceReport(BaseModel):
     period: Optional[str] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
     generated_at: datetime
     sources: List[SourcePerformanceItem] = []
     total_leads: int
@@ -828,6 +832,8 @@ class FacebookLeadConversionRow(BaseModel):
 
 class FacebookLeadConversionReport(BaseModel):
     period: Optional[str] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
     generated_at: datetime
     summary: FacebookLeadConversionSummary
     advert_breakdown: List[FacebookLeadConversionBreakdownItem] = []
@@ -850,6 +856,8 @@ class CloserPerformanceReport(BaseModel):
 
 class QuoteEngagementReport(BaseModel):
     period: Optional[str] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
     generated_at: datetime
     sent_count: int
     viewed_count: int

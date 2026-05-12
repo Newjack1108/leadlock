@@ -4,6 +4,9 @@ import {
   ActivityType,
   type CustomerCommunicationStats,
   type DashboardCommunicationTotals,
+  type DashboardPresetPeriod,
+  type DashboardStats,
+  type DateRangeQueryParams,
   type DealerProfile,
   type DealerSummary,
   type DealerDiscountPolicyAdminPayload,
@@ -115,6 +118,23 @@ export function getApiErrorDetail(err: unknown): string {
 }
 
 export default api;
+
+function buildDateRangeParams(filter?: DateRangeQueryParams | string): Record<string, string> {
+  if (!filter) return {};
+  if (typeof filter === 'string') {
+    return { period: filter };
+  }
+  if (filter.start_date && filter.end_date) {
+    return {
+      start_date: filter.start_date,
+      end_date: filter.end_date,
+    };
+  }
+  if (filter.period) {
+    return { period: filter.period };
+  }
+  return {};
+}
 
 // Email API functions
 export const sendEmail = async (emailData: {
@@ -337,16 +357,21 @@ export const getUnreadEmails = async () => {
   return response.data;
 };
 
-export const getLeadLocations = async (period?: string) => {
-  const params = period && period !== 'all' ? { period } : {};
+export const getDashboardStats = async (filter?: DateRangeQueryParams): Promise<DashboardStats> => {
+  const response = await api.get('/api/dashboard/stats', { params: buildDateRangeParams(filter) });
+  return response.data;
+};
+
+export const getLeadLocations = async (filter?: DateRangeQueryParams | DashboardPresetPeriod) => {
+  const params = buildDateRangeParams(filter);
   const response = await api.get('/api/dashboard/lead-locations', { params });
   return response.data;
 };
 
 export const getDashboardCommunicationTotals = async (
-  period: 'week' | 'month' | 'quarter' | 'year' | 'all' = 'week'
+  filter: DateRangeQueryParams = { period: 'week' }
 ): Promise<DashboardCommunicationTotals> => {
-  const response = await api.get('/api/dashboard/communication-totals', { params: { period } });
+  const response = await api.get('/api/dashboard/communication-totals', { params: buildDateRangeParams(filter) });
   return response.data;
 };
 
@@ -1772,14 +1797,14 @@ export const downloadCustomerExport = async () => {
 };
 
 // Sales Reports API functions
-export const getPipelineValueReport = async (period?: string) => {
-  const params = period ? { period } : {};
+export const getPipelineValueReport = async (filter?: DateRangeQueryParams) => {
+  const params = buildDateRangeParams(filter);
   const response = await api.get('/api/reports/pipeline-value', { params });
   return response.data;
 };
 
-export const downloadPipelineValueReportPdf = async (period?: string) => {
-  const params = period ? { period } : {};
+export const downloadPipelineValueReportPdf = async (filter?: DateRangeQueryParams) => {
+  const params = buildDateRangeParams(filter);
   const response = await api.get('/api/reports/pipeline-value/pdf', {
     responseType: 'blob',
     params,
@@ -1795,14 +1820,14 @@ export const downloadPipelineValueReportPdf = async (period?: string) => {
   window.URL.revokeObjectURL(url);
 };
 
-export const getSourcePerformanceReport = async (period?: string) => {
-  const params = period ? { period } : {};
+export const getSourcePerformanceReport = async (filter?: DateRangeQueryParams) => {
+  const params = buildDateRangeParams(filter);
   const response = await api.get('/api/reports/source-performance', { params });
   return response.data;
 };
 
-export const downloadSourcePerformanceReportPdf = async (period?: string) => {
-  const params = period ? { period } : {};
+export const downloadSourcePerformanceReportPdf = async (filter?: DateRangeQueryParams) => {
+  const params = buildDateRangeParams(filter);
   const response = await api.get('/api/reports/source-performance/pdf', {
     responseType: 'blob',
     params,
@@ -1818,14 +1843,14 @@ export const downloadSourcePerformanceReportPdf = async (period?: string) => {
   window.URL.revokeObjectURL(url);
 };
 
-export const getFacebookLeadConversionReport = async (period?: string) => {
-  const params = period ? { period } : {};
+export const getFacebookLeadConversionReport = async (filter?: DateRangeQueryParams) => {
+  const params = buildDateRangeParams(filter);
   const response = await api.get('/api/reports/facebook-lead-conversion', { params });
   return response.data;
 };
 
-export const downloadFacebookLeadConversionReportCsv = async (period?: string) => {
-  const params = period ? { period } : {};
+export const downloadFacebookLeadConversionReportCsv = async (filter?: DateRangeQueryParams) => {
+  const params = buildDateRangeParams(filter);
   const response = await api.get('/api/reports/facebook-lead-conversion.csv', {
     responseType: 'blob',
     params,
@@ -1861,14 +1886,14 @@ export const downloadCloserPerformanceReportPdf = async () => {
   window.URL.revokeObjectURL(url);
 };
 
-export const getQuoteEngagementReport = async (period?: string) => {
-  const params = period ? { period } : {};
+export const getQuoteEngagementReport = async (filter?: DateRangeQueryParams) => {
+  const params = buildDateRangeParams(filter);
   const response = await api.get('/api/reports/quote-engagement', { params });
   return response.data;
 };
 
-export const downloadQuoteEngagementReportPdf = async (period?: string) => {
-  const params = period ? { period } : {};
+export const downloadQuoteEngagementReportPdf = async (filter?: DateRangeQueryParams) => {
+  const params = buildDateRangeParams(filter);
   const response = await api.get('/api/reports/quote-engagement/pdf', {
     responseType: 'blob',
     params,

@@ -1,14 +1,16 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Header from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import ReminderList from '@/components/ReminderList';
 import api, {
+  getDashboardStats,
   getStaleSummary,
   getCompanySettings,
   getDiscountTemplates,
@@ -24,7 +26,7 @@ import api, {
   downloadQuoteEngagementReportPdf,
   downloadWeeklySummaryReportPdf,
 } from '@/lib/api';
-import { DashboardStats, StaleSummary, CompanySettings, UnreadSmsSummary, UnreadMessengerSummary, LeadLocationItem, DiscountTemplate, DashboardCommunicationTotals, FacebookLeadConversionReport, FacebookLeadConversionRow } from '@/lib/types';
+import { DashboardStats, StaleSummary, CompanySettings, UnreadSmsSummary, UnreadMessengerSummary, LeadLocationItem, DiscountTemplate, DashboardCommunicationTotals, FacebookLeadConversionReport, FacebookLeadConversionRow, DashboardPresetPeriod, DateRangeQueryParams } from '@/lib/types';
 import { getInstallationLeadTimeRows, hasAnyInstallationLeadTime } from '@/lib/companyLeadTimeDisplay';
 import { toast } from 'sonner';
 import { TrendingUp, Users, CheckCircle2, Trophy, Bell, ArrowRight, Clock, MessageSquare, FileDown, BarChart3, Target, MessageCircle, Calendar, DoorClosed, LayoutDashboard } from 'lucide-react';
@@ -33,7 +35,21 @@ import LeadsBySourceBarChart from '@/components/LeadsBySourceBarChart';
 
 const LeadMap = dynamic(() => import('@/components/LeadMap'), { ssr: false });
 
-type DatePeriod = 'all' | 'week' | 'month' | 'quarter' | 'year';
+type DashboardDateFilter =
+  | { mode: 'preset'; period: DashboardPresetPeriod }
+  | { mode: 'custom'; start_date: string; end_date: string };
+
+const PRESET_PERIODS: DashboardPresetPeriod[] = ['all', 'week', 'month', 'quarter', 'year'];
+
+function getTodayDateInputValue(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function getDaysAgoDateInputValue(days: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() - days);
+  return date.toISOString().slice(0, 10);
+}
 
 function formatCurrency(amount?: number | null, currency: string = 'GBP'): string {
   return new Intl.NumberFormat('en-GB', {
@@ -72,6 +88,55 @@ function getOrderReference(row: FacebookLeadConversionRow): string {
   return `${row.order_number} +${row.order_count - 1}`;
 }
 
+function formatDateInputLabel(value?: string | null): string {
+  if (!value) return '—';
+  const [year, month, day] = value.split('-').map(Number);
+  if (!year || !month || !day) return value;
+  return new Date(year, month - 1, day).toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+function getPresetPeriodLabel(period: DashboardPresetPeriod): string {
+  switch (period) {
+    case 'all':
+      return 'All Time';
+    case 'week':
+      return 'This Week';
+    case 'month':
+      return 'This Month';
+    case 'quarter':
+      return 'This Quarter';
+    case 'year':
+      return 'This Year';
+    default:
+      return 'Selected Range';
+  }
+}
+
+function getDateRangeParams(filter: DashboardDateFilter): DateRangeQueryParams {
+  if (filter.mode === 'custom') {
+    return {
+      start_date: filter.start_date,
+      end_date: filter.end_date,
+    };
+  }
+  return { period: filter.period };
+}
+
+function getActiveRangeLabel(filter: DashboardDateFilter): string {
+  if (filter.mode === 'preset') {
+    return getPresetPeriodLabel(filter.period);
+  }
+  return `${formatDateInputLabel(filter.start_date)} - ${formatDateInputLabel(filter.end_date)}`;
+}
+
+function toDateInputValue(value?: string | null): string {
+  return value ? value.slice(0, 10) : '';
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -84,9 +149,14 @@ export default function DashboardPage() {
   const [facebookLeadReport, setFacebookLeadReport] = useState<FacebookLeadConversionReport | null>(null);
   const [activeDiscounts, setActiveDiscounts] = useState<DiscountTemplate[]>([]);
   const [loading, setLoading] = useState(true);
-  const [datePeriod, setDatePeriod] = useState<DatePeriod>('week');
+  const [dateFilter, setDateFilter] = useState<DashboardDateFilter>({ mode: 'preset', period: 'week' });
+  const [lastPresetPeriod, setLastPresetPeriod] = useState<DashboardPresetPeriod>('week');
+  const [showCustomEditor, setShowCustomEditor] = useState(false);
+  const [customStartDate, setCustomStartDate] = useState(getDaysAgoDateInputValue(6));
+  const [customEndDate, setCustomEndDate] = useState(getTodayDateInputValue());
   const [userRole, setUserRole] = useState<string | null>(null);
-  const periodLabel = datePeriod === 'all' ? 'All Time' : `This ${datePeriod.charAt(0).toUpperCase() + datePeriod.slice(1)}`;
+  const activeDateParams = useMemo(() => getDateRangeParams(dateFilter), [dateFilter]);
+  const activeRangeLabel = useMemo(() => getActiveRangeLabel(dateFilter), [dateFilter]);
 
   const fetchDashboard = useCallback(async () => {
     try {
@@ -99,17 +169,17 @@ export default function DashboardPage() {
       }
 
       const [statsRes, staleRes, companyRes, unreadSmsRes, unreadMessengerRes, locationsRes, discountsRes, communicationRes, facebookReportRes] = await Promise.all([
-        api.get('/api/dashboard/stats', { params: datePeriod === 'all' ? {} : { period: datePeriod } }),
+        getDashboardStats(activeDateParams),
         getStaleSummary().catch(() => null), // Don't fail if reminders not available
         getCompanySettings().catch(() => null), // Don't fail if settings not set up yet
         getUnreadSms().catch(() => ({ count: 0, messages: [] })),
         getUnreadMessenger().catch(() => ({ count: 0, messages: [] })),
-        getLeadLocations(datePeriod === 'all' ? undefined : datePeriod).catch(() => []),
+        getLeadLocations(activeDateParams).catch(() => []),
         getDiscountTemplates(true).catch(() => []),
-        getDashboardCommunicationTotals(datePeriod).catch(() => null),
-        getFacebookLeadConversionReport(datePeriod === 'all' ? undefined : datePeriod).catch(() => null),
+        getDashboardCommunicationTotals(activeDateParams).catch(() => null),
+        getFacebookLeadConversionReport(activeDateParams).catch(() => null),
       ]);
-      setStats(statsRes.data);
+      setStats(statsRes);
       setStaleSummary(staleRes);
       setCompanySettings(companyRes ?? null);
       setUnreadSms(unreadSmsRes ?? { count: 0, messages: [] });
@@ -130,11 +200,52 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [datePeriod, router]);
+  }, [activeDateParams, router]);
 
   useEffect(() => {
     fetchDashboard();
   }, [fetchDashboard]);
+
+  const openCustomEditor = () => {
+    if (dateFilter.mode === 'custom') {
+      setCustomStartDate(dateFilter.start_date);
+      setCustomEndDate(dateFilter.end_date);
+    } else if (communicationTotals?.start_date && communicationTotals?.end_date) {
+      setCustomStartDate(toDateInputValue(communicationTotals.start_date));
+      setCustomEndDate(toDateInputValue(communicationTotals.end_date));
+    }
+    setShowCustomEditor(true);
+  };
+
+  const handlePresetChange = (period: DashboardPresetPeriod) => {
+    setLastPresetPeriod(period);
+    setDateFilter({ mode: 'preset', period });
+    setShowCustomEditor(false);
+  };
+
+  const applyCustomRange = () => {
+    if (!customStartDate || !customEndDate) {
+      toast.error('Choose both a start date and end date.');
+      return;
+    }
+    if (customEndDate < customStartDate) {
+      toast.error('End date must be on or after the start date.');
+      return;
+    }
+    setDateFilter({
+      mode: 'custom',
+      start_date: customStartDate,
+      end_date: customEndDate,
+    });
+    setShowCustomEditor(true);
+  };
+
+  const cancelCustomEditor = () => {
+    if (dateFilter.mode === 'custom') {
+      setDateFilter({ mode: 'preset', period: lastPresetPeriod });
+    }
+    setShowCustomEditor(false);
+  };
 
   if (loading) {
     return (
@@ -172,7 +283,10 @@ export default function DashboardPage() {
       <main className="container mx-auto px-4 sm:px-6 py-8">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
           <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-semibold">Dashboard</h1>
+            <div>
+              <h1 className="text-3xl font-semibold">Dashboard</h1>
+              <p className="text-sm text-muted-foreground mt-1">Showing: {activeRangeLabel}</p>
+            </div>
             {(userRole === 'DIRECTOR' || userRole === 'SALES_MANAGER') && (
               <Link href="/closer-dashboard">
                 <Button variant="outline" size="sm">
@@ -183,19 +297,54 @@ export default function DashboardPage() {
             )}
           </div>
           <div className="flex max-w-full flex-wrap gap-2">
-            {(['all', 'week', 'month', 'quarter', 'year'] as const).map((period) => (
+            {PRESET_PERIODS.map((period) => (
               <Button
                 key={period}
-                variant={datePeriod === period ? 'default' : 'outline'}
+                variant={dateFilter.mode === 'preset' && dateFilter.period === period ? 'default' : 'outline'}
                 size="sm"
                 className="shrink-0"
-                onClick={() => setDatePeriod(period)}
+                onClick={() => handlePresetChange(period)}
               >
                 {period === 'all' ? 'All' : period.charAt(0).toUpperCase() + period.slice(1)}
               </Button>
             ))}
+            <Button
+              variant={dateFilter.mode === 'custom' || showCustomEditor ? 'default' : 'outline'}
+              size="sm"
+              className="shrink-0"
+              onClick={openCustomEditor}
+            >
+              Custom
+            </Button>
           </div>
         </div>
+
+        {showCustomEditor && (
+          <Card className="mb-6">
+            <CardContent className="py-4">
+              <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+                <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div>
+                    <p className="mb-1 text-sm font-medium">Start date</p>
+                    <Input type="date" value={customStartDate} onChange={(e) => setCustomStartDate(e.target.value)} />
+                  </div>
+                  <div>
+                    <p className="mb-1 text-sm font-medium">End date</p>
+                    <Input type="date" value={customEndDate} onChange={(e) => setCustomEndDate(e.target.value)} />
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" onClick={applyCustomRange}>
+                    Apply range
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={cancelCustomEditor}>
+                    {dateFilter.mode === 'custom' ? `Use ${getPresetPeriodLabel(lastPresetPeriod)}` : 'Cancel'}
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Installation lead times – clear indicator for sales */}
         {hasAnyInstallationLeadTime(companySettings) && (
@@ -332,7 +481,12 @@ export default function DashboardPage() {
               <CardTitle className="text-lg">Lead Locations</CardTitle>
             </CardHeader>
             <CardContent>
-              <LeadMap locations={leadLocations} loading={loading} period={datePeriod} />
+              <LeadMap
+                locations={leadLocations}
+                loading={loading}
+                period={dateFilter.mode === 'custom' ? 'custom' : dateFilter.period}
+                periodLabel={activeRangeLabel}
+              />
             </CardContent>
           </Card>
         </div>
@@ -342,7 +496,7 @@ export default function DashboardPage() {
             <CardHeader>
               <CardTitle className="text-lg">Communication Activity Overview</CardTitle>
               <p className="text-sm text-muted-foreground">
-                {periodLabel} across email, SMS, and phone.
+                {activeRangeLabel} across email, SMS, and phone.
               </p>
             </CardHeader>
             <CardContent>
@@ -467,7 +621,7 @@ export default function DashboardPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => downloadPipelineValueReportPdf(datePeriod === 'all' ? undefined : datePeriod)}
+                  onClick={() => downloadPipelineValueReportPdf(activeDateParams)}
                   className="mt-auto"
                 >
                   <FileDown className="h-4 w-4 mr-1" />
@@ -485,7 +639,7 @@ export default function DashboardPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => downloadSourcePerformanceReportPdf(datePeriod === 'all' ? undefined : datePeriod)}
+                  onClick={() => downloadSourcePerformanceReportPdf(activeDateParams)}
                   className="mt-auto"
                 >
                   <FileDown className="h-4 w-4 mr-1" />
@@ -521,7 +675,7 @@ export default function DashboardPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => downloadQuoteEngagementReportPdf(datePeriod === 'all' ? undefined : datePeriod)}
+                  onClick={() => downloadQuoteEngagementReportPdf(activeDateParams)}
                   className="mt-auto"
                 >
                   <FileDown className="h-4 w-4 mr-1" />
@@ -561,13 +715,13 @@ export default function DashboardPage() {
                     Facebook Lead-to-Order
                   </CardTitle>
                   <p className="text-sm text-muted-foreground mt-1">
-                    {periodLabel} Facebook lead performance, conversion, revenue, and tagged advert breakdown.
+                    {activeRangeLabel} Facebook lead performance, conversion, revenue, and tagged advert breakdown.
                   </p>
                 </div>
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => downloadFacebookLeadConversionReportCsv(datePeriod === 'all' ? undefined : datePeriod)}
+                  onClick={() => downloadFacebookLeadConversionReportCsv(activeDateParams)}
                 >
                   <FileDown className="h-4 w-4 mr-1" />
                   Download CSV

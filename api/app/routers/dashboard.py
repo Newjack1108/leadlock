@@ -20,6 +20,7 @@ from app.models import (
     EmailDirection,
 )
 from app.distance_service import bulk_geocode_postcodes
+from app.date_ranges import resolve_date_range
 from app.auth import require_non_dealer_user
 from app.schemas import (
     DashboardStats,
@@ -36,48 +37,25 @@ from app.schemas import (
     QualifiedForQuotingSummary,
     QualifiedForQuotingItem,
 )
-from datetime import datetime, timedelta
 from typing import Optional
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
-
-
-def get_date_range_for_period(period: str) -> tuple[datetime, datetime]:
-    """Return (start, end) datetime for the given period (week, month, quarter, year)."""
-    now = datetime.utcnow()
-    end = now
-    if period == "week":
-        # This week: Monday 00:00 to now
-        start_of_week = now - timedelta(days=now.weekday())
-        start = start_of_week.replace(hour=0, minute=0, second=0, microsecond=0)
-    elif period == "month":
-        # This month: 1st 00:00 to now
-        start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    elif period == "quarter":
-        # This quarter: first day of quarter to now
-        quarter_start_month = ((now.month - 1) // 3) * 3 + 1
-        start = now.replace(month=quarter_start_month, day=1, hour=0, minute=0, second=0, microsecond=0)
-    elif period == "year":
-        # This year: Jan 1 00:00 to now
-        start = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
-    else:
-        # Default: all time (epoch to now)
-        start = datetime(1970, 1, 1)
-    return start, end
 
 
 @router.get("/stats", response_model=DashboardStats)
 async def get_dashboard_stats(
     session: Session = Depends(get_session),
     current_user = Depends(require_non_dealer_user),
-    period: Optional[str] = Query(None, description="Filter by period: week, month, quarter, year. Omit for all-time."),
+    period: Optional[str] = Query(None, description="Filter by period: all, week, month, quarter, year."),
+    start_date: Optional[str] = Query(None, description="Custom range start date (YYYY-MM-DD)."),
+    end_date: Optional[str] = Query(None, description="Custom range end date (YYYY-MM-DD)."),
 ):
+    resolved_range = resolve_date_range(period=period, start_date=start_date, end_date=end_date, default_period="all")
     date_filter = None
     quote_date_filter = None
-    if period and period.lower() in ("week", "month", "quarter", "year"):
-        start, end = get_date_range_for_period(period.lower())
-        date_filter = (Lead.created_at >= start) & (Lead.created_at <= end)
-        quote_date_filter = (Quote.sent_at >= start) & (Quote.sent_at <= end)
+    if resolved_range.period != "all":
+        date_filter = (Lead.created_at >= resolved_range.start) & (Lead.created_at <= resolved_range.end)
+        quote_date_filter = (Quote.sent_at >= resolved_range.start) & (Quote.sent_at <= resolved_range.end)
 
     def count_leads(extra_cond=None):
         stmt = select(func.count(Lead.id))
@@ -174,16 +152,12 @@ async def get_dashboard_stats(
 async def get_dashboard_communication_totals(
     session: Session = Depends(get_session),
     current_user=Depends(require_non_dealer_user),
-    period: str = Query("week", description="Period: week, month, quarter, year, all"),
+    period: Optional[str] = Query("week", description="Period: all, week, month, quarter, year."),
+    start_date: Optional[str] = Query(None, description="Custom range start date (YYYY-MM-DD)."),
+    end_date: Optional[str] = Query(None, description="Custom range end date (YYYY-MM-DD)."),
 ):
-    normalized_period = (period or "week").lower()
-    if normalized_period in ("week", "month", "quarter", "year"):
-        start, end = get_date_range_for_period(normalized_period)
-    else:
-        normalized_period = "all"
-        start, end = get_date_range_for_period("all")
-
-    date_clause = (start, end)
+    resolved_range = resolve_date_range(period=period, start_date=start_date, end_date=end_date, default_period="week")
+    date_clause = (resolved_range.start, resolved_range.end)
 
     email_sent = session.exec(
         select(func.count(Email.id)).where(
@@ -283,9 +257,9 @@ async def get_dashboard_communication_totals(
     total_received = email_received + sms_received + phone_answered
 
     return DashboardCommunicationTotals(
-        period=normalized_period,
-        start_date=start,
-        end_date=end,
+        period=resolved_range.period,
+        start_date=resolved_range.start,
+        end_date=resolved_range.end,
         email=DashboardChannelDirectionCounts(sent=email_sent, received=email_received),
         sms=DashboardChannelDirectionCounts(sent=sms_sent, received=sms_received),
         phone=DashboardChannelDirectionCounts(sent=phone_unanswered, received=phone_answered),
@@ -303,13 +277,15 @@ async def get_dashboard_communication_totals(
 async def get_lead_locations(
     session: Session = Depends(get_session),
     current_user = Depends(require_non_dealer_user),
-    period: Optional[str] = Query(None, description="Filter by period: week, month, quarter, year. Omit for all-time."),
+    period: Optional[str] = Query(None, description="Filter by period: all, week, month, quarter, year."),
+    start_date: Optional[str] = Query(None, description="Custom range start date (YYYY-MM-DD)."),
+    end_date: Optional[str] = Query(None, description="Custom range end date (YYYY-MM-DD)."),
 ):
     """Get geocoded lead locations for dashboard map. Includes all leads that came in during the period (any status). Uses lead postcode, or customer postcode when lead has none."""
+    resolved_range = resolve_date_range(period=period, start_date=start_date, end_date=end_date, default_period="all")
     date_filter = None
-    if period and period.lower() in ("week", "month", "quarter", "year"):
-        start, end = get_date_range_for_period(period.lower())
-        date_filter = (Lead.created_at >= start) & (Lead.created_at <= end)
+    if resolved_range.period != "all":
+        date_filter = (Lead.created_at >= resolved_range.start) & (Lead.created_at <= resolved_range.end)
 
     # 1. Leads with postcode
     stmt = (

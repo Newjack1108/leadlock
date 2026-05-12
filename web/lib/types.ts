@@ -264,6 +264,14 @@ export interface LeadLocationItem {
   count: number;
 }
 
+export type DashboardPresetPeriod = 'all' | 'week' | 'month' | 'quarter' | 'year';
+
+export interface DateRangeQueryParams {
+  period?: DashboardPresetPeriod;
+  start_date?: string;
+  end_date?: string;
+}
+
 export interface DashboardStats {
   total_leads: number;
   new_count: number;
@@ -324,6 +332,8 @@ export interface PipelineValueStageItem {
 
 export interface PipelineValueReport {
   period?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
   generated_at: string;
   stages: PipelineValueStageItem[];
   total_value: number;
@@ -340,6 +350,8 @@ export interface SourcePerformanceItem {
 
 export interface SourcePerformanceReport {
   period?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
   generated_at: string;
   sources: SourcePerformanceItem[];
   total_leads: number;
@@ -392,6 +404,8 @@ export interface FacebookLeadConversionRow {
 
 export interface FacebookLeadConversionReport {
   period?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
   generated_at: string;
   summary: FacebookLeadConversionSummary;
   advert_breakdown: FacebookLeadConversionBreakdownItem[];
@@ -414,6 +428,8 @@ export interface CloserPerformanceReport {
 
 export interface QuoteEngagementReport {
   period?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
   generated_at: string;
   sent_count: number;
   viewed_count: number;

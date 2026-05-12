@@ -49,6 +49,41 @@ def format_currency(amount: Any, currency: str = "GBP") -> str:
     return f"{currency} {val:,.2f}"
 
 
+def _coerce_datetime(value: Any) -> Optional[datetime]:
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str) and value.strip():
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            return None
+    return None
+
+
+def _format_range_label(data: Dict[str, Any]) -> str:
+    period = (data.get("period") or "").strip().lower()
+    start = _coerce_datetime(data.get("start_date"))
+    end = _coerce_datetime(data.get("end_date"))
+
+    if period == "all":
+        return "All time"
+
+    if start and end and period == "custom":
+        return f"{start.strftime('%d %b %Y')} - {end.strftime('%d %b %Y')}"
+
+    if period == "week":
+        return f"This week ({start.strftime('%d %b %Y')} - {end.strftime('%d %b %Y')})" if start and end else "This week"
+    if period == "month":
+        return f"This month ({start.strftime('%d %b %Y')} - {end.strftime('%d %b %Y')})" if start and end else "This month"
+    if period == "quarter":
+        return f"This quarter ({start.strftime('%d %b %Y')} - {end.strftime('%d %b %Y')})" if start and end else "This quarter"
+    if period == "year":
+        return f"This year ({start.strftime('%d %b %Y')} - {end.strftime('%d %b %Y')})" if start and end else "This year"
+    if start and end:
+        return f"{start.strftime('%d %b %Y')} - {end.strftime('%d %b %Y')}"
+    return "All time"
+
+
 def _resolve_logo() -> Tuple[Optional[str], Optional[bytes]]:
     """Resolve logo from static files or frontend URL."""
     logo_path: Optional[str] = None
@@ -348,8 +383,7 @@ def generate_pipeline_value_pdf(data: Dict[str, Any], company_name: str = "") ->
     _, logo_bytes = _resolve_logo()
     flowables = _build_report_header(company_name, "Pipeline Value Report", logo_bytes)
 
-    period = data.get("period") or "All time"
-    flowables.append(Paragraph(f"<b>Period:</b> {period}", normal))
+    flowables.append(Paragraph(f"<b>Range:</b> {_format_range_label(data)}", normal))
     flowables.append(Spacer(1, 15))
 
     stages = data.get("stages", [])
@@ -412,8 +446,10 @@ def generate_source_performance_pdf(data: Dict[str, Any], company_name: str = ""
     _, logo_bytes = _resolve_logo()
     flowables = _build_report_header(company_name, "Source Performance Report", logo_bytes)
 
-    period = data.get("period") or "All time"
-    flowables.append(Paragraph(f"<b>Period:</b> {period} | <b>Total Leads:</b> {data.get('total_leads', 0)}", normal))
+    flowables.append(Paragraph(
+        f"<b>Range:</b> {_format_range_label(data)} | <b>Total Leads:</b> {data.get('total_leads', 0)}",
+        normal,
+    ))
     flowables.append(Spacer(1, 15))
 
     sources = data.get("sources", [])
@@ -499,8 +535,7 @@ def generate_quote_engagement_pdf(data: Dict[str, Any], company_name: str = "") 
     _, logo_bytes = _resolve_logo()
     flowables = _build_report_header(company_name, "Quote Engagement Report", logo_bytes)
 
-    period = data.get("period") or "All time"
-    flowables.append(Paragraph(f"<b>Period:</b> {period}", normal))
+    flowables.append(Paragraph(f"<b>Range:</b> {_format_range_label(data)}", normal))
     flowables.append(Spacer(1, 15))
 
     # Pie chart - engagement breakdown
