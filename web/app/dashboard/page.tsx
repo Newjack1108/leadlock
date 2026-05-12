@@ -19,6 +19,7 @@ import api, {
   getLeadLocations,
   getDashboardCommunicationTotals,
   getFacebookLeadConversionReport,
+  downloadFacebookLeadConversionReportPdf,
   downloadPipelineValueReportPdf,
   downloadSourcePerformanceReportPdf,
   downloadFacebookLeadConversionReportCsv,
@@ -718,14 +719,23 @@ export default function DashboardPage() {
                     {activeRangeLabel} Facebook lead performance, conversion, revenue, and tagged advert breakdown.
                   </p>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => downloadFacebookLeadConversionReportCsv(activeDateParams)}
-                >
-                  <FileDown className="h-4 w-4 mr-1" />
-                  Download CSV
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    onClick={() => downloadFacebookLeadConversionReportPdf(activeDateParams)}
+                  >
+                    <FileDown className="h-4 w-4 mr-1" />
+                    Download PDF
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => downloadFacebookLeadConversionReportCsv(activeDateParams)}
+                  >
+                    <FileDown className="h-4 w-4 mr-1" />
+                    Download CSV
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent>

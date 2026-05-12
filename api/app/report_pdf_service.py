@@ -37,6 +37,15 @@ CHART_COLORS = [
     colors.HexColor("#15803d"),  # Green-700
 ]
 
+FACEBOOK_REPORT_COLORS = [
+    colors.HexColor("#1877F2"),
+    colors.HexColor("#7C3AED"),
+    colors.HexColor("#F97316"),
+    colors.HexColor("#06B6D4"),
+    colors.HexColor("#10B981"),
+    colors.HexColor("#EC4899"),
+]
+
 
 def format_currency(amount: Any, currency: str = "GBP") -> str:
     """Format decimal/float amount as currency string."""
@@ -316,6 +325,46 @@ def _create_horizontal_bar_chart(data: List[Tuple[str, float]], title: str = "",
     return drawing
 
 
+def _create_colorful_horizontal_bar_chart(
+    data: List[Tuple[str, float]],
+    title: str = "",
+    width: int = 450,
+    height: int = 200,
+) -> Drawing:
+    """Create a horizontal bar chart with multiple accent colours."""
+    drawing = Drawing(width, height)
+
+    if not data:
+        return drawing
+
+    labels = [d[0][:18] for d in data]
+    values = [d[1] for d in data]
+
+    chart = HorizontalBarChart()
+    chart.x = 110
+    chart.y = 20
+    chart.width = width - 140
+    chart.height = height - 50
+    chart.data = [values]
+    chart.categoryAxis.categoryNames = labels
+    chart.categoryAxis.labels.fontSize = 8
+    chart.valueAxis.valueMin = 0
+    chart.valueAxis.labels.fontSize = 8
+    chart.bars.strokeColor = colors.white
+    chart.bars.strokeWidth = 0.5
+
+    for i, _ in enumerate(values):
+        chart.bars[(0, i)].fillColor = FACEBOOK_REPORT_COLORS[i % len(FACEBOOK_REPORT_COLORS)]
+
+    drawing.add(chart)
+
+    if title:
+        drawing.add(String(width / 2, height - 10, title,
+                          textAnchor='middle', fontSize=10, fillColor=DARK_GREEN))
+
+    return drawing
+
+
 def _create_pie_chart(data: List[Tuple[str, float]], title: str = "", width: int = 350, height: int = 200) -> Drawing:
     """Create a pie chart with green theme."""
     drawing = Drawing(width, height)
@@ -585,6 +634,222 @@ def generate_quote_engagement_pdf(data: Dict[str, Any], company_name: str = "") 
             textColor=DARK_GREEN,
             fontSize=11,
         )))
+
+    doc.build(flowables)
+    buffer.seek(0)
+    return buffer
+
+
+def generate_facebook_lead_conversion_pdf(data: Dict[str, Any], company_name: str = "") -> BytesIO:
+    """Generate a condensed printable PDF for the Facebook lead-to-order report."""
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=32, leftMargin=32, topMargin=32, bottomMargin=32)
+    styles = getSampleStyleSheet()
+    normal = styles["Normal"]
+    section_heading = ParagraphStyle(
+        name="FacebookSectionHeading",
+        parent=styles["Heading2"],
+        fontSize=13,
+        textColor=DARK_GREEN,
+        spaceAfter=6,
+    )
+    muted = ParagraphStyle(
+        name="FacebookMuted",
+        parent=normal,
+        fontSize=9,
+        textColor=colors.HexColor("#6b7280"),
+    )
+
+    _, logo_bytes = _resolve_logo()
+    flowables = _build_report_header(company_name, "Facebook Lead-to-Order Report", logo_bytes)
+    flowables.append(Paragraph(f"<b>Range:</b> {_format_range_label(data)}", normal))
+    flowables.append(Paragraph("Condensed printable summary for marketing review and team handover.", muted))
+    flowables.append(Spacer(1, 12))
+
+    summary = data.get("summary", {}) or {}
+    kpi_cards = [
+        ("Facebook leads", summary.get("total_facebook_leads", 0), FACEBOOK_REPORT_COLORS[0], None),
+        ("Converted leads", summary.get("converted_leads", 0), FACEBOOK_REPORT_COLORS[1], f"{summary.get('total_orders', 0)} linked orders"),
+        ("Conversion rate", f"{summary.get('conversion_rate', 0):.1f}%", FACEBOOK_REPORT_COLORS[2], "Lead to order"),
+        ("Order revenue", format_currency(summary.get("total_order_revenue", 0)), FACEBOOK_REPORT_COLORS[3], None),
+        ("Average order", format_currency(summary.get("average_order_value", 0)), FACEBOOK_REPORT_COLORS[4], None),
+        ("Avg days", f"{summary.get('average_days_to_convert', 0):.1f} days", FACEBOOK_REPORT_COLORS[5], "Converted leads"),
+    ]
+
+    def build_kpi_card(title: str, value: Any, accent: colors.Color, note: Optional[str]) -> Table:
+        title_style = ParagraphStyle(
+            name=f"KpiTitle{title}",
+            parent=normal,
+            fontSize=8,
+            textColor=colors.HexColor("#475569"),
+            uppercase=True,
+        )
+        value_style = ParagraphStyle(
+            name=f"KpiValue{title}",
+            parent=normal,
+            fontSize=15,
+            textColor=colors.HexColor("#0f172a"),
+            fontName="Helvetica-Bold",
+        )
+        note_style = ParagraphStyle(
+            name=f"KpiNote{title}",
+            parent=normal,
+            fontSize=7.5,
+            textColor=colors.HexColor("#64748b"),
+        )
+        rows = [
+            [Paragraph(title, title_style)],
+            [Paragraph(str(value), value_style)],
+        ]
+        if note:
+            rows.append([Paragraph(note, note_style)])
+        card = Table(rows, colWidths=[58 * mm])
+        card.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), colors.white),
+            ("LINEBEFORE", (0, 0), (0, -1), 4, accent),
+            ("BOX", (0, 0), (-1, -1), 0.75, colors.HexColor("#dbe4f0")),
+            ("LEFTPADDING", (0, 0), (-1, -1), 8),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+            ("TOPPADDING", (0, 0), (-1, -1), 7),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+        ]))
+        return card
+
+    kpi_rows = []
+    for start_idx in range(0, len(kpi_cards), 3):
+        slice_cards = kpi_cards[start_idx:start_idx + 3]
+        built = [build_kpi_card(*card) for card in slice_cards]
+        while len(built) < 3:
+            built.append("")
+        kpi_rows.append(built)
+    kpi_table = Table(kpi_rows, colWidths=[60 * mm, 60 * mm, 60 * mm], hAlign="LEFT")
+    kpi_table.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    flowables.append(kpi_table)
+    flowables.append(Spacer(1, 10))
+
+    advert_breakdown = data.get("advert_breakdown", []) or []
+    product_breakdown = data.get("product_type_breakdown", []) or []
+    rows = data.get("rows", []) or []
+
+    if not rows:
+        empty_box = Table(
+            [[Paragraph("No Facebook leads were found for the selected range.", normal)]],
+            colWidths=[175 * mm],
+        )
+        empty_box.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f8fafc")),
+            ("BOX", (0, 0), (-1, -1), 0.75, colors.HexColor("#cbd5e1")),
+            ("LEFTPADDING", (0, 0), (-1, -1), 12),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 12),
+            ("TOPPADDING", (0, 0), (-1, -1), 12),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 12),
+        ]))
+        flowables.append(empty_box)
+        doc.build(flowables)
+        buffer.seek(0)
+        return buffer
+
+    def build_breakdown_table(title: str, items: List[Dict[str, Any]], accent_color: colors.Color) -> None:
+        flowables.append(Paragraph(title, section_heading))
+        chart_data = [
+            (item.get("name", "")[:18], float(item.get("total_revenue", 0) or 0))
+            for item in items[:6]
+            if float(item.get("total_revenue", 0) or 0) > 0
+        ]
+        if chart_data:
+            flowables.append(_create_colorful_horizontal_bar_chart(chart_data, f"{title} by revenue", width=460, height=180))
+            flowables.append(Spacer(1, 10))
+
+        table_data = [["Name", "Leads", "Conv %", "Revenue", "Avg order", "Avg days"]]
+        for item in items[:8]:
+            table_data.append([
+                item.get("name", ""),
+                str(item.get("leads_count", 0)),
+                f"{item.get('conversion_rate', 0):.1f}%",
+                format_currency(item.get("total_revenue", 0)),
+                format_currency(item.get("average_order_value", 0)),
+                f"{item.get('average_days_to_convert', 0):.1f}",
+            ])
+        table = Table(table_data, colWidths=[58 * mm, 18 * mm, 20 * mm, 28 * mm, 28 * mm, 20 * mm], repeatRows=1)
+        table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), accent_color),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, 0), 9),
+            ("FONTSIZE", (0, 1), (-1, -1), 8),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#d1d5db")),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f8fafc")]),
+            ("ALIGN", (1, 1), (-1, -1), "CENTER"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 6),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+            ("TOPPADDING", (0, 0), (-1, -1), 6),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ]))
+        flowables.append(table)
+        flowables.append(Spacer(1, 14))
+
+    build_breakdown_table("Advert profile summary", advert_breakdown, FACEBOOK_REPORT_COLORS[0])
+    build_breakdown_table("Product type summary", product_breakdown, FACEBOOK_REPORT_COLORS[4])
+
+    flowables.append(Paragraph("Exceptions and recent conversions", section_heading))
+    exceptions = Table([
+        ["Unknown advert tags", str(summary.get("unknown_advert_profile_leads", 0))],
+        ["Won without order", str(summary.get("won_without_order_leads", 0))],
+    ], colWidths=[80 * mm, 24 * mm])
+    exceptions.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#fff7ed")),
+        ("TEXTCOLOR", (0, 0), (-1, -1), colors.HexColor("#9a3412")),
+        ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"),
+        ("BOX", (0, 0), (-1, -1), 0.75, colors.HexColor("#fdba74")),
+        ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#fed7aa")),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+        ("TOPPADDING", (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+    ]))
+    flowables.append(exceptions)
+    flowables.append(Spacer(1, 10))
+
+    converted_rows = [row for row in rows if row.get("converted")]
+    converted_rows.sort(
+        key=lambda row: (
+            _coerce_datetime(row.get("order_created_at")) or datetime.min,
+            float(row.get("order_amount", 0) or 0),
+        ),
+        reverse=True,
+    )
+
+    recent_table_data = [["Lead", "Advert", "Order", "Revenue", "Days"]]
+    for row in converted_rows[:8]:
+        recent_table_data.append([
+            row.get("lead_name", ""),
+            row.get("advert_profile_name", ""),
+            row.get("order_number", "") or f"{row.get('order_count', 0)} orders",
+            format_currency(row.get("order_amount", 0)),
+            f"{row.get('days_to_convert', 0):.1f}" if row.get("days_to_convert") is not None else "—",
+        ])
+    recent_table = Table(recent_table_data, colWidths=[38 * mm, 50 * mm, 30 * mm, 28 * mm, 16 * mm], repeatRows=1)
+    recent_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), FACEBOOK_REPORT_COLORS[3]),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, 0), 9),
+        ("FONTSIZE", (0, 1), (-1, -1), 8),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#d1d5db")),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f8fafc")]),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("ALIGN", (2, 1), (-1, -1), "CENTER"),
+    ]))
+    flowables.append(recent_table)
 
     doc.build(flowables)
     buffer.seek(0)

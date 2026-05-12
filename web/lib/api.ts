@@ -1849,6 +1849,23 @@ export const getFacebookLeadConversionReport = async (filter?: DateRangeQueryPar
   return response.data;
 };
 
+export const downloadFacebookLeadConversionReportPdf = async (filter?: DateRangeQueryParams) => {
+  const params = buildDateRangeParams(filter);
+  const response = await api.get('/api/reports/facebook-lead-conversion/pdf', {
+    responseType: 'blob',
+    params,
+  });
+  const blob = new Blob([response.data], { type: 'application/pdf' });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', `Facebook_Lead_To_Order_Report_${new Date().toISOString().slice(0, 10)}.pdf`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
+};
+
 export const downloadFacebookLeadConversionReportCsv = async (filter?: DateRangeQueryParams) => {
   const params = buildDateRangeParams(filter);
   const response = await api.get('/api/reports/facebook-lead-conversion.csv', {

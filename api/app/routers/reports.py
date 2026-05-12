@@ -28,6 +28,7 @@ from app.schemas import (
 from app.report_pdf_service import (
     generate_pipeline_value_pdf,
     generate_source_performance_pdf,
+    generate_facebook_lead_conversion_pdf,
     generate_closer_performance_pdf,
     generate_quote_engagement_pdf,
     generate_weekly_summary_pdf,
@@ -560,6 +561,29 @@ async def download_facebook_lead_conversion_report_csv(
     return Response(
         content=output.getvalue(),
         media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/facebook-lead-conversion/pdf")
+async def download_facebook_lead_conversion_report_pdf(
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_user),
+    period: Optional[str] = Query(None),
+    start_date: Optional[str] = Query(None, description="Custom range start date (YYYY-MM-DD)."),
+    end_date: Optional[str] = Query(None, description="Custom range end date (YYYY-MM-DD)."),
+):
+    """Download Facebook lead-to-order conversion report as PDF."""
+    resolved_range = resolve_date_range(period=period, start_date=start_date, end_date=end_date, default_period="all")
+    report = _build_facebook_lead_conversion_report(session, resolved_range)
+    data = report.model_dump()
+    company_name = _get_company_name(session)
+    buffer = generate_facebook_lead_conversion_pdf(data, company_name)
+    pdf_content = buffer.read()
+    filename = f"Facebook_Lead_To_Order_Report_{datetime.utcnow().strftime('%Y-%m-%d')}.pdf"
+    return Response(
+        content=pdf_content,
+        media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
