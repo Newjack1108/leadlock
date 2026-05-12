@@ -23,7 +23,9 @@ from app.models import (
     Lead,
     MessengerDirection,
     MessengerMessage,
+    Order,
     Quote,
+    QuoteStatus,
     ReminderPriority,
     SmsDirection,
     SmsMessage,
@@ -404,6 +406,28 @@ def _blend_final_priority(base_priority_score: Decimal, likelihood_score: Decima
     return max(Decimal("1"), min(Decimal("100"), blended))
 
 
+def _ordered_customer_and_lead_ids(session: Session) -> tuple[set[int], set[int]]:
+    ordered_customer_ids = {
+        customer_id
+        for customer_id in session.exec(
+            select(Order.customer_id).where(Order.customer_id.is_not(None))
+        ).all()
+        if customer_id is not None
+    }
+    accepted_rows = session.exec(
+        select(Quote.customer_id, Quote.lead_id).where(
+            (Quote.accepted_at.is_not(None)) | (Quote.status == QuoteStatus.ACCEPTED)
+        )
+    ).all()
+    ordered_lead_ids: set[int] = set()
+    for customer_id, lead_id in accepted_rows:
+        if customer_id is not None:
+            ordered_customer_ids.add(customer_id)
+        if lead_id is not None:
+            ordered_lead_ids.add(lead_id)
+    return ordered_customer_ids, ordered_lead_ids
+
+
 def generate_weekly_plan(
     session: Session,
     *,
@@ -423,9 +447,12 @@ def generate_weekly_plan(
 
     plan_items: List[WeeklyPlanItem] = []
     seen_keys: set[tuple[str, int]] = set()
+    ordered_customer_ids, ordered_lead_ids = _ordered_customer_and_lead_ids(session)
 
     for lead, rule, days_stale in detect_stale_leads(session):
         if not lead.id:
+            continue
+        if (lead.customer_id is not None and lead.customer_id in ordered_customer_ids) or lead.id in ordered_lead_ids:
             continue
         key = ("lead", lead.id)
         if key in seen_keys:
@@ -493,6 +520,10 @@ def generate_weekly_plan(
     quote_by_id = {}
     for quote, rule, days_stale in detect_stale_quotes(session):
         if not quote.id:
+            continue
+        if (quote.customer_id is not None and quote.customer_id in ordered_customer_ids) or (
+            quote.lead_id is not None and quote.lead_id in ordered_lead_ids
+        ):
             continue
         quote_by_id[quote.id] = quote
         key = ("quote", quote.id)
@@ -565,6 +596,10 @@ def generate_weekly_plan(
 
     for opp, reason, days_overdue in detect_stale_opportunities(session):
         if not opp.id:
+            continue
+        if (opp.customer_id is not None and opp.customer_id in ordered_customer_ids) or (
+            opp.lead_id is not None and opp.lead_id in ordered_lead_ids
+        ):
             continue
         key = ("opp", opp.id)
         if key in seen_keys:
