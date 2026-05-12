@@ -3,9 +3,37 @@ from sqlmodel import Session, select
 from app.database import get_session
 from app.models import User, UserRole
 from app.auth import get_current_user, require_role, get_password_hash
-from app.schemas import UserCreate, UserUpdate, UserListResponse, AssignableUserResponse
+from app.schemas import (
+    UserCreate,
+    UserUpdate,
+    UserListResponse,
+    AssignableUserResponse,
+    SystemAttributionBackfillRequest,
+    SystemAttributionBackfillResponse,
+)
+from app.system_attribution_service import backfill_system_attribution
+from app.system_user_service import (
+    get_system_user_id,
+    has_reserved_system_name,
+    is_system_user,
+    is_system_user_email,
+    system_user_email,
+)
 
 router = APIRouter(prefix="/api/users", tags=["users"])
+
+
+def _user_to_response(user: User) -> UserListResponse:
+    return UserListResponse(
+        id=user.id,
+        email=user.email,
+        full_name=user.full_name,
+        role=user.role,
+        dealer_id=user.dealer_id,
+        dealer_commission_pct=user.dealer_commission_pct,
+        is_active=user.is_active,
+        created_at=user.created_at,
+    )
 
 
 def _validate_dealer_user_payload(data: UserCreate | UserUpdate) -> None:
@@ -19,24 +47,38 @@ def _validate_dealer_user_payload(data: UserCreate | UserUpdate) -> None:
             raise HTTPException(status_code=400, detail="dealer_commission_pct must be 10 or 15")
 
 
+def _validate_not_reserved_system_identity(data: UserCreate | UserUpdate) -> None:
+    email = getattr(data, "email", None)
+    if is_system_user_email(email):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"{system_user_email()} is reserved for the internal System account",
+        )
+    full_name = getattr(data, "full_name", None)
+    if has_reserved_system_name(full_name):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The name 'System' is reserved for the internal System account",
+        )
+
+
+def _ensure_user_is_manageable(user: User) -> None:
+    if is_system_user(user):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The internal System account is managed automatically and cannot be changed here",
+        )
+
+
 @router.get("", response_model=list[UserListResponse])
 async def list_users(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_role([UserRole.DIRECTOR])),
 ):
     """List all users. DIRECTOR only."""
-    statement = select(User)
+    statement = select(User).where(User.email != system_user_email())
     users = session.exec(statement).all()
-    return [UserListResponse(
-        id=u.id,
-        email=u.email,
-        full_name=u.full_name,
-        role=u.role,
-        dealer_id=u.dealer_id,
-        dealer_commission_pct=u.dealer_commission_pct,
-        is_active=u.is_active,
-        created_at=u.created_at,
-    ) for u in users]
+    return [_user_to_response(u) for u in users]
 
 
 @router.get("/assignable", response_model=list[AssignableUserResponse])
@@ -60,6 +102,7 @@ async def create_user(
     current_user: User = Depends(require_role([UserRole.DIRECTOR])),
 ):
     """Create a new user. DIRECTOR only."""
+    _validate_not_reserved_system_identity(data)
     existing = session.exec(select(User).where(User.email == data.email)).first()
     if existing:
         raise HTTPException(
@@ -78,15 +121,47 @@ async def create_user(
     session.add(user)
     session.commit()
     session.refresh(user)
-    return UserListResponse(
-        id=user.id,
-        email=user.email,
-        full_name=user.full_name,
-        role=user.role,
-        dealer_id=user.dealer_id,
-        dealer_commission_pct=user.dealer_commission_pct,
-        is_active=user.is_active,
-        created_at=user.created_at,
+    return _user_to_response(user)
+
+
+@router.post("/system-attribution/backfill", response_model=SystemAttributionBackfillResponse)
+async def backfill_system_user_attribution(
+    payload: SystemAttributionBackfillRequest,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_role([UserRole.DIRECTOR])),
+):
+    """Reassign clearly automated historical rows from a human user to the internal System account."""
+    del current_user  # role guard only
+    source_user: User | None
+    if payload.user_id is not None:
+        source_user = session.get(User, payload.user_id)
+    else:
+        source_user = session.exec(select(User).where(User.email == payload.email)).first()
+    if not source_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    _ensure_user_is_manageable(source_user)
+
+    try:
+        result = backfill_system_attribution(
+            session,
+            source_user=source_user,
+            system_user_id=get_system_user_id(session),
+            dry_run=payload.dry_run,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    return SystemAttributionBackfillResponse(
+        source_user_id=result.source_user_id,
+        source_email=result.source_email,
+        source_full_name=result.source_full_name,
+        system_user_id=result.system_user_id,
+        dry_run=result.dry_run,
+        activities_updated=result.activities_updated,
+        emails_updated=result.emails_updated,
+        sms_messages_updated=result.sms_messages_updated,
+        status_history_updated=result.status_history_updated,
+        total_updated=result.total_updated,
     )
 
 
@@ -100,16 +175,8 @@ async def get_user(
     user = session.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    return UserListResponse(
-        id=user.id,
-        email=user.email,
-        full_name=user.full_name,
-        role=user.role,
-        dealer_id=user.dealer_id,
-        dealer_commission_pct=user.dealer_commission_pct,
-        is_active=user.is_active,
-        created_at=user.created_at,
-    )
+    _ensure_user_is_manageable(user)
+    return _user_to_response(user)
 
 
 @router.put("/{user_id}", response_model=UserListResponse)
@@ -123,6 +190,8 @@ async def update_user(
     user = session.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    _ensure_user_is_manageable(user)
+    _validate_not_reserved_system_identity(data)
     _validate_dealer_user_payload(data)
     update_data = data.dict(exclude_unset=True)
     if "password" in update_data:
@@ -132,16 +201,7 @@ async def update_user(
     session.add(user)
     session.commit()
     session.refresh(user)
-    return UserListResponse(
-        id=user.id,
-        email=user.email,
-        full_name=user.full_name,
-        role=user.role,
-        dealer_id=user.dealer_id,
-        dealer_commission_pct=user.dealer_commission_pct,
-        is_active=user.is_active,
-        created_at=user.created_at,
-    )
+    return _user_to_response(user)
 
 
 @router.delete("/{user_id}")
@@ -154,6 +214,7 @@ async def deactivate_user(
     user = session.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    _ensure_user_is_manageable(user)
     if user.id == current_user.id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

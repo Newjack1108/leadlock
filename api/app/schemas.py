@@ -60,6 +60,31 @@ class UserUpdate(BaseModel):
     dealer_commission_pct: Optional[int] = None
 
 
+class SystemAttributionBackfillRequest(BaseModel):
+    user_id: Optional[int] = None
+    email: Optional[EmailStr] = None
+    dry_run: bool = True
+
+    @model_validator(mode="after")
+    def validate_source_selector(self):
+        if bool(self.user_id) == bool(self.email):
+            raise ValueError("Provide exactly one of user_id or email")
+        return self
+
+
+class SystemAttributionBackfillResponse(BaseModel):
+    source_user_id: int
+    source_email: str
+    source_full_name: str
+    system_user_id: int
+    dry_run: bool
+    activities_updated: int
+    emails_updated: int
+    sms_messages_updated: int
+    status_history_updated: int
+    total_updated: int
+
+
 class UserListResponse(BaseModel):
     id: int
     email: str
