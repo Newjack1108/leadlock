@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -16,13 +16,15 @@ import api, {
   getUnreadMessenger,
   getLeadLocations,
   getDashboardCommunicationTotals,
+  getFacebookLeadConversionReport,
   downloadPipelineValueReportPdf,
   downloadSourcePerformanceReportPdf,
+  downloadFacebookLeadConversionReportCsv,
   downloadCloserPerformanceReportPdf,
   downloadQuoteEngagementReportPdf,
   downloadWeeklySummaryReportPdf,
 } from '@/lib/api';
-import { DashboardStats, StaleSummary, CompanySettings, UnreadSmsSummary, UnreadMessengerSummary, LeadLocationItem, DiscountTemplate, DashboardCommunicationTotals } from '@/lib/types';
+import { DashboardStats, StaleSummary, CompanySettings, UnreadSmsSummary, UnreadMessengerSummary, LeadLocationItem, DiscountTemplate, DashboardCommunicationTotals, FacebookLeadConversionReport, FacebookLeadConversionRow } from '@/lib/types';
 import { getInstallationLeadTimeRows, hasAnyInstallationLeadTime } from '@/lib/companyLeadTimeDisplay';
 import { toast } from 'sonner';
 import { TrendingUp, Users, CheckCircle2, Trophy, Bell, ArrowRight, Clock, MessageSquare, FileDown, BarChart3, Target, MessageCircle, Calendar, DoorClosed, LayoutDashboard } from 'lucide-react';
@@ -33,6 +35,43 @@ const LeadMap = dynamic(() => import('@/components/LeadMap'), { ssr: false });
 
 type DatePeriod = 'all' | 'week' | 'month' | 'quarter' | 'year';
 
+function formatCurrency(amount?: number | null, currency: string = 'GBP'): string {
+  return new Intl.NumberFormat('en-GB', {
+    style: 'currency',
+    currency,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount ?? 0);
+}
+
+function formatShortDate(value?: string | null): string {
+  if (!value) return '—';
+  return new Date(value).toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+function formatDays(value?: number | null): string {
+  if (value === null || value === undefined) return '—';
+  return `${value.toFixed(1)} days`;
+}
+
+function getConversionRowStatus(row: FacebookLeadConversionRow): string {
+  if (row.converted) return 'Ordered';
+  if (row.won_without_order) return 'Won without order';
+  return 'Lead only';
+}
+
+function getOrderReference(row: FacebookLeadConversionRow): string {
+  if (!row.order_number) {
+    return row.order_count > 0 ? `${row.order_count} orders` : '—';
+  }
+  if (row.order_count <= 1) return row.order_number;
+  return `${row.order_number} +${row.order_count - 1}`;
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -42,17 +81,14 @@ export default function DashboardPage() {
   const [unreadMessenger, setUnreadMessenger] = useState<UnreadMessengerSummary | null>(null);
   const [leadLocations, setLeadLocations] = useState<LeadLocationItem[]>([]);
   const [communicationTotals, setCommunicationTotals] = useState<DashboardCommunicationTotals | null>(null);
+  const [facebookLeadReport, setFacebookLeadReport] = useState<FacebookLeadConversionReport | null>(null);
   const [activeDiscounts, setActiveDiscounts] = useState<DiscountTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [datePeriod, setDatePeriod] = useState<DatePeriod>('week');
   const [userRole, setUserRole] = useState<string | null>(null);
   const periodLabel = datePeriod === 'all' ? 'All Time' : `This ${datePeriod.charAt(0).toUpperCase() + datePeriod.slice(1)}`;
 
-  useEffect(() => {
-    fetchDashboard();
-  }, [datePeriod]);
-
-  const fetchDashboard = async () => {
+  const fetchDashboard = useCallback(async () => {
     try {
       const me = await api.get('/api/auth/me');
       const role = me.data?.role as string | undefined;
@@ -62,7 +98,7 @@ export default function DashboardPage() {
         return;
       }
 
-      const [statsRes, staleRes, companyRes, unreadSmsRes, unreadMessengerRes, locationsRes, discountsRes, communicationRes] = await Promise.all([
+      const [statsRes, staleRes, companyRes, unreadSmsRes, unreadMessengerRes, locationsRes, discountsRes, communicationRes, facebookReportRes] = await Promise.all([
         api.get('/api/dashboard/stats', { params: datePeriod === 'all' ? {} : { period: datePeriod } }),
         getStaleSummary().catch(() => null), // Don't fail if reminders not available
         getCompanySettings().catch(() => null), // Don't fail if settings not set up yet
@@ -71,6 +107,7 @@ export default function DashboardPage() {
         getLeadLocations(datePeriod === 'all' ? undefined : datePeriod).catch(() => []),
         getDiscountTemplates(true).catch(() => []),
         getDashboardCommunicationTotals(datePeriod).catch(() => null),
+        getFacebookLeadConversionReport(datePeriod === 'all' ? undefined : datePeriod).catch(() => null),
       ]);
       setStats(statsRes.data);
       setStaleSummary(staleRes);
@@ -80,8 +117,12 @@ export default function DashboardPage() {
       setLeadLocations(Array.isArray(locationsRes) ? locationsRes : []);
       setActiveDiscounts(Array.isArray(discountsRes) ? discountsRes : []);
       setCommunicationTotals(communicationRes);
-    } catch (error: any) {
-      if (error.response?.status === 401) {
+      setFacebookLeadReport(facebookReportRes);
+    } catch (error: unknown) {
+      const status = typeof error === 'object' && error !== null && 'response' in error
+        ? (error as { response?: { status?: number } }).response?.status
+        : undefined;
+      if (status === 401) {
         router.push('/login');
       } else {
         toast.error('Failed to load dashboard');
@@ -89,7 +130,11 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [datePeriod, router]);
+
+  useEffect(() => {
+    fetchDashboard();
+  }, [fetchDashboard]);
 
   if (loading) {
     return (
@@ -504,6 +549,223 @@ export default function DashboardPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Facebook Lead-to-Order */}
+        {facebookLeadReport && (
+          <Card className="mb-8">
+            <CardHeader>
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Target className="h-5 w-5" />
+                    Facebook Lead-to-Order
+                  </CardTitle>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {periodLabel} Facebook lead performance, conversion, revenue, and tagged advert breakdown.
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => downloadFacebookLeadConversionReportCsv(datePeriod === 'all' ? undefined : datePeriod)}
+                >
+                  <FileDown className="h-4 w-4 mr-1" />
+                  Download CSV
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {facebookLeadReport.rows.length === 0 ? (
+                <div className="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
+                  No Facebook leads found for this period.
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    <div className="rounded-lg border p-4">
+                      <p className="text-sm text-muted-foreground">Facebook leads</p>
+                      <p className="mt-1 text-2xl font-semibold">{facebookLeadReport.summary.total_facebook_leads}</p>
+                    </div>
+                    <div className="rounded-lg border p-4">
+                      <p className="text-sm text-muted-foreground">Converted leads</p>
+                      <p className="mt-1 text-2xl font-semibold">{facebookLeadReport.summary.converted_leads}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {facebookLeadReport.summary.total_orders} linked orders
+                      </p>
+                    </div>
+                    <div className="rounded-lg border p-4">
+                      <p className="text-sm text-muted-foreground">Conversion rate</p>
+                      <p className="mt-1 text-2xl font-semibold">{facebookLeadReport.summary.conversion_rate}%</p>
+                      <p className="text-xs text-muted-foreground">
+                        Lead to order
+                      </p>
+                    </div>
+                    <div className="rounded-lg border p-4">
+                      <p className="text-sm text-muted-foreground">Order revenue</p>
+                      <p className="mt-1 text-2xl font-semibold">
+                        {formatCurrency(facebookLeadReport.summary.total_order_revenue)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Avg order {formatCurrency(facebookLeadReport.summary.average_order_value)}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border p-4">
+                      <p className="text-sm text-muted-foreground">Avg days to convert</p>
+                      <p className="mt-1 text-2xl font-semibold">
+                        {formatDays(facebookLeadReport.summary.average_days_to_convert)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Converted leads only
+                      </p>
+                    </div>
+                    <div className="rounded-lg border p-4">
+                      <p className="text-sm text-muted-foreground">Unknown advert tags</p>
+                      <p className="mt-1 text-2xl font-semibold">{facebookLeadReport.summary.unknown_advert_profile_leads}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Need manual advert tagging
+                      </p>
+                    </div>
+                    <div className="rounded-lg border p-4">
+                      <p className="text-sm text-muted-foreground">Won without order</p>
+                      <p className="mt-1 text-2xl font-semibold">{facebookLeadReport.summary.won_without_order_leads}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Historical edge case
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                    <div className="rounded-lg border">
+                      <div className="border-b px-4 py-3">
+                        <h3 className="font-medium">By Advert Profile</h3>
+                        <p className="text-sm text-muted-foreground">Conversion and revenue by tagged Facebook advert.</p>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b bg-muted/40">
+                              <th className="p-3 text-left font-medium">Advert</th>
+                              <th className="p-3 text-left font-medium">Leads</th>
+                              <th className="p-3 text-left font-medium">Conv %</th>
+                              <th className="p-3 text-left font-medium">Revenue</th>
+                              <th className="p-3 text-left font-medium">Avg days</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {facebookLeadReport.advert_breakdown.map((item) => (
+                              <tr key={item.name} className="border-b last:border-0">
+                                <td className="p-3 font-medium">{item.name}</td>
+                                <td className="p-3 text-muted-foreground">
+                                  {item.leads_count}
+                                  <span className="ml-1 text-xs">({item.converted_leads} converted)</span>
+                                </td>
+                                <td className="p-3">{item.conversion_rate}%</td>
+                                <td className="p-3">{formatCurrency(item.total_revenue)}</td>
+                                <td className="p-3">{formatDays(item.average_days_to_convert)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    <div className="rounded-lg border">
+                      <div className="border-b px-4 py-3">
+                        <h3 className="font-medium">By Product Type</h3>
+                        <p className="text-sm text-muted-foreground">See which product interest converts fastest and best.</p>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b bg-muted/40">
+                              <th className="p-3 text-left font-medium">Product type</th>
+                              <th className="p-3 text-left font-medium">Leads</th>
+                              <th className="p-3 text-left font-medium">Conv %</th>
+                              <th className="p-3 text-left font-medium">Revenue</th>
+                              <th className="p-3 text-left font-medium">Avg days</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {facebookLeadReport.product_type_breakdown.map((item) => (
+                              <tr key={item.name} className="border-b last:border-0">
+                                <td className="p-3 font-medium">{item.name}</td>
+                                <td className="p-3 text-muted-foreground">
+                                  {item.leads_count}
+                                  <span className="ml-1 text-xs">({item.converted_leads} converted)</span>
+                                </td>
+                                <td className="p-3">{item.conversion_rate}%</td>
+                                <td className="p-3">{formatCurrency(item.total_revenue)}</td>
+                                <td className="p-3">{formatDays(item.average_days_to_convert)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg border">
+                    <div className="border-b px-4 py-3">
+                      <h3 className="font-medium">Lead Details</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Lead-level breakdown showing tagged advert, order outcome, and conversion timing.
+                      </p>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b bg-muted/40">
+                            <th className="p-3 text-left font-medium">Lead date</th>
+                            <th className="p-3 text-left font-medium">Lead</th>
+                            <th className="p-3 text-left font-medium">Advert</th>
+                            <th className="p-3 text-left font-medium">Product type</th>
+                            <th className="p-3 text-left font-medium">Quote</th>
+                            <th className="p-3 text-left font-medium">Order</th>
+                            <th className="p-3 text-left font-medium">Order amount</th>
+                            <th className="p-3 text-left font-medium">Days</th>
+                            <th className="p-3 text-left font-medium">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {facebookLeadReport.rows.map((row) => (
+                            <tr key={row.lead_id} className="border-b last:border-0 align-top">
+                              <td className="p-3 text-muted-foreground">{formatShortDate(row.lead_created_at)}</td>
+                              <td className="p-3">
+                                <div className="font-medium">{row.lead_name}</div>
+                                <div className="text-xs text-muted-foreground">
+                                  {[row.email, row.phone].filter(Boolean).join(' • ') || row.lead_status}
+                                </div>
+                              </td>
+                              <td className="p-3">{row.advert_profile_name}</td>
+                              <td className="p-3">
+                                <div>{row.product_type}</div>
+                                {row.product_interest && (
+                                  <div className="text-xs text-muted-foreground">{row.product_interest}</div>
+                                )}
+                              </td>
+                              <td className="p-3 text-muted-foreground">{row.quote_number || '—'}</td>
+                              <td className="p-3">
+                                <div>{getOrderReference(row)}</div>
+                                {row.order_created_at && (
+                                  <div className="text-xs text-muted-foreground">{formatShortDate(row.order_created_at)}</div>
+                                )}
+                              </td>
+                              <td className="p-3">
+                                {row.order_amount !== null && row.order_amount !== undefined ? formatCurrency(row.order_amount) : '—'}
+                              </td>
+                              <td className="p-3">{formatDays(row.days_to_convert)}</td>
+                              <td className="p-3">{getConversionRowStatus(row)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Leads by Source */}
         {stats.leads_by_source && stats.leads_by_source.length > 0 && (

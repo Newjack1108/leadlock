@@ -1818,6 +1818,29 @@ export const downloadSourcePerformanceReportPdf = async (period?: string) => {
   window.URL.revokeObjectURL(url);
 };
 
+export const getFacebookLeadConversionReport = async (period?: string) => {
+  const params = period ? { period } : {};
+  const response = await api.get('/api/reports/facebook-lead-conversion', { params });
+  return response.data;
+};
+
+export const downloadFacebookLeadConversionReportCsv = async (period?: string) => {
+  const params = period ? { period } : {};
+  const response = await api.get('/api/reports/facebook-lead-conversion.csv', {
+    responseType: 'blob',
+    params,
+  });
+  const blob = new Blob([response.data], { type: 'text/csv' });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', `Facebook_Lead_To_Order_Report_${new Date().toISOString().slice(0, 10)}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
+};
+
 export const getCloserPerformanceReport = async () => {
   const response = await api.get('/api/reports/closer-performance');
   return response.data;

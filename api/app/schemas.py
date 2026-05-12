@@ -781,6 +781,60 @@ class SourcePerformanceReport(BaseModel):
     total_leads: int
 
 
+class FacebookLeadConversionSummary(BaseModel):
+    total_facebook_leads: int
+    converted_leads: int
+    conversion_rate: float
+    total_orders: int
+    total_order_revenue: Decimal
+    average_order_value: Decimal
+    average_days_to_convert: float
+    unknown_advert_profile_leads: int
+    won_without_order_leads: int
+
+
+class FacebookLeadConversionBreakdownItem(BaseModel):
+    name: str
+    leads_count: int
+    converted_leads: int
+    conversion_rate: float
+    total_orders: int
+    total_revenue: Decimal
+    average_order_value: Decimal
+    average_days_to_convert: float
+
+
+class FacebookLeadConversionRow(BaseModel):
+    lead_id: int
+    lead_created_at: datetime
+    lead_name: str
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    lead_status: str
+    lead_source: str
+    advert_profile_name: str
+    product_interest: Optional[str] = None
+    lead_type: str
+    product_type: str
+    quote_number: Optional[str] = None
+    order_number: Optional[str] = None
+    order_created_at: Optional[datetime] = None
+    order_amount: Optional[Decimal] = None
+    days_to_convert: Optional[float] = None
+    converted: bool
+    order_count: int
+    won_without_order: bool
+
+
+class FacebookLeadConversionReport(BaseModel):
+    period: Optional[str] = None
+    generated_at: datetime
+    summary: FacebookLeadConversionSummary
+    advert_breakdown: List[FacebookLeadConversionBreakdownItem] = []
+    product_type_breakdown: List[FacebookLeadConversionBreakdownItem] = []
+    rows: List[FacebookLeadConversionRow] = []
+
+
 class CloserPerformanceItem(BaseModel):
     user_id: int
     full_name: str

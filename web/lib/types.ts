@@ -345,6 +345,60 @@ export interface SourcePerformanceReport {
   total_leads: number;
 }
 
+export interface FacebookLeadConversionSummary {
+  total_facebook_leads: number;
+  converted_leads: number;
+  conversion_rate: number;
+  total_orders: number;
+  total_order_revenue: number;
+  average_order_value: number;
+  average_days_to_convert: number;
+  unknown_advert_profile_leads: number;
+  won_without_order_leads: number;
+}
+
+export interface FacebookLeadConversionBreakdownItem {
+  name: string;
+  leads_count: number;
+  converted_leads: number;
+  conversion_rate: number;
+  total_orders: number;
+  total_revenue: number;
+  average_order_value: number;
+  average_days_to_convert: number;
+}
+
+export interface FacebookLeadConversionRow {
+  lead_id: number;
+  lead_created_at: string;
+  lead_name: string;
+  email?: string | null;
+  phone?: string | null;
+  lead_status: string;
+  lead_source: string;
+  advert_profile_name: string;
+  product_interest?: string | null;
+  lead_type: string;
+  product_type: string;
+  quote_number?: string | null;
+  order_number?: string | null;
+  order_created_at?: string | null;
+  order_amount?: number | null;
+  days_to_convert?: number | null;
+  converted: boolean;
+  order_count: number;
+  won_without_order: boolean;
+}
+
+export interface FacebookLeadConversionReport {
+  period?: string | null;
+  generated_at: string;
+  summary: FacebookLeadConversionSummary;
+  advert_breakdown: FacebookLeadConversionBreakdownItem[];
+  product_type_breakdown: FacebookLeadConversionBreakdownItem[];
+  rows: FacebookLeadConversionRow[];
+}
+
 export interface CloserPerformanceItem {
   user_id: number;
   full_name: string;
