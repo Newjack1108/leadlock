@@ -49,6 +49,11 @@ def _get_company_name(session: Session) -> str:
     return (cs.trading_name or cs.company_name or "LeadLock") if cs else "LeadLock"
 
 
+def _get_company_settings(session: Session) -> Optional[CompanySettings]:
+    stmt = select(CompanySettings).limit(1)
+    return session.exec(stmt).first()
+
+
 def _enum_value(value, default: str = "Unknown") -> str:
     if value is None:
         return default
@@ -378,8 +383,9 @@ async def get_pipeline_value_pdf(
         "total_value": float(report.total_value),
         "total_weighted_value": float(report.total_weighted_value),
     }
-    company_name = _get_company_name(session)
-    buffer = generate_pipeline_value_pdf(data, company_name)
+    company_settings = _get_company_settings(session)
+    company_name = (company_settings.trading_name or company_settings.company_name or "LeadLock") if company_settings else "LeadLock"
+    buffer = generate_pipeline_value_pdf(data, company_name, company_settings=company_settings)
     pdf_content = buffer.read()
     fn = f"Pipeline_Value_Report_{datetime.utcnow().strftime('%Y-%m-%d')}.pdf"
     return Response(
@@ -476,8 +482,9 @@ async def get_source_performance_pdf(
         "sources": [s.model_dump() for s in report.sources],
         "total_leads": report.total_leads,
     }
-    company_name = _get_company_name(session)
-    buffer = generate_source_performance_pdf(data, company_name)
+    company_settings = _get_company_settings(session)
+    company_name = (company_settings.trading_name or company_settings.company_name or "LeadLock") if company_settings else "LeadLock"
+    buffer = generate_source_performance_pdf(data, company_name, company_settings=company_settings)
     pdf_content = buffer.read()
     fn = f"Source_Performance_Report_{datetime.utcnow().strftime('%Y-%m-%d')}.pdf"
     return Response(
@@ -577,8 +584,9 @@ async def download_facebook_lead_conversion_report_pdf(
     resolved_range = resolve_date_range(period=period, start_date=start_date, end_date=end_date, default_period="all")
     report = _build_facebook_lead_conversion_report(session, resolved_range)
     data = report.model_dump()
-    company_name = _get_company_name(session)
-    buffer = generate_facebook_lead_conversion_pdf(data, company_name)
+    company_settings = _get_company_settings(session)
+    company_name = (company_settings.trading_name or company_settings.company_name or "LeadLock") if company_settings else "LeadLock"
+    buffer = generate_facebook_lead_conversion_pdf(data, company_name, company_settings=company_settings)
     pdf_content = buffer.read()
     filename = f"Facebook_Lead_To_Order_Report_{datetime.utcnow().strftime('%Y-%m-%d')}.pdf"
     return Response(
@@ -646,8 +654,9 @@ async def get_closer_performance_pdf(
     }
     for c in data["closers"]:
         c["total_revenue"] = float(c["total_revenue"])
-    company_name = _get_company_name(session)
-    buffer = generate_closer_performance_pdf(data, company_name)
+    company_settings = _get_company_settings(session)
+    company_name = (company_settings.trading_name or company_settings.company_name or "LeadLock") if company_settings else "LeadLock"
+    buffer = generate_closer_performance_pdf(data, company_name, company_settings=company_settings)
     pdf_content = buffer.read()
     fn = f"Closer_Performance_Report_{datetime.utcnow().strftime('%Y-%m-%d')}.pdf"
     return Response(
@@ -733,8 +742,9 @@ async def get_quote_engagement_pdf(
         end_date=end_date,
     )
     data = report.model_dump()
-    company_name = _get_company_name(session)
-    buffer = generate_quote_engagement_pdf(data, company_name)
+    company_settings = _get_company_settings(session)
+    company_name = (company_settings.trading_name or company_settings.company_name or "LeadLock") if company_settings else "LeadLock"
+    buffer = generate_quote_engagement_pdf(data, company_name, company_settings=company_settings)
     pdf_content = buffer.read()
     fn = f"Quote_Engagement_Report_{datetime.utcnow().strftime('%Y-%m-%d')}.pdf"
     return Response(
@@ -801,8 +811,9 @@ async def get_weekly_summary_pdf(
     data = report.model_dump()
     data["start_date"] = report.start_date.isoformat() if report.start_date else ""
     data["end_date"] = report.end_date.isoformat() if report.end_date else ""
-    company_name = _get_company_name(session)
-    buffer = generate_weekly_summary_pdf(data, company_name)
+    company_settings = _get_company_settings(session)
+    company_name = (company_settings.trading_name or company_settings.company_name or "LeadLock") if company_settings else "LeadLock"
+    buffer = generate_weekly_summary_pdf(data, company_name, company_settings=company_settings)
     pdf_content = buffer.read()
     fn = f"Weekly_Pipeline_Summary_{datetime.utcnow().strftime('%Y-%m-%d')}.pdf"
     return Response(

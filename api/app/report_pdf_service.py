@@ -19,6 +19,8 @@ from pathlib import Path
 import os
 import tempfile
 import urllib.request
+from app.models import CompanySettings
+from app.quote_pdf_service import _resolve_logo as _resolve_company_logo
 
 # Green theme colors
 PRIMARY_GREEN = colors.HexColor("#16a34a")  # Green-600
@@ -93,8 +95,14 @@ def _format_range_label(data: Dict[str, Any]) -> str:
     return "All time"
 
 
-def _resolve_logo() -> Tuple[Optional[str], Optional[bytes]]:
-    """Resolve logo from static files or frontend URL."""
+def _resolve_logo(company_settings: Optional[CompanySettings] = None) -> Tuple[Optional[str], Optional[bytes]]:
+    """Resolve logo from company settings when available, otherwise fallback to static files or frontend URL."""
+    if company_settings:
+        try:
+            return _resolve_company_logo(company_settings)
+        except Exception:
+            pass
+
     logo_path: Optional[str] = None
     logo_bytes: Optional[bytes] = None
     JPEG_MAGIC = b"\xff\xd8\xff"
@@ -422,14 +430,18 @@ def _create_pie_chart(data: List[Tuple[str, float]], title: str = "", width: int
     return drawing
 
 
-def generate_pipeline_value_pdf(data: Dict[str, Any], company_name: str = "") -> BytesIO:
+def generate_pipeline_value_pdf(
+    data: Dict[str, Any],
+    company_name: str = "",
+    company_settings: Optional[CompanySettings] = None,
+) -> BytesIO:
     """Generate PDF for Pipeline Value Report with logo and chart."""
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=40, leftMargin=40, topMargin=40, bottomMargin=40)
     styles = getSampleStyleSheet()
     normal = styles["Normal"]
 
-    _, logo_bytes = _resolve_logo()
+    _, logo_bytes = _resolve_logo(company_settings)
     flowables = _build_report_header(company_name, "Pipeline Value Report", logo_bytes)
 
     flowables.append(Paragraph(f"<b>Range:</b> {_format_range_label(data)}", normal))
@@ -485,14 +497,18 @@ def generate_pipeline_value_pdf(data: Dict[str, Any], company_name: str = "") ->
     return buffer
 
 
-def generate_source_performance_pdf(data: Dict[str, Any], company_name: str = "") -> BytesIO:
+def generate_source_performance_pdf(
+    data: Dict[str, Any],
+    company_name: str = "",
+    company_settings: Optional[CompanySettings] = None,
+) -> BytesIO:
     """Generate PDF for Source Performance Report with logo and chart."""
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=40, leftMargin=40, topMargin=40, bottomMargin=40)
     styles = getSampleStyleSheet()
     normal = styles["Normal"]
 
-    _, logo_bytes = _resolve_logo()
+    _, logo_bytes = _resolve_logo(company_settings)
     flowables = _build_report_header(company_name, "Source Performance Report", logo_bytes)
 
     flowables.append(Paragraph(
@@ -532,14 +548,18 @@ def generate_source_performance_pdf(data: Dict[str, Any], company_name: str = ""
     return buffer
 
 
-def generate_closer_performance_pdf(data: Dict[str, Any], company_name: str = "") -> BytesIO:
+def generate_closer_performance_pdf(
+    data: Dict[str, Any],
+    company_name: str = "",
+    company_settings: Optional[CompanySettings] = None,
+) -> BytesIO:
     """Generate PDF for Closer Performance Report with logo and chart."""
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=40, leftMargin=40, topMargin=40, bottomMargin=40)
     styles = getSampleStyleSheet()
     normal = styles["Normal"]
 
-    _, logo_bytes = _resolve_logo()
+    _, logo_bytes = _resolve_logo(company_settings)
     flowables = _build_report_header(company_name, "Closer Performance Report", logo_bytes)
 
     closers = data.get("closers", [])
@@ -574,14 +594,18 @@ def generate_closer_performance_pdf(data: Dict[str, Any], company_name: str = ""
     return buffer
 
 
-def generate_quote_engagement_pdf(data: Dict[str, Any], company_name: str = "") -> BytesIO:
+def generate_quote_engagement_pdf(
+    data: Dict[str, Any],
+    company_name: str = "",
+    company_settings: Optional[CompanySettings] = None,
+) -> BytesIO:
     """Generate PDF for Quote Engagement Report with logo and pie chart."""
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=40, leftMargin=40, topMargin=40, bottomMargin=40)
     styles = getSampleStyleSheet()
     normal = styles["Normal"]
 
-    _, logo_bytes = _resolve_logo()
+    _, logo_bytes = _resolve_logo(company_settings)
     flowables = _build_report_header(company_name, "Quote Engagement Report", logo_bytes)
 
     flowables.append(Paragraph(f"<b>Range:</b> {_format_range_label(data)}", normal))
@@ -640,7 +664,11 @@ def generate_quote_engagement_pdf(data: Dict[str, Any], company_name: str = "") 
     return buffer
 
 
-def generate_facebook_lead_conversion_pdf(data: Dict[str, Any], company_name: str = "") -> BytesIO:
+def generate_facebook_lead_conversion_pdf(
+    data: Dict[str, Any],
+    company_name: str = "",
+    company_settings: Optional[CompanySettings] = None,
+) -> BytesIO:
     """Generate a condensed printable PDF for the Facebook lead-to-order report."""
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=32, leftMargin=32, topMargin=32, bottomMargin=32)
@@ -668,7 +696,7 @@ def generate_facebook_lead_conversion_pdf(data: Dict[str, Any], company_name: st
         splitLongWords=1,
     )
 
-    _, logo_bytes = _resolve_logo()
+    _, logo_bytes = _resolve_logo(company_settings)
     flowables = _build_report_header(company_name, "Facebook Lead-to-Order Report", logo_bytes)
     flowables.append(Paragraph(f"<b>Range:</b> {_format_range_label(data)}", normal))
     flowables.append(Paragraph("Condensed printable summary for marketing review and team handover.", muted))
@@ -866,14 +894,18 @@ def generate_facebook_lead_conversion_pdf(data: Dict[str, Any], company_name: st
     return buffer
 
 
-def generate_weekly_summary_pdf(data: Dict[str, Any], company_name: str = "") -> BytesIO:
+def generate_weekly_summary_pdf(
+    data: Dict[str, Any],
+    company_name: str = "",
+    company_settings: Optional[CompanySettings] = None,
+) -> BytesIO:
     """Generate PDF for Weekly Pipeline Summary Report with logo and chart."""
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=40, leftMargin=40, topMargin=40, bottomMargin=40)
     styles = getSampleStyleSheet()
     normal = styles["Normal"]
 
-    _, logo_bytes = _resolve_logo()
+    _, logo_bytes = _resolve_logo(company_settings)
     flowables = _build_report_header(company_name, "Weekly Pipeline Summary", logo_bytes)
 
     flowables.append(Paragraph(f"<b>Week:</b> {data.get('week_label', '')}", normal))
