@@ -143,6 +143,20 @@ export default function CustomerSmsPage() {
   const hasCustomerPhone = !!customer?.phone?.trim();
 
   const botStatusLabel = isBotStopped ? 'Bot stopped' : isBotPaused ? 'Bot paused' : 'Bot active';
+  const botStatusClassName = isBotStopped
+    ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/30 dark:text-red-300'
+    : isBotPaused
+      ? 'border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-800 dark:bg-orange-950/30 dark:text-orange-300'
+      : 'border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-950/30 dark:text-green-300';
+  const pauseBotButtonClassName = isBotPaused && !isBotStopped
+    ? 'border-orange-600 bg-orange-600 text-white hover:bg-orange-700 hover:text-white dark:border-orange-700 dark:bg-orange-700 dark:hover:bg-orange-600'
+    : '';
+  const stopBotButtonClassName = isBotStopped
+    ? 'border-red-600 bg-red-600 text-white hover:bg-red-700 hover:text-white dark:border-red-700 dark:bg-red-700 dark:hover:bg-red-600'
+    : '';
+  const resumeBotButtonClassName = !isBotPaused && !isBotStopped
+    ? 'border-green-600 bg-green-600 text-white hover:bg-green-700 hover:text-white dark:border-green-700 dark:bg-green-700 dark:hover:bg-green-600'
+    : '';
 
   const handlePauseBot = async () => {
     const minutes = Math.max(1, parseInt(botPauseMinutes || '720', 10) || 720);
@@ -404,11 +418,7 @@ export default function CustomerSmsPage() {
                 <div className="rounded-md border p-3 bg-muted/20 space-y-2">
                   <div className="flex items-center justify-between gap-2">
                     <Label>Customer bot handling</Label>
-                    <Badge
-                      variant={
-                        isBotStopped ? 'destructive' : isBotPaused ? 'secondary' : 'default'
-                      }
-                    >
+                    <Badge variant="outline" className={botStatusClassName}>
                       {botStatusLabel}
                     </Badge>
                   </div>
@@ -436,6 +446,7 @@ export default function CustomerSmsPage() {
                     <Button
                       type="button"
                       variant="outline"
+                      className={pauseBotButtonClassName}
                       onClick={handlePauseBot}
                       disabled={botUpdating || !hasCustomerPhone}
                     >
@@ -444,6 +455,7 @@ export default function CustomerSmsPage() {
                     <Button
                       type="button"
                       variant="outline"
+                      className={stopBotButtonClassName}
                       onClick={handleStopBot}
                       disabled={botUpdating || isBotStopped || !hasCustomerPhone}
                     >
@@ -452,6 +464,7 @@ export default function CustomerSmsPage() {
                     <Button
                       type="button"
                       variant="outline"
+                      className={resumeBotButtonClassName}
                       onClick={handleResumeBot}
                       disabled={botUpdating || !hasCustomerPhone}
                     >
