@@ -659,6 +659,14 @@ def generate_facebook_lead_conversion_pdf(data: Dict[str, Any], company_name: st
         fontSize=9,
         textColor=colors.HexColor("#6b7280"),
     )
+    table_cell = ParagraphStyle(
+        name="FacebookTableCell",
+        parent=normal,
+        fontSize=8,
+        leading=10,
+        textColor=colors.black,
+        splitLongWords=1,
+    )
 
     _, logo_bytes = _resolve_logo()
     flowables = _build_report_header(company_name, "Facebook Lead-to-Order Report", logo_bytes)
@@ -769,7 +777,7 @@ def generate_facebook_lead_conversion_pdf(data: Dict[str, Any], company_name: st
         table_data = [["Name", "Leads", "Conv %", "Revenue", "Avg order", "Avg days"]]
         for item in items[:8]:
             table_data.append([
-                item.get("name", ""),
+                Paragraph(str(item.get("name", "") or "—"), table_cell),
                 str(item.get("leads_count", 0)),
                 f"{item.get('conversion_rate', 0):.1f}%",
                 format_currency(item.get("total_revenue", 0)),
@@ -786,6 +794,7 @@ def generate_facebook_lead_conversion_pdf(data: Dict[str, Any], company_name: st
             ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#d1d5db")),
             ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f8fafc")]),
             ("ALIGN", (1, 1), (-1, -1), "CENTER"),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
             ("LEFTPADDING", (0, 0), (-1, -1), 6),
             ("RIGHTPADDING", (0, 0), (-1, -1), 6),
             ("TOPPADDING", (0, 0), (-1, -1), 6),
@@ -828,9 +837,9 @@ def generate_facebook_lead_conversion_pdf(data: Dict[str, Any], company_name: st
     recent_table_data = [["Lead", "Advert", "Order", "Revenue", "Days"]]
     for row in converted_rows[:8]:
         recent_table_data.append([
-            row.get("lead_name", ""),
-            row.get("advert_profile_name", ""),
-            row.get("order_number", "") or f"{row.get('order_count', 0)} orders",
+            Paragraph(str(row.get("lead_name", "") or "—"), table_cell),
+            Paragraph(str(row.get("advert_profile_name", "") or "—"), table_cell),
+            Paragraph(str(row.get("order_number", "") or f"{row.get('order_count', 0)} orders"), table_cell),
             format_currency(row.get("order_amount", 0)),
             f"{row.get('days_to_convert', 0):.1f}" if row.get("days_to_convert") is not None else "—",
         ])
@@ -843,6 +852,7 @@ def generate_facebook_lead_conversion_pdf(data: Dict[str, Any], company_name: st
         ("FONTSIZE", (0, 1), (-1, -1), 8),
         ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#d1d5db")),
         ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f8fafc")]),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("LEFTPADDING", (0, 0), (-1, -1), 6),
         ("RIGHTPADDING", (0, 0), (-1, -1), 6),
         ("TOPPADDING", (0, 0), (-1, -1), 6),
