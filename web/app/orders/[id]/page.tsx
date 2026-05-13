@@ -377,16 +377,24 @@ export default function OrderDetailPage() {
                   View quote
                 </Link>
               </Button>
-              <Button
-                type="button"
-                variant="outline"
-                disabled={deleteLoading}
-                className="text-destructive border-destructive/40 hover:bg-destructive/10"
-                onClick={handleDeleteOrder}
-              >
-                <Trash2 className="h-4 w-4 mr-2" />
-                {deleteLoading ? 'Removing…' : 'Remove order'}
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button type="button" variant="ghost" size="sm" disabled={deleteLoading}>
+                    More
+                    <ChevronDown className="h-4 w-4 ml-2" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    onClick={handleDeleteOrder}
+                    disabled={deleteLoading}
+                    className="text-destructive focus:text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    {deleteLoading ? 'Removing…' : 'Remove order'}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         </div>

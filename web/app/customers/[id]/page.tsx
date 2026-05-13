@@ -26,12 +26,14 @@ import {
   Clock,
   User,
   Building,
+  ShoppingBag,
   Eye,
   Globe,
   ChevronDown,
   ChevronUp,
   Pencil,
   Trash2,
+  Upload,
   BellOff,
   Bell,
   Info,
@@ -104,6 +106,15 @@ const historyIcons: Record<CustomerHistoryEventType, any> = {
   CUSTOMER_CREATED: Building,
   CUSTOMER_UPDATED: Building,
   OPPORTUNITY_CREATED: FileText,
+  ORDER_CREATED: ShoppingBag,
+  ORDER_REMOVED: Trash2,
+  ORDER_PAYMENT_UPDATED: CheckCircle,
+  ORDER_INSTALLATION_UPDATED: CheckCircle,
+  ORDER_ACCESS_SHEET_SENT: Send,
+  ORDER_ACCESS_SHEET_COMPLETED: CheckCircle,
+  ORDER_SENT_TO_PRODUCTION: Send,
+  ORDER_XERO_PUSHED: Upload,
+  ORDER_INVOICE_ACTION: FileText,
 };
 
 const historyColors: Record<CustomerHistoryEventType, string> = {
@@ -122,6 +133,15 @@ const historyColors: Record<CustomerHistoryEventType, string> = {
   CUSTOMER_CREATED: 'text-green-600',
   CUSTOMER_UPDATED: 'text-yellow-600',
   OPPORTUNITY_CREATED: 'text-blue-600',
+  ORDER_CREATED: 'text-green-600',
+  ORDER_REMOVED: 'text-red-600',
+  ORDER_PAYMENT_UPDATED: 'text-green-600',
+  ORDER_INSTALLATION_UPDATED: 'text-blue-600',
+  ORDER_ACCESS_SHEET_SENT: 'text-blue-600',
+  ORDER_ACCESS_SHEET_COMPLETED: 'text-green-600',
+  ORDER_SENT_TO_PRODUCTION: 'text-purple-600',
+  ORDER_XERO_PUSHED: 'text-blue-600',
+  ORDER_INVOICE_ACTION: 'text-blue-600',
 };
 
 export default function CustomerDetailPage() {
@@ -1131,6 +1151,8 @@ export default function CustomerDetailPage() {
                         const color = historyColors[event.event_type] || 'text-muted-foreground';
                         const quoteNumber =
                           typeof event.metadata?.quote_number === 'string' ? event.metadata.quote_number : null;
+                        const orderNumber =
+                          typeof event.metadata?.order_number === 'string' ? event.metadata.order_number : null;
                         const leadName =
                           typeof event.metadata?.lead_name === 'string' ? event.metadata.lead_name : null;
                         const oldStatus =
@@ -1163,6 +1185,15 @@ export default function CustomerDetailPage() {
                               )}
                               {event.metadata && Object.keys(event.metadata).length > 0 && (
                                 <div className="flex gap-1 overflow-hidden whitespace-nowrap">
+                                  {orderNumber && (
+                                    <Badge
+                                      variant="outline"
+                                      className="text-xs shrink-0 max-w-[180px] truncate"
+                                      title={`Order: ${orderNumber}`}
+                                    >
+                                      Order: {orderNumber}
+                                    </Badge>
+                                  )}
                                   {quoteNumber && (
                                     <Badge
                                       variant="outline"

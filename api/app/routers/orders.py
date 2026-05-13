@@ -20,13 +20,56 @@ from app.models import (
     LeadSource,
 )
 from app.auth import get_current_user
-from app.schemas import OrderResponse, OrderItemResponse, OrderUpdate, AccessSheetSendResponse, AccessSheetResponse
+from app.schemas import (
+    OrderResponse,
+    OrderItemResponse,
+    OrderUpdate,
+    AccessSheetSendResponse,
+    AccessSheetResponse,
+    CustomerHistoryEventType,
+)
 from app.models import User
 from app.invoice_pdf_service import generate_deposit_paid_invoice_pdf, generate_paid_in_full_invoice_pdf
 from app.make_xero_service import push_order_invoice_to_make
 from app.order_delete import delete_order_cascade
+from app.order_audit import record_order_audit_event
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
+
+_PAYMENT_FIELDS = ("deposit_paid", "balance_paid", "paid_in_full")
+_INSTALLATION_FIELDS = ("installation_booked", "installation_completed")
+_ORDER_FIELD_LABELS = {
+    "deposit_paid": "Deposit paid",
+    "balance_paid": "Balance paid",
+    "paid_in_full": "Paid in full",
+    "installation_booked": "Installation booked",
+    "installation_completed": "Installation completed",
+}
+
+
+def _collect_order_flag_changes(order: Order, old_values: dict[str, bool], fields: tuple[str, ...]) -> list[dict]:
+    changes: list[dict] = []
+    for field in fields:
+        old_value = bool(old_values.get(field, False))
+        new_value = bool(getattr(order, field) or False)
+        if old_value == new_value:
+            continue
+        changes.append(
+            {
+                "field": field,
+                "label": _ORDER_FIELD_LABELS[field],
+                "old": old_value,
+                "new": new_value,
+            }
+        )
+    return changes
+
+
+def _describe_order_flag_changes(changes: list[dict]) -> str:
+    parts = []
+    for change in changes:
+        parts.append(f"{change['label']} {'marked' if change['new'] else 'cleared'}")
+    return "; ".join(parts)
 
 
 def generate_invoice_number(session: Session) -> str:
@@ -187,6 +230,15 @@ async def delete_order(
     order = session.exec(select(Order).where(Order.id == order_id)).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+    record_order_audit_event(
+        session,
+        event_type=CustomerHistoryEventType.ORDER_REMOVED.value,
+        title="Order Removed",
+        description=f"Order {order.order_number} was removed",
+        order=order,
+        metadata={"reason": "removed"},
+        created_by_id=current_user.id,
+    )
     delete_order_cascade(session, order_id)
     session.commit()
     return Response(status_code=204)
@@ -203,12 +255,41 @@ async def update_order(
     order = session.exec(select(Order).where(Order.id == order_id)).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+    old_flag_values = {
+        field: bool(getattr(order, field) or False)
+        for field in (*_PAYMENT_FIELDS, *_INSTALLATION_FIELDS)
+    }
     update_dict = order_data.dict(exclude_unset=True)
     for field, value in update_dict.items():
         setattr(order, field, value)
     # Assign invoice_number when first payment is recorded
     if order.invoice_number is None and (order.deposit_paid or order.paid_in_full):
         order.invoice_number = generate_invoice_number(session)
+    payment_changes = _collect_order_flag_changes(order, old_flag_values, _PAYMENT_FIELDS)
+    installation_changes = _collect_order_flag_changes(order, old_flag_values, _INSTALLATION_FIELDS)
+    if payment_changes:
+        record_order_audit_event(
+            session,
+            event_type=CustomerHistoryEventType.ORDER_PAYMENT_UPDATED.value,
+            title="Order Payment Updated",
+            description=f"{_describe_order_flag_changes(payment_changes)} for order {order.order_number}",
+            order=order,
+            metadata={
+                "changes": payment_changes,
+                "invoice_number": order.invoice_number,
+            },
+            created_by_id=current_user.id,
+        )
+    if installation_changes:
+        record_order_audit_event(
+            session,
+            event_type=CustomerHistoryEventType.ORDER_INSTALLATION_UPDATED.value,
+            title="Order Installation Updated",
+            description=f"{_describe_order_flag_changes(installation_changes)} for order {order.order_number}",
+            order=order,
+            metadata={"changes": installation_changes},
+            created_by_id=current_user.id,
+        )
     session.add(order)
     session.commit()
     session.refresh(order)
@@ -248,6 +329,20 @@ async def get_deposit_paid_invoice_pdf(
     safe_name = re.sub(r'\s+', '_', safe_name)
     inv_display = f"{order.invoice_number}-1" if order.invoice_number else order.invoice_number or ""
     filename = f"Invoice_Deposit_{inv_display}_{safe_name}.pdf"
+    record_order_audit_event(
+        session,
+        event_type=CustomerHistoryEventType.ORDER_INVOICE_ACTION.value,
+        title="Deposit Invoice Accessed",
+        description=f"Deposit invoice for order {order.order_number} was generated",
+        order=order,
+        metadata={
+            "action": "deposit_invoice_accessed",
+            "invoice_type": "deposit",
+            "invoice_number": order.invoice_number,
+        },
+        created_by_id=current_user.id,
+    )
+    session.commit()
     return Response(
         content=pdf_content,
         media_type="application/pdf",
@@ -285,6 +380,20 @@ async def get_paid_in_full_invoice_pdf(
     safe_name = re.sub(r'\s+', '_', safe_name)
     inv_display = f"{order.invoice_number}-2" if order.invoice_number else order.invoice_number or ""
     filename = f"Invoice_PaidInFull_{inv_display}_{safe_name}.pdf"
+    record_order_audit_event(
+        session,
+        event_type=CustomerHistoryEventType.ORDER_INVOICE_ACTION.value,
+        title="Paid in Full Invoice Accessed",
+        description=f"Paid in full invoice for order {order.order_number} was generated",
+        order=order,
+        metadata={
+            "action": "paid_in_full_invoice_accessed",
+            "invoice_type": "paid_in_full",
+            "invoice_number": order.invoice_number,
+        },
+        created_by_id=current_user.id,
+    )
+    session.commit()
     return Response(
         content=pdf_content,
         media_type="application/pdf",
@@ -317,6 +426,19 @@ async def push_to_xero(
     result = push_order_invoice_to_make(order, customer, order_items, session)
     if not result.get("success"):
         raise HTTPException(status_code=400, detail=result.get("error", "Failed to push to XERO"))
+    record_order_audit_event(
+        session,
+        event_type=CustomerHistoryEventType.ORDER_XERO_PUSHED.value,
+        title="Order Pushed to XERO",
+        description=f"Order {order.order_number} was pushed to XERO",
+        order=order,
+        metadata={
+            "invoice_number": order.invoice_number,
+            "xero_invoice_id": result.get("xero_invoice_id") or order.xero_invoice_id,
+        },
+        created_by_id=current_user.id,
+    )
+    session.commit()
     return result
 
 
@@ -361,6 +483,16 @@ async def send_access_sheet(
         frontend = "https://leadlock-frontend-production.up.railway.app"
     base = frontend.rstrip("/")
     access_sheet_url = f"{base}/access-sheet/{req.access_token}"
+    record_order_audit_event(
+        session,
+        event_type=CustomerHistoryEventType.ORDER_ACCESS_SHEET_SENT.value,
+        title="Access Sheet Sent",
+        description=f"Access sheet link was prepared for order {order.order_number}",
+        order=order,
+        metadata={"access_sheet_url": access_sheet_url},
+        created_by_id=current_user.id,
+    )
+    session.commit()
 
     return AccessSheetSendResponse(
         access_sheet_url=access_sheet_url,
@@ -480,6 +612,16 @@ async def send_to_production(
             response = await client.post(url, json=payload, headers=headers)
             response.raise_for_status()
             data = response.json() if response.content else {}
+            record_order_audit_event(
+                session,
+                event_type=CustomerHistoryEventType.ORDER_SENT_TO_PRODUCTION.value,
+                title="Order Sent to Production",
+                description=f"Order {order.order_number} was sent to production",
+                order=order,
+                metadata={"production_response": data or None},
+                created_by_id=current_user.id,
+            )
+            session.commit()
             return {"success": True, "message": "Order sent to production", **data}
     except httpx.HTTPStatusError as e:
         detail = "Production app rejected the request"

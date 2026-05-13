@@ -34,8 +34,10 @@ from app.schemas import (
     PublicQuoteDiscountLineResponse,
     AccessSheetContextResponse,
     AccessSheetSubmitRequest,
+    CustomerHistoryEventType,
 )
 from app.constants import VAT_RATE_DECIMAL, DELIVERY_INSTALLATION_CONTACT_NOTE
+from app.order_audit import record_order_audit_event
 from app.quote_pdf_service import aggregate_quote_discount_lines, generate_quote_pdf
 from app.temperature_service import recompute_quote_temperature
 
@@ -376,6 +378,10 @@ def submit_access_sheet(
     if req.completed_at:
         raise HTTPException(status_code=400, detail="Access sheet already submitted")
 
+    order = session.get(Order, req.order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
     # Build answers dict from request (exclude None)
     answers = {}
     for field, value in data.model_dump(exclude_none=True).items():
@@ -386,6 +392,15 @@ def submit_access_sheet(
     req.completed_at = datetime.utcnow()
 
     session.add(req)
+    record_order_audit_event(
+        session,
+        event_type=CustomerHistoryEventType.ORDER_ACCESS_SHEET_COMPLETED.value,
+        title="Access Sheet Completed",
+        description=f"Customer completed the access sheet for order {order.order_number}",
+        order=order,
+        metadata={"completed_by": "customer"},
+        created_at=req.completed_at,
+    )
     session.commit()
 
     return {"message": "Access sheet submitted successfully"}

@@ -48,8 +48,9 @@ from app.schemas import (
     QuoteEmailSendRequest, QuoteEmailSendResponse, QuoteViewLinkResponse,
     QuoteShareLinkRequest, QuoteShareLinkResponse, QuoteSendSmsRequest, QuoteSendSmsResponse,
     OpportunityWonRequest, OpportunityLostRequest, OpportunityCloseRequest,
-    QuoteDiscountResponse
+    QuoteDiscountResponse, CustomerHistoryEventType
 )
+from app.order_audit import record_order_audit_event
 from app.quote_email_service import send_quote_email
 from app.routers.emails import (
     MAX_ATTACHMENT_SIZE,
@@ -718,6 +719,16 @@ def create_order_from_quote(quote: Quote, session: Session, created_by_id: int) 
     ).all():
         cf.order_id = order.id
         session.add(cf)
+    record_order_audit_event(
+        session,
+        event_type=CustomerHistoryEventType.ORDER_CREATED.value,
+        title="Order Created",
+        description=f"Order {order.order_number} was created from accepted quote {quote.quote_number}",
+        order=order,
+        metadata={"quote_number": quote.quote_number},
+        created_by_id=created_by_id,
+        created_at=order.created_at,
+    )
     return order
 
 

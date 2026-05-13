@@ -838,6 +838,20 @@ class Order(SQLModel, table=True):
     access_sheet_requests: List["AccessSheetRequest"] = Relationship(back_populates="order")
 
 
+class OrderAuditEvent(SQLModel, table=True):
+    """Durable customer-facing audit trail for significant order actions."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    customer_id: int = Field(index=True)
+    order_id: Optional[int] = Field(default=None, index=True)
+    event_type: str = Field(index=True)
+    title: str
+    description: Optional[str] = None
+    details: Optional[dict] = Field(default=None, sa_column=Column("metadata", JSON))
+    created_by_id: Optional[int] = Field(default=None, foreign_key="user.id", index=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+
+
 class OrderItem(SQLModel, table=True):
     """Line item on an order; snapshot of quote line at acceptance."""
     id: Optional[int] = Field(default=None, primary_key=True)

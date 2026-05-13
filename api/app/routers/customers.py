@@ -14,6 +14,7 @@ from app.models import (
     MessengerDirection,
     MessengerMessage,
     Order,
+    OrderAuditEvent,
     OrderItem,
     Quote,
     QuoteEmail,
@@ -936,6 +937,29 @@ async def get_customer_history(
                 created_by_id=None,
                 created_by_name=None
             ))
+
+    # 8. Persisted order audit events
+    statement = select(OrderAuditEvent, User).outerjoin(
+        User, OrderAuditEvent.created_by_id == User.id
+    ).where(
+        OrderAuditEvent.customer_id == customer_id
+    ).order_by(OrderAuditEvent.created_at)
+    order_audit_results = session.exec(statement).all()
+
+    for audit_event, user in order_audit_results:
+        try:
+            event_type = CustomerHistoryEventType(audit_event.event_type)
+        except ValueError:
+            continue
+        events.append(CustomerHistoryEvent(
+            event_type=event_type,
+            timestamp=audit_event.created_at,
+            title=audit_event.title,
+            description=audit_event.description,
+            metadata=audit_event.details or {},
+            created_by_id=audit_event.created_by_id,
+            created_by_name=user.full_name if user else None,
+        ))
     
     # Sort all events by timestamp (most recent first)
     events.sort(key=lambda x: x.timestamp, reverse=True)
