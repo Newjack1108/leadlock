@@ -26,7 +26,68 @@ DEFAULT_BUSINESS_HOURS = {
 }
 
 OPT_OUT_KEYWORDS = {"STOP", "UNSUBSCRIBE", "CANCEL", "END", "QUIT", "STOPALL"}
-HANDOVER_HINTS = ("price", "discount", "complaint", "manager", "human", "call me", "urgent")
+BOT_HANDOVER_PREFIX = "[BOT_HANDOVER]"
+BOT_HANDOVER_MESSAGE = (
+    f"{BOT_HANDOVER_PREFIX} Thanks for your message. "
+    "A team member will review this and get back to you on the next working day."
+)
+HANDOVER_HINTS = (
+    "price",
+    "discount",
+    "complaint",
+    "manager",
+    "human",
+    "call me",
+    "ring me",
+    "phone me",
+    "urgent",
+    "go ahead",
+    "proceed",
+    "move forward",
+    "next step",
+)
+DEFER_OR_THINKING_HINTS = (
+    "think about it",
+    "think on it",
+    "i will think",
+    "i'll think",
+    "come back to you",
+    "come back to us",
+    "get back to you",
+    "get back to us",
+    "let you know",
+    "leave it with me",
+    "discuss it",
+    "talk it over",
+    "not sure yet",
+    "still thinking",
+    "will be in touch",
+    "not right now",
+    "not just yet",
+)
+CLOSE_ACK_EXACT = {
+    "thanks",
+    "thank you",
+    "ok",
+    "okay",
+    "perfect",
+    "great",
+    "cheers",
+    "noted",
+    "sounds good",
+    "all good",
+    "all sorted",
+    "all set",
+    "no thanks",
+    "no thank you",
+    "thats all",
+    "that's all",
+    "speak soon",
+    "speak later",
+    "will do",
+}
+CLOSE_ACK_PREFIXES = ("thanks", "thank you", "ok", "okay", "perfect", "great", "cheers")
+RECENT_HANDOVER_WINDOW_HOURS = 72
 WEEKDAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 
 
@@ -80,9 +141,48 @@ def _contains_opt_out(body: str) -> bool:
     return any(k in words for k in OPT_OUT_KEYWORDS)
 
 
+def _normalize_inbound_body(body: str) -> str:
+    text = (body or "").lower().replace("’", "'").strip()
+    text = re.sub(r"[^a-z0-9\s']", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _contains_any_phrase(text: str, phrases: tuple[str, ...]) -> bool:
+    return any(phrase in text for phrase in phrases)
+
+
 def _contains_handover_hint(body: str) -> bool:
-    lower = (body or "").lower()
-    return any(k in lower for k in HANDOVER_HINTS)
+    text = _normalize_inbound_body(body)
+    return _contains_any_phrase(text, HANDOVER_HINTS)
+
+
+def _contains_defer_or_thinking_hint(body: str) -> bool:
+    text = _normalize_inbound_body(body)
+    return _contains_any_phrase(text, DEFER_OR_THINKING_HINTS)
+
+
+def _is_close_ack(body: str) -> bool:
+    if not body or "?" in body:
+        return False
+    if _contains_handover_hint(body) or _contains_defer_or_thinking_hint(body):
+        return False
+    text = _normalize_inbound_body(body)
+    if not text:
+        return False
+    if text in CLOSE_ACK_EXACT:
+        return True
+    words = text.split()
+    return len(words) <= 4 and any(text.startswith(prefix) for prefix in CLOSE_ACK_PREFIXES)
+
+
+def _classify_inbound_intent(body: str) -> str:
+    if _contains_defer_or_thinking_hint(body):
+        return "defer_or_thinking"
+    if _contains_handover_hint(body):
+        return "handover_request"
+    if _is_close_ack(body):
+        return "close_ack"
+    return "normal"
 
 
 def _bot_sent_count_recent(session: Session, customer_id: int, minutes: int = 1440) -> int:
@@ -106,9 +206,34 @@ def _last_handover_at(session: Session, customer_id: int) -> Optional[datetime]:
         .order_by(SmsMessage.created_at.desc())
     )
     for msg in session.exec(stmt).all():
-        if (msg.body or "").startswith("[BOT_HANDOVER]"):
+        if (msg.body or "").startswith(BOT_HANDOVER_PREFIX):
             return msg.created_at
     return None
+
+
+def _recent_handover_context(
+    session: Session,
+    customer_id: int,
+    *,
+    now_utc: Optional[datetime] = None,
+) -> Tuple[Optional[datetime], bool]:
+    now_utc = now_utc or datetime.utcnow()
+    last_handover = _last_handover_at(session, customer_id)
+    if not last_handover:
+        return None, False
+    if (now_utc - last_handover) > timedelta(hours=RECENT_HANDOVER_WINDOW_HOURS):
+        return None, False
+    stmt = (
+        select(SmsMessage)
+        .where(SmsMessage.customer_id == customer_id)
+        .where(SmsMessage.direction == SmsDirection.SENT)
+        .where(SmsMessage.created_at > last_handover)
+        .order_by(SmsMessage.created_at.desc())
+    )
+    human_follow_up_after_handover = any(
+        msg.created_by_id is not None for msg in session.exec(stmt).all()
+    )
+    return last_handover, human_follow_up_after_handover
 
 
 def should_bot_reply(
@@ -118,17 +243,18 @@ def should_bot_reply(
     inbound_body: str,
     inbound_received_at: Optional[datetime] = None,
 ) -> Tuple[bool, Optional[str]]:
+    now_utc = datetime.utcnow()
     if not settings or not customer:
         return False, "no_settings_or_customer"
     if getattr(customer, "sms_bot_stopped", False):
         return False, "bot_stopped"
-    if customer.sms_bot_paused_until and customer.sms_bot_paused_until > datetime.utcnow():
+    if customer.sms_bot_paused_until and customer.sms_bot_paused_until > now_utc:
         return False, "customer_pause_active"
     if _contains_opt_out(inbound_body):
         customer.sms_bot_stopped = True
         customer.automated_reminder_outreach_opt_out = True
         return False, "opt_out_keyword"
-    if not is_bot_active_now(settings):
+    if not is_bot_active_now(settings, now_utc=now_utc):
         return False, "bot_inactive"
     sup = customer.sms_bot_suppress_auto_reply_before_utc
     if sup and inbound_received_at is not None:
@@ -137,12 +263,26 @@ def should_bot_reply(
         customer.sms_bot_suppress_auto_reply_before_utc = None
     pause_minutes = max(0, int(settings.sms_bot_pause_minutes_after_handover or 0))
     last_handover = _last_handover_at(session, customer.id)
-    if pause_minutes and last_handover and (datetime.utcnow() - last_handover) < timedelta(minutes=pause_minutes):
+    if pause_minutes and last_handover and (now_utc - last_handover) < timedelta(minutes=pause_minutes):
         return False, "handover_pause_window"
     max_replies = max(1, int(settings.sms_bot_max_replies_per_thread or 3))
     if _bot_sent_count_recent(session, customer.id) >= max_replies:
         return False, "max_replies_reached"
-    if _contains_handover_hint(inbound_body):
+    intent = _classify_inbound_intent(inbound_body)
+    if intent == "close_ack":
+        return False, "close_ack_no_reply"
+    if intent == "defer_or_thinking":
+        recent_handover_at, human_follow_up = _recent_handover_context(
+            session,
+            customer.id,
+            now_utc=now_utc,
+        )
+        if recent_handover_at:
+            if human_follow_up:
+                return False, "defer_after_team_follow_up_no_reply"
+            return False, "defer_after_handover_no_reply"
+        return True, "handover"
+    if intent == "handover_request":
         return True, "handover"
     return True, None
 
@@ -207,7 +347,10 @@ def _build_sms_bot_system_prompt(settings: Optional[CompanySettings]) -> str:
     guardrails = (
         "You are the company's out-of-hours SMS assistant. "
         "Reply in plain text under 320 characters. "
+        "If the customer is simply acknowledging, thanking you, or closing the conversation, do not reopen it or ask extra questions. "
+        "If the customer says they will think about it or come back later, hand over once and avoid repeating the handover in follow-ups. "
         "If the question is complex, pricing-specific, complaint-related, or unclear, politely hand over to a human for next business day. "
+        "Keep the tone warm, brief, and professional. "
         "Do not invent facts or promise specific installation dates."
     )
     parts: list[str] = [guardrails]

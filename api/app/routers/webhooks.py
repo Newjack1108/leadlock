@@ -52,7 +52,7 @@ from app.sms_service import (
     send_sms,
     is_unsubscribed_recipient_error,
 )
-from app.sms_bot_service import should_bot_reply, generate_bot_reply
+from app.sms_bot_service import BOT_HANDOVER_MESSAGE, generate_bot_reply, should_bot_reply
 from app.messenger_service import (
     parse_webhook_payload,
     get_user_profile,
@@ -469,7 +469,7 @@ async def twilio_inbound_sms(request: Request, session: Session = Depends(get_se
         if should_reply:
             bot_reply, _from_ai = await generate_bot_reply(settings, customer.name if customer else "Customer", body)
             if reason == "handover":
-                bot_reply = "[BOT_HANDOVER] Thanks for your message. A team member will review this and get back to you on the next working day."
+                bot_reply = BOT_HANDOVER_MESSAGE
 
             sent_ok, sent_sid, sent_err = send_sms(from_phone, bot_reply)
             if sent_ok:
