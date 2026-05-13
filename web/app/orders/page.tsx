@@ -20,7 +20,7 @@ import { FileText, ExternalLink } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import NinoxBadge from '@/components/NinoxBadge';
 
-type OrderStatusFilter = 'new' | 'deposit_paid' | 'installation_booked' | 'installation_completed' | 'all';
+type OrderStatusFilter = 'new' | 'deposit_paid' | 'installation_booked' | 'installation_completed' | 'completed' | 'all';
 type LeadTypeFilter = 'all' | LeadType | 'unknown';
 
 function formatCurrency(amount: number, currency: string = 'GBP'): string {
@@ -33,8 +33,10 @@ function formatCurrency(amount: number, currency: string = 'GBP'): string {
 
 function orderMatchesStatusFilter(order: Order, filter: OrderStatusFilter): boolean {
   const dp = order.deposit_paid ?? false;
+  const bp = order.balance_paid ?? false;
   const ib = order.installation_booked ?? false;
   const ic = order.installation_completed ?? false;
+  const paidInFull = order.paid_in_full ?? false;
   switch (filter) {
     case 'new':
       return !dp && !ib && !ic;
@@ -44,6 +46,8 @@ function orderMatchesStatusFilter(order: Order, filter: OrderStatusFilter): bool
       return ib;
     case 'installation_completed':
       return ic;
+    case 'completed':
+      return paidInFull || bp;
     case 'all':
       return true;
     default:
@@ -137,6 +141,7 @@ export default function OrdersPage() {
                 <SelectItem value="deposit_paid">Deposit paid</SelectItem>
                 <SelectItem value="installation_booked">Installation booked</SelectItem>
                 <SelectItem value="installation_completed">Installation completed</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
                 <SelectItem value="all">All</SelectItem>
               </SelectContent>
             </Select>
