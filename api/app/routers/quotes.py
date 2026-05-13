@@ -1434,6 +1434,37 @@ async def get_quote(
     return build_quote_response(quote, list(quote_items), session)
 
 
+@router.post("/{quote_id}/ensure-order", response_model=QuoteResponse)
+async def ensure_quote_order(
+    quote_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Recreate a missing order for an accepted quote."""
+    statement = select(Quote).where(Quote.id == quote_id)
+    quote = session.exec(statement).first()
+
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+
+    is_accepted = (
+        quote.status == QuoteStatus.ACCEPTED
+        or quote.opportunity_stage == OpportunityStage.WON
+        or quote.accepted_at is not None
+    )
+    if not is_accepted:
+        raise HTTPException(status_code=400, detail="Only accepted quotes can recreate a missing order")
+
+    create_order_from_quote(quote, session, current_user.id)
+    session.commit()
+    session.refresh(quote)
+
+    quote_items = session.exec(
+        select(QuoteItem).where(QuoteItem.quote_id == quote.id).order_by(QuoteItem.sort_order)
+    ).all()
+    return build_quote_response(quote, list(quote_items), session)
+
+
 @router.delete("/{quote_id}", status_code=204)
 async def delete_draft_quote(
     quote_id: int,

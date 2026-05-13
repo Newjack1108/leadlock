@@ -914,6 +914,11 @@ export const acceptQuote = async (quoteId: number) => {
   return response.data;
 };
 
+export const ensureQuoteOrder = async (quoteId: number) => {
+  const response = await api.post(`/api/quotes/${quoteId}/ensure-order`);
+  return response.data;
+};
+
 export const cancelDraftQuote = async (quoteId: number) => {
   await api.delete(`/api/quotes/${quoteId}`);
 };

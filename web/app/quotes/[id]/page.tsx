@@ -6,7 +6,7 @@ import Header from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import api, { getQuote, previewQuotePdf, getDiscountRequestsForQuote, getQuoteViewLink, acceptQuote, cancelDraftQuote, duplicateQuoteToDraft, deleteDiscountRequest } from '@/lib/api';
+import api, { getQuote, previewQuotePdf, getDiscountRequestsForQuote, getQuoteViewLink, acceptQuote, ensureQuoteOrder, cancelDraftQuote, duplicateQuoteToDraft, deleteDiscountRequest } from '@/lib/api';
 import {
   Quote,
   QuoteItem,
@@ -26,7 +26,7 @@ import FilesCard from '@/components/FilesCard';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { formatDateTime } from '@/lib/utils';
-import { ArrowLeft, Mail, Eye, Tag, Pencil, ChevronDown, ChevronUp, Send, ExternalLink, CheckCircle, ShoppingBag, XCircle, MinusCircle, FileSearch, Trash2, Copy } from 'lucide-react';
+import { ArrowLeft, Mail, Eye, Tag, Pencil, ChevronDown, ChevronUp, Send, ExternalLink, CheckCircle, ShoppingBag, XCircle, MinusCircle, FileSearch, Trash2, Copy, AlertTriangle } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -67,6 +67,7 @@ export default function QuoteDetailPage() {
   const [requestDialogOpen, setRequestDialogOpen] = useState(false);
   const [callNotesOpen, setCallNotesOpen] = useState(false);
   const [accepting, setAccepting] = useState(false);
+  const [repairingOrder, setRepairingOrder] = useState(false);
   const [lostDialogOpen, setLostDialogOpen] = useState(false);
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
   const [lossReason, setLossReason] = useState('');
@@ -230,6 +231,7 @@ export default function QuoteDetailPage() {
     quote.opportunity_stage === OpportunityStage.WON ||
     Boolean(quote.accepted_at) ||
     Boolean(quote.order_id);
+  const missingAcceptedOrder = isAccepted && !quote.order_id;
 
   return (
     <div className="min-h-screen">
@@ -372,7 +374,7 @@ export default function QuoteDetailPage() {
                   Accept quote
                 </Button>
               )}
-              {quote.status === 'ACCEPTED' && (
+              {quote.status === 'ACCEPTED' && quote.order_id && (
                 <Button variant="outline" asChild>
                   <Link href={quote.order_id ? `/orders/${quote.order_id}` : '/orders'}>
                     <ShoppingBag className="h-4 w-4 mr-2" />
@@ -401,6 +403,48 @@ export default function QuoteDetailPage() {
             </div>
           </div>
         </div>
+
+        {missingAcceptedOrder && (
+          <div className="mb-6 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm dark:border-amber-800 dark:bg-amber-950/30">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-300" />
+              <div className="flex-1">
+                <p className="font-medium text-amber-800 dark:text-amber-200">
+                  This quote is accepted but no order exists for it.
+                </p>
+                <p className="mt-1 text-amber-700 dark:text-amber-300">
+                  Recreate the missing order from this accepted quote to restore the normal order workflow.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-3"
+                  disabled={repairingOrder}
+                  onClick={async () => {
+                    try {
+                      setRepairingOrder(true);
+                      const updated = await ensureQuoteOrder(quote.id);
+                      setQuote(updated);
+                      if (updated?.order_id) {
+                        toast.success('Missing order recreated.');
+                        router.push(`/orders/${updated.order_id}`);
+                      } else {
+                        toast.error('Order repair did not return an order.');
+                      }
+                    } catch (error: any) {
+                      toast.error(error.response?.data?.detail || 'Failed to recreate order');
+                    } finally {
+                      setRepairingOrder(false);
+                    }
+                  }}
+                >
+                  <ShoppingBag className="h-4 w-4 mr-2" />
+                  {repairingOrder ? 'Recreating order…' : 'Recreate missing order'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="grid gap-6 lg:grid-cols-3">
           {/* Main Content */}
