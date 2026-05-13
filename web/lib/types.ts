@@ -73,6 +73,7 @@ export enum LeadSource {
   SMS = "SMS",
   EMAIL = "EMAIL",
   PHONE = "PHONE",
+  PAST_CUSTOMER = "Past Customer",
   REFERRAL = "REFERRAL",
   OTHER = "OTHER",
 }
