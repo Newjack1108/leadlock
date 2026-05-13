@@ -135,6 +135,8 @@ export default function CustomerDetailPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [quotes, setQuotes] = useState<any[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [ordersLoadError, setOrdersLoadError] = useState<string | null>(null);
   const [websiteVisits, setWebsiteVisits] = useState<WebsiteVisit[]>([]);
   const [communicationStats, setCommunicationStats] = useState<CustomerCommunicationStats>({
     email: { sent: 0, received: 0 },
@@ -243,11 +245,17 @@ export default function CustomerDetailPage() {
   };
 
   const fetchOrders = async () => {
+    setOrdersLoading(true);
+    setOrdersLoadError(null);
     try {
       const response = await api.get(`/api/customers/${customerId}/orders`);
       setOrders(response.data);
     } catch (error: any) {
-      console.error('Failed to load orders');
+      console.error('Failed to load orders', error);
+      setOrdersLoadError('Could not load this customer\'s orders right now.');
+      toast.error('Failed to load customer orders');
+    } finally {
+      setOrdersLoading(false);
     }
   };
 
@@ -873,9 +881,26 @@ export default function CustomerDetailPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                {orders.length === 0 ? (
+                {ordersLoadError && (
+                  <div className="mb-3 rounded-md border border-destructive/30 bg-destructive/5 p-3">
+                    <p className="text-sm font-medium text-destructive">{ordersLoadError}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Retry to confirm whether this customer has no orders or the request failed.
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-3"
+                      onClick={fetchOrders}
+                      disabled={ordersLoading}
+                    >
+                      {ordersLoading ? 'Retrying...' : 'Retry orders'}
+                    </Button>
+                  </div>
+                )}
+                {!ordersLoadError && orders.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No orders yet. Orders are created when quotes are accepted.</p>
-                ) : (
+                ) : orders.length > 0 ? (
                   <div className="space-y-2">
                     {orders.map((order) => (
                       <div
@@ -913,7 +938,7 @@ export default function CustomerDetailPage() {
                       </div>
                     ))}
                   </div>
-                )}
+                ) : null}
               </CardContent>
             </Card>
             </div>
