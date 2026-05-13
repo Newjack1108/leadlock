@@ -65,6 +65,7 @@ class LeadType(str, Enum):
 class LeadSource(str, Enum):
     UNKNOWN = "UNKNOWN"
     FACEBOOK = "FACEBOOK"
+    FACEBOOK_WHATSAPP = "Facebook/WhatsApp"
     INSTAGRAM = "INSTAGRAM"
     WEBSITE = "WEBSITE"  # Legacy - prefer CSGB_WEBSITE, CS_WEBSITE, BLC_WEBSITE for new leads
     CSGB_WEBSITE = "CSGB WEBSITE"

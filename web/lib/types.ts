@@ -62,6 +62,7 @@ export enum LeadType {
 export enum LeadSource {
   UNKNOWN = "UNKNOWN",
   FACEBOOK = "FACEBOOK",
+  FACEBOOK_WHATSAPP = "Facebook/WhatsApp",
   INSTAGRAM = "INSTAGRAM",
   WEBSITE = "WEBSITE",  // Legacy - prefer CSGB/CS/BLC WEBSITE for new leads
   CSGB_WEBSITE = "CSGB WEBSITE",
