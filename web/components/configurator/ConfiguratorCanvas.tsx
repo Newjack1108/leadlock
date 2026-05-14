@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Minus, Move, Plus, RotateCcw, Search } from 'lucide-react';
+import { Minus, Move, Plus, RotateCcw, Search, Trash2 } from 'lucide-react';
 
 import type { ConfiguratorBoxPlacement, Product } from '@/lib/types';
 import {
@@ -10,6 +10,7 @@ import {
   getCanvasBounds,
   getFootprint,
   type CandidatePlacement,
+  type CanvasBounds,
 } from '@/lib/configurator/geometry';
 import { cn } from '@/lib/utils';
 
@@ -25,6 +26,13 @@ interface ConfiguratorCanvasProps {
   onSelect: (boxId: string) => void;
   onMoveBox: (boxId: string, nextBox: Pick<ConfiguratorBoxPlacement, 'x' | 'y'>) => void;
   onRotateBox: (boxId: string, rotation: number) => void;
+  onRemoveBox: (boxId: string) => void;
+}
+
+interface InteractionSnapshot {
+  bounds: CanvasBounds;
+  pan: { x: number; y: number };
+  zoom: number;
 }
 
 interface DragState {
@@ -32,6 +40,7 @@ interface DragState {
   pointerId: number;
   offsetX: number;
   offsetY: number;
+  snapshot: InteractionSnapshot;
 }
 
 interface PanState {
@@ -45,6 +54,7 @@ interface PanState {
 interface RotateState {
   boxId: string;
   pointerId: number;
+  snapshot: InteractionSnapshot;
 }
 
 interface RotationCandidate {
@@ -69,6 +79,7 @@ export default function ConfiguratorCanvas({
   onSelect,
   onMoveBox,
   onRotateBox,
+  onRemoveBox,
 }: ConfiguratorCanvasProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const [dragState, setDragState] = useState<DragState | null>(null);
@@ -100,10 +111,17 @@ export default function ConfiguratorCanvas({
   );
 
   const bounds = getCanvasBounds(rectEntries.map((entry) => entry.rect));
-  const contentWidth = bounds.width * SCALE;
-  const contentHeight = bounds.height * SCALE;
+  const interactionSnapshot = dragState?.snapshot ?? rotateState?.snapshot ?? null;
+  const displayBounds = interactionSnapshot?.bounds ?? bounds;
+  const displayPan = interactionSnapshot?.pan ?? pan;
+  const displayZoom = interactionSnapshot?.zoom ?? zoom;
+  const layoutContentWidth = bounds.width * SCALE;
+  const layoutContentHeight = bounds.height * SCALE;
+  const contentWidth = displayBounds.width * SCALE;
+  const contentHeight = displayBounds.height * SCALE;
+  const isInteracting = Boolean(dragState || rotateState);
 
-  const toCanvasPosition = (value: number, min: number) => (value - min + bounds.padding) * SCALE;
+  const toCanvasPosition = (value: number, min: number) => (value - min + displayBounds.padding) * SCALE;
 
   const fitToViewport = useCallback((manual = false) => {
     const viewport = viewportRef.current;
@@ -113,35 +131,52 @@ export default function ConfiguratorCanvas({
     const viewportHeight = viewport.clientHeight - 24;
     if (viewportWidth <= 0 || viewportHeight <= 0) return;
 
-    const nextZoom = clampZoom(Math.min(viewportWidth / contentWidth, viewportHeight / contentHeight));
+    const fitZoom = Math.min(viewportWidth / layoutContentWidth, viewportHeight / layoutContentHeight);
+    const nextZoom = clampZoom(manual ? fitZoom : Math.min(1, fitZoom));
     setZoom(nextZoom);
     setPan({
-      x: (viewport.clientWidth - contentWidth * nextZoom) / 2,
-      y: (viewport.clientHeight - contentHeight * nextZoom) / 2,
+      x: (viewport.clientWidth - layoutContentWidth * nextZoom) / 2,
+      y: (viewport.clientHeight - layoutContentHeight * nextZoom) / 2,
     });
     setHasManualView(manual);
-  }, [contentHeight, contentWidth]);
+  }, [layoutContentHeight, layoutContentWidth]);
+
+  const resetView = useCallback(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+
+    setZoom(1);
+    setPan({
+      x: (viewport.clientWidth - layoutContentWidth) / 2,
+      y: (viewport.clientHeight - layoutContentHeight) / 2,
+    });
+    setHasManualView(true);
+  }, [layoutContentHeight, layoutContentWidth]);
 
   useEffect(() => {
-    if (hasManualView) return;
-    fitToViewport(false);
-  }, [fitToViewport, hasManualView]);
+    if (hasManualView || isInteracting) return;
+    const frameId = window.requestAnimationFrame(() => {
+      fitToViewport(false);
+    });
+    return () => window.cancelAnimationFrame(frameId);
+  }, [fitToViewport, hasManualView, isInteracting]);
 
   useEffect(() => {
     const viewport = viewportRef.current;
     if (!viewport || typeof ResizeObserver === 'undefined') return undefined;
 
     const observer = new ResizeObserver(() => {
-      if (!hasManualView) {
+      if (!hasManualView && !isInteracting) {
         fitToViewport(false);
       }
     });
 
     observer.observe(viewport);
     return () => observer.disconnect();
-  }, [fitToViewport, hasManualView]);
+  }, [fitToViewport, hasManualView, isInteracting]);
 
   const zoomAroundPoint = (nextZoomRaw: number, clientX?: number, clientY?: number) => {
+    if (isInteracting) return;
     const viewport = viewportRef.current;
     if (!viewport) return;
 
@@ -164,23 +199,37 @@ export default function ConfiguratorCanvas({
     setHasManualView(true);
   };
 
-  const getLayoutPoint = (clientX: number, clientY: number) => {
+  const getInteractionSnapshot = (): InteractionSnapshot => ({
+    bounds,
+    pan: { ...pan },
+    zoom,
+  });
+
+  const getLayoutPoint = (clientX: number, clientY: number, snapshot?: InteractionSnapshot) => {
     const viewportRect = viewportRef.current?.getBoundingClientRect();
     if (!viewportRect) return { x: 0, y: 0 };
+    const activeBounds = snapshot?.bounds ?? bounds;
+    const activePan = snapshot?.pan ?? pan;
+    const activeZoom = snapshot?.zoom ?? zoom;
 
-    const scaledX = (clientX - viewportRect.left - pan.x) / zoom;
-    const scaledY = (clientY - viewportRect.top - pan.y) / zoom;
+    const scaledX = (clientX - viewportRect.left - activePan.x) / activeZoom;
+    const scaledY = (clientY - viewportRect.top - activePan.y) / activeZoom;
 
     return {
-      x: scaledX / SCALE + bounds.minX - bounds.padding,
-      y: scaledY / SCALE + bounds.minY - bounds.padding,
+      x: scaledX / SCALE + activeBounds.minX - activeBounds.padding,
+      y: scaledY / SCALE + activeBounds.minY - activeBounds.padding,
     };
   };
 
-  const getRotationForPointer = (box: ConfiguratorBoxPlacement, clientX: number, clientY: number) => {
+  const getRotationForPointer = (
+    box: ConfiguratorBoxPlacement,
+    clientX: number,
+    clientY: number,
+    snapshot?: InteractionSnapshot
+  ) => {
     const product = productMap[box.product_id];
     if (!product) return box.rotation;
-    const point = getLayoutPoint(clientX, clientY);
+    const point = getLayoutPoint(clientX, clientY, snapshot);
     const { width, length } = getFootprint(product, box.rotation);
     const centerX = Number(box.x) + width / 2;
     const centerY = Number(box.y) + length / 2;
@@ -259,11 +308,7 @@ export default function ConfiguratorCanvas({
           <button
             type="button"
             className="rounded-md border px-3 py-1 text-sm hover:bg-accent"
-            onClick={() => {
-              setZoom(1);
-              setPan({ x: 24, y: 24 });
-              setHasManualView(true);
-            }}
+            onClick={resetView}
           >
             <RotateCcw className="mr-1 inline h-4 w-4" />
             Reset
@@ -279,16 +324,20 @@ export default function ConfiguratorCanvas({
         )}
         style={{ height: '72vh', minHeight: 560 }}
         onWheel={(event) => {
+          if (isInteracting) return;
           event.preventDefault();
           const delta = event.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
           zoomAroundPoint(zoom + delta, event.clientX, event.clientY);
         }}
       >
-        <div className="absolute left-0 top-0" style={{ transform: `translate(${pan.x}px, ${pan.y}px)` }}>
+        <div
+          className="absolute left-0 top-0"
+          style={{ transform: `translate(${displayPan.x}px, ${displayPan.y}px)` }}
+        >
           <div
             className="origin-top-left"
             style={{
-              transform: `scale(${zoom})`,
+              transform: `scale(${displayZoom})`,
             }}
           >
             <div
@@ -345,8 +394,8 @@ export default function ConfiguratorCanvas({
                       key={`guide-v-${index}`}
                       className="pointer-events-none absolute border-l border-dashed border-primary/70"
                       style={{
-                        left: `${toCanvasPosition(guide.position, bounds.minX)}px`,
-                        top: `${toCanvasPosition(guide.start, bounds.minY)}px`,
+                        left: `${toCanvasPosition(guide.position, displayBounds.minX)}px`,
+                        top: `${toCanvasPosition(guide.start, displayBounds.minY)}px`,
                         height: `${(guide.end - guide.start) * SCALE}px`,
                       }}
                     />
@@ -357,8 +406,8 @@ export default function ConfiguratorCanvas({
                     key={`guide-h-${index}`}
                     className="pointer-events-none absolute border-t border-dashed border-primary/70"
                     style={{
-                      top: `${toCanvasPosition(guide.position, bounds.minY)}px`,
-                      left: `${toCanvasPosition(guide.start, bounds.minX)}px`,
+                      top: `${toCanvasPosition(guide.position, displayBounds.minY)}px`,
+                      left: `${toCanvasPosition(guide.start, displayBounds.minX)}px`,
                       width: `${(guide.end - guide.start) * SCALE}px`,
                     }}
                   />
@@ -371,155 +420,203 @@ export default function ConfiguratorCanvas({
                 const activeInvalid =
                   (isDragging && dragCandidate && !dragCandidate.valid) ||
                   (isRotating && rotationCandidate && !rotationCandidate.valid);
+                const boxPixelWidth = rect.boxWidth * SCALE;
+                const boxPixelHeight = rect.boxLength * SCALE;
+                const showFrontMarker = boxPixelWidth >= 104 && boxPixelHeight >= 70;
+                const showDimensions = boxPixelWidth >= 90 && boxPixelHeight >= 86;
+                const compactLabel = boxPixelWidth < 90 || boxPixelHeight < 64;
+                const showRotationBadge = isRotating && rotationCandidate && boxPixelHeight >= 72;
 
                 return (
-                <button
-                  key={box.id}
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onSelect(box.id);
-                  }}
-                  onPointerDown={(event) => {
-                    if (rotateState) return;
-                    if (event.button !== 0) return;
-                    event.stopPropagation();
-                    const point = getLayoutPoint(event.clientX, event.clientY);
-                    setDragState({
-                      boxId: box.id,
-                      pointerId: event.pointerId,
-                      offsetX: point.x - box.x,
-                      offsetY: point.y - box.y,
-                    });
-                    setDragCandidate({
-                      x: box.x,
-                      y: box.y,
-                      snapped: false,
-                      overlaps: false,
-                      connected: true,
-                      valid: true,
-                      guides: [],
-                    });
-                    onSelect(box.id);
-                    event.currentTarget.setPointerCapture(event.pointerId);
-                  }}
-                  onPointerMove={(event) => {
-                    if (rotateState) return;
-                    if (!dragState || dragState.boxId !== box.id) return;
-                    const point = getLayoutPoint(event.clientX, event.clientY);
-                    const candidate = findPlacementCandidate({
-                      movingBox: box,
-                      rawX: point.x - dragState.offsetX,
-                      rawY: point.y - dragState.offsetY,
-                      boxes,
-                      productMap,
-                    });
-                    setDragCandidate(candidate);
-                  }}
-                  onPointerUp={(event) => {
-                    if (dragState?.boxId !== box.id || dragState.pointerId !== event.pointerId) return;
-                    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-                      event.currentTarget.releasePointerCapture(event.pointerId);
-                    }
-                    finalizeDrag();
-                  }}
-                  onPointerCancel={(event) => {
-                    if (dragState?.boxId !== box.id || dragState.pointerId !== event.pointerId) return;
-                    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-                      event.currentTarget.releasePointerCapture(event.pointerId);
-                    }
-                    setDragState(null);
-                    setDragCandidate(null);
-                  }}
-                  className={cn(
-                    'absolute touch-none rounded-md border text-left text-xs font-medium transition-colors',
-                    activeInvalid
-                      ? 'cursor-grabbing border-red-500 bg-red-100/90 text-red-900 shadow-lg'
-                      : isDragging || isRotating
-                        ? 'cursor-grabbing border-primary bg-primary/20 text-primary shadow-lg'
-                        : selectedBoxId === box.id
-                          ? 'cursor-grab border-primary bg-primary/15 text-primary shadow-sm'
-                          : 'cursor-grab border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
-                  )}
-                  style={{
-                    left: `${toCanvasPosition(rect.centerX, bounds.minX)}px`,
-                    top: `${toCanvasPosition(rect.centerY, bounds.minY)}px`,
-                    width: `${Math.max(rect.boxWidth * SCALE, 48)}px`,
-                    height: `${Math.max(rect.boxLength * SCALE, 48)}px`,
-                    transform: `translate(-50%, -50%) rotate(${box.rotation}deg)`,
-                  }}
-                >
+                  <button
+                    key={box.id}
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onSelect(box.id);
+                    }}
+                    onPointerDown={(event) => {
+                      if (rotateState) return;
+                      if (event.button !== 0) return;
+                      event.stopPropagation();
+                      const snapshot = getInteractionSnapshot();
+                      const point = getLayoutPoint(event.clientX, event.clientY, snapshot);
+                      setDragState({
+                        boxId: box.id,
+                        pointerId: event.pointerId,
+                        offsetX: point.x - box.x,
+                        offsetY: point.y - box.y,
+                        snapshot,
+                      });
+                      setDragCandidate({
+                        x: box.x,
+                        y: box.y,
+                        snapped: false,
+                        overlaps: false,
+                        connected: true,
+                        valid: true,
+                        guides: [],
+                      });
+                      onSelect(box.id);
+                      event.currentTarget.setPointerCapture(event.pointerId);
+                    }}
+                    onPointerMove={(event) => {
+                      if (rotateState) return;
+                      if (!dragState || dragState.boxId !== box.id) return;
+                      const point = getLayoutPoint(event.clientX, event.clientY, dragState.snapshot);
+                      const candidate = findPlacementCandidate({
+                        movingBox: box,
+                        rawX: point.x - dragState.offsetX,
+                        rawY: point.y - dragState.offsetY,
+                        boxes,
+                        productMap,
+                      });
+                      setDragCandidate(candidate);
+                    }}
+                    onPointerUp={(event) => {
+                      if (dragState?.boxId !== box.id || dragState.pointerId !== event.pointerId) return;
+                      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                        event.currentTarget.releasePointerCapture(event.pointerId);
+                      }
+                      finalizeDrag();
+                    }}
+                    onPointerCancel={(event) => {
+                      if (dragState?.boxId !== box.id || dragState.pointerId !== event.pointerId) return;
+                      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                        event.currentTarget.releasePointerCapture(event.pointerId);
+                      }
+                      setDragState(null);
+                      setDragCandidate(null);
+                    }}
+                    className={cn(
+                      'absolute overflow-visible touch-none rounded-md border text-left text-xs font-medium transition-colors',
+                      activeInvalid
+                        ? 'cursor-grabbing border-red-500 bg-red-100/90 text-red-900 shadow-lg'
+                        : isDragging || isRotating
+                          ? 'cursor-grabbing border-primary bg-primary/20 text-primary shadow-lg'
+                          : selectedBoxId === box.id
+                            ? 'cursor-grab border-primary bg-primary/15 text-primary shadow-sm'
+                            : 'cursor-grab border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    )}
+                    style={{
+                      left: `${toCanvasPosition(rect.centerX, displayBounds.minX)}px`,
+                      top: `${toCanvasPosition(rect.centerY, displayBounds.minY)}px`,
+                      width: `${rect.boxWidth * SCALE}px`,
+                      height: `${rect.boxLength * SCALE}px`,
+                      transform: `translate(-50%, -50%) rotate(${box.rotation}deg)`,
+                    }}
+                  >
                   {selectedBoxId === box.id && (
                     <span
-                      className="absolute left-1/2 top-0 z-20 flex h-7 w-7 -translate-x-1/2 -translate-y-[calc(100%+10px)] items-center justify-center rounded-full border border-primary/60 bg-background text-primary shadow-sm"
-                      onPointerDown={(event) => {
-                        if (event.button !== 0) return;
-                        event.stopPropagation();
-                        const rotation = getRotationForPointer(box, event.clientX, event.clientY);
-                        setDragState(null);
-                        setDragCandidate(null);
-                        setRotateState({
-                          boxId: box.id,
-                          pointerId: event.pointerId,
-                        });
-                        setRotationCandidate(getRotationPreview(box, rotation));
-                        onSelect(box.id);
-                        event.currentTarget.setPointerCapture(event.pointerId);
-                      }}
-                      onPointerMove={(event) => {
-                        if (!rotateState || rotateState.boxId !== box.id || rotateState.pointerId !== event.pointerId) {
-                          return;
-                        }
-                        const rotation = getRotationForPointer(box, event.clientX, event.clientY);
-                        setRotationCandidate(getRotationPreview(box, rotation));
-                      }}
-                      onPointerUp={(event) => {
-                        if (!rotateState || rotateState.boxId !== box.id || rotateState.pointerId !== event.pointerId) {
-                          return;
-                        }
-                        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-                          event.currentTarget.releasePointerCapture(event.pointerId);
-                        }
-                        finalizeRotation();
-                      }}
-                      onPointerCancel={(event) => {
-                        if (!rotateState || rotateState.boxId !== box.id || rotateState.pointerId !== event.pointerId) {
-                          return;
-                        }
-                        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-                          event.currentTarget.releasePointerCapture(event.pointerId);
-                        }
-                        setRotateState(null);
-                        setRotationCandidate(null);
+                      className="absolute left-1/2 top-0 z-20 flex items-center gap-2"
+                      style={{
+                        transform: `translate(-50%, calc(-100% - 10px)) rotate(${-box.rotation}deg)`,
                       }}
                     >
-                      <span className="pointer-events-none text-sm">↻</span>
+                      <span
+                        className="flex h-7 w-7 items-center justify-center rounded-full border border-primary/60 bg-background text-primary shadow-sm"
+                        onPointerDown={(event) => {
+                          if (event.button !== 0) return;
+                          event.stopPropagation();
+                          const snapshot = getInteractionSnapshot();
+                          const rotation = getRotationForPointer(box, event.clientX, event.clientY, snapshot);
+                          setDragState(null);
+                          setDragCandidate(null);
+                          setRotateState({
+                            boxId: box.id,
+                            pointerId: event.pointerId,
+                            snapshot,
+                          });
+                          setRotationCandidate(getRotationPreview(box, rotation));
+                          onSelect(box.id);
+                          event.currentTarget.setPointerCapture(event.pointerId);
+                        }}
+                        onPointerMove={(event) => {
+                          if (!rotateState || rotateState.boxId !== box.id || rotateState.pointerId !== event.pointerId) {
+                            return;
+                          }
+                          const rotation = getRotationForPointer(box, event.clientX, event.clientY, rotateState.snapshot);
+                          setRotationCandidate(getRotationPreview(box, rotation));
+                        }}
+                        onPointerUp={(event) => {
+                          if (!rotateState || rotateState.boxId !== box.id || rotateState.pointerId !== event.pointerId) {
+                            return;
+                          }
+                          if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                            event.currentTarget.releasePointerCapture(event.pointerId);
+                          }
+                          finalizeRotation();
+                        }}
+                        onPointerCancel={(event) => {
+                          if (!rotateState || rotateState.boxId !== box.id || rotateState.pointerId !== event.pointerId) {
+                            return;
+                          }
+                          if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                            event.currentTarget.releasePointerCapture(event.pointerId);
+                          }
+                          setRotateState(null);
+                          setRotationCandidate(null);
+                        }}
+                      >
+                        <span className="pointer-events-none text-sm">↻</span>
+                      </span>
+                      <span
+                        className="flex h-7 w-7 items-center justify-center rounded-full border border-red-300 bg-background text-red-600 shadow-sm"
+                        onPointerDown={(event) => {
+                          event.stopPropagation();
+                        }}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setDragState(null);
+                          setDragCandidate(null);
+                          setRotateState(null);
+                          setRotationCandidate(null);
+                          onRemoveBox(box.id);
+                        }}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </span>
                     </span>
                   )}
-                  <span className="pointer-events-none absolute inset-0">
-                    <span className="absolute left-1/2 top-2 flex -translate-x-1/2 items-center gap-1 rounded-full bg-background/85 px-2 py-0.5 text-[10px] font-semibold shadow-sm">
-                      <span className="block h-1.5 w-6 rounded-full bg-sky-500" />
-                      <span>Front</span>
+                  {showFrontMarker && (
+                    <span className="pointer-events-none absolute inset-0">
+                      <span className="absolute left-1/2 top-2 flex max-w-[calc(100%-12px)] -translate-x-1/2 items-center gap-1 overflow-hidden rounded-full bg-background/85 px-2 py-0.5 text-[10px] font-semibold shadow-sm">
+                        <span className="block h-1.5 w-6 shrink-0 rounded-full bg-sky-500" />
+                        <span className="truncate">Front</span>
+                      </span>
                     </span>
-                  </span>
+                  )}
                   <span
-                    className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-2 text-center"
+                    className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center overflow-hidden px-2 text-center"
                     style={{ transform: `rotate(${-box.rotation}deg)` }}
                   >
-                    <span className="max-w-full truncate text-[11px] font-semibold leading-tight">
+                    <span
+                      className={cn(
+                        'max-w-full overflow-hidden break-words font-semibold leading-tight',
+                        compactLabel ? 'text-[9px]' : 'text-[11px]'
+                      )}
+                      style={{
+                        display: '-webkit-box',
+                        WebkitBoxOrient: 'vertical',
+                        WebkitLineClamp: compactLabel ? 2 : 3,
+                      }}
+                    >
                       {product.name}
                     </span>
-                    <span className="mt-1 text-[10px] text-muted-foreground">
-                      {rect.boxWidth} x {rect.boxLength}
-                    </span>
-                    {isRotating && rotationCandidate && (
+                    {showDimensions && (
+                      <span className="mt-1 max-w-full truncate text-[10px] text-muted-foreground">
+                        {rect.boxWidth} x {rect.boxLength}
+                      </span>
+                    )}
+                    {showRotationBadge && (
                       <span className="mt-1 rounded-full bg-background/85 px-2 py-0.5 text-[10px] font-semibold text-foreground shadow-sm">
                         {rotationCandidate.rotation.toFixed(1)}°
                       </span>
                     )}
                   </span>
                 </button>
-              )})}
+                );
+              })}
 
               {rectEntries.length === 0 && (
                 <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">

@@ -3,16 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import {
-  AlertTriangle,
-  ArrowDown,
-  ArrowLeft,
-  ArrowRight,
-  ArrowUp,
-  CheckCircle2,
-  RotateCw,
-  Trash2,
-} from 'lucide-react';
+import { AlertTriangle, CheckCircle2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -67,8 +58,6 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
     }, {});
   }, [catalog]);
 
-  const selectedBox = configuration.boxes.find((box) => box.id === selectedBoxId) ?? null;
-  const selectedProduct = selectedBox ? productMap[selectedBox.product_id] ?? null : null;
   const errorCount = getPreviewIssueCount(preview, 'error');
   const warningCount = getPreviewIssueCount(preview, 'warning');
 
@@ -166,28 +155,6 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
     });
   };
 
-  const handleRotateBox = (boxId: string, delta = 15) => {
-    const current = configuration.boxes.find((box) => box.id === boxId);
-    if (!current) return;
-    const rotatedBox = { ...current, rotation: normalizeRotation(current.rotation + delta) };
-    const candidate = findPlacementCandidate({
-      movingBox: rotatedBox,
-      rawX: rotatedBox.x,
-      rawY: rotatedBox.y,
-      boxes: configuration.boxes.map((box) => (box.id === boxId ? rotatedBox : box)),
-      productMap,
-      threshold: 0,
-    });
-    if (!candidate.valid) {
-      toast.error('Rotating here would create an overlap or disconnect the layout.');
-      return;
-    }
-    updateConfiguration({
-      ...configuration,
-      boxes: configuration.boxes.map((box) => (box.id === boxId ? rotatedBox : box)),
-    });
-  };
-
   const handleSetRotation = (boxId: string, rotation: number) => {
     if (!Number.isFinite(rotation)) return;
     const current = configuration.boxes.find((box) => box.id === boxId);
@@ -211,31 +178,10 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
     });
   };
 
-  const handleNudgeSelectedBox = (dx: number, dy: number) => {
-    if (!selectedBox) return;
-    const candidate = findPlacementCandidate({
-      movingBox: selectedBox,
-      rawX: Number((selectedBox.x + dx).toFixed(2)),
-      rawY: Number((selectedBox.y + dy).toFixed(2)),
-      boxes: configuration.boxes,
-      productMap,
-      threshold: 0,
-    });
-    if (!candidate.valid) {
-      toast.error(candidate.overlaps ? 'That nudge would overlap another box.' : 'That nudge would disconnect the layout.');
-      return;
-    }
-    handleMoveBox(selectedBox.id, {
-      x: candidate.x,
-      y: candidate.y,
-    });
-  };
-
-  const handleRemoveSelectedBox = () => {
-    if (!selectedBox) return;
+  const handleRemoveBox = (boxId: string) => {
     updateConfiguration({
       ...configuration,
-      boxes: configuration.boxes.filter((box) => box.id !== selectedBox.id),
+      boxes: configuration.boxes.filter((box) => box.id !== boxId),
     });
   };
 
@@ -330,6 +276,7 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
                 onSelect={setSelectedBoxId}
                 onMoveBox={handleMoveBox}
                 onRotateBox={handleSetRotation}
+                onRemoveBox={handleRemoveBox}
               />
               <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
                 The front marker is visual only in this beta. It rotates with the box so you can quickly read layout
@@ -401,101 +348,6 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
                 <Label>Schema Version</Label>
                 <Input value={String(configuration.schema_version ?? 1)} disabled />
               </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Selected Box</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {selectedBox && selectedProduct ? (
-                <>
-                  <div>
-                    <p className="font-medium">{selectedProduct.name}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {selectedProduct.configurator_width ?? '—'}m x {selectedProduct.configurator_length ?? '—'}m
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-2 rounded-md border p-3 text-sm">
-                    <div>
-                      <p className="text-muted-foreground">X</p>
-                      <p className="font-medium">{selectedBox.x.toFixed(2)}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Y</p>
-                      <p className="font-medium">{selectedBox.y.toFixed(2)}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Rotation</p>
-                      <p className="font-medium">{selectedBox.rotation.toFixed(1)}°</p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="box-rotation">Rotation</Label>
-                    <Input
-                      id="box-rotation"
-                      type="number"
-                      step="1"
-                      min={0}
-                      max={359.9}
-                      value={selectedBox.rotation}
-                      onChange={(event) => handleSetRotation(selectedBox.id, Number(event.target.value || 0))}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium">Nudge</p>
-                    <div className="grid grid-cols-3 gap-2">
-                      <div />
-                      <Button variant="outline" size="sm" onClick={() => handleNudgeSelectedBox(0, -0.25)}>
-                        <ArrowUp className="h-4 w-4" />
-                      </Button>
-                      <div />
-                      <Button variant="outline" size="sm" onClick={() => handleNudgeSelectedBox(-0.25, 0)}>
-                        <ArrowLeft className="h-4 w-4" />
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={() => handleNudgeSelectedBox(0, 0.25)}>
-                        <ArrowDown className="h-4 w-4" />
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={() => handleNudgeSelectedBox(0.25, 0)}>
-                        <ArrowRight className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleRotateBox(selectedBox.id, -15)}
-                    >
-                      <RotateCw className="mr-2 h-4 w-4" />
-                      Rotate -15°
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleRotateBox(selectedBox.id, 15)}
-                    >
-                      <RotateCw className="mr-2 h-4 w-4" />
-                      Rotate +15°
-                    </Button>
-                    <Button type="button" variant="destructive" size="sm" onClick={handleRemoveSelectedBox}>
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Remove
-                    </Button>
-                  </div>
-                </>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  Select a box on the canvas to rotate it, nudge it slightly, or remove it.
-                </p>
-              )}
             </CardContent>
           </Card>
 
