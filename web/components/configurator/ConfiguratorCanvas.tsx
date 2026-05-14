@@ -1,9 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Minus, Move, Plus, RotateCcw, RotateCw, Search, Trash2 } from 'lucide-react';
 
-import type { ConfiguratorBoxPlacement, Product } from '@/lib/types';
+import type { ConfiguratorBoxPlacement, ConfiguratorConnectionProfile, Product } from '@/lib/types';
 import {
   buildLayoutRectEntries,
   findPlacementCandidate,
@@ -56,28 +56,63 @@ function clampZoom(value: number) {
   return Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, Number(value.toFixed(2))));
 }
 
-function getFrontMarkerPosition(face: 'top' | 'right' | 'bottom' | 'left') {
+function getBlockedFrontMarkerRatio(
+  profile: ConfiguratorConnectionProfile,
+  face: 'top' | 'right' | 'bottom' | 'left',
+  boxWidth: number,
+  boxLength: number
+) {
+  const faceLength = face === 'top' || face === 'bottom' ? boxWidth : boxLength;
+  const joinLength = Math.min(boxWidth, boxLength);
+  if (faceLength <= 0 || joinLength <= 0 || faceLength <= joinLength) {
+    return null;
+  }
+
+  const blockedLength = faceLength - joinLength;
+  if (blockedLength <= 0) {
+    return null;
+  }
+
+  return profile === 'corner_left'
+    ? blockedLength / 2 / faceLength
+    : 1 - blockedLength / 2 / faceLength;
+}
+
+function getFrontMarkerPosition(
+  face: 'top' | 'right' | 'bottom' | 'left',
+  profile: ConfiguratorConnectionProfile | null | undefined,
+  boxWidth: number,
+  boxLength: number
+) {
+  const blockedRatio = profile
+    ? getBlockedFrontMarkerRatio(profile, face, boxWidth, boxLength)
+    : null;
+
   if (face === 'right') {
     return {
       containerClass: 'absolute right-2 top-1/2 -translate-y-1/2',
       labelClass: 'rotate-90',
+      containerStyle: blockedRatio != null ? ({ top: `${blockedRatio * 100}%` } satisfies CSSProperties) : undefined,
     };
   }
   if (face === 'bottom') {
     return {
       containerClass: 'absolute bottom-2 left-1/2 -translate-x-1/2',
       labelClass: '',
+      containerStyle: blockedRatio != null ? ({ left: `${blockedRatio * 100}%` } satisfies CSSProperties) : undefined,
     };
   }
   if (face === 'left') {
     return {
       containerClass: 'absolute left-2 top-1/2 -translate-y-1/2',
       labelClass: '-rotate-90',
+      containerStyle: blockedRatio != null ? ({ top: `${blockedRatio * 100}%` } satisfies CSSProperties) : undefined,
     };
   }
   return {
     containerClass: 'absolute left-1/2 top-2 -translate-x-1/2',
     labelClass: '',
+    containerStyle: blockedRatio != null ? ({ left: `${blockedRatio * 100}%` } satisfies CSSProperties) : undefined,
   };
 }
 
@@ -382,7 +417,12 @@ export default function ConfiguratorCanvas({
                 const showFrontMarker = boxPixelWidth >= 104 && boxPixelHeight >= 70;
                 const showDimensions = boxPixelWidth >= 90 && boxPixelHeight >= 86;
                 const compactLabel = boxPixelWidth < 90 || boxPixelHeight < 64;
-                const frontMarkerPosition = getFrontMarkerPosition(getBaseFrontFace(product));
+                const frontMarkerPosition = getFrontMarkerPosition(
+                  getBaseFrontFace(product),
+                  product.configurator_connection_profile,
+                  rect.boxWidth,
+                  rect.boxLength
+                );
 
                 return (
                   <button
@@ -518,7 +558,10 @@ export default function ConfiguratorCanvas({
                   )}
                   {showFrontMarker && (
                     <span className="pointer-events-none absolute inset-0">
-                      <span className={frontMarkerPosition.containerClass}>
+                      <span
+                        className={frontMarkerPosition.containerClass}
+                        style={frontMarkerPosition.containerStyle}
+                      >
                         <span
                           className={cn(
                             'flex max-w-[calc(100%-12px)] items-center gap-1 overflow-hidden rounded-full bg-background/85 px-2 py-0.5 text-[10px] font-semibold shadow-sm',
