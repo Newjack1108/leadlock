@@ -8,7 +8,7 @@ import type {
 export const SNAP_THRESHOLD = 0.45;
 export const TOUCH_TOLERANCE = 0;
 export const DEFAULT_CANVAS_PADDING = 1;
-export const DEFAULT_GRID_STEP = 0.25;
+export const DEFAULT_GRID_STEP = 0.1;
 const OVERLAP_EPSILON = 1e-6;
 const EDGE_EPSILON = 1e-6;
 const RIGHT_ANGLES = [0, 90, 180, 270] as const;

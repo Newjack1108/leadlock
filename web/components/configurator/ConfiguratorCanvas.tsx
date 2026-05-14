@@ -87,31 +87,80 @@ function getFrontMarkerPosition(
   const blockedRatio = profile
     ? getBlockedFrontMarkerRatio(profile, face, boxWidth, boxLength)
     : null;
+  const isCornerProfile = Boolean(profile && blockedRatio != null);
 
   if (face === 'right') {
     return {
-      containerClass: 'absolute right-2 top-1/2 -translate-y-1/2',
+      containerClass: cn(
+        'absolute top-1/2 -translate-y-1/2',
+        isCornerProfile ? 'right-0' : 'right-2'
+      ),
       labelClass: 'rotate-90',
+      markerClass: cn(
+        'bg-sky-500/95',
+        isCornerProfile ? 'h-14 w-1.5 rounded-l-sm' : 'h-1.5 w-6 rounded-full'
+      ),
+      badgeClass: isCornerProfile ? 'bg-transparent px-0 py-0 shadow-none' : 'bg-background/85 px-2 py-0.5 shadow-sm',
+      textClass: cn(
+        'text-[10px] font-semibold text-sky-700',
+        isCornerProfile ? 'sr-only' : ''
+      ),
       containerStyle: blockedRatio != null ? ({ top: `${blockedRatio * 100}%` } satisfies CSSProperties) : undefined,
     };
   }
   if (face === 'bottom') {
     return {
-      containerClass: 'absolute bottom-2 left-1/2 -translate-x-1/2',
+      containerClass: cn(
+        'absolute left-1/2 -translate-x-1/2',
+        isCornerProfile ? 'bottom-0' : 'bottom-2'
+      ),
       labelClass: '',
+      markerClass: cn(
+        'bg-sky-500/95',
+        isCornerProfile ? 'h-1.5 w-14 rounded-t-sm' : 'h-1.5 w-6 rounded-full'
+      ),
+      badgeClass: isCornerProfile ? 'bg-transparent px-0 py-0 shadow-none' : 'bg-background/85 px-2 py-0.5 shadow-sm',
+      textClass: cn(
+        'text-[10px] font-semibold text-sky-700',
+        isCornerProfile ? 'sr-only' : ''
+      ),
       containerStyle: blockedRatio != null ? ({ left: `${blockedRatio * 100}%` } satisfies CSSProperties) : undefined,
     };
   }
   if (face === 'left') {
     return {
-      containerClass: 'absolute left-2 top-1/2 -translate-y-1/2',
+      containerClass: cn(
+        'absolute top-1/2 -translate-y-1/2',
+        isCornerProfile ? 'left-0' : 'left-2'
+      ),
       labelClass: '-rotate-90',
+      markerClass: cn(
+        'bg-sky-500/95',
+        isCornerProfile ? 'h-14 w-1.5 rounded-r-sm' : 'h-1.5 w-6 rounded-full'
+      ),
+      badgeClass: isCornerProfile ? 'bg-transparent px-0 py-0 shadow-none' : 'bg-background/85 px-2 py-0.5 shadow-sm',
+      textClass: cn(
+        'text-[10px] font-semibold text-sky-700',
+        isCornerProfile ? 'sr-only' : ''
+      ),
       containerStyle: blockedRatio != null ? ({ top: `${blockedRatio * 100}%` } satisfies CSSProperties) : undefined,
     };
   }
   return {
-    containerClass: 'absolute left-1/2 top-2 -translate-x-1/2',
+    containerClass: cn(
+      'absolute left-1/2 -translate-x-1/2',
+      isCornerProfile ? 'top-0' : 'top-2'
+    ),
     labelClass: '',
+    markerClass: cn(
+      'bg-sky-500/95',
+      isCornerProfile ? 'h-1.5 w-14 rounded-b-sm' : 'h-1.5 w-6 rounded-full'
+    ),
+    badgeClass: isCornerProfile ? 'bg-transparent px-0 py-0 shadow-none' : 'bg-background/85 px-2 py-0.5 shadow-sm',
+    textClass: cn(
+      'text-[10px] font-semibold text-sky-700',
+      isCornerProfile ? 'sr-only' : ''
+    ),
     containerStyle: blockedRatio != null ? ({ left: `${blockedRatio * 100}%` } satisfies CSSProperties) : undefined,
   };
 }
@@ -564,12 +613,13 @@ export default function ConfiguratorCanvas({
                       >
                         <span
                           className={cn(
-                            'flex max-w-[calc(100%-12px)] items-center gap-1 overflow-hidden rounded-full bg-background/85 px-2 py-0.5 text-[10px] font-semibold shadow-sm',
+                            'flex max-w-[calc(100%-12px)] items-center gap-1 overflow-hidden rounded-full',
+                            frontMarkerPosition.badgeClass,
                             frontMarkerPosition.labelClass
                           )}
                         >
-                          <span className="block h-1.5 w-6 shrink-0 rounded-full bg-sky-500" />
-                          <span className="truncate">Front</span>
+                          <span className={cn('block shrink-0', frontMarkerPosition.markerClass)} />
+                          <span className={cn('truncate', frontMarkerPosition.textClass)}>Front</span>
                         </span>
                       </span>
                     </span>
