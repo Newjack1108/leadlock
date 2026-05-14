@@ -3,6 +3,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
+import {
+  AlertTriangle,
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUp,
+  CheckCircle2,
+  RotateCw,
+  Trash2,
+} from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -19,8 +29,10 @@ import {
   saveQuoteConfiguration,
 } from '@/lib/api';
 import { addProductToConfiguration, createEmptyConfiguration } from '@/lib/configurator/defaults';
+import { findPlacementCandidate } from '@/lib/configurator/geometry';
 import { formatCurrency, getPreviewIssueCount } from '@/lib/configurator/summary';
 import type {
+  ConfiguratorBoxPlacement,
   ConfiguratorCatalogResponse,
   ConfiguratorExtraSelection,
   ConfiguratorPreviewResponse,
@@ -31,6 +43,12 @@ import type {
 
 interface ConfiguratorShellProps {
   quote: Quote;
+}
+
+function normalizeRotation(value: number): 0 | 90 | 180 | 270 {
+  const next = ((value % 360) + 360) % 360;
+  if (next === 90 || next === 180 || next === 270) return next;
+  return 0;
 }
 
 export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
@@ -52,6 +70,7 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
   }, [catalog]);
 
   const selectedBox = configuration.boxes.find((box) => box.id === selectedBoxId) ?? null;
+  const selectedProduct = selectedBox ? productMap[selectedBox.product_id] ?? null : null;
   const errorCount = getPreviewIssueCount(preview, 'error');
   const warningCount = getPreviewIssueCount(preview, 'warning');
 
@@ -109,7 +128,7 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
   };
 
   const handleAddItem = (product: Product) => {
-    const next = addProductToConfiguration(configuration, product);
+    const next = addProductToConfiguration(configuration, product, productMap, selectedBoxId);
     updateConfiguration(next);
     setSelectedBoxId(next.boxes[next.boxes.length - 1]?.id ?? null);
   };
@@ -140,13 +159,54 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
     });
   };
 
-  const handleUpdateSelectedBox = (field: 'x' | 'y' | 'rotation', value: number) => {
-    if (!selectedBox) return;
+  const handleMoveBox = (boxId: string, nextBox: Pick<ConfiguratorBoxPlacement, 'x' | 'y'>) => {
     updateConfiguration({
       ...configuration,
       boxes: configuration.boxes.map((box) =>
-        box.id === selectedBox.id ? { ...box, [field]: value } : box
+        box.id === boxId ? { ...box, x: nextBox.x, y: nextBox.y } : box
       ),
+    });
+  };
+
+  const handleRotateBox = (boxId: string, delta = 90) => {
+    const current = configuration.boxes.find((box) => box.id === boxId);
+    if (!current) return;
+    const rotatedBox = { ...current, rotation: normalizeRotation(current.rotation + delta) };
+    const candidate = findPlacementCandidate({
+      movingBox: rotatedBox,
+      rawX: rotatedBox.x,
+      rawY: rotatedBox.y,
+      boxes: configuration.boxes.map((box) => (box.id === boxId ? rotatedBox : box)),
+      productMap,
+      threshold: 0,
+    });
+    if (!candidate.valid) {
+      toast.error('Rotating here would create an overlap or disconnect the layout.');
+      return;
+    }
+    updateConfiguration({
+      ...configuration,
+      boxes: configuration.boxes.map((box) => (box.id === boxId ? rotatedBox : box)),
+    });
+  };
+
+  const handleNudgeSelectedBox = (dx: number, dy: number) => {
+    if (!selectedBox) return;
+    const candidate = findPlacementCandidate({
+      movingBox: selectedBox,
+      rawX: Number((selectedBox.x + dx).toFixed(2)),
+      rawY: Number((selectedBox.y + dy).toFixed(2)),
+      boxes: configuration.boxes,
+      productMap,
+      threshold: 0,
+    });
+    if (!candidate.valid) {
+      toast.error(candidate.overlaps ? 'That nudge would overlap another box.' : 'That nudge would disconnect the layout.');
+      return;
+    }
+    handleMoveBox(selectedBox.id, {
+      x: candidate.x,
+      y: candidate.y,
     });
   };
 
@@ -187,11 +247,15 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-semibold">Quote Configurator</h1>
           <p className="mt-1 text-muted-foreground">
             {quote.quote_number} · {quote.customer_name || 'Draft quote'}
+          </p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Drag boxes on the canvas to build the layout. Boxes snap to valid edges, cannot overlap, and the front
+            marker rotates with each box.
           </p>
         </div>
         <div className="flex flex-wrap gap-3">
@@ -207,185 +271,50 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
         </div>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[340px_minmax(0,1fr)]">
-        <ConfiguratorCatalog
-          items={catalog.items}
-          extras={catalog.extras}
-          configuration={configuration}
-          onAddItem={handleAddItem}
-          onToggleExtra={handleToggleExtra}
-          onUpdateExtra={handleUpdateExtra}
-        />
-
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="space-y-6">
           <Card>
-            <CardHeader>
-              <CardTitle>Layout Metadata</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="layout-name">Saved Layout Name</Label>
-                <Input
-                  id="layout-name"
-                  value={configuration.name ?? ''}
-                  onChange={(event) =>
-                    updateConfiguration({
-                      ...configuration,
-                      name: event.target.value,
-                    })
-                  }
-                  placeholder="e.g. Four-box L shape"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Stored with the quote configuration now so reusable presets can be added later without changing
-                  the payload shape.
+            <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <CardTitle>Layout Canvas</CardTitle>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  The canvas is the main workspace. Drag boxes to reposition them, and use rotation on the selected
+                  box when you need to turn a corner.
                 </p>
               </div>
-              <div className="space-y-2">
-                <Label>Schema Version</Label>
-                <Input value={String(configuration.schema_version ?? 1)} disabled />
+              <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
+                <div className="rounded-md border px-3 py-2">
+                  <p className="text-muted-foreground">Boxes</p>
+                  <p className="text-lg font-semibold">{preview?.total_boxes ?? configuration.boxes.length}</p>
+                </div>
+                <div className="rounded-md border px-3 py-2">
+                  <p className="text-muted-foreground">Errors</p>
+                  <p className="text-lg font-semibold">{errorCount}</p>
+                </div>
+                <div className="rounded-md border px-3 py-2">
+                  <p className="text-muted-foreground">Warnings</p>
+                  <p className="text-lg font-semibold">{warningCount}</p>
+                </div>
+                <div className="rounded-md border px-3 py-2">
+                  <p className="text-muted-foreground">Subtotal</p>
+                  <p className="text-lg font-semibold">{formatCurrency(preview?.subtotal ?? 0)}</p>
+                </div>
               </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Layout Canvas</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
               <ConfiguratorCanvas
                 boxes={configuration.boxes}
                 productMap={productMap}
                 selectedBoxId={selectedBoxId}
                 onSelect={setSelectedBoxId}
+                onMoveBox={handleMoveBox}
               />
+              <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+                The front marker is visual only in this beta. It rotates with the box so you can quickly read layout
+                orientation without adding more product metadata yet.
+              </div>
             </CardContent>
           </Card>
-
-          <div className="grid gap-6 lg:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>Selected Item</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {selectedBox ? (
-                  <>
-                    <div className="space-y-1">
-                      <p className="font-medium">{productMap[selectedBox.product_id]?.name || 'Unknown item'}</p>
-                      <p className="text-sm text-muted-foreground">Edit placement and rotation for the selected item.</p>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="box-x">X Position</Label>
-                        <Input
-                          id="box-x"
-                          type="number"
-                          step="0.25"
-                          value={selectedBox.x}
-                          onChange={(event) => handleUpdateSelectedBox('x', Number(event.target.value || 0))}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="box-y">Y Position</Label>
-                        <Input
-                          id="box-y"
-                          type="number"
-                          step="0.25"
-                          value={selectedBox.y}
-                          onChange={(event) => handleUpdateSelectedBox('y', Number(event.target.value || 0))}
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="box-rotation">Rotation</Label>
-                      <Input
-                        id="box-rotation"
-                        type="number"
-                        step="90"
-                        min={0}
-                        max={270}
-                        value={selectedBox.rotation}
-                        onChange={(event) =>
-                          handleUpdateSelectedBox('rotation', Number(event.target.value || 0) as 0 | 90 | 180 | 270)
-                        }
-                      />
-                    </div>
-                    <div className="flex gap-3">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() =>
-                          handleUpdateSelectedBox(
-                            'rotation',
-                            (((selectedBox.rotation + 90) % 360) as 0 | 90 | 180 | 270)
-                          )
-                        }
-                      >
-                        Rotate 90°
-                      </Button>
-                      <Button type="button" variant="destructive" onClick={handleRemoveSelectedBox}>
-                        Remove Item
-                      </Button>
-                    </div>
-                  </>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    Select a configurator item on the canvas to edit its position or rotation.
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Preview Summary</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-3 gap-3 text-sm">
-                  <div className="rounded-md border p-3">
-                    <p className="text-muted-foreground">Boxes</p>
-                    <p className="text-lg font-semibold">{preview?.total_boxes ?? 0}</p>
-                  </div>
-                  <div className="rounded-md border p-3">
-                    <p className="text-muted-foreground">Errors</p>
-                    <p className="text-lg font-semibold">{errorCount}</p>
-                  </div>
-                  <div className="rounded-md border p-3">
-                    <p className="text-muted-foreground">Warnings</p>
-                    <p className="text-lg font-semibold">{warningCount}</p>
-                  </div>
-                </div>
-                <div className="rounded-md border p-3">
-                  <p className="text-sm text-muted-foreground">Preview subtotal</p>
-                  <p className="text-xl font-semibold">{formatCurrency(preview?.subtotal ?? 0)}</p>
-                </div>
-                <div className="space-y-2">
-                  <p className="text-sm font-medium">Validation</p>
-                  {preview?.issues?.length ? (
-                    <div className="space-y-2">
-                      {preview.issues.map((issue, index) => (
-                        <div
-                          key={`${issue.code}-${index}`}
-                          className={`rounded-md border p-3 text-sm ${
-                            issue.severity === 'error'
-                              ? 'border-red-200 bg-red-50 text-red-800'
-                              : 'border-amber-200 bg-amber-50 text-amber-800'
-                          }`}
-                        >
-                          <p className="font-medium">{issue.message}</p>
-                          {issue.box_ids.length > 0 && (
-                            <p className="mt-1 text-xs opacity-80">Items: {issue.box_ids.join(', ')}</p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">No validation issues.</p>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
 
           <Card>
             <CardHeader>
@@ -424,6 +353,157 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
               )}
             </CardContent>
           </Card>
+        </div>
+
+        <div className="space-y-6 xl:sticky xl:top-4 xl:self-start">
+          <Card>
+            <CardHeader>
+              <CardTitle>Layout Metadata</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="layout-name">Saved Layout Name</Label>
+                <Input
+                  id="layout-name"
+                  value={configuration.name ?? ''}
+                  onChange={(event) =>
+                    updateConfiguration({
+                      ...configuration,
+                      name: event.target.value,
+                    })
+                  }
+                  placeholder="e.g. Four-box L shape"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Schema Version</Label>
+                <Input value={String(configuration.schema_version ?? 1)} disabled />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Selected Box</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {selectedBox && selectedProduct ? (
+                <>
+                  <div>
+                    <p className="font-medium">{selectedProduct.name}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {selectedProduct.configurator_width ?? '—'}m x {selectedProduct.configurator_length ?? '—'}m
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 rounded-md border p-3 text-sm">
+                    <div>
+                      <p className="text-muted-foreground">X</p>
+                      <p className="font-medium">{selectedBox.x.toFixed(2)}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Y</p>
+                      <p className="font-medium">{selectedBox.y.toFixed(2)}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Rotation</p>
+                      <p className="font-medium">{selectedBox.rotation}°</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium">Nudge</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div />
+                      <Button variant="outline" size="sm" onClick={() => handleNudgeSelectedBox(0, -0.25)}>
+                        <ArrowUp className="h-4 w-4" />
+                      </Button>
+                      <div />
+                      <Button variant="outline" size="sm" onClick={() => handleNudgeSelectedBox(-0.25, 0)}>
+                        <ArrowLeft className="h-4 w-4" />
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => handleNudgeSelectedBox(0, 0.25)}>
+                        <ArrowDown className="h-4 w-4" />
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => handleNudgeSelectedBox(0.25, 0)}>
+                        <ArrowRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleRotateBox(selectedBox.id, 90)}
+                    >
+                      <RotateCw className="mr-2 h-4 w-4" />
+                      Rotate 90°
+                    </Button>
+                    <Button type="button" variant="destructive" size="sm" onClick={handleRemoveSelectedBox}>
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Remove
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Select a box on the canvas to rotate it, nudge it slightly, or remove it.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Validation</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {preview?.issues?.length ? (
+                preview.issues.map((issue, index) => (
+                  <div
+                    key={`${issue.code}-${index}`}
+                    className={`rounded-md border p-3 text-sm ${
+                      issue.severity === 'error'
+                        ? 'border-red-200 bg-red-50 text-red-800'
+                        : 'border-amber-200 bg-amber-50 text-amber-800'
+                    }`}
+                  >
+                    <div className="flex items-start gap-2">
+                      {issue.severity === 'error' ? (
+                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                      ) : (
+                        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+                      )}
+                      <div>
+                        <p className="font-medium">{issue.message}</p>
+                        {issue.box_ids.length > 0 && (
+                          <p className="mt-1 text-xs opacity-80">Items: {issue.box_ids.join(', ')}</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+                  <div className="flex items-start gap-2">
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+                    <p>No validation issues. This layout is ready to save or apply.</p>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <ConfiguratorCatalog
+            items={catalog.items}
+            extras={catalog.extras}
+            configuration={configuration}
+            onAddItem={handleAddItem}
+            onToggleExtra={handleToggleExtra}
+            onUpdateExtra={handleUpdateExtra}
+          />
         </div>
       </div>
     </div>

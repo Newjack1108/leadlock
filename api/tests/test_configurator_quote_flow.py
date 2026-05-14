@@ -165,3 +165,60 @@ def test_configurator_catalog_save_preview_and_apply_flow():
         "3m Front Box",
         "Rubber Matting",
     }
+
+
+def test_configurator_preview_rejects_disconnected_layouts_and_accepts_snap_tolerance():
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SQLModel.metadata.create_all(engine)
+    user = _seed_user(engine)
+
+    with Session(engine) as session:
+        item = Product(
+            name="3m Side Box",
+            category=ProductCategory.CONFIGURATOR,
+            base_price=Decimal("1800.00"),
+            configurator_width=Decimal("3.00"),
+            configurator_length=Decimal("3.00"),
+        )
+        session.add(item)
+        session.commit()
+        session.refresh(item)
+        item_id = item.id
+
+    client = TestClient(_make_app(engine, user))
+
+    disconnected = client.post(
+        "/api/configurator/preview",
+        json={
+            "schema_version": 1,
+            "boxes": [
+                {"id": "box-1", "product_id": item_id, "x": "0", "y": "0", "rotation": 0},
+                {"id": "box-2", "product_id": item_id, "x": "7", "y": "0", "rotation": 0},
+            ],
+            "extras": [],
+        },
+    )
+    assert disconnected.status_code == 200
+    disconnected_payload = disconnected.json()
+    assert disconnected_payload["valid"] is False
+    assert any(issue["code"] == "DISCONNECTED_LAYOUT" for issue in disconnected_payload["issues"])
+
+    within_tolerance = client.post(
+        "/api/configurator/preview",
+        json={
+            "schema_version": 1,
+            "boxes": [
+                {"id": "box-1", "product_id": item_id, "x": "0", "y": "0", "rotation": 0},
+                {"id": "box-2", "product_id": item_id, "x": "3.03", "y": "0", "rotation": 0},
+            ],
+            "extras": [],
+        },
+    )
+    assert within_tolerance.status_code == 200
+    tolerant_payload = within_tolerance.json()
+    assert tolerant_payload["valid"] is True
+    assert all(issue["code"] != "DISCONNECTED_LAYOUT" for issue in tolerant_payload["issues"])

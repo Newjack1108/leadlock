@@ -15,6 +15,7 @@ from app.schemas import (
 
 
 ZERO = Decimal("0")
+EDGE_TOLERANCE = Decimal("0.05")
 
 
 def _to_decimal(value: Decimal | int | float | str) -> Decimal:
@@ -44,17 +45,26 @@ def _rectangles_overlap(
     left: Tuple[Decimal, Decimal, Decimal, Decimal],
     right: Tuple[Decimal, Decimal, Decimal, Decimal],
 ) -> bool:
-    return left[0] < right[2] and left[2] > right[0] and left[1] < right[3] and left[3] > right[1]
+    return (
+        left[0] < right[2] - EDGE_TOLERANCE
+        and left[2] > right[0] + EDGE_TOLERANCE
+        and left[1] < right[3] - EDGE_TOLERANCE
+        and left[3] > right[1] + EDGE_TOLERANCE
+    )
+
+
+def _edges_close(left: Decimal, right: Decimal) -> bool:
+    return abs(left - right) <= EDGE_TOLERANCE
 
 
 def _touching(
     left: Tuple[Decimal, Decimal, Decimal, Decimal],
     right: Tuple[Decimal, Decimal, Decimal, Decimal],
 ) -> bool:
-    shares_vertical_edge = (left[2] == right[0] or right[2] == left[0]) and _range_overlap(
+    shares_vertical_edge = (_edges_close(left[2], right[0]) or _edges_close(right[2], left[0])) and _range_overlap(
         left[1], left[3], right[1], right[3]
     )
-    shares_horizontal_edge = (left[3] == right[1] or right[3] == left[1]) and _range_overlap(
+    shares_horizontal_edge = (_edges_close(left[3], right[1]) or _edges_close(right[3], left[1])) and _range_overlap(
         left[0], left[2], right[0], right[2]
     )
     return shares_vertical_edge or shares_horizontal_edge
@@ -179,8 +189,8 @@ def build_configurator_preview(
             issues.append(
                 ConfiguratorValidationIssue(
                     code="DISCONNECTED_LAYOUT",
-                    severity="warning",
-                    message="Some configurator items are not attached to the main block.",
+                    severity="error",
+                    message="All configurator items must attach to the main block.",
                     box_ids=sorted(set(layout_rects.keys()) - visited),
                 )
             )

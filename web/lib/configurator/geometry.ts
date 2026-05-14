@@ -1,5 +1,10 @@
 import type { ConfiguratorBoxPlacement, Product } from '@/lib/types';
 
+export const SNAP_THRESHOLD = 0.45;
+export const CONNECTION_TOLERANCE = 0.05;
+export const DEFAULT_CANVAS_PADDING = 1;
+export const DEFAULT_GRID_STEP = 0.25;
+
 export interface PlacementRect {
   x1: number;
   y1: number;
@@ -7,6 +12,48 @@ export interface PlacementRect {
   y2: number;
   width: number;
   length: number;
+}
+
+export interface SnapGuide {
+  orientation: 'vertical' | 'horizontal';
+  position: number;
+  start: number;
+  end: number;
+}
+
+export interface CanvasBounds {
+  minX: number;
+  minY: number;
+  width: number;
+  height: number;
+  padding: number;
+}
+
+export interface LayoutRectEntry {
+  box: ConfiguratorBoxPlacement;
+  product: Product;
+  rect: PlacementRect;
+}
+
+export interface CandidatePlacement {
+  x: number;
+  y: number;
+  snapped: boolean;
+  overlaps: boolean;
+  connected: boolean;
+  valid: boolean;
+  guides: SnapGuide[];
+}
+
+interface SnapCandidate {
+  value: number;
+  distance: number;
+  guide: SnapGuide;
+}
+
+export function roundLayoutValue(value: number, step = DEFAULT_GRID_STEP) {
+  if (!Number.isFinite(value)) return 0;
+  return Math.round(value / step) * step;
 }
 
 export function getFootprint(product: Product, rotation: number) {
@@ -30,18 +77,327 @@ export function getPlacementRect(box: ConfiguratorBoxPlacement, product: Product
   };
 }
 
-export function placementsOverlap(a: PlacementRect, b: PlacementRect) {
-  return a.x1 < b.x2 && a.x2 > b.x1 && a.y1 < b.y2 && a.y2 > b.y1;
+export function placementsOverlap(a: PlacementRect, b: PlacementRect, tolerance = CONNECTION_TOLERANCE) {
+  return (
+    a.x1 < b.x2 - tolerance &&
+    a.x2 > b.x1 + tolerance &&
+    a.y1 < b.y2 - tolerance &&
+    a.y2 > b.y1 + tolerance
+  );
 }
 
-export function getCanvasBounds(rects: PlacementRect[]) {
+export function rangesOverlap(
+  aStart: number,
+  aEnd: number,
+  bStart: number,
+  bEnd: number,
+  tolerance = CONNECTION_TOLERANCE
+) {
+  return Math.max(aStart, bStart) < Math.min(aEnd, bEnd) - tolerance;
+}
+
+export function rectsTouch(
+  a: PlacementRect,
+  b: PlacementRect,
+  tolerance = CONNECTION_TOLERANCE
+) {
+  const sharesVerticalEdge =
+    (Math.abs(a.x2 - b.x1) <= tolerance || Math.abs(b.x2 - a.x1) <= tolerance) &&
+    rangesOverlap(a.y1, a.y2, b.y1, b.y2, tolerance);
+  const sharesHorizontalEdge =
+    (Math.abs(a.y2 - b.y1) <= tolerance || Math.abs(b.y2 - a.y1) <= tolerance) &&
+    rangesOverlap(a.x1, a.x2, b.x1, b.x2, tolerance);
+  return sharesVerticalEdge || sharesHorizontalEdge;
+}
+
+export function buildLayoutRectEntries(
+  boxes: ConfiguratorBoxPlacement[],
+  productMap: Record<number, Product>
+): LayoutRectEntry[] {
+  return boxes
+    .map((box) => {
+      const product = productMap[box.product_id];
+      if (!product) return null;
+      return { box, product, rect: getPlacementRect(box, product) };
+    })
+    .filter((entry): entry is LayoutRectEntry => Boolean(entry));
+}
+
+export function getCanvasBounds(rects: PlacementRect[], padding = DEFAULT_CANVAS_PADDING): CanvasBounds {
   if (rects.length === 0) {
-    return { width: 6, height: 4 };
+    return {
+      minX: 0,
+      minY: 0,
+      width: 10,
+      height: 7,
+      padding,
+    };
   }
+
+  const minX = Math.min(0, Math.floor(Math.min(...rects.map((rect) => rect.x1))));
+  const minY = Math.min(0, Math.floor(Math.min(...rects.map((rect) => rect.y1))));
   const maxX = Math.max(...rects.map((rect) => rect.x2));
   const maxY = Math.max(...rects.map((rect) => rect.y2));
+
   return {
-    width: Math.max(6, Math.ceil(maxX + 1)),
-    height: Math.max(4, Math.ceil(maxY + 1)),
+    minX,
+    minY,
+    width: Math.max(10, Math.ceil(maxX - minX + padding * 2)),
+    height: Math.max(7, Math.ceil(maxY - minY + padding * 2)),
+    padding,
+  };
+}
+
+export function getConnectedBoxIds(entries: LayoutRectEntry[], tolerance = CONNECTION_TOLERANCE) {
+  if (entries.length === 0) return new Set<string>();
+
+  const graph = new Map<string, Set<string>>();
+  entries.forEach(({ box }) => graph.set(box.id, new Set<string>()));
+
+  for (let index = 0; index < entries.length; index += 1) {
+    const current = entries[index];
+    for (let otherIndex = index + 1; otherIndex < entries.length; otherIndex += 1) {
+      const other = entries[otherIndex];
+      if (rectsTouch(current.rect, other.rect, tolerance)) {
+        graph.get(current.box.id)?.add(other.box.id);
+        graph.get(other.box.id)?.add(current.box.id);
+      }
+    }
+  }
+
+  const connected = new Set<string>();
+  const queue = [entries[0].box.id];
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current || connected.has(current)) continue;
+    connected.add(current);
+    queue.push(...(graph.get(current) ?? []));
+  }
+
+  return connected;
+}
+
+export function isLayoutConnected(entries: LayoutRectEntry[], tolerance = CONNECTION_TOLERANCE) {
+  if (entries.length <= 1) return true;
+  return getConnectedBoxIds(entries, tolerance).size === entries.length;
+}
+
+function getSnapCandidates(
+  rawValue: number,
+  axis: 'x' | 'y',
+  movingRect: PlacementRect,
+  otherRect: PlacementRect,
+  threshold: number
+): SnapCandidate[] {
+  if (axis === 'x') {
+    const overlap = rangesOverlap(movingRect.y1, movingRect.y2, otherRect.y1, otherRect.y2, 0);
+    const candidates = [
+      {
+        value: otherRect.x1 - movingRect.width,
+        guide: {
+          orientation: 'vertical' as const,
+          position: otherRect.x1,
+          start: Math.min(movingRect.y1, otherRect.y1),
+          end: Math.max(movingRect.y2, otherRect.y2),
+        },
+      },
+      {
+        value: otherRect.x2,
+        guide: {
+          orientation: 'vertical' as const,
+          position: otherRect.x2,
+          start: Math.min(movingRect.y1, otherRect.y1),
+          end: Math.max(movingRect.y2, otherRect.y2),
+        },
+      },
+      {
+        value: otherRect.x1,
+        guide: {
+          orientation: 'vertical' as const,
+          position: otherRect.x1,
+          start: otherRect.y1,
+          end: otherRect.y2,
+        },
+      },
+      {
+        value: otherRect.x2 - movingRect.width,
+        guide: {
+          orientation: 'vertical' as const,
+          position: otherRect.x2,
+          start: otherRect.y1,
+          end: otherRect.y2,
+        },
+      },
+    ];
+
+    return candidates
+      .map((candidate) => ({
+        value: candidate.value,
+        guide: candidate.guide,
+        distance: Math.abs(rawValue - candidate.value),
+      }))
+      .filter((candidate) => candidate.distance <= threshold && overlap);
+  }
+
+  const overlap = rangesOverlap(movingRect.x1, movingRect.x2, otherRect.x1, otherRect.x2, 0);
+  const candidates = [
+    {
+      value: otherRect.y1 - movingRect.length,
+      guide: {
+        orientation: 'horizontal' as const,
+        position: otherRect.y1,
+        start: Math.min(movingRect.x1, otherRect.x1),
+        end: Math.max(movingRect.x2, otherRect.x2),
+      },
+    },
+    {
+      value: otherRect.y2,
+      guide: {
+        orientation: 'horizontal' as const,
+        position: otherRect.y2,
+        start: Math.min(movingRect.x1, otherRect.x1),
+        end: Math.max(movingRect.x2, otherRect.x2),
+      },
+    },
+    {
+      value: otherRect.y1,
+      guide: {
+        orientation: 'horizontal' as const,
+        position: otherRect.y1,
+        start: otherRect.x1,
+        end: otherRect.x2,
+      },
+    },
+    {
+      value: otherRect.y2 - movingRect.length,
+      guide: {
+        orientation: 'horizontal' as const,
+        position: otherRect.y2,
+        start: otherRect.x1,
+        end: otherRect.x2,
+      },
+    },
+  ];
+
+  return candidates
+    .map((candidate) => ({
+      value: candidate.value,
+      guide: candidate.guide,
+      distance: Math.abs(rawValue - candidate.value),
+    }))
+    .filter((candidate) => candidate.distance <= threshold && overlap);
+}
+
+function getBestCandidate(candidates: SnapCandidate[]) {
+  return candidates.sort((left, right) => left.distance - right.distance)[0] ?? null;
+}
+
+export function findPlacementCandidate(params: {
+  movingBox: ConfiguratorBoxPlacement;
+  rawX: number;
+  rawY: number;
+  boxes: ConfiguratorBoxPlacement[];
+  productMap: Record<number, Product>;
+  threshold?: number;
+}) {
+  const { movingBox, rawX, rawY, boxes, productMap, threshold = SNAP_THRESHOLD } = params;
+  const movingProduct = productMap[movingBox.product_id];
+  if (!movingProduct) {
+    return {
+      x: roundLayoutValue(rawX),
+      y: roundLayoutValue(rawY),
+      snapped: false,
+      overlaps: false,
+      connected: true,
+      valid: false,
+      guides: [],
+    } satisfies CandidatePlacement;
+  }
+
+  const baseX = Math.max(0, roundLayoutValue(rawX));
+  const baseY = Math.max(0, roundLayoutValue(rawY));
+  const initialRect = getPlacementRect({ ...movingBox, x: baseX, y: baseY }, movingProduct);
+  const otherEntries = buildLayoutRectEntries(
+    boxes.filter((box) => box.id !== movingBox.id),
+    productMap
+  );
+
+  const xCandidate = getBestCandidate(
+    otherEntries.flatMap((entry) => getSnapCandidates(baseX, 'x', initialRect, entry.rect, threshold))
+  );
+  const snappedX = xCandidate ? roundLayoutValue(xCandidate.value) : baseX;
+
+  const rectAfterX = getPlacementRect({ ...movingBox, x: snappedX, y: baseY }, movingProduct);
+  const yCandidate = getBestCandidate(
+    otherEntries.flatMap((entry) => getSnapCandidates(baseY, 'y', rectAfterX, entry.rect, threshold))
+  );
+  const snappedY = yCandidate ? roundLayoutValue(yCandidate.value) : baseY;
+
+  const nextBox = { ...movingBox, x: snappedX, y: snappedY };
+  const nextRect = getPlacementRect(nextBox, movingProduct);
+  const overlaps = otherEntries.some((entry) => placementsOverlap(nextRect, entry.rect));
+  const layoutEntries = buildLayoutRectEntries(
+    boxes.map((box) => (box.id === movingBox.id ? nextBox : box)),
+    productMap
+  );
+  const connected = isLayoutConnected(layoutEntries);
+
+  return {
+    x: snappedX,
+    y: snappedY,
+    snapped: Boolean(xCandidate || yCandidate),
+    overlaps,
+    connected,
+    valid: !overlaps && connected,
+    guides: [xCandidate?.guide, yCandidate?.guide].filter((guide): guide is SnapGuide => Boolean(guide)),
+  } satisfies CandidatePlacement;
+}
+
+export function getSuggestedPlacement(
+  boxes: ConfiguratorBoxPlacement[],
+  product: Product,
+  productMap: Record<number, Product>,
+  anchorBoxId?: string | null
+) {
+  if (boxes.length === 0) {
+    return { x: 0, y: 0 };
+  }
+
+  const entries = buildLayoutRectEntries(boxes, productMap);
+  const footprint = getFootprint(product, 0);
+  const anchorEntry =
+    entries.find((entry) => entry.box.id === anchorBoxId) ??
+    entries[entries.length - 1];
+  const orderedEntries = [anchorEntry, ...entries.filter((entry) => entry.box.id !== anchorEntry.box.id)];
+
+  for (const entry of orderedEntries) {
+    const candidates = [
+      { x: roundLayoutValue(entry.rect.x2), y: roundLayoutValue(entry.rect.y1) },
+      { x: roundLayoutValue(entry.rect.x1), y: roundLayoutValue(entry.rect.y2) },
+      { x: roundLayoutValue(Math.max(0, entry.rect.x1 - footprint.width)), y: roundLayoutValue(entry.rect.y1) },
+      { x: roundLayoutValue(entry.rect.x1), y: roundLayoutValue(Math.max(0, entry.rect.y1 - footprint.length)) },
+    ];
+
+    for (const candidate of candidates) {
+      const nextRect: PlacementRect = {
+        x1: candidate.x,
+        y1: candidate.y,
+        x2: candidate.x + footprint.width,
+        y2: candidate.y + footprint.length,
+        width: footprint.width,
+        length: footprint.length,
+      };
+      const overlaps = entries.some((other) => placementsOverlap(nextRect, other.rect, 0));
+      if (!overlaps) {
+        return candidate;
+      }
+    }
+  }
+
+  const maxX = Math.max(...entries.map((entry) => entry.rect.x2));
+
+  return {
+    x: roundLayoutValue(maxX),
+    y: 0,
   };
 }

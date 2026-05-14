@@ -1,3 +1,4 @@
+import { getSuggestedPlacement } from '@/lib/configurator/geometry';
 import type { Product, QuoteConfigurationPayload } from '@/lib/types';
 
 export function createEmptyConfiguration(name?: string): QuoteConfigurationPayload {
@@ -15,9 +16,12 @@ export function createPlacementId(productId: number, index: number): string {
 
 export function addProductToConfiguration(
   config: QuoteConfigurationPayload,
-  product: Product
+  product: Product,
+  productMap: Record<number, Product>,
+  anchorBoxId?: string | null
 ): QuoteConfigurationPayload {
   const nextIndex = config.boxes.length + 1;
+  const { x, y } = getSuggestedPlacement(config.boxes, product, productMap, anchorBoxId);
   return {
     ...config,
     boxes: [
@@ -25,8 +29,8 @@ export function addProductToConfiguration(
       {
         id: createPlacementId(product.id, nextIndex),
         product_id: product.id,
-        x: (nextIndex - 1) * 0.5,
-        y: 0,
+        x,
+        y,
         rotation: 0,
       },
     ],
