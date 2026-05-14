@@ -5,7 +5,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, 
 from sqlmodel import Session, select
 from typing import Optional, List
 from app.database import get_session
-from app.models import Product, ProductCategory, ConfiguratorFrontFace, User, ProductOptionalExtra
+from app.models import (
+    Product,
+    ProductCategory,
+    ConfiguratorFrontFace,
+    ConfiguratorConnectionProfile,
+    User,
+    ProductOptionalExtra,
+)
 from app.auth import get_current_user, require_role
 from app.schemas import ProductCreate, ProductUpdate, ProductResponse
 from app.models import UserRole
@@ -26,10 +33,19 @@ def _coerce_configurator_front_face(value):
     return None
 
 
+def _coerce_configurator_connection_profile(value):
+    if isinstance(value, ConfiguratorConnectionProfile):
+        return value
+    if isinstance(value, str) and value:
+        return ConfiguratorConnectionProfile(value)
+    return None
+
+
 def _build_product_response(product: Product, optional_extras: Optional[List[ProductResponse]] = None) -> ProductResponse:
     payload = {
         **product.dict(),
         "configurator_front_face": _coerce_configurator_front_face(product.configurator_front_face),
+        "configurator_connection_profile": _coerce_configurator_connection_profile(product.configurator_connection_profile),
         "is_production_synced": product.production_product_id is not None,
         "optional_extras": optional_extras,
     }
@@ -43,6 +59,7 @@ def _validate_configurator_product_payload(payload: dict) -> None:
     configurator_width = payload.get("configurator_width")
     configurator_length = payload.get("configurator_length")
     configurator_front_face = payload.get("configurator_front_face")
+    configurator_connection_profile = payload.get("configurator_connection_profile")
 
     if allow_in_configurator and not is_extra:
         raise HTTPException(
@@ -54,6 +71,12 @@ def _validate_configurator_product_payload(payload: dict) -> None:
         raise HTTPException(
             status_code=422,
             detail="Only non-extra configurator items can set configurator_front_face",
+        )
+
+    if configurator_connection_profile is not None and (category != ProductCategory.CONFIGURATOR or is_extra):
+        raise HTTPException(
+            status_code=422,
+            detail="Only non-extra configurator items can set configurator_connection_profile",
         )
 
     if category == ProductCategory.CONFIGURATOR and not is_extra:
@@ -98,6 +121,12 @@ def _validate_configurator_product_payload(payload: dict) -> None:
                     status_code=422,
                     detail="For deeper configurator products, configurator_front_face must be left or right",
                 )
+
+        if configurator_connection_profile is not None and width == length:
+            raise HTTPException(
+                status_code=422,
+                detail="Corner connection profiles require a non-square configurator footprint",
+            )
 
 
 @router.get("", response_model=List[ProductResponse])
@@ -366,6 +395,9 @@ async def update_product(
         "configurator_width": update_data.get("configurator_width", product.configurator_width),
         "configurator_length": update_data.get("configurator_length", product.configurator_length),
         "configurator_front_face": update_data.get("configurator_front_face", product.configurator_front_face),
+        "configurator_connection_profile": update_data.get(
+            "configurator_connection_profile", product.configurator_connection_profile
+        ),
     }
     _validate_configurator_product_payload(candidate_payload)
     

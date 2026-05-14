@@ -11,7 +11,16 @@ from sqlmodel import Session, SQLModel, create_engine
 
 from app.auth import get_current_user, require_configurator_access
 from app.database import get_session
-from app.models import ConfiguratorFrontFace, Product, ProductCategory, Quote, QuoteStatus, User, UserRole
+from app.models import (
+    ConfiguratorConnectionProfile,
+    ConfiguratorFrontFace,
+    Product,
+    ProductCategory,
+    Quote,
+    QuoteStatus,
+    User,
+    UserRole,
+)
 from app.routers import configurator, products, quotes
 
 
@@ -121,6 +130,38 @@ def test_non_square_configurator_products_require_valid_front_face():
     )
     assert valid_front.status_code == 200
     assert valid_front.json()["configurator_front_face"] == "right"
+
+    invalid_corner_profile = client.post(
+        "/api/products",
+        json={
+            "name": "Square Corner Box",
+            "category": "CONFIGURATOR",
+            "base_price": "1450.00",
+            "unit": "Unit",
+            "configurator_width": "3.50",
+            "configurator_length": "3.50",
+            "configurator_front_face": "bottom",
+            "configurator_connection_profile": "corner_right",
+        },
+    )
+    assert invalid_corner_profile.status_code == 422
+    assert "non-square configurator footprint" in invalid_corner_profile.json()["detail"]
+
+    valid_corner_profile = client.post(
+        "/api/products",
+        json={
+            "name": "Right Hand Corner Box",
+            "category": "CONFIGURATOR",
+            "base_price": "2450.00",
+            "unit": "Unit",
+            "configurator_width": "5.00",
+            "configurator_length": "3.50",
+            "configurator_front_face": "bottom",
+            "configurator_connection_profile": "corner_right",
+        },
+    )
+    assert valid_corner_profile.status_code == 200
+    assert valid_corner_profile.json()["configurator_connection_profile"] == "corner_right"
 
 
 def test_configurator_catalog_save_preview_and_apply_flow():
@@ -429,3 +470,142 @@ def test_configurator_preview_uses_product_front_face_for_rectangular_items():
     exposed_payload = side_join_with_bottom_front_exposed.json()
     assert exposed_payload["valid"] is True
     assert all(issue["code"] != "FRONT_FACE_BLOCKED" for issue in exposed_payload["issues"])
+
+
+def test_corner_connection_profiles_restrict_front_segment_and_side_faces():
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SQLModel.metadata.create_all(engine)
+    user = _seed_user(engine)
+
+    with Session(engine) as session:
+        standard_box = Product(
+            name="3.5 Box",
+            category=ProductCategory.CONFIGURATOR,
+            base_price=Decimal("1800.00"),
+            configurator_width=Decimal("3.50"),
+            configurator_length=Decimal("3.50"),
+        )
+        right_corner = Product(
+            name="Right Corner Box",
+            category=ProductCategory.CONFIGURATOR,
+            base_price=Decimal("2400.00"),
+            configurator_width=Decimal("5.00"),
+            configurator_length=Decimal("3.50"),
+            configurator_front_face=ConfiguratorFrontFace.BOTTOM,
+            configurator_connection_profile=ConfiguratorConnectionProfile.CORNER_RIGHT,
+        )
+        left_corner = Product(
+            name="Left Corner Box",
+            category=ProductCategory.CONFIGURATOR,
+            base_price=Decimal("2400.00"),
+            configurator_width=Decimal("5.00"),
+            configurator_length=Decimal("3.50"),
+            configurator_front_face=ConfiguratorFrontFace.BOTTOM,
+            configurator_connection_profile=ConfiguratorConnectionProfile.CORNER_LEFT,
+        )
+        session.add(standard_box)
+        session.add(right_corner)
+        session.add(left_corner)
+        session.commit()
+        session.refresh(standard_box)
+        session.refresh(right_corner)
+        session.refresh(left_corner)
+        standard_box_id = standard_box.id
+        right_corner_id = right_corner.id
+        left_corner_id = left_corner.id
+
+    client = TestClient(_make_app(engine, user))
+
+    right_front_allowed = client.post(
+        "/api/configurator/preview",
+        json={
+            "schema_version": 1,
+            "boxes": [
+                {"id": "corner", "product_id": right_corner_id, "x": "0", "y": "0", "rotation": 0},
+                {"id": "joiner", "product_id": standard_box_id, "x": "0", "y": "3.50", "rotation": 180},
+            ],
+            "extras": [],
+        },
+    )
+    assert right_front_allowed.status_code == 200
+    assert right_front_allowed.json()["valid"] is True
+
+    right_front_blocked = client.post(
+        "/api/configurator/preview",
+        json={
+            "schema_version": 1,
+            "boxes": [
+                {"id": "corner", "product_id": right_corner_id, "x": "0", "y": "0", "rotation": 0},
+                {"id": "joiner", "product_id": standard_box_id, "x": "1.50", "y": "3.50", "rotation": 180},
+            ],
+            "extras": [],
+        },
+    )
+    assert right_front_blocked.status_code == 200
+    right_front_blocked_payload = right_front_blocked.json()
+    assert right_front_blocked_payload["valid"] is False
+    assert any(issue["code"] == "INVALID_CONNECTION_SEGMENT" for issue in right_front_blocked_payload["issues"])
+
+    right_side_allowed = client.post(
+        "/api/configurator/preview",
+        json={
+            "schema_version": 1,
+            "boxes": [
+                {"id": "corner", "product_id": right_corner_id, "x": "0", "y": "0", "rotation": 0},
+                {"id": "joiner", "product_id": standard_box_id, "x": "5.00", "y": "0", "rotation": 0},
+            ],
+            "extras": [],
+        },
+    )
+    assert right_side_allowed.status_code == 200
+    assert right_side_allowed.json()["valid"] is True
+
+    right_forbidden_face = client.post(
+        "/api/configurator/preview",
+        json={
+            "schema_version": 1,
+            "boxes": [
+                {"id": "corner", "product_id": right_corner_id, "x": "0", "y": "0", "rotation": 0},
+                {"id": "joiner", "product_id": standard_box_id, "x": "-3.50", "y": "0", "rotation": 0},
+            ],
+            "extras": [],
+        },
+    )
+    assert right_forbidden_face.status_code == 200
+    right_forbidden_face_payload = right_forbidden_face.json()
+    assert right_forbidden_face_payload["valid"] is False
+    assert any(issue["code"] == "INVALID_CONNECTION_FACE" for issue in right_forbidden_face_payload["issues"])
+
+    left_front_allowed = client.post(
+        "/api/configurator/preview",
+        json={
+            "schema_version": 1,
+            "boxes": [
+                {"id": "corner", "product_id": left_corner_id, "x": "0", "y": "0", "rotation": 0},
+                {"id": "joiner", "product_id": standard_box_id, "x": "1.50", "y": "3.50", "rotation": 180},
+            ],
+            "extras": [],
+        },
+    )
+    assert left_front_allowed.status_code == 200
+    assert left_front_allowed.json()["valid"] is True
+
+    left_front_blocked = client.post(
+        "/api/configurator/preview",
+        json={
+            "schema_version": 1,
+            "boxes": [
+                {"id": "corner", "product_id": left_corner_id, "x": "0", "y": "0", "rotation": 0},
+                {"id": "joiner", "product_id": standard_box_id, "x": "0", "y": "3.50", "rotation": 180},
+            ],
+            "extras": [],
+        },
+    )
+    assert left_front_blocked.status_code == 200
+    left_front_blocked_payload = left_front_blocked.json()
+    assert left_front_blocked_payload["valid"] is False
+    assert any(issue["code"] == "INVALID_CONNECTION_SEGMENT" for issue in left_front_blocked_payload["issues"])

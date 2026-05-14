@@ -41,6 +41,8 @@ export enum ProductCategory {
 
 export const CONFIGURATOR_FRONT_FACES = ['top', 'right', 'bottom', 'left'] as const;
 export type ConfiguratorFrontFace = (typeof CONFIGURATOR_FRONT_FACES)[number];
+export const CONFIGURATOR_CONNECTION_PROFILES = ['corner_left', 'corner_right'] as const;
+export type ConfiguratorConnectionProfile = (typeof CONFIGURATOR_CONNECTION_PROFILES)[number];
 
 /** Fixed subcategory labels for catalog filtering and forms (matches Product.subcategory). */
 export const PRODUCT_SUBCATEGORIES = [
@@ -553,6 +555,7 @@ export interface Product {
   configurator_width?: number;
   configurator_length?: number;
   configurator_front_face?: ConfiguratorFrontFace | null;
+  configurator_connection_profile?: ConfiguratorConnectionProfile | null;
   allow_in_configurator: boolean;
   installation_hours?: number;
   boxes_per_product?: number;

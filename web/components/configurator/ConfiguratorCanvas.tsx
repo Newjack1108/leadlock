@@ -410,6 +410,7 @@ export default function ConfiguratorCanvas({
                         snapped: false,
                         overlaps: false,
                         connected: true,
+                        connectionBlocked: false,
                         frontBlocked: false,
                         valid: true,
                         guides: [],
@@ -567,6 +568,8 @@ export default function ConfiguratorCanvas({
                 <div className="pointer-events-none absolute bottom-4 left-4 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800 shadow-sm">
                   {dragCandidate.overlaps
                     ? 'This position overlaps another box.'
+                    : dragCandidate.connectionBlocked
+                      ? 'This join hits a blocked side or fixed front section.'
                     : dragCandidate.frontBlocked
                       ? 'The front of this box must stay on an exposed face.'
                       : 'This position breaks the connected layout.'}

@@ -4,7 +4,7 @@ from sqlmodel import Session, select
 from app.auth import require_configurator_access
 from app.configurator_service import build_configurator_preview
 from app.database import get_session
-from app.models import ConfiguratorFrontFace, Product, ProductCategory, User
+from app.models import ConfiguratorConnectionProfile, ConfiguratorFrontFace, Product, ProductCategory, User
 from app.schemas import (
     ConfiguratorAccessResponse,
     ConfiguratorCatalogResponse,
@@ -23,6 +23,11 @@ def _build_product_response(product: Product) -> ProductResponse:
             ConfiguratorFrontFace(product.configurator_front_face)
             if isinstance(product.configurator_front_face, str) and product.configurator_front_face
             else product.configurator_front_face
+        ),
+        "configurator_connection_profile": (
+            ConfiguratorConnectionProfile(product.configurator_connection_profile)
+            if isinstance(product.configurator_connection_profile, str) and product.configurator_connection_profile
+            else product.configurator_connection_profile
         ),
         "is_production_synced": product.production_product_id is not None,
         "optional_extras": None,

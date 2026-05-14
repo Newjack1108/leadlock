@@ -7,6 +7,7 @@ from app.models import (
     Customer,
     LeadStatus, ActivityType, Timeframe, UserRole, ProductCategory,
     ConfiguratorFrontFace,
+    ConfiguratorConnectionProfile,
     QuoteStatus, QuoteTemperature, DiscountType, DiscountScope, DiscountRequestStatus,
     LeadType, LeadSource, EmailDirection, ReminderPriority, ReminderType,
     SuggestedAction, OpportunityStage, LossCategory, InstallationLeadTime,
@@ -1058,6 +1059,7 @@ class ProductCreate(BaseModel):
     configurator_width: Optional[Decimal] = None
     configurator_length: Optional[Decimal] = None
     configurator_front_face: Optional[ConfiguratorFrontFace] = None
+    configurator_connection_profile: Optional[ConfiguratorConnectionProfile] = None
     allow_in_configurator: bool = False
     installation_hours: Optional[Decimal] = None
     boxes_per_product: Optional[int] = None  # Number of boxes per product (optional; used in installation calculation)
@@ -1092,6 +1094,7 @@ class ProductUpdate(BaseModel):
     configurator_width: Optional[Decimal] = None
     configurator_length: Optional[Decimal] = None
     configurator_front_face: Optional[ConfiguratorFrontFace] = None
+    configurator_connection_profile: Optional[ConfiguratorConnectionProfile] = None
     allow_in_configurator: Optional[bool] = None
     installation_hours: Optional[Decimal] = None
     boxes_per_product: Optional[int] = None
@@ -1129,6 +1132,7 @@ class ProductResponse(BaseModel):
     configurator_width: Optional[Decimal] = None
     configurator_length: Optional[Decimal] = None
     configurator_front_face: Optional[ConfiguratorFrontFace] = None
+    configurator_connection_profile: Optional[ConfiguratorConnectionProfile] = None
     allow_in_configurator: bool = False
     installation_hours: Optional[Decimal] = None
     boxes_per_product: Optional[int] = None

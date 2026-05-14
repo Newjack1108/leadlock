@@ -168,6 +168,8 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
       toast.error(
         candidate.overlaps
           ? 'That rotation would overlap another box.'
+          : candidate.connectionBlocked
+            ? 'That rotation would use a blocked side or fixed front section.'
           : candidate.frontBlocked
             ? 'The front of this box must stay on an exposed face.'
             : 'That rotation would disconnect the layout.'

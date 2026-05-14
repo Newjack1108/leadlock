@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from decimal import Decimal
 from math import cos, pi, sin
-from typing import Dict, List, Tuple
+from typing import Dict, List, Literal, Set, Tuple
 
 from sqlmodel import Session, select
 
-from app.models import ConfiguratorFrontFace, Product, ProductCategory
+from app.models import ConfiguratorConnectionProfile, ConfiguratorFrontFace, Product, ProductCategory
 from app.schemas import (
     ConfiguratorGeneratedLine,
     ConfiguratorPreviewResponse,
@@ -23,6 +23,8 @@ Point = Tuple[float, float]
 LayoutShape = Tuple[float, float, float, float, Tuple[Point, Point, Point, Point]]
 Face = str
 FACE_ORDER: Tuple[Face, Face, Face, Face] = ("top", "right", "bottom", "left")
+FaceContact = Tuple[Face, Face, float, float]
+FaceContactState = Literal["valid", "forbidden_face", "blocked_front_segment"]
 
 
 def _to_decimal(value: Decimal | int | float | str) -> Decimal:
@@ -113,34 +115,117 @@ def _base_front_face(product: Product) -> Face:
     return "top"
 
 
+def _connection_profile(product: Product) -> str | None:
+    profile = product.configurator_connection_profile
+    if isinstance(profile, ConfiguratorConnectionProfile):
+        return profile.value
+    if isinstance(profile, str) and profile in (
+        ConfiguratorConnectionProfile.CORNER_LEFT.value,
+        ConfiguratorConnectionProfile.CORNER_RIGHT.value,
+    ):
+        return profile
+    return None
+
+
 def _rotate_face(face: Face, rotation: int) -> Face:
     base_index = FACE_ORDER.index(face) if face in FACE_ORDER else 0
     steps = rotation // 90
     return FACE_ORDER[(base_index + steps) % len(FACE_ORDER)]
 
 
+def _front_start_adjacent_face(face: Face) -> Face:
+    if face in ("top", "bottom"):
+        return "left"
+    return "top"
+
+
+def _front_end_adjacent_face(face: Face) -> Face:
+    if face in ("top", "bottom"):
+        return "right"
+    return "bottom"
+
+
+def _corner_standard_face(face: Face, profile: str) -> Face:
+    return (
+        _front_start_adjacent_face(face)
+        if profile == ConfiguratorConnectionProfile.CORNER_LEFT.value
+        else _front_end_adjacent_face(face)
+    )
+
+
+def _face_length(shape: LayoutShape, face: Face) -> float:
+    if face in ("top", "bottom"):
+        return shape[2] - shape[0]
+    return shape[3] - shape[1]
+
+
+def _face_axis_start(shape: LayoutShape, face: Face) -> float:
+    if face in ("top", "bottom"):
+        return shape[0]
+    return shape[1]
+
+
+def _allowed_front_join_interval(box, product: Product, shape: LayoutShape, face: Face, profile: str) -> Tuple[float, float]:
+    width, length = _footprint(product, box.rotation)
+    face_length = _face_length(shape, face)
+    join_length = float(min(width, length))
+    blocked_length = max(0.0, face_length - join_length)
+    axis_start = _face_axis_start(shape, face)
+
+    if profile == ConfiguratorConnectionProfile.CORNER_LEFT.value:
+        return axis_start + blocked_length, axis_start + face_length
+    return axis_start, axis_start + join_length
+
+
+def _interval_within_allowed_range(contact_start: float, contact_end: float, allowed_start: float, allowed_end: float) -> bool:
+    return contact_start >= allowed_start - EDGE_EPSILON and contact_end <= allowed_end + EDGE_EPSILON
+
+
 def _front_face(product: Product, rotation: int) -> Face:
     return _rotate_face(_base_front_face(product), rotation)
 
 
-def _shared_faces(left: LayoutShape, right: LayoutShape) -> List[Tuple[Face, Face]]:
-    faces: List[Tuple[Face, Face]] = []
+def _shared_face_contacts(left: LayoutShape, right: LayoutShape) -> List[FaceContact]:
+    faces: List[FaceContact] = []
     if _edges_close(left[2], right[0]) and _range_overlap(left[1], left[3], right[1], right[3], TOUCH_TOLERANCE):
-        faces.append(("right", "left"))
+        faces.append(("right", "left", max(left[1], right[1]), min(left[3], right[3])))
     if _edges_close(right[2], left[0]) and _range_overlap(left[1], left[3], right[1], right[3], TOUCH_TOLERANCE):
-        faces.append(("left", "right"))
+        faces.append(("left", "right", max(left[1], right[1]), min(left[3], right[3])))
     if _edges_close(left[3], right[1]) and _range_overlap(left[0], left[2], right[0], right[2], TOUCH_TOLERANCE):
-        faces.append(("bottom", "top"))
+        faces.append(("bottom", "top", max(left[0], right[0]), min(left[2], right[2])))
     if _edges_close(right[3], left[1]) and _range_overlap(left[0], left[2], right[0], right[2], TOUCH_TOLERANCE):
-        faces.append(("top", "bottom"))
+        faces.append(("top", "bottom", max(left[0], right[0]), min(left[2], right[2])))
     return faces
+
+
+def _shared_faces(left: LayoutShape, right: LayoutShape) -> List[Tuple[Face, Face]]:
+    return [(left_face, right_face) for left_face, right_face, _, _ in _shared_face_contacts(left, right)]
 
 
 def _touching(
     left: LayoutShape,
     right: LayoutShape,
 ) -> bool:
-    return len(_shared_faces(left, right)) > 0
+    return len(_shared_face_contacts(left, right)) > 0
+
+
+def _face_contact_state(box, product: Product, shape: LayoutShape, face: Face, overlap_start: float, overlap_end: float) -> FaceContactState:
+    profile = _connection_profile(product)
+    if profile is None:
+        return "valid"
+
+    front_face = _front_face(product, box.rotation)
+    standard_face = _corner_standard_face(front_face, profile)
+    if face == standard_face:
+        return "valid"
+    if face == front_face:
+        allowed_start, allowed_end = _allowed_front_join_interval(box, product, shape, face, profile)
+        return (
+            "valid"
+            if _interval_within_allowed_range(overlap_start, overlap_end, allowed_start, allowed_end)
+            else "blocked_front_segment"
+        )
+    return "forbidden_face"
 
 
 def _load_products(session: Session, product_ids: List[int]) -> Dict[int, Product]:
@@ -183,6 +268,7 @@ def build_configurator_preview(
     layout_rects: Dict[str, LayoutShape] = {}
     graph: Dict[str, set[str]] = {box.id: set() for box in payload.boxes}
     joined_faces: Dict[str, set[Face]] = {box.id: set() for box in payload.boxes}
+    invalid_connection_pairs: Set[Tuple[str, str, str]] = set()
 
     for box in payload.boxes:
         product = box_products.get(box.product_id)
@@ -247,14 +333,43 @@ def build_configurator_preview(
                     )
                 )
             else:
-                shared_faces = _shared_faces(rect, other_rect)
-                if not shared_faces:
+                current_product = box_products.get(box.product_id)
+                other_product = box_products.get(other.product_id)
+                if not current_product or not other_product:
                     continue
-                graph[box.id].add(other.id)
-                graph[other.id].add(box.id)
-                for box_face, other_face in shared_faces:
-                    joined_faces[box.id].add(box_face)
-                    joined_faces[other.id].add(other_face)
+                contacts = _shared_face_contacts(rect, other_rect)
+                if not contacts:
+                    continue
+                for box_face, other_face, overlap_start, overlap_end in contacts:
+                    box_state = _face_contact_state(
+                        box,
+                        current_product,
+                        rect,
+                        box_face,
+                        overlap_start,
+                        overlap_end,
+                    )
+                    other_state = _face_contact_state(
+                        other,
+                        other_product,
+                        other_rect,
+                        other_face,
+                        overlap_start,
+                        overlap_end,
+                    )
+                    if box_state == "valid" and other_state == "valid":
+                        graph[box.id].add(other.id)
+                        graph[other.id].add(box.id)
+                        joined_faces[box.id].add(box_face)
+                        joined_faces[other.id].add(other_face)
+                        continue
+
+                    issue_code = (
+                        "INVALID_CONNECTION_SEGMENT"
+                        if "blocked_front_segment" in (box_state, other_state)
+                        else "INVALID_CONNECTION_FACE"
+                    )
+                    invalid_connection_pairs.add(tuple(sorted((box.id, other.id))) + (issue_code,))
 
     if len(layout_rects) > 1:
         to_visit = [next(iter(layout_rects.keys()))]
@@ -275,11 +390,27 @@ def build_configurator_preview(
                 )
             )
 
+    for left_id, right_id, issue_code in sorted(invalid_connection_pairs):
+        issues.append(
+            ConfiguratorValidationIssue(
+                code=issue_code,
+                severity="error",
+                message=(
+                    "Corner boxes can only join across their marked 3.5m front section."
+                    if issue_code == "INVALID_CONNECTION_SEGMENT"
+                    else "Configurator items can only connect on their allowed join sides."
+                ),
+                box_ids=[left_id, right_id],
+            )
+        )
+
     for box in payload.boxes:
         if box.id not in layout_rects:
             continue
         product = box_products.get(box.product_id)
         if not product:
+            continue
+        if _connection_profile(product):
             continue
         if _front_face(product, box.rotation) in joined_faces.get(box.id, set()):
             issues.append(

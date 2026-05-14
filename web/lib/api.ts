@@ -1263,6 +1263,7 @@ export const createProduct = async (productData: {
   configurator_width?: number;
   configurator_length?: number;
   configurator_front_face?: 'top' | 'right' | 'bottom' | 'left' | null;
+  configurator_connection_profile?: 'corner_left' | 'corner_right' | null;
   allow_in_configurator?: boolean;
   installation_hours?: number;
   boxes_per_product?: number;
@@ -1293,6 +1294,7 @@ export const updateProduct = async (productId: number, productData: {
   configurator_width?: number | null;
   configurator_length?: number | null;
   configurator_front_face?: 'top' | 'right' | 'bottom' | 'left' | null;
+  configurator_connection_profile?: 'corner_left' | 'corner_right' | null;
   allow_in_configurator?: boolean;
   installation_hours?: number;
   boxes_per_product?: number;

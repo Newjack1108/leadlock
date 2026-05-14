@@ -1,4 +1,9 @@
-import type { ConfiguratorBoxPlacement, ConfiguratorFrontFace, Product } from '@/lib/types';
+import type {
+  ConfiguratorBoxPlacement,
+  ConfiguratorConnectionProfile,
+  ConfiguratorFrontFace,
+  Product,
+} from '@/lib/types';
 
 export const SNAP_THRESHOLD = 0.45;
 export const TOUCH_TOLERANCE = 0;
@@ -53,6 +58,7 @@ export interface CandidatePlacement {
   snapped: boolean;
   overlaps: boolean;
   connected: boolean;
+  connectionBlocked: boolean;
   frontBlocked: boolean;
   valid: boolean;
   guides: SnapGuide[];
@@ -69,6 +75,22 @@ interface AnchorInsets {
   right: number;
   top: number;
   bottom: number;
+}
+
+interface FaceContact {
+  leftFace: BoxFace;
+  rightFace: BoxFace;
+  overlapStart: number;
+  overlapEnd: number;
+}
+
+type FaceContactState = 'valid' | 'forbidden_face' | 'blocked_front_segment';
+
+interface LayoutAnalysis {
+  graph: Map<string, Set<string>>;
+  joinedFaces: Map<string, Set<BoxFace>>;
+  frontBlocked: Set<string>;
+  connectionBlocked: Set<string>;
 }
 
 export function roundLayoutValue(value: number, step = DEFAULT_GRID_STEP) {
@@ -107,11 +129,72 @@ export function getBaseFrontFace(product?: Product | null): BoxFace {
   return 'top';
 }
 
+function getConnectionProfile(product?: Product | null): ConfiguratorConnectionProfile | null {
+  const profile = product?.configurator_connection_profile;
+  if (profile === 'corner_left' || profile === 'corner_right') {
+    return profile;
+  }
+  return null;
+}
+
 function rotateFace(face: BoxFace, rotation: number): BoxFace {
   const normalized = normalizeRotation(rotation);
   const baseIndex = FACE_ORDER.indexOf(face);
   const steps = normalized / 90;
   return FACE_ORDER[(baseIndex + steps) % FACE_ORDER.length] ?? 'top';
+}
+
+function getFrontStartAdjacentFace(face: BoxFace): BoxFace {
+  if (face === 'top' || face === 'bottom') {
+    return 'left';
+  }
+  return 'top';
+}
+
+function getFrontEndAdjacentFace(face: BoxFace): BoxFace {
+  if (face === 'top' || face === 'bottom') {
+    return 'right';
+  }
+  return 'bottom';
+}
+
+function getCornerStandardFace(face: BoxFace, profile: ConfiguratorConnectionProfile): BoxFace {
+  return profile === 'corner_left' ? getFrontStartAdjacentFace(face) : getFrontEndAdjacentFace(face);
+}
+
+function getFaceLength(rect: PlacementRect, face: BoxFace) {
+  return face === 'top' || face === 'bottom' ? rect.x2 - rect.x1 : rect.y2 - rect.y1;
+}
+
+function getFaceAxisStart(rect: PlacementRect, face: BoxFace) {
+  return face === 'top' || face === 'bottom' ? rect.x1 : rect.y1;
+}
+
+function getAllowedFrontJoinInterval(
+  rect: PlacementRect,
+  face: BoxFace,
+  profile: ConfiguratorConnectionProfile
+) {
+  const faceLength = getFaceLength(rect, face);
+  const joinLength = Math.min(rect.boxWidth, rect.boxLength);
+  const blockedLength = Math.max(0, faceLength - joinLength);
+  const axisStart = getFaceAxisStart(rect, face);
+
+  if (profile === 'corner_left') {
+    return {
+      start: axisStart + blockedLength,
+      end: axisStart + faceLength,
+    };
+  }
+
+  return {
+    start: axisStart,
+    end: axisStart + joinLength,
+  };
+}
+
+function isIntervalWithinAllowedRange(contactStart: number, contactEnd: number, allowedStart: number, allowedEnd: number) {
+  return contactStart >= allowedStart - EDGE_EPSILON && contactEnd <= allowedEnd + EDGE_EPSILON;
 }
 
 export function getFrontFace(product: Product | null | undefined, rotation: number): BoxFace {
@@ -235,24 +318,44 @@ function edgesClose(a: number, b: number, tolerance = TOUCH_TOLERANCE) {
   return Math.abs(a - b) <= tolerance + EDGE_EPSILON;
 }
 
-function getSharedFaces(
+function getSharedFaceContacts(
   a: PlacementRect,
   b: PlacementRect,
   tolerance = TOUCH_TOLERANCE
 ) {
-  const faces: Array<[BoxFace, BoxFace]> = [];
+  const faces: FaceContact[] = [];
 
   if (edgesClose(a.x2, b.x1, tolerance) && rangesOverlap(a.y1, a.y2, b.y1, b.y2, tolerance)) {
-    faces.push(['right', 'left']);
+    faces.push({
+      leftFace: 'right',
+      rightFace: 'left',
+      overlapStart: Math.max(a.y1, b.y1),
+      overlapEnd: Math.min(a.y2, b.y2),
+    });
   }
   if (edgesClose(b.x2, a.x1, tolerance) && rangesOverlap(a.y1, a.y2, b.y1, b.y2, tolerance)) {
-    faces.push(['left', 'right']);
+    faces.push({
+      leftFace: 'left',
+      rightFace: 'right',
+      overlapStart: Math.max(a.y1, b.y1),
+      overlapEnd: Math.min(a.y2, b.y2),
+    });
   }
   if (edgesClose(a.y2, b.y1, tolerance) && rangesOverlap(a.x1, a.x2, b.x1, b.x2, tolerance)) {
-    faces.push(['bottom', 'top']);
+    faces.push({
+      leftFace: 'bottom',
+      rightFace: 'top',
+      overlapStart: Math.max(a.x1, b.x1),
+      overlapEnd: Math.min(a.x2, b.x2),
+    });
   }
   if (edgesClose(b.y2, a.y1, tolerance) && rangesOverlap(a.x1, a.x2, b.x1, b.x2, tolerance)) {
-    faces.push(['top', 'bottom']);
+    faces.push({
+      leftFace: 'top',
+      rightFace: 'bottom',
+      overlapStart: Math.max(a.x1, b.x1),
+      overlapEnd: Math.min(a.x2, b.x2),
+    });
   }
 
   return faces;
@@ -263,26 +366,122 @@ export function rectsTouch(
   b: PlacementRect,
   tolerance = TOUCH_TOLERANCE
 ) {
-  return getSharedFaces(a, b, tolerance).length > 0;
+  return getSharedFaceContacts(a, b, tolerance).length > 0;
 }
 
-export function getJoinedFaces(entries: LayoutRectEntry[], tolerance = TOUCH_TOLERANCE) {
+function getFaceContactState(
+  entry: LayoutRectEntry,
+  face: BoxFace,
+  overlapStart: number,
+  overlapEnd: number
+): FaceContactState {
+  const profile = getConnectionProfile(entry.product);
+  if (!profile) {
+    return 'valid';
+  }
+
+  const frontFace = getFrontFace(entry.product, entry.box.rotation);
+  const standardFace = getCornerStandardFace(frontFace, profile);
+
+  if (face === standardFace) {
+    return 'valid';
+  }
+
+  if (face === frontFace) {
+    const allowedInterval = getAllowedFrontJoinInterval(entry.rect, face, profile);
+    return isIntervalWithinAllowedRange(
+      overlapStart,
+      overlapEnd,
+      allowedInterval.start,
+      allowedInterval.end
+    )
+      ? 'valid'
+      : 'blocked_front_segment';
+  }
+
+  return 'forbidden_face';
+}
+
+function analyzeLayoutConnections(entries: LayoutRectEntry[], tolerance = TOUCH_TOLERANCE): LayoutAnalysis {
+  const graph = new Map<string, Set<string>>();
   const joinedFaces = new Map<string, Set<BoxFace>>();
-  entries.forEach(({ box }) => joinedFaces.set(box.id, new Set<BoxFace>()));
+  const frontBlocked = new Set<string>();
+  const connectionBlocked = new Set<string>();
+
+  entries.forEach(({ box }) => {
+    graph.set(box.id, new Set<string>());
+    joinedFaces.set(box.id, new Set<BoxFace>());
+  });
 
   for (let index = 0; index < entries.length; index += 1) {
     const current = entries[index];
     for (let otherIndex = index + 1; otherIndex < entries.length; otherIndex += 1) {
       const other = entries[otherIndex];
-      const sharedFaces = getSharedFaces(current.rect, other.rect, tolerance);
-      sharedFaces.forEach(([currentFace, otherFace]) => {
-        joinedFaces.get(current.box.id)?.add(currentFace);
-        joinedFaces.get(other.box.id)?.add(otherFace);
+      const contacts = getSharedFaceContacts(current.rect, other.rect, tolerance);
+
+      contacts.forEach((contact) => {
+        const currentState = getFaceContactState(
+          current,
+          contact.leftFace,
+          contact.overlapStart,
+          contact.overlapEnd
+        );
+        const otherState = getFaceContactState(
+          other,
+          contact.rightFace,
+          contact.overlapStart,
+          contact.overlapEnd
+        );
+
+        if (currentState === 'valid' && otherState === 'valid') {
+          graph.get(current.box.id)?.add(other.box.id);
+          graph.get(other.box.id)?.add(current.box.id);
+          joinedFaces.get(current.box.id)?.add(contact.leftFace);
+          joinedFaces.get(other.box.id)?.add(contact.rightFace);
+
+          if (!getConnectionProfile(current.product) && contact.leftFace === getFrontFace(current.product, current.box.rotation)) {
+            frontBlocked.add(current.box.id);
+          }
+          if (!getConnectionProfile(other.product) && contact.rightFace === getFrontFace(other.product, other.box.rotation)) {
+            frontBlocked.add(other.box.id);
+          }
+          return;
+        }
+
+        connectionBlocked.add(current.box.id);
+        connectionBlocked.add(other.box.id);
       });
     }
   }
 
-  return joinedFaces;
+  return {
+    graph,
+    joinedFaces,
+    frontBlocked,
+    connectionBlocked,
+  };
+}
+
+function getConnectedIdsFromGraph(graph: Map<string, Set<string>>, startId?: string) {
+  const connected = new Set<string>();
+  const seed = startId ?? graph.keys().next().value;
+  if (!seed) {
+    return connected;
+  }
+
+  const queue = [seed];
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current || connected.has(current)) continue;
+    connected.add(current);
+    queue.push(...(graph.get(current) ?? []));
+  }
+
+  return connected;
+}
+
+export function getJoinedFaces(entries: LayoutRectEntry[], tolerance = TOUCH_TOLERANCE) {
+  return analyzeLayoutConnections(entries, tolerance).joinedFaces;
 }
 
 export function isFrontFaceExposed(
@@ -290,6 +489,9 @@ export function isFrontFaceExposed(
   product: Product | null | undefined,
   joinedFaces: Map<string, Set<BoxFace>>
 ) {
+  if (getConnectionProfile(product)) {
+    return true;
+  }
   return !joinedFaces.get(box.id)?.has(getFrontFace(product, box.rotation));
 }
 
@@ -342,31 +544,8 @@ export function getCanvasBounds(rects: PlacementRect[], padding = DEFAULT_CANVAS
 
 export function getConnectedBoxIds(entries: LayoutRectEntry[], tolerance = TOUCH_TOLERANCE) {
   if (entries.length === 0) return new Set<string>();
-
-  const graph = new Map<string, Set<string>>();
-  entries.forEach(({ box }) => graph.set(box.id, new Set<string>()));
-
-  for (let index = 0; index < entries.length; index += 1) {
-    const current = entries[index];
-    for (let otherIndex = index + 1; otherIndex < entries.length; otherIndex += 1) {
-      const other = entries[otherIndex];
-      if (rectsTouch(current.rect, other.rect, tolerance)) {
-        graph.get(current.box.id)?.add(other.box.id);
-        graph.get(other.box.id)?.add(current.box.id);
-      }
-    }
-  }
-
-  const connected = new Set<string>();
-  const queue = [entries[0].box.id];
-  while (queue.length > 0) {
-    const current = queue.shift();
-    if (!current || connected.has(current)) continue;
-    connected.add(current);
-    queue.push(...(graph.get(current) ?? []));
-  }
-
-  return connected;
+  const analysis = analyzeLayoutConnections(entries, tolerance);
+  return getConnectedIdsFromGraph(analysis.graph, entries[0]?.box.id);
 }
 
 export function isLayoutConnected(entries: LayoutRectEntry[], tolerance = TOUCH_TOLERANCE) {
@@ -502,6 +681,7 @@ export function findPlacementCandidate(params: {
       snapped: false,
       overlaps: false,
       connected: true,
+      connectionBlocked: false,
       frontBlocked: false,
       valid: false,
       guides: [],
@@ -538,9 +718,10 @@ export function findPlacementCandidate(params: {
     boxes.map((box) => (box.id === movingBox.id ? nextBox : box)),
     productMap
   );
-  const connected = isLayoutConnected(layoutEntries);
-  const joinedFaces = getJoinedFaces(layoutEntries);
-  const frontBlocked = !isFrontFaceExposed(nextBox, movingProduct, joinedFaces);
+  const analysis = analyzeLayoutConnections(layoutEntries);
+  const connected = getConnectedIdsFromGraph(analysis.graph, layoutEntries[0]?.box.id).size === layoutEntries.length;
+  const connectionBlocked = analysis.connectionBlocked.has(nextBox.id);
+  const frontBlocked = analysis.frontBlocked.has(nextBox.id);
 
   return {
     x: snappedX,
@@ -548,8 +729,9 @@ export function findPlacementCandidate(params: {
     snapped: Boolean(xCandidate || yCandidate),
     overlaps,
     connected,
+    connectionBlocked,
     frontBlocked,
-    valid: !overlaps && connected && !frontBlocked,
+    valid: !overlaps && connected && !connectionBlocked && !frontBlocked,
     guides: [xCandidate?.guide, yCandidate?.guide].filter((guide): guide is SnapGuide => Boolean(guide)),
   } satisfies CandidatePlacement;
 }
@@ -620,8 +802,10 @@ export function getSuggestedPlacement(
           y: candidate.y,
           rotation,
         } satisfies ConfiguratorBoxPlacement;
-        const joinedFaces = getJoinedFaces([...entries, { box: nextBox, product, rect: nextRect }]);
-        if (isFrontFaceExposed(nextBox, product, joinedFaces)) {
+        const nextEntries = [...entries, { box: nextBox, product, rect: nextRect }];
+        const analysis = analyzeLayoutConnections(nextEntries);
+        const connected = getConnectedIdsFromGraph(analysis.graph, nextEntries[0]?.box.id).size === nextEntries.length;
+        if (!analysis.connectionBlocked.has(nextBox.id) && !analysis.frontBlocked.has(nextBox.id) && connected) {
           return { ...candidate, rotation };
         }
       }
