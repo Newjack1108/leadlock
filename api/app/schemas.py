@@ -114,13 +114,13 @@ class ConfiguratorBoxPlacement(BaseModel):
     product_id: int
     x: Decimal = Decimal("0")
     y: Decimal = Decimal("0")
-    rotation: float = 0
+    rotation: int = 0
 
     @field_validator("rotation")
     @classmethod
-    def rotation_must_be_finite(cls, value: float) -> float:
-        if value != value or value in (float("inf"), float("-inf")):
-            raise ValueError("rotation must be a finite number")
+    def rotation_must_be_face_aligned(cls, value: int) -> int:
+        if value not in (0, 90, 180, 270):
+            raise ValueError("rotation must be one of 0, 90, 180, 270")
         return value
 
 

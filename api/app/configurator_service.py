@@ -16,17 +16,19 @@ from app.schemas import (
 
 
 ZERO = Decimal("0")
-TOUCH_TOLERANCE = 0.05
+TOUCH_TOLERANCE = 0.0
 OVERLAP_EPSILON = 1e-6
+EDGE_EPSILON = 1e-6
 Point = Tuple[float, float]
 LayoutShape = Tuple[float, float, float, float, Tuple[Point, Point, Point, Point]]
+Face = str
 
 
 def _to_decimal(value: Decimal | int | float | str) -> Decimal:
     return value if isinstance(value, Decimal) else Decimal(str(value))
 
 
-def _footprint(product: Product, rotation: float) -> Tuple[Decimal, Decimal]:
+def _footprint(product: Product, rotation: int) -> Tuple[Decimal, Decimal]:
     del rotation
     width = _to_decimal(product.configurator_width or ZERO)
     length = _to_decimal(product.configurator_length or ZERO)
@@ -63,7 +65,7 @@ def _shape(box, product: Product) -> LayoutShape:
 
 
 def _range_overlap(a_start: float, a_end: float, b_start: float, b_end: float, tolerance: float = 0.0) -> bool:
-    return max(a_start, b_start) < min(a_end, b_end) - tolerance
+    return max(a_start, b_start) < min(a_end, b_end) - tolerance - EDGE_EPSILON
 
 
 def _get_axes(corners: Tuple[Point, Point, Point, Point]) -> List[Point]:
@@ -97,20 +99,37 @@ def _rectangles_overlap(
 
 
 def _edges_close(left: float, right: float) -> bool:
-    return abs(left - right) <= TOUCH_TOLERANCE
+    return abs(left - right) <= TOUCH_TOLERANCE + EDGE_EPSILON
+
+
+def _front_face(rotation: int) -> Face:
+    if rotation == 90:
+        return "right"
+    if rotation == 180:
+        return "bottom"
+    if rotation == 270:
+        return "left"
+    return "top"
+
+
+def _shared_faces(left: LayoutShape, right: LayoutShape) -> List[Tuple[Face, Face]]:
+    faces: List[Tuple[Face, Face]] = []
+    if _edges_close(left[2], right[0]) and _range_overlap(left[1], left[3], right[1], right[3], TOUCH_TOLERANCE):
+        faces.append(("right", "left"))
+    if _edges_close(right[2], left[0]) and _range_overlap(left[1], left[3], right[1], right[3], TOUCH_TOLERANCE):
+        faces.append(("left", "right"))
+    if _edges_close(left[3], right[1]) and _range_overlap(left[0], left[2], right[0], right[2], TOUCH_TOLERANCE):
+        faces.append(("bottom", "top"))
+    if _edges_close(right[3], left[1]) and _range_overlap(left[0], left[2], right[0], right[2], TOUCH_TOLERANCE):
+        faces.append(("top", "bottom"))
+    return faces
 
 
 def _touching(
     left: LayoutShape,
     right: LayoutShape,
 ) -> bool:
-    shares_vertical_edge = (_edges_close(left[2], right[0]) or _edges_close(right[2], left[0])) and _range_overlap(
-        left[1], left[3], right[1], right[3], TOUCH_TOLERANCE
-    )
-    shares_horizontal_edge = (_edges_close(left[3], right[1]) or _edges_close(right[3], left[1])) and _range_overlap(
-        left[0], left[2], right[0], right[2], TOUCH_TOLERANCE
-    )
-    return shares_vertical_edge or shares_horizontal_edge
+    return len(_shared_faces(left, right)) > 0
 
 
 def _load_products(session: Session, product_ids: List[int]) -> Dict[int, Product]:
@@ -152,6 +171,7 @@ def build_configurator_preview(
 
     layout_rects: Dict[str, LayoutShape] = {}
     graph: Dict[str, set[str]] = {box.id: set() for box in payload.boxes}
+    joined_faces: Dict[str, set[Face]] = {box.id: set() for box in payload.boxes}
 
     for box in payload.boxes:
         product = box_products.get(box.product_id)
@@ -215,9 +235,15 @@ def build_configurator_preview(
                         box_ids=[box.id, other.id],
                     )
                 )
-            elif _touching(rect, other_rect):
+            else:
+                shared_faces = _shared_faces(rect, other_rect)
+                if not shared_faces:
+                    continue
                 graph[box.id].add(other.id)
                 graph[other.id].add(box.id)
+                for box_face, other_face in shared_faces:
+                    joined_faces[box.id].add(box_face)
+                    joined_faces[other.id].add(other_face)
 
     if len(layout_rects) > 1:
         to_visit = [next(iter(layout_rects.keys()))]
@@ -235,6 +261,19 @@ def build_configurator_preview(
                     severity="error",
                     message="All configurator items must attach to the main block.",
                     box_ids=sorted(set(layout_rects.keys()) - visited),
+                )
+            )
+
+    for box in payload.boxes:
+        if box.id not in layout_rects:
+            continue
+        if _front_face(box.rotation) in joined_faces.get(box.id, set()):
+            issues.append(
+                ConfiguratorValidationIssue(
+                    code="FRONT_FACE_BLOCKED",
+                    severity="error",
+                    message="The front of a configurator item must stay on an exposed face.",
+                    box_ids=[box.id],
                 )
             )
 

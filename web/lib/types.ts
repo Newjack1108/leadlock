@@ -116,7 +116,7 @@ export interface ConfiguratorBoxPlacement {
   product_id: number;
   x: number;
   y: number;
-  rotation: number;
+  rotation: 0 | 90 | 180 | 270;
 }
 
 export interface ConfiguratorExtraSelection {

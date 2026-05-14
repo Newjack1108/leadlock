@@ -167,7 +167,7 @@ def test_configurator_catalog_save_preview_and_apply_flow():
     }
 
 
-def test_configurator_preview_rejects_disconnected_layouts_keeps_touch_tolerance_and_allows_free_rotation():
+def test_configurator_preview_enforces_zero_overlap_and_front_face_rules():
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
@@ -207,21 +207,21 @@ def test_configurator_preview_rejects_disconnected_layouts_keeps_touch_tolerance
     assert disconnected_payload["valid"] is False
     assert any(issue["code"] == "DISCONNECTED_LAYOUT" for issue in disconnected_payload["issues"])
 
-    within_touch_tolerance = client.post(
+    flush_stack = client.post(
         "/api/configurator/preview",
         json={
             "schema_version": 1,
             "boxes": [
                 {"id": "box-1", "product_id": item_id, "x": "0", "y": "0", "rotation": 0},
-                {"id": "box-2", "product_id": item_id, "x": "3.03", "y": "0", "rotation": 0},
+                {"id": "box-2", "product_id": item_id, "x": "3.00", "y": "0", "rotation": 0},
             ],
             "extras": [],
         },
     )
-    assert within_touch_tolerance.status_code == 200
-    tolerant_payload = within_touch_tolerance.json()
-    assert tolerant_payload["valid"] is True
-    assert all(issue["code"] != "DISCONNECTED_LAYOUT" for issue in tolerant_payload["issues"])
+    assert flush_stack.status_code == 200
+    flush_payload = flush_stack.json()
+    assert flush_payload["valid"] is True
+    assert all(issue["code"] != "DISCONNECTED_LAYOUT" for issue in flush_payload["issues"])
 
     slight_overlap = client.post(
         "/api/configurator/preview",
@@ -239,16 +239,64 @@ def test_configurator_preview_rejects_disconnected_layouts_keeps_touch_tolerance
     assert overlap_payload["valid"] is False
     assert any(issue["code"] == "OVERLAP" for issue in overlap_payload["issues"])
 
-    free_rotation = client.post(
+    slight_gap = client.post(
         "/api/configurator/preview",
         json={
             "schema_version": 1,
             "boxes": [
-                {"id": "box-1", "product_id": item_id, "x": "0", "y": "0", "rotation": 37.5},
+                {"id": "box-1", "product_id": item_id, "x": "0", "y": "0", "rotation": 0},
+                {"id": "box-2", "product_id": item_id, "x": "3.03", "y": "0", "rotation": 0},
             ],
             "extras": [],
         },
     )
-    assert free_rotation.status_code == 200
-    free_rotation_payload = free_rotation.json()
-    assert free_rotation_payload["valid"] is True
+    assert slight_gap.status_code == 200
+    gap_payload = slight_gap.json()
+    assert gap_payload["valid"] is False
+    assert any(issue["code"] == "DISCONNECTED_LAYOUT" for issue in gap_payload["issues"])
+
+    front_blocked = client.post(
+        "/api/configurator/preview",
+        json={
+            "schema_version": 1,
+            "boxes": [
+                {"id": "box-1", "product_id": item_id, "x": "0", "y": "0", "rotation": 90},
+                {"id": "box-2", "product_id": item_id, "x": "3.00", "y": "0", "rotation": 0},
+            ],
+            "extras": [],
+        },
+    )
+    assert front_blocked.status_code == 200
+    front_payload = front_blocked.json()
+    assert front_payload["valid"] is False
+    assert any(issue["code"] == "FRONT_FACE_BLOCKED" for issue in front_payload["issues"])
+
+    snapped_row = client.post(
+        "/api/configurator/preview",
+        json={
+            "schema_version": 1,
+            "boxes": [
+                {"id": "box-1", "product_id": item_id, "x": "0", "y": "0", "rotation": 0},
+                {"id": "box-2", "product_id": item_id, "x": "3.00", "y": "0", "rotation": 0},
+                {"id": "box-3", "product_id": item_id, "x": "6.00", "y": "0", "rotation": 0},
+                {"id": "box-4", "product_id": item_id, "x": "9.00", "y": "0", "rotation": 0},
+            ],
+            "extras": [],
+        },
+    )
+    assert snapped_row.status_code == 200
+    row_payload = snapped_row.json()
+    assert row_payload["valid"] is True
+    assert all(issue["code"] != "OVERLAP" for issue in row_payload["issues"])
+
+    invalid_rotation = client.post(
+        "/api/configurator/preview",
+        json={
+            "schema_version": 1,
+            "boxes": [
+                {"id": "box-1", "product_id": item_id, "x": "0", "y": "0", "rotation": 45},
+            ],
+            "extras": [],
+        },
+    )
+    assert invalid_rotation.status_code == 422

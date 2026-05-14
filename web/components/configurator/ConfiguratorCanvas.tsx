@@ -1,14 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Minus, Move, Plus, RotateCcw, Search, Trash2 } from 'lucide-react';
+import { Minus, Move, Plus, RotateCcw, RotateCw, Search, Trash2 } from 'lucide-react';
 
 import type { ConfiguratorBoxPlacement, Product } from '@/lib/types';
 import {
   buildLayoutRectEntries,
   findPlacementCandidate,
   getCanvasBounds,
-  getFootprint,
+  normalizeRotation,
   type CandidatePlacement,
   type CanvasBounds,
 } from '@/lib/configurator/geometry';
@@ -51,25 +51,8 @@ interface PanState {
   startPanY: number;
 }
 
-interface RotateState {
-  boxId: string;
-  pointerId: number;
-  snapshot: InteractionSnapshot;
-}
-
-interface RotationCandidate {
-  rotation: number;
-  overlaps: boolean;
-  connected: boolean;
-  valid: boolean;
-}
-
 function clampZoom(value: number) {
   return Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, Number(value.toFixed(2))));
-}
-
-function normalizeRotation(value: number) {
-  return Number((((value % 360) + 360) % 360).toFixed(1));
 }
 
 export default function ConfiguratorCanvas({
@@ -84,26 +67,19 @@ export default function ConfiguratorCanvas({
   const viewportRef = useRef<HTMLDivElement>(null);
   const [dragState, setDragState] = useState<DragState | null>(null);
   const [dragCandidate, setDragCandidate] = useState<CandidatePlacement | null>(null);
-  const [rotateState, setRotateState] = useState<RotateState | null>(null);
-  const [rotationCandidate, setRotationCandidate] = useState<RotationCandidate | null>(null);
   const [panState, setPanState] = useState<PanState | null>(null);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 24, y: 24 });
   const [hasManualView, setHasManualView] = useState(false);
 
   const renderBoxes = useMemo(() => {
-    if (rotateState && rotationCandidate) {
-      return boxes.map((box) =>
-        box.id === rotateState.boxId ? { ...box, rotation: rotationCandidate.rotation } : box
-      );
-    }
     if (dragState && dragCandidate) {
       return boxes.map((box) =>
         box.id === dragState.boxId ? { ...box, x: dragCandidate.x, y: dragCandidate.y } : box
       );
     }
     return boxes;
-  }, [boxes, dragCandidate, dragState, rotateState, rotationCandidate]);
+  }, [boxes, dragCandidate, dragState]);
 
   const rectEntries = useMemo(
     () => buildLayoutRectEntries(renderBoxes, productMap),
@@ -111,7 +87,7 @@ export default function ConfiguratorCanvas({
   );
 
   const bounds = getCanvasBounds(rectEntries.map((entry) => entry.rect));
-  const interactionSnapshot = dragState?.snapshot ?? rotateState?.snapshot ?? null;
+  const interactionSnapshot = dragState?.snapshot ?? null;
   const displayBounds = interactionSnapshot?.bounds ?? bounds;
   const displayPan = interactionSnapshot?.pan ?? pan;
   const displayZoom = interactionSnapshot?.zoom ?? zoom;
@@ -119,7 +95,7 @@ export default function ConfiguratorCanvas({
   const layoutContentHeight = bounds.height * SCALE;
   const contentWidth = displayBounds.width * SCALE;
   const contentHeight = displayBounds.height * SCALE;
-  const isInteracting = Boolean(dragState || rotateState);
+  const isInteracting = Boolean(dragState);
 
   const toCanvasPosition = (value: number, min: number) => (value - min + displayBounds.padding) * SCALE;
 
@@ -221,53 +197,12 @@ export default function ConfiguratorCanvas({
     };
   };
 
-  const getRotationForPointer = (
-    box: ConfiguratorBoxPlacement,
-    clientX: number,
-    clientY: number,
-    snapshot?: InteractionSnapshot
-  ) => {
-    const product = productMap[box.product_id];
-    if (!product) return box.rotation;
-    const point = getLayoutPoint(clientX, clientY, snapshot);
-    const { width, length } = getFootprint(product, box.rotation);
-    const centerX = Number(box.x) + width / 2;
-    const centerY = Number(box.y) + length / 2;
-    const angle = (Math.atan2(point.y - centerY, point.x - centerX) * 180) / Math.PI + 90;
-    return normalizeRotation(angle);
-  };
-
-  const getRotationPreview = (box: ConfiguratorBoxPlacement, rotation: number) => {
-    const candidate = findPlacementCandidate({
-      movingBox: { ...box, rotation },
-      rawX: box.x,
-      rawY: box.y,
-      boxes,
-      productMap,
-      threshold: 0,
-    });
-    return {
-      rotation,
-      overlaps: candidate.overlaps,
-      connected: candidate.connected,
-      valid: candidate.valid,
-    } satisfies RotationCandidate;
-  };
-
   const finalizeDrag = () => {
     if (dragState && dragCandidate?.valid) {
       onMoveBox(dragState.boxId, { x: dragCandidate.x, y: dragCandidate.y });
     }
     setDragState(null);
     setDragCandidate(null);
-  };
-
-  const finalizeRotation = () => {
-    if (rotateState && rotationCandidate?.valid) {
-      onRotateBox(rotateState.boxId, rotationCandidate.rotation);
-    }
-    setRotateState(null);
-    setRotationCandidate(null);
   };
 
   return (
@@ -320,7 +255,7 @@ export default function ConfiguratorCanvas({
         ref={viewportRef}
         className={cn(
           'relative overflow-hidden rounded-md border bg-muted/20',
-          panState ? 'cursor-grabbing' : rotateState ? 'cursor-crosshair' : 'cursor-grab'
+          panState ? 'cursor-grabbing' : 'cursor-grab'
         )}
         style={{ height: '72vh', minHeight: 560 }}
         onWheel={(event) => {
@@ -350,7 +285,7 @@ export default function ConfiguratorCanvas({
                 backgroundSize: `${SCALE}px ${SCALE}px`,
               }}
               onPointerDown={(event) => {
-                if (event.target !== event.currentTarget || event.button !== 0 || dragState || rotateState) return;
+                if (event.target !== event.currentTarget || event.button !== 0 || dragState) return;
                 setPanState({
                   pointerId: event.pointerId,
                   startClientX: event.clientX,
@@ -384,7 +319,6 @@ export default function ConfiguratorCanvas({
               }}
               onClick={() => {
                 if (dragState) finalizeDrag();
-                if (rotateState) finalizeRotation();
               }}
             >
               {dragCandidate?.guides.map((guide, index) => {
@@ -416,16 +350,12 @@ export default function ConfiguratorCanvas({
 
               {rectEntries.map(({ box, product, rect }) => {
                 const isDragging = dragState?.boxId === box.id;
-                const isRotating = rotateState?.boxId === box.id;
-                const activeInvalid =
-                  (isDragging && dragCandidate && !dragCandidate.valid) ||
-                  (isRotating && rotationCandidate && !rotationCandidate.valid);
+                const activeInvalid = isDragging && dragCandidate && !dragCandidate.valid;
                 const boxPixelWidth = rect.boxWidth * SCALE;
                 const boxPixelHeight = rect.boxLength * SCALE;
                 const showFrontMarker = boxPixelWidth >= 104 && boxPixelHeight >= 70;
                 const showDimensions = boxPixelWidth >= 90 && boxPixelHeight >= 86;
                 const compactLabel = boxPixelWidth < 90 || boxPixelHeight < 64;
-                const showRotationBadge = isRotating && rotationCandidate && boxPixelHeight >= 72;
 
                 return (
                   <button
@@ -436,7 +366,6 @@ export default function ConfiguratorCanvas({
                       onSelect(box.id);
                     }}
                     onPointerDown={(event) => {
-                      if (rotateState) return;
                       if (event.button !== 0) return;
                       event.stopPropagation();
                       const snapshot = getInteractionSnapshot();
@@ -454,6 +383,7 @@ export default function ConfiguratorCanvas({
                         snapped: false,
                         overlaps: false,
                         connected: true,
+                        frontBlocked: false,
                         valid: true,
                         guides: [],
                       });
@@ -461,7 +391,6 @@ export default function ConfiguratorCanvas({
                       event.currentTarget.setPointerCapture(event.pointerId);
                     }}
                     onPointerMove={(event) => {
-                      if (rotateState) return;
                       if (!dragState || dragState.boxId !== box.id) return;
                       const point = getLayoutPoint(event.clientX, event.clientY, dragState.snapshot);
                       const candidate = findPlacementCandidate({
@@ -492,7 +421,7 @@ export default function ConfiguratorCanvas({
                       'absolute overflow-visible touch-none rounded-md border text-left text-xs font-medium transition-colors',
                       activeInvalid
                         ? 'cursor-grabbing border-red-500 bg-red-100/90 text-red-900 shadow-lg'
-                        : isDragging || isRotating
+                        : isDragging
                           ? 'cursor-grabbing border-primary bg-primary/20 text-primary shadow-lg'
                           : selectedBoxId === box.id
                             ? 'cursor-grab border-primary bg-primary/15 text-primary shadow-sm'
@@ -515,50 +444,33 @@ export default function ConfiguratorCanvas({
                     >
                       <span
                         className="flex h-7 w-7 items-center justify-center rounded-full border border-primary/60 bg-background text-primary shadow-sm"
-                        onPointerDown={(event) => {
-                          if (event.button !== 0) return;
-                          event.stopPropagation();
-                          const snapshot = getInteractionSnapshot();
-                          const rotation = getRotationForPointer(box, event.clientX, event.clientY, snapshot);
-                          setDragState(null);
-                          setDragCandidate(null);
-                          setRotateState({
-                            boxId: box.id,
-                            pointerId: event.pointerId,
-                            snapshot,
-                          });
-                          setRotationCandidate(getRotationPreview(box, rotation));
-                          onSelect(box.id);
-                          event.currentTarget.setPointerCapture(event.pointerId);
-                        }}
-                        onPointerMove={(event) => {
-                          if (!rotateState || rotateState.boxId !== box.id || rotateState.pointerId !== event.pointerId) {
-                            return;
-                          }
-                          const rotation = getRotationForPointer(box, event.clientX, event.clientY, rotateState.snapshot);
-                          setRotationCandidate(getRotationPreview(box, rotation));
-                        }}
-                        onPointerUp={(event) => {
-                          if (!rotateState || rotateState.boxId !== box.id || rotateState.pointerId !== event.pointerId) {
-                            return;
-                          }
-                          if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-                            event.currentTarget.releasePointerCapture(event.pointerId);
-                          }
-                          finalizeRotation();
-                        }}
                         onPointerCancel={(event) => {
-                          if (!rotateState || rotateState.boxId !== box.id || rotateState.pointerId !== event.pointerId) {
-                            return;
-                          }
-                          if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-                            event.currentTarget.releasePointerCapture(event.pointerId);
-                          }
-                          setRotateState(null);
-                          setRotationCandidate(null);
+                          event.stopPropagation();
+                        }}
+                        onPointerDown={(event) => {
+                          event.stopPropagation();
+                        }}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onRotateBox(box.id, normalizeRotation(box.rotation - 90));
                         }}
                       >
-                        <span className="pointer-events-none text-sm">↻</span>
+                        <RotateCcw className="h-3.5 w-3.5" />
+                      </span>
+                      <span
+                        className="flex h-7 w-7 items-center justify-center rounded-full border border-primary/60 bg-background text-primary shadow-sm"
+                        onPointerCancel={(event) => {
+                          event.stopPropagation();
+                        }}
+                        onPointerDown={(event) => {
+                          event.stopPropagation();
+                        }}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onRotateBox(box.id, normalizeRotation(box.rotation + 90));
+                        }}
+                      >
+                        <RotateCw className="h-3.5 w-3.5" />
                       </span>
                       <span
                         className="flex h-7 w-7 items-center justify-center rounded-full border border-red-300 bg-background text-red-600 shadow-sm"
@@ -569,8 +481,6 @@ export default function ConfiguratorCanvas({
                           event.stopPropagation();
                           setDragState(null);
                           setDragCandidate(null);
-                          setRotateState(null);
-                          setRotationCandidate(null);
                           onRemoveBox(box.id);
                         }}
                       >
@@ -608,11 +518,6 @@ export default function ConfiguratorCanvas({
                         {rect.boxWidth} x {rect.boxLength}
                       </span>
                     )}
-                    {showRotationBadge && (
-                      <span className="mt-1 rounded-full bg-background/85 px-2 py-0.5 text-[10px] font-semibold text-foreground shadow-sm">
-                        {rotationCandidate.rotation.toFixed(1)}°
-                      </span>
-                    )}
                   </span>
                 </button>
                 );
@@ -624,12 +529,13 @@ export default function ConfiguratorCanvas({
                 </div>
               )}
 
-              {((dragState && dragCandidate && !dragCandidate.valid) ||
-                (rotateState && rotationCandidate && !rotationCandidate.valid)) && (
+              {dragState && dragCandidate && !dragCandidate.valid && (
                 <div className="pointer-events-none absolute bottom-4 left-4 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800 shadow-sm">
-                  {(dragCandidate?.overlaps || rotationCandidate?.overlaps)
+                  {dragCandidate.overlaps
                     ? 'This position overlaps another box.'
-                    : 'This position breaks the connected layout.'}
+                    : dragCandidate.frontBlocked
+                      ? 'The front of this box must stay on an exposed face.'
+                      : 'This position breaks the connected layout.'}
                 </div>
               )}
             </div>

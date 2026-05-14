@@ -20,7 +20,7 @@ import {
   saveQuoteConfiguration,
 } from '@/lib/api';
 import { addProductToConfiguration, createEmptyConfiguration } from '@/lib/configurator/defaults';
-import { findPlacementCandidate } from '@/lib/configurator/geometry';
+import { findPlacementCandidate, normalizeRotation } from '@/lib/configurator/geometry';
 import { formatCurrency, getPreviewIssueCount } from '@/lib/configurator/summary';
 import type {
   ConfiguratorBoxPlacement,
@@ -34,10 +34,6 @@ import type {
 
 interface ConfiguratorShellProps {
   quote: Quote;
-}
-
-function normalizeRotation(value: number): number {
-  return Number((((value % 360) + 360) % 360).toFixed(1));
 }
 
 export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
@@ -169,7 +165,13 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
       threshold: 0,
     });
     if (!candidate.valid) {
-      toast.error('That rotation would create an overlap or disconnect the layout.');
+      toast.error(
+        candidate.overlaps
+          ? 'That rotation would overlap another box.'
+          : candidate.frontBlocked
+            ? 'The front of this box must stay on an exposed face.'
+            : 'That rotation would disconnect the layout.'
+      );
       return;
     }
     updateConfiguration({

@@ -1,10 +1,14 @@
 import type { ConfiguratorBoxPlacement, Product } from '@/lib/types';
 
 export const SNAP_THRESHOLD = 0.45;
-export const TOUCH_TOLERANCE = 0.05;
+export const TOUCH_TOLERANCE = 0;
 export const DEFAULT_CANVAS_PADDING = 1;
 export const DEFAULT_GRID_STEP = 0.25;
 const OVERLAP_EPSILON = 1e-6;
+const EDGE_EPSILON = 1e-6;
+const RIGHT_ANGLES = [0, 90, 180, 270] as const;
+
+export type BoxFace = 'top' | 'right' | 'bottom' | 'left';
 
 export interface PlacementRect {
   x1: number;
@@ -47,6 +51,7 @@ export interface CandidatePlacement {
   snapped: boolean;
   overlaps: boolean;
   connected: boolean;
+  frontBlocked: boolean;
   valid: boolean;
   guides: SnapGuide[];
 }
@@ -57,9 +62,24 @@ interface SnapCandidate {
   guide: SnapGuide;
 }
 
+interface AnchorInsets {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+}
+
 export function roundLayoutValue(value: number, step = DEFAULT_GRID_STEP) {
   if (!Number.isFinite(value)) return 0;
   return Math.round(value / step) * step;
+}
+
+export function normalizeRotation(value: number): ConfiguratorBoxPlacement['rotation'] {
+  const normalized = ((Math.round(value / 90) * 90) % 360 + 360) % 360;
+  if (RIGHT_ANGLES.includes(normalized as (typeof RIGHT_ANGLES)[number])) {
+    return normalized as ConfiguratorBoxPlacement['rotation'];
+  }
+  return 0;
 }
 
 export function getFootprint(product: Product, rotation: number) {
@@ -67,6 +87,14 @@ export function getFootprint(product: Product, rotation: number) {
   const width = Number(product.configurator_width ?? 0);
   const length = Number(product.configurator_length ?? 0);
   return { width, length };
+}
+
+export function getFrontFace(rotation: number): BoxFace {
+  const normalized = normalizeRotation(rotation);
+  if (normalized === 90) return 'right';
+  if (normalized === 180) return 'bottom';
+  if (normalized === 270) return 'left';
+  return 'top';
 }
 
 function toRadians(rotation: number) {
@@ -164,7 +192,34 @@ export function rangesOverlap(
   bEnd: number,
   tolerance = TOUCH_TOLERANCE
 ) {
-  return Math.max(aStart, bStart) < Math.min(aEnd, bEnd) - tolerance;
+  return Math.max(aStart, bStart) < Math.min(aEnd, bEnd) - tolerance - EDGE_EPSILON;
+}
+
+function edgesClose(a: number, b: number, tolerance = TOUCH_TOLERANCE) {
+  return Math.abs(a - b) <= tolerance + EDGE_EPSILON;
+}
+
+function getSharedFaces(
+  a: PlacementRect,
+  b: PlacementRect,
+  tolerance = TOUCH_TOLERANCE
+) {
+  const faces: Array<[BoxFace, BoxFace]> = [];
+
+  if (edgesClose(a.x2, b.x1, tolerance) && rangesOverlap(a.y1, a.y2, b.y1, b.y2, tolerance)) {
+    faces.push(['right', 'left']);
+  }
+  if (edgesClose(b.x2, a.x1, tolerance) && rangesOverlap(a.y1, a.y2, b.y1, b.y2, tolerance)) {
+    faces.push(['left', 'right']);
+  }
+  if (edgesClose(a.y2, b.y1, tolerance) && rangesOverlap(a.x1, a.x2, b.x1, b.x2, tolerance)) {
+    faces.push(['bottom', 'top']);
+  }
+  if (edgesClose(b.y2, a.y1, tolerance) && rangesOverlap(a.x1, a.x2, b.x1, b.x2, tolerance)) {
+    faces.push(['top', 'bottom']);
+  }
+
+  return faces;
 }
 
 export function rectsTouch(
@@ -172,13 +227,42 @@ export function rectsTouch(
   b: PlacementRect,
   tolerance = TOUCH_TOLERANCE
 ) {
-  const sharesVerticalEdge =
-    (Math.abs(a.x2 - b.x1) <= tolerance || Math.abs(b.x2 - a.x1) <= tolerance) &&
-    rangesOverlap(a.y1, a.y2, b.y1, b.y2, tolerance);
-  const sharesHorizontalEdge =
-    (Math.abs(a.y2 - b.y1) <= tolerance || Math.abs(b.y2 - a.y1) <= tolerance) &&
-    rangesOverlap(a.x1, a.x2, b.x1, b.x2, tolerance);
-  return sharesVerticalEdge || sharesHorizontalEdge;
+  return getSharedFaces(a, b, tolerance).length > 0;
+}
+
+export function getJoinedFaces(entries: LayoutRectEntry[], tolerance = TOUCH_TOLERANCE) {
+  const joinedFaces = new Map<string, Set<BoxFace>>();
+  entries.forEach(({ box }) => joinedFaces.set(box.id, new Set<BoxFace>()));
+
+  for (let index = 0; index < entries.length; index += 1) {
+    const current = entries[index];
+    for (let otherIndex = index + 1; otherIndex < entries.length; otherIndex += 1) {
+      const other = entries[otherIndex];
+      const sharedFaces = getSharedFaces(current.rect, other.rect, tolerance);
+      sharedFaces.forEach(([currentFace, otherFace]) => {
+        joinedFaces.get(current.box.id)?.add(currentFace);
+        joinedFaces.get(other.box.id)?.add(otherFace);
+      });
+    }
+  }
+
+  return joinedFaces;
+}
+
+export function isFrontFaceExposed(
+  box: ConfiguratorBoxPlacement,
+  joinedFaces: Map<string, Set<BoxFace>>
+) {
+  return !joinedFaces.get(box.id)?.has(getFrontFace(box.rotation));
+}
+
+function getAnchorInsets(box: ConfiguratorBoxPlacement, rect: PlacementRect): AnchorInsets {
+  return {
+    left: rect.x1 - Number(box.x),
+    right: rect.x2 - Number(box.x),
+    top: rect.y1 - Number(box.y),
+    bottom: rect.y2 - Number(box.y),
+  };
 }
 
 export function buildLayoutRectEntries(
@@ -256,6 +340,7 @@ export function isLayoutConnected(entries: LayoutRectEntry[], tolerance = TOUCH_
 function getSnapCandidates(
   rawValue: number,
   axis: 'x' | 'y',
+  movingInsets: AnchorInsets,
   movingRect: PlacementRect,
   otherRect: PlacementRect,
   threshold: number
@@ -264,7 +349,7 @@ function getSnapCandidates(
     const overlap = rangesOverlap(movingRect.y1, movingRect.y2, otherRect.y1, otherRect.y2, 0);
     const candidates = [
       {
-        value: otherRect.x1 - movingRect.boundsWidth,
+        value: otherRect.x1 - movingInsets.right,
         guide: {
           orientation: 'vertical' as const,
           position: otherRect.x1,
@@ -273,7 +358,7 @@ function getSnapCandidates(
         },
       },
       {
-        value: otherRect.x2,
+        value: otherRect.x2 - movingInsets.left,
         guide: {
           orientation: 'vertical' as const,
           position: otherRect.x2,
@@ -282,7 +367,7 @@ function getSnapCandidates(
         },
       },
       {
-        value: otherRect.x1,
+        value: otherRect.x1 - movingInsets.left,
         guide: {
           orientation: 'vertical' as const,
           position: otherRect.x1,
@@ -291,7 +376,7 @@ function getSnapCandidates(
         },
       },
       {
-        value: otherRect.x2 - movingRect.boundsWidth,
+        value: otherRect.x2 - movingInsets.right,
         guide: {
           orientation: 'vertical' as const,
           position: otherRect.x2,
@@ -313,7 +398,7 @@ function getSnapCandidates(
   const overlap = rangesOverlap(movingRect.x1, movingRect.x2, otherRect.x1, otherRect.x2, 0);
   const candidates = [
     {
-      value: otherRect.y1 - movingRect.boundsHeight,
+      value: otherRect.y1 - movingInsets.bottom,
       guide: {
         orientation: 'horizontal' as const,
         position: otherRect.y1,
@@ -322,7 +407,7 @@ function getSnapCandidates(
       },
     },
     {
-      value: otherRect.y2,
+      value: otherRect.y2 - movingInsets.top,
       guide: {
         orientation: 'horizontal' as const,
         position: otherRect.y2,
@@ -331,7 +416,7 @@ function getSnapCandidates(
       },
     },
     {
-      value: otherRect.y1,
+      value: otherRect.y1 - movingInsets.top,
       guide: {
         orientation: 'horizontal' as const,
         position: otherRect.y1,
@@ -340,7 +425,7 @@ function getSnapCandidates(
       },
     },
     {
-      value: otherRect.y2 - movingRect.boundsHeight,
+      value: otherRect.y2 - movingInsets.bottom,
       guide: {
         orientation: 'horizontal' as const,
         position: otherRect.y2,
@@ -380,6 +465,7 @@ export function findPlacementCandidate(params: {
       snapped: false,
       overlaps: false,
       connected: true,
+      frontBlocked: false,
       valid: false,
       guides: [],
     } satisfies CandidatePlacement;
@@ -388,19 +474,23 @@ export function findPlacementCandidate(params: {
   const baseX = Math.max(0, roundLayoutValue(rawX));
   const baseY = Math.max(0, roundLayoutValue(rawY));
   const initialRect = getPlacementRect({ ...movingBox, x: baseX, y: baseY }, movingProduct);
+  const movingInsets = getAnchorInsets({ ...movingBox, x: baseX, y: baseY }, initialRect);
   const otherEntries = buildLayoutRectEntries(
     boxes.filter((box) => box.id !== movingBox.id),
     productMap
   );
 
   const xCandidate = getBestCandidate(
-    otherEntries.flatMap((entry) => getSnapCandidates(baseX, 'x', initialRect, entry.rect, threshold))
+    otherEntries.flatMap((entry) => getSnapCandidates(baseX, 'x', movingInsets, initialRect, entry.rect, threshold))
   );
   const snappedX = xCandidate ? roundLayoutValue(xCandidate.value) : baseX;
 
   const rectAfterX = getPlacementRect({ ...movingBox, x: snappedX, y: baseY }, movingProduct);
+  const movingInsetsAfterX = getAnchorInsets({ ...movingBox, x: snappedX, y: baseY }, rectAfterX);
   const yCandidate = getBestCandidate(
-    otherEntries.flatMap((entry) => getSnapCandidates(baseY, 'y', rectAfterX, entry.rect, threshold))
+    otherEntries.flatMap((entry) =>
+      getSnapCandidates(baseY, 'y', movingInsetsAfterX, rectAfterX, entry.rect, threshold)
+    )
   );
   const snappedY = yCandidate ? roundLayoutValue(yCandidate.value) : baseY;
 
@@ -412,6 +502,8 @@ export function findPlacementCandidate(params: {
     productMap
   );
   const connected = isLayoutConnected(layoutEntries);
+  const joinedFaces = getJoinedFaces(layoutEntries);
+  const frontBlocked = !isFrontFaceExposed(nextBox, joinedFaces);
 
   return {
     x: snappedX,
@@ -419,7 +511,8 @@ export function findPlacementCandidate(params: {
     snapped: Boolean(xCandidate || yCandidate),
     overlaps,
     connected,
-    valid: !overlaps && connected,
+    frontBlocked,
+    valid: !overlaps && connected && !frontBlocked,
     guides: [xCandidate?.guide, yCandidate?.guide].filter((guide): guide is SnapGuide => Boolean(guide)),
   } satisfies CandidatePlacement;
 }
