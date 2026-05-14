@@ -226,7 +226,7 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
           </p>
           <p className="mt-2 text-sm text-muted-foreground">
             Drag boxes on the canvas to build the layout. Boxes snap to valid edges, cannot overlap, and the front
-            marker rotates with each box.
+            marker rotates with each box. Corner-box fronts stay attached to the physical box as it turns.
           </p>
         </div>
         <div className="flex flex-wrap gap-3">
@@ -283,8 +283,7 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
                 onRemoveBox={handleRemoveBox}
               />
               <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
-                The front marker is visual only in this beta. It rotates with the box so you can quickly read layout
-                orientation without adding more product metadata yet.
+                Corner boxes now keep their marked front section attached to the box through each right-angle rotation.
               </div>
             </CardContent>
           </Card>

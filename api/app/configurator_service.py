@@ -24,6 +24,7 @@ LayoutShape = Tuple[float, float, float, float, Tuple[Point, Point, Point, Point
 Face = str
 FACE_ORDER: Tuple[Face, Face, Face, Face] = ("top", "right", "bottom", "left")
 FaceContact = Tuple[Face, Face, float, float]
+EdgeInterval = Tuple[Face, float, float]
 FaceContactState = Literal["valid", "forbidden_face", "blocked_front_segment"]
 CORNER_PROFILE_FRONT_FACE: Face = "bottom"
 
@@ -131,54 +132,112 @@ def _connection_profile(product: Product) -> str | None:
     return None
 
 
+def _native_dimensions(product: Product) -> Tuple[float, float]:
+    return float(_to_decimal(product.configurator_width or ZERO)), float(
+        _to_decimal(product.configurator_length or ZERO)
+    )
+
+
+def _corner_base_definition(product: Product) -> dict[str, float | Face] | None:
+    profile = _connection_profile(product)
+    if profile is None:
+        return None
+
+    width, length = _native_dimensions(product)
+    join_length = min(width, length)
+    blocked_length = max(0.0, width - join_length)
+
+    if profile == ConfiguratorConnectionProfile.CORNER_LEFT.value:
+        return {
+            "front_face": "bottom",
+            "standard_face": "left",
+            "join_start": blocked_length,
+            "join_end": width,
+            "blocked_start": 0.0,
+            "blocked_end": blocked_length,
+        }
+
+    return {
+        "front_face": "bottom",
+        "standard_face": "right",
+        "join_start": 0.0,
+        "join_end": join_length,
+        "blocked_start": join_length,
+        "blocked_end": width,
+    }
+
+
 def _rotate_face(face: Face, rotation: int) -> Face:
     base_index = FACE_ORDER.index(face) if face in FACE_ORDER else 0
     steps = rotation // 90
     return FACE_ORDER[(base_index + steps) % len(FACE_ORDER)]
 
 
-def _front_start_adjacent_face(face: Face) -> Face:
-    if face in ("top", "bottom"):
-        return "left"
-    return "top"
+def _segment_interval(start_point: Point, end_point: Point, shape: LayoutShape) -> EdgeInterval:
+    min_x, min_y, max_x, max_y = shape[0], shape[1], shape[2], shape[3]
+    if abs(start_point[1] - end_point[1]) <= EDGE_EPSILON:
+        average_y = (start_point[1] + end_point[1]) / 2
+        face = "top" if abs(average_y - min_y) <= abs(average_y - max_y) else "bottom"
+        return face, min(start_point[0], end_point[0]), max(start_point[0], end_point[0])
+
+    average_x = (start_point[0] + end_point[0]) / 2
+    face = "left" if abs(average_x - min_x) <= abs(average_x - max_x) else "right"
+    return face, min(start_point[1], end_point[1]), max(start_point[1], end_point[1])
 
 
-def _front_end_adjacent_face(face: Face) -> Face:
-    if face in ("top", "bottom"):
-        return "right"
-    return "bottom"
+def _rotated_corner_definition(box, product: Product, shape: LayoutShape):
+    base = _corner_base_definition(product)
+    if base is None:
+        return None
 
+    width, length = _native_dimensions(product)
+    if width <= 0 or length <= 0:
+        return None
 
-def _corner_standard_face(face: Face, profile: str) -> Face:
-    return (
-        _front_start_adjacent_face(face)
-        if profile == ConfiguratorConnectionProfile.CORNER_LEFT.value
-        else _front_end_adjacent_face(face)
+    center_x = (shape[0] + shape[2]) / 2
+    center_y = (shape[1] + shape[3]) / 2
+    left = center_x - width / 2
+    right = center_x + width / 2
+    top = center_y - length / 2
+    bottom = center_y + length / 2
+
+    def rotate_segment_point(x: float, y: float) -> Point:
+        return _rotate_point(x, y, center_x, center_y, box.rotation)
+
+    join_start = float(base["join_start"])
+    join_end = float(base["join_end"])
+    blocked_start = float(base["blocked_start"])
+    blocked_end = float(base["blocked_end"])
+    standard_face = str(base["standard_face"])
+
+    join_interval = _segment_interval(
+        rotate_segment_point(left + join_start, bottom),
+        rotate_segment_point(left + join_end, bottom),
+        shape,
     )
 
+    blocked_interval = (
+        _segment_interval(
+            rotate_segment_point(left + blocked_start, bottom),
+            rotate_segment_point(left + blocked_end, bottom),
+            shape,
+        )
+        if blocked_end - blocked_start > EDGE_EPSILON
+        else None
+    )
 
-def _face_length(shape: LayoutShape, face: Face) -> float:
-    if face in ("top", "bottom"):
-        return shape[2] - shape[0]
-    return shape[3] - shape[1]
+    standard_interval = _segment_interval(
+        rotate_segment_point(right if standard_face == "right" else left, top),
+        rotate_segment_point(right if standard_face == "right" else left, bottom),
+        shape,
+    )
 
-
-def _face_axis_start(shape: LayoutShape, face: Face) -> float:
-    if face in ("top", "bottom"):
-        return shape[0]
-    return shape[1]
-
-
-def _allowed_front_join_interval(box, product: Product, shape: LayoutShape, face: Face, profile: str) -> Tuple[float, float]:
-    width, length = _footprint(product, box.rotation)
-    face_length = _face_length(shape, face)
-    join_length = float(min(width, length))
-    blocked_length = max(0.0, face_length - join_length)
-    axis_start = _face_axis_start(shape, face)
-
-    if profile == ConfiguratorConnectionProfile.CORNER_LEFT.value:
-        return axis_start + blocked_length, axis_start + face_length
-    return axis_start, axis_start + join_length
+    return {
+        "front_face": join_interval[0],
+        "join_interval": join_interval,
+        "blocked_interval": blocked_interval,
+        "standard_face": standard_interval[0],
+    }
 
 
 def _interval_within_allowed_range(contact_start: float, contact_end: float, allowed_start: float, allowed_end: float) -> bool:
@@ -214,16 +273,14 @@ def _touching(
 
 
 def _face_contact_state(box, product: Product, shape: LayoutShape, face: Face, overlap_start: float, overlap_end: float) -> FaceContactState:
-    profile = _connection_profile(product)
-    if profile is None:
+    corner_definition = _rotated_corner_definition(box, product, shape)
+    if corner_definition is None:
         return "valid"
 
-    front_face = _front_face(product, box.rotation)
-    standard_face = _corner_standard_face(front_face, profile)
-    if face == standard_face:
+    if face == corner_definition["standard_face"]:
         return "valid"
-    if face == front_face:
-        allowed_start, allowed_end = _allowed_front_join_interval(box, product, shape, face, profile)
+    join_face, allowed_start, allowed_end = corner_definition["join_interval"]
+    if face == join_face:
         return (
             "valid"
             if _interval_within_allowed_range(overlap_start, overlap_end, allowed_start, allowed_end)

@@ -279,6 +279,119 @@ def test_configurator_catalog_save_preview_and_apply_flow():
     }
 
 
+def test_deleted_boxes_do_not_reappear_after_save_and_reapply():
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SQLModel.metadata.create_all(engine)
+    user = _seed_user(engine)
+
+    with Session(engine) as session:
+        first_item = Product(
+            name="Front Box A",
+            category=ProductCategory.CONFIGURATOR,
+            base_price=Decimal("2500.00"),
+            configurator_width=Decimal("3.00"),
+            configurator_length=Decimal("3.00"),
+        )
+        second_item = Product(
+            name="Front Box B",
+            category=ProductCategory.CONFIGURATOR,
+            base_price=Decimal("2750.00"),
+            configurator_width=Decimal("3.00"),
+            configurator_length=Decimal("3.00"),
+        )
+        quote = Quote(
+            quote_number="QT-CONFIG-DELETE",
+            status=QuoteStatus.DRAFT,
+            subtotal=Decimal("0.00"),
+            discount_total=Decimal("0.00"),
+            total_amount=Decimal("0.00"),
+            deposit_amount=Decimal("0.00"),
+            balance_amount=Decimal("0.00"),
+            created_by_id=user.id,
+        )
+        session.add(first_item)
+        session.add(second_item)
+        session.add(quote)
+        session.commit()
+        session.refresh(first_item)
+        session.refresh(second_item)
+        session.refresh(quote)
+        quote_id = quote.id
+        first_item_id = first_item.id
+        second_item_id = second_item.id
+
+    client = TestClient(_make_app(engine, user))
+
+    initial_payload = {
+        "schema_version": 1,
+        "name": "Two box layout",
+        "boxes": [
+            {
+                "id": "box-a",
+                "product_id": first_item_id,
+                "x": "0",
+                "y": "0",
+                "rotation": 0,
+            },
+            {
+                "id": "box-b",
+                "product_id": second_item_id,
+                "x": "3.00",
+                "y": "0",
+                "rotation": 0,
+            },
+        ],
+        "extras": [],
+    }
+
+    save_initial = client.put(f"/api/quotes/{quote_id}/configuration", json=initial_payload)
+    assert save_initial.status_code == 200
+
+    apply_initial = client.post(f"/api/quotes/{quote_id}/configuration/apply")
+    assert apply_initial.status_code == 200
+    initial_applied = apply_initial.json()
+    assert {row["description"] for row in initial_applied["items"]} == {
+        "Front Box A",
+        "Front Box B",
+    }
+
+    updated_payload = {
+        "schema_version": 1,
+        "name": "One box layout",
+        "boxes": [
+            {
+                "id": "box-a",
+                "product_id": first_item_id,
+                "x": "0",
+                "y": "0",
+                "rotation": 0,
+            }
+        ],
+        "extras": [],
+    }
+
+    preview_updated = client.post("/api/configurator/preview", json=updated_payload)
+    assert preview_updated.status_code == 200
+    updated_preview = preview_updated.json()
+    assert updated_preview["valid"] is True
+    assert [row["description"] for row in updated_preview["items"]] == ["Front Box A"]
+
+    save_updated = client.put(f"/api/quotes/{quote_id}/configuration", json=updated_payload)
+    assert save_updated.status_code == 200
+    saved_updated = save_updated.json()
+    assert [box["id"] for box in saved_updated["configuration"]["boxes"]] == ["box-a"]
+
+    apply_updated = client.post(f"/api/quotes/{quote_id}/configuration/apply")
+    assert apply_updated.status_code == 200
+    updated_applied = apply_updated.json()
+    assert [row["description"] for row in updated_applied["items"]] == ["Front Box A"]
+    assert len(updated_applied["items"]) == 1
+
+
 def test_configurator_preview_enforces_zero_overlap_and_front_face_rules():
     engine = create_engine(
         "sqlite://",
@@ -625,3 +738,132 @@ def test_corner_connection_profiles_restrict_front_segment_and_side_faces():
     left_front_blocked_payload = left_front_blocked.json()
     assert left_front_blocked_payload["valid"] is False
     assert any(issue["code"] == "INVALID_CONNECTION_SEGMENT" for issue in left_front_blocked_payload["issues"])
+
+
+def test_corner_connection_profiles_rotate_their_physical_front_and_side_rules():
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SQLModel.metadata.create_all(engine)
+    user = _seed_user(engine)
+
+    with Session(engine) as session:
+        standard_box = Product(
+            name="3.5 Box",
+            category=ProductCategory.CONFIGURATOR,
+            base_price=Decimal("1800.00"),
+            configurator_width=Decimal("3.50"),
+            configurator_length=Decimal("3.50"),
+        )
+        right_corner = Product(
+            name="Right Corner Box",
+            category=ProductCategory.CONFIGURATOR,
+            base_price=Decimal("2400.00"),
+            configurator_width=Decimal("5.00"),
+            configurator_length=Decimal("3.50"),
+            configurator_front_face=ConfiguratorFrontFace.BOTTOM,
+            configurator_connection_profile=ConfiguratorConnectionProfile.CORNER_RIGHT,
+        )
+        left_corner = Product(
+            name="Left Corner Box",
+            category=ProductCategory.CONFIGURATOR,
+            base_price=Decimal("2400.00"),
+            configurator_width=Decimal("5.00"),
+            configurator_length=Decimal("3.50"),
+            configurator_front_face=ConfiguratorFrontFace.BOTTOM,
+            configurator_connection_profile=ConfiguratorConnectionProfile.CORNER_LEFT,
+        )
+        session.add(standard_box)
+        session.add(right_corner)
+        session.add(left_corner)
+        session.commit()
+        session.refresh(standard_box)
+        session.refresh(right_corner)
+        session.refresh(left_corner)
+        standard_box_id = standard_box.id
+        right_corner_id = right_corner.id
+        left_corner_id = left_corner.id
+
+    client = TestClient(_make_app(engine, user))
+
+    def preview(boxes):
+        response = client.post(
+            "/api/configurator/preview",
+            json={
+                "schema_version": 1,
+                "boxes": boxes,
+                "extras": [],
+            },
+        )
+        assert response.status_code == 200
+        return response.json()
+
+    right_front_allowed_rotated_90 = preview(
+        [
+            {"id": "corner", "product_id": right_corner_id, "x": "0", "y": "0", "rotation": 90},
+            {"id": "joiner", "product_id": standard_box_id, "x": "-4.25", "y": "0", "rotation": 0},
+        ]
+    )
+    assert right_front_allowed_rotated_90["valid"] is True
+
+    right_front_blocked_rotated_90 = preview(
+        [
+            {"id": "corner", "product_id": right_corner_id, "x": "0", "y": "0", "rotation": 90},
+            {"id": "joiner", "product_id": standard_box_id, "x": "-4.25", "y": "1.50", "rotation": 0},
+        ]
+    )
+    assert right_front_blocked_rotated_90["valid"] is False
+    assert any(issue["code"] == "INVALID_CONNECTION_SEGMENT" for issue in right_front_blocked_rotated_90["issues"])
+
+    left_standard_allowed_rotated_90 = preview(
+        [
+            {"id": "corner", "product_id": left_corner_id, "x": "0", "y": "0", "rotation": 90},
+            {"id": "joiner", "product_id": standard_box_id, "x": "-0.75", "y": "-2.75", "rotation": 0},
+        ]
+    )
+    assert left_standard_allowed_rotated_90["valid"] is True
+
+    left_forbidden_face_rotated_90 = preview(
+        [
+            {"id": "corner", "product_id": left_corner_id, "x": "0", "y": "0", "rotation": 90},
+            {"id": "joiner", "product_id": standard_box_id, "x": "-0.75", "y": "4.25", "rotation": 0},
+        ]
+    )
+    assert left_forbidden_face_rotated_90["valid"] is False
+    assert any(issue["code"] == "INVALID_CONNECTION_FACE" for issue in left_forbidden_face_rotated_90["issues"])
+
+    left_front_allowed_rotated_180 = preview(
+        [
+            {"id": "corner", "product_id": left_corner_id, "x": "0", "y": "0", "rotation": 180},
+            {"id": "joiner", "product_id": standard_box_id, "x": "0", "y": "-3.50", "rotation": 0},
+        ]
+    )
+    assert left_front_allowed_rotated_180["valid"] is True
+
+    left_front_blocked_rotated_180 = preview(
+        [
+            {"id": "corner", "product_id": left_corner_id, "x": "0", "y": "0", "rotation": 180},
+            {"id": "joiner", "product_id": standard_box_id, "x": "1.50", "y": "-3.50", "rotation": 0},
+        ]
+    )
+    assert left_front_blocked_rotated_180["valid"] is False
+    assert any(issue["code"] == "INVALID_CONNECTION_SEGMENT" for issue in left_front_blocked_rotated_180["issues"])
+
+    right_front_allowed_rotated_270 = preview(
+        [
+            {"id": "corner", "product_id": right_corner_id, "x": "0", "y": "0", "rotation": 270},
+            {"id": "joiner", "product_id": standard_box_id, "x": "4.25", "y": "1.50", "rotation": 0},
+        ]
+    )
+    assert right_front_allowed_rotated_270["valid"] is True
+
+    right_front_blocked_rotated_270 = preview(
+        [
+            {"id": "corner", "product_id": right_corner_id, "x": "0", "y": "0", "rotation": 270},
+            {"id": "joiner", "product_id": standard_box_id, "x": "4.25", "y": "0", "rotation": 0},
+        ]
+    )
+    assert right_front_blocked_rotated_270["valid"] is False
+    assert any(issue["code"] == "INVALID_CONNECTION_SEGMENT" for issue in right_front_blocked_rotated_270["issues"])

@@ -92,6 +92,28 @@ interface FaceContact {
   overlapEnd: number;
 }
 
+interface EdgeInterval {
+  face: BoxFace;
+  start: number;
+  end: number;
+}
+
+interface CornerBaseDefinition {
+  frontFace: 'bottom';
+  standardFace: 'left' | 'right';
+  joinStart: number;
+  joinEnd: number;
+  blockedStart: number;
+  blockedEnd: number;
+}
+
+interface CornerLayoutDefinition {
+  frontFace: BoxFace;
+  standardFace: BoxFace;
+  joinInterval: EdgeInterval;
+  blockedInterval: EdgeInterval | null;
+}
+
 type FaceContactState = 'valid' | 'forbidden_face' | 'blocked_front_segment';
 
 interface LayoutAnalysis {
@@ -149,6 +171,44 @@ function getConnectionProfile(product?: Product | null): ConfiguratorConnectionP
   return null;
 }
 
+function getNativeDimensions(product: Product | null | undefined) {
+  return {
+    width: Number(product?.configurator_width ?? 0),
+    length: Number(product?.configurator_length ?? 0),
+  };
+}
+
+export function getCornerBaseDefinition(product: Product | null | undefined): CornerBaseDefinition | null {
+  const profile = getConnectionProfile(product);
+  if (!profile) {
+    return null;
+  }
+
+  const { width, length } = getNativeDimensions(product);
+  const joinLength = Math.min(width, length);
+  const blockedLength = Math.max(0, width - joinLength);
+
+  if (profile === 'corner_left') {
+    return {
+      frontFace: 'bottom',
+      standardFace: 'left',
+      joinStart: blockedLength,
+      joinEnd: width,
+      blockedStart: 0,
+      blockedEnd: blockedLength,
+    };
+  }
+
+  return {
+    frontFace: 'bottom',
+    standardFace: 'right',
+    joinStart: 0,
+    joinEnd: joinLength,
+    blockedStart: joinLength,
+    blockedEnd: width,
+  };
+}
+
 function rotateFace(face: BoxFace, rotation: number): BoxFace {
   const normalized = normalizeRotation(rotation);
   const baseIndex = FACE_ORDER.indexOf(face);
@@ -156,52 +216,83 @@ function rotateFace(face: BoxFace, rotation: number): BoxFace {
   return FACE_ORDER[(baseIndex + steps) % FACE_ORDER.length] ?? 'top';
 }
 
-function getFrontStartAdjacentFace(face: BoxFace): BoxFace {
-  if (face === 'top' || face === 'bottom') {
-    return 'left';
-  }
-  return 'top';
-}
-
-function getFrontEndAdjacentFace(face: BoxFace): BoxFace {
-  if (face === 'top' || face === 'bottom') {
-    return 'right';
-  }
-  return 'bottom';
-}
-
-function getCornerStandardFace(face: BoxFace, profile: ConfiguratorConnectionProfile): BoxFace {
-  return profile === 'corner_left' ? getFrontStartAdjacentFace(face) : getFrontEndAdjacentFace(face);
-}
-
-function getFaceLength(rect: PlacementRect, face: BoxFace) {
-  return face === 'top' || face === 'bottom' ? rect.x2 - rect.x1 : rect.y2 - rect.y1;
-}
-
-function getFaceAxisStart(rect: PlacementRect, face: BoxFace) {
-  return face === 'top' || face === 'bottom' ? rect.x1 : rect.y1;
-}
-
-function getAllowedFrontJoinInterval(
-  rect: PlacementRect,
-  face: BoxFace,
-  profile: ConfiguratorConnectionProfile
-) {
-  const faceLength = getFaceLength(rect, face);
-  const joinLength = Math.min(rect.boxWidth, rect.boxLength);
-  const blockedLength = Math.max(0, faceLength - joinLength);
-  const axisStart = getFaceAxisStart(rect, face);
-
-  if (profile === 'corner_left') {
+function getIntervalFromSegment(
+  startPoint: { x: number; y: number },
+  endPoint: { x: number; y: number },
+  bounds: Pick<PlacementRect, 'x1' | 'x2' | 'y1' | 'y2'>
+): EdgeInterval {
+  if (Math.abs(startPoint.y - endPoint.y) <= EDGE_EPSILON) {
+    const averageY = (startPoint.y + endPoint.y) / 2;
+    const topDistance = Math.abs(averageY - bounds.y1);
+    const bottomDistance = Math.abs(averageY - bounds.y2);
     return {
-      start: axisStart + blockedLength,
-      end: axisStart + faceLength,
+      face: topDistance <= bottomDistance ? 'top' : 'bottom',
+      start: Math.min(startPoint.x, endPoint.x),
+      end: Math.max(startPoint.x, endPoint.x),
     };
   }
 
+  const averageX = (startPoint.x + endPoint.x) / 2;
+  const leftDistance = Math.abs(averageX - bounds.x1);
+  const rightDistance = Math.abs(averageX - bounds.x2);
   return {
-    start: axisStart,
-    end: axisStart + joinLength,
+    face: leftDistance <= rightDistance ? 'left' : 'right',
+    start: Math.min(startPoint.y, endPoint.y),
+    end: Math.max(startPoint.y, endPoint.y),
+  };
+}
+
+function getRotatedCornerDefinition(
+  box: ConfiguratorBoxPlacement,
+  product: Product,
+  rect: PlacementRect
+): CornerLayoutDefinition | null {
+  const base = getCornerBaseDefinition(product);
+  if (!base) {
+    return null;
+  }
+
+  const { width, length } = getNativeDimensions(product);
+  if (width <= 0 || length <= 0) {
+    return null;
+  }
+
+  const left = rect.centerX - width / 2;
+  const right = rect.centerX + width / 2;
+  const top = rect.centerY - length / 2;
+  const bottom = rect.centerY + length / 2;
+
+  const rotateSegmentPoint = (x: number, y: number) =>
+    rotatePoint(x, y, rect.centerX, rect.centerY, box.rotation);
+
+  const joinStartPoint = rotateSegmentPoint(left + base.joinStart, bottom);
+  const joinEndPoint = rotateSegmentPoint(left + base.joinEnd, bottom);
+  const joinInterval = getIntervalFromSegment(joinStartPoint, joinEndPoint, rect);
+
+  const blockedInterval =
+    base.blockedEnd - base.blockedStart > EDGE_EPSILON
+      ? getIntervalFromSegment(
+          rotateSegmentPoint(left + base.blockedStart, bottom),
+          rotateSegmentPoint(left + base.blockedEnd, bottom),
+          rect
+        )
+      : null;
+
+  const standardInterval = getIntervalFromSegment(
+    base.standardFace === 'right'
+      ? rotateSegmentPoint(right, top)
+      : rotateSegmentPoint(left, top),
+    base.standardFace === 'right'
+      ? rotateSegmentPoint(right, bottom)
+      : rotateSegmentPoint(left, bottom),
+    rect
+  );
+
+  return {
+    frontFace: joinInterval.face,
+    standardFace: standardInterval.face,
+    joinInterval,
+    blockedInterval,
   };
 }
 
@@ -391,25 +482,21 @@ function getFaceContactState(
   overlapStart: number,
   overlapEnd: number
 ): FaceContactState {
-  const profile = getConnectionProfile(entry.product);
-  if (!profile) {
+  const cornerDefinition = getRotatedCornerDefinition(entry.box, entry.product, entry.rect);
+  if (!cornerDefinition) {
     return 'valid';
   }
 
-  const frontFace = getFrontFace(entry.product, entry.box.rotation);
-  const standardFace = getCornerStandardFace(frontFace, profile);
-
-  if (face === standardFace) {
+  if (face === cornerDefinition.standardFace) {
     return 'valid';
   }
 
-  if (face === frontFace) {
-    const allowedInterval = getAllowedFrontJoinInterval(entry.rect, face, profile);
+  if (face === cornerDefinition.joinInterval.face) {
     return isIntervalWithinAllowedRange(
       overlapStart,
       overlapEnd,
-      allowedInterval.start,
-      allowedInterval.end
+      cornerDefinition.joinInterval.start,
+      cornerDefinition.joinInterval.end
     )
       ? 'valid'
       : 'blocked_front_segment';

@@ -1,14 +1,15 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Minus, Move, Plus, RotateCcw, RotateCw, Search, Trash2 } from 'lucide-react';
 
-import type { ConfiguratorBoxPlacement, ConfiguratorConnectionProfile, Product } from '@/lib/types';
+import type { ConfiguratorBoxPlacement, Product } from '@/lib/types';
 import {
   buildLayoutRectEntries,
   findPlacementCandidate,
   getBaseFrontFace,
   getCanvasBounds,
+  getCornerBaseDefinition,
   normalizeRotation,
   type CandidatePlacement,
   type CanvasBounds,
@@ -56,112 +57,81 @@ function clampZoom(value: number) {
   return Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, Number(value.toFixed(2))));
 }
 
-function getBlockedFrontMarkerRatio(
-  profile: ConfiguratorConnectionProfile,
-  face: 'top' | 'right' | 'bottom' | 'left',
-  boxWidth: number,
-  boxLength: number
-) {
-  const faceLength = face === 'top' || face === 'bottom' ? boxWidth : boxLength;
-  const joinLength = Math.min(boxWidth, boxLength);
-  if (faceLength <= 0 || joinLength <= 0 || faceLength <= joinLength) {
-    return null;
-  }
-
-  const blockedLength = faceLength - joinLength;
-  if (blockedLength <= 0) {
-    return null;
-  }
-
-  return profile === 'corner_left'
-    ? blockedLength / 2 / faceLength
-    : 1 - blockedLength / 2 / faceLength;
-}
-
 function getFrontMarkerPosition(
   face: 'top' | 'right' | 'bottom' | 'left',
-  profile: ConfiguratorConnectionProfile | null | undefined,
-  boxWidth: number,
-  boxLength: number
+  isCornerProfile: boolean,
+  hasLeftBlockedCorner: boolean
 ) {
-  const blockedRatio = profile
-    ? getBlockedFrontMarkerRatio(profile, face, boxWidth, boxLength)
-    : null;
-  const isCornerProfile = Boolean(profile && blockedRatio != null);
+  if (isCornerProfile && face === 'bottom') {
+    return {
+      containerClass: cn(
+        'absolute bottom-0',
+        hasLeftBlockedCorner ? 'left-1.5' : 'right-1.5'
+      ),
+      labelClass: '',
+      markerClass: 'h-1.5 w-14 rounded-t-sm bg-sky-500/95',
+      badgeClass: 'bg-transparent px-0 py-0 shadow-none',
+      textClass: 'sr-only text-[10px] font-semibold text-sky-700',
+    };
+  }
 
   if (face === 'right') {
     return {
       containerClass: cn(
         'absolute top-1/2 -translate-y-1/2',
-        isCornerProfile ? 'right-0' : 'right-2'
+        'right-2'
       ),
       labelClass: 'rotate-90',
       markerClass: cn(
         'bg-sky-500/95',
-        isCornerProfile ? 'h-14 w-1.5 rounded-l-sm' : 'h-1.5 w-6 rounded-full'
+        'h-1.5 w-6 rounded-full'
       ),
-      badgeClass: isCornerProfile ? 'bg-transparent px-0 py-0 shadow-none' : 'bg-background/85 px-2 py-0.5 shadow-sm',
-      textClass: cn(
-        'text-[10px] font-semibold text-sky-700',
-        isCornerProfile ? 'sr-only' : ''
-      ),
-      containerStyle: blockedRatio != null ? ({ top: `${blockedRatio * 100}%` } satisfies CSSProperties) : undefined,
+      badgeClass: 'bg-background/85 px-2 py-0.5 shadow-sm',
+      textClass: 'text-[10px] font-semibold text-sky-700',
     };
   }
   if (face === 'bottom') {
     return {
       containerClass: cn(
         'absolute left-1/2 -translate-x-1/2',
-        isCornerProfile ? 'bottom-0' : 'bottom-2'
+        'bottom-2'
       ),
       labelClass: '',
       markerClass: cn(
         'bg-sky-500/95',
-        isCornerProfile ? 'h-1.5 w-14 rounded-t-sm' : 'h-1.5 w-6 rounded-full'
+        'h-1.5 w-6 rounded-full'
       ),
-      badgeClass: isCornerProfile ? 'bg-transparent px-0 py-0 shadow-none' : 'bg-background/85 px-2 py-0.5 shadow-sm',
-      textClass: cn(
-        'text-[10px] font-semibold text-sky-700',
-        isCornerProfile ? 'sr-only' : ''
-      ),
-      containerStyle: blockedRatio != null ? ({ left: `${blockedRatio * 100}%` } satisfies CSSProperties) : undefined,
+      badgeClass: 'bg-background/85 px-2 py-0.5 shadow-sm',
+      textClass: 'text-[10px] font-semibold text-sky-700',
     };
   }
   if (face === 'left') {
     return {
       containerClass: cn(
         'absolute top-1/2 -translate-y-1/2',
-        isCornerProfile ? 'left-0' : 'left-2'
+        'left-2'
       ),
       labelClass: '-rotate-90',
       markerClass: cn(
         'bg-sky-500/95',
-        isCornerProfile ? 'h-14 w-1.5 rounded-r-sm' : 'h-1.5 w-6 rounded-full'
+        'h-1.5 w-6 rounded-full'
       ),
-      badgeClass: isCornerProfile ? 'bg-transparent px-0 py-0 shadow-none' : 'bg-background/85 px-2 py-0.5 shadow-sm',
-      textClass: cn(
-        'text-[10px] font-semibold text-sky-700',
-        isCornerProfile ? 'sr-only' : ''
-      ),
-      containerStyle: blockedRatio != null ? ({ top: `${blockedRatio * 100}%` } satisfies CSSProperties) : undefined,
+      badgeClass: 'bg-background/85 px-2 py-0.5 shadow-sm',
+      textClass: 'text-[10px] font-semibold text-sky-700',
     };
   }
   return {
     containerClass: cn(
       'absolute left-1/2 -translate-x-1/2',
-      isCornerProfile ? 'top-0' : 'top-2'
+      'top-2'
     ),
     labelClass: '',
     markerClass: cn(
       'bg-sky-500/95',
-      isCornerProfile ? 'h-1.5 w-14 rounded-b-sm' : 'h-1.5 w-6 rounded-full'
+      'h-1.5 w-6 rounded-full'
     ),
-    badgeClass: isCornerProfile ? 'bg-transparent px-0 py-0 shadow-none' : 'bg-background/85 px-2 py-0.5 shadow-sm',
-    textClass: cn(
-      'text-[10px] font-semibold text-sky-700',
-      isCornerProfile ? 'sr-only' : ''
-    ),
-    containerStyle: blockedRatio != null ? ({ left: `${blockedRatio * 100}%` } satisfies CSSProperties) : undefined,
+    badgeClass: 'bg-background/85 px-2 py-0.5 shadow-sm',
+    textClass: 'text-[10px] font-semibold text-sky-700',
   };
 }
 
@@ -466,11 +436,12 @@ export default function ConfiguratorCanvas({
                 const showFrontMarker = boxPixelWidth >= 104 && boxPixelHeight >= 70;
                 const showDimensions = boxPixelWidth >= 90 && boxPixelHeight >= 86;
                 const compactLabel = boxPixelWidth < 90 || boxPixelHeight < 64;
+                const cornerBaseDefinition = getCornerBaseDefinition(product);
                 const frontMarkerPosition = getFrontMarkerPosition(
-                  getBaseFrontFace(product),
-                  product.configurator_connection_profile,
-                  Number(product.configurator_width ?? rect.boxWidth),
-                  Number(product.configurator_length ?? rect.boxLength)
+                  cornerBaseDefinition?.frontFace ?? getBaseFrontFace(product),
+                  Boolean(cornerBaseDefinition),
+                  (cornerBaseDefinition?.blockedEnd ?? 0) > 0 &&
+                    Math.abs(cornerBaseDefinition?.blockedStart ?? 0) <= 1e-6
                 );
 
                 return (
@@ -609,7 +580,6 @@ export default function ConfiguratorCanvas({
                     <span className="pointer-events-none absolute inset-0">
                       <span
                         className={frontMarkerPosition.containerClass}
-                        style={frontMarkerPosition.containerStyle}
                       >
                         <span
                           className={cn(
