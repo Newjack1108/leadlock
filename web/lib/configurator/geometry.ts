@@ -277,12 +277,6 @@ function getFaceSegmentPoints(params: {
       endPoint: { x: left + end, y: bottom },
     };
   }
-  if (face === 'top') {
-    return {
-      startPoint: { x: left + start, y: top },
-      endPoint: { x: left + end, y: top },
-    };
-  }
   if (face === 'left') {
     return {
       startPoint: { x: left, y: top + start },
@@ -342,7 +336,7 @@ function getRotatedCornerDefinition(
   const standardSegment = getFaceSegmentPoints({
     face: base.standardFace,
     start: 0,
-    end: base.standardFace === 'bottom' || base.standardFace === 'top' ? width : length,
+    end: base.standardFace === 'bottom' ? width : length,
     left,
     right,
     top,
