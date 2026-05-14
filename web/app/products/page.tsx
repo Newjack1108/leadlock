@@ -24,9 +24,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Plus, Edit, Trash2, Package, List, LayoutGrid, FileDown } from 'lucide-react';
+import { Plus, Edit, Trash2, List, LayoutGrid, FileDown } from 'lucide-react';
 import Link from 'next/link';
-import api from '@/lib/api';
+import api, { getApiErrorDetail } from '@/lib/api';
 import { Product, ProductCategory, PRODUCT_SUBCATEGORIES, ProductSubcategory } from '@/lib/types';
 import { toast } from 'sonner';
 
@@ -69,7 +69,7 @@ export default function ProductsPage() {
   const fetchProducts = async () => {
     try {
       setLoading(true);
-      const params: any = { is_active: true };
+      const params: Record<string, string | boolean> = { is_active: true };
       if (categoryFilter !== 'ALL') {
         params.category = categoryFilter;
       }
@@ -82,11 +82,11 @@ export default function ProductsPage() {
 
       const response = await api.get('/api/products', { params });
       setProducts(response.data);
-    } catch (error: any) {
-      if (error.response?.status === 401) {
+    } catch (error: unknown) {
+      if ((error as { response?: { status?: number } })?.response?.status === 401) {
         router.push('/login');
       } else {
-        toast.error('Failed to load products');
+        toast.error(getApiErrorDetail(error) || 'Failed to load products');
       }
     } finally {
       setLoading(false);
@@ -130,11 +130,11 @@ export default function ProductsPage() {
       a.remove();
       window.URL.revokeObjectURL(url);
       toast.success('Price list downloaded');
-    } catch (error: any) {
-      if (error.response?.status === 401) {
+    } catch (error: unknown) {
+      if ((error as { response?: { status?: number } })?.response?.status === 401) {
         router.push('/login');
       } else {
-        toast.error('Failed to export price list');
+        toast.error(getApiErrorDetail(error) || 'Failed to export price list');
       }
     } finally {
       setExportingPdf(false);
@@ -174,8 +174,8 @@ export default function ProductsPage() {
       setEditDialogOpen(false);
       setEditingProduct(null);
       fetchProducts();
-    } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Failed to update product');
+    } catch (error: unknown) {
+      toast.error(getApiErrorDetail(error) || 'Failed to update product');
     } finally {
       setSaving(false);
     }
@@ -190,8 +190,8 @@ export default function ProductsPage() {
       await api.delete(`/api/products/${productId}`);
       toast.success('Product deactivated successfully');
       fetchProducts();
-    } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Failed to deactivate product');
+    } catch (error: unknown) {
+      toast.error(getApiErrorDetail(error) || 'Failed to deactivate product');
     }
   };
 
@@ -199,6 +199,7 @@ export default function ProductsPage() {
     STABLES: 'bg-blue-100 text-blue-700',
     SHEDS: 'bg-green-100 text-green-700',
     CABINS: 'bg-purple-100 text-purple-700',
+    CONFIGURATOR: 'bg-amber-100 text-amber-800',
   };
 
   return (
@@ -358,6 +359,7 @@ export default function ProductsPage() {
                             {product.category}
                           </Badge>
                           {product.is_extra && <Badge variant="outline">Extra</Badge>}
+                          {product.allow_in_configurator && <Badge variant="secondary">Configurator Extra</Badge>}
                         </div>
                       </td>
                       <td className="p-3 font-semibold">£{Number(product.base_price).toFixed(2)}</td>
@@ -401,6 +403,9 @@ export default function ProductsPage() {
                         </Badge>
                         {product.is_extra && (
                           <Badge variant="outline">Extra</Badge>
+                        )}
+                        {product.allow_in_configurator && (
+                          <Badge variant="secondary">Configurator Extra</Badge>
                         )}
                         {product.is_production_synced && (
                           <Badge variant="secondary">Production</Badge>

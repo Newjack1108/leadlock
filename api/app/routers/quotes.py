@@ -9,6 +9,7 @@ from typing import Dict, List, Literal, Optional, Tuple
 from app.database import get_session
 from app.models import (
     Quote,
+    QuoteConfiguration,
     QuoteItem,
     QuoteTemplate,
     QuoteTemplateSalesDocument,
@@ -42,8 +43,12 @@ from app.models import (
     MessengerMessage,
     MessengerDirection,
 )
-from app.auth import get_current_user
+from app.auth import get_current_user, require_configurator_access
+from app.configurator_service import build_configurator_preview
 from app.schemas import (
+    ConfiguratorGeneratedLine,
+    QuoteConfigurationPayload,
+    QuoteConfigurationResponse,
     QuoteCreate, QuoteUpdate, QuoteDraftUpdate, QuoteResponse, QuoteListResponse, QuoteItemCreate, QuoteItemResponse,
     QuoteEmailSendRequest, QuoteEmailSendResponse, QuoteViewLinkResponse,
     QuoteShareLinkRequest, QuoteShareLinkResponse, QuoteSendSmsRequest, QuoteSendSmsResponse,
@@ -1366,6 +1371,134 @@ def _build_duplicate_draft_payload_from_source(source: Quote, session: Session) 
         include_available_optional_extras=source.include_available_optional_extras,
         include_delivery_installation_contact_note=source.include_delivery_installation_contact_note,
     )
+
+
+def _serialize_quote_configuration(record: QuoteConfiguration) -> QuoteConfigurationResponse:
+    return QuoteConfigurationResponse(
+        quote_id=record.quote_id,
+        version=record.version,
+        configuration=QuoteConfigurationPayload.model_validate(record.configuration_json or {}),
+        created_by_id=record.created_by_id,
+        created_at=record.created_at,
+        updated_at=record.updated_at,
+    )
+
+
+def _generated_line_to_quote_item(line: ConfiguratorGeneratedLine) -> QuoteItemCreate:
+    return QuoteItemCreate(
+        product_id=line.product_id,
+        description=line.description,
+        quantity=line.quantity,
+        unit_price=line.unit_price,
+        is_custom=line.is_custom,
+        sort_order=line.sort_order,
+        parent_index=line.parent_index,
+        include_in_building_discount=line.include_in_building_discount,
+    )
+
+
+def _get_quote_configuration_record(session: Session, quote_id: int) -> QuoteConfiguration:
+    record = session.exec(
+        select(QuoteConfiguration).where(QuoteConfiguration.quote_id == quote_id)
+    ).first()
+    if not record:
+        raise HTTPException(status_code=404, detail="Quote configuration not found")
+    return record
+
+
+@router.get("/{quote_id}/configuration", response_model=QuoteConfigurationResponse)
+async def get_quote_configuration(
+    quote_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_configurator_access),
+):
+    del current_user
+    quote = session.exec(select(Quote).where(Quote.id == quote_id)).first()
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    return _serialize_quote_configuration(_get_quote_configuration_record(session, quote_id))
+
+
+@router.put("/{quote_id}/configuration", response_model=QuoteConfigurationResponse)
+async def save_quote_configuration(
+    quote_id: int,
+    payload: QuoteConfigurationPayload,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_configurator_access),
+):
+    quote = session.exec(select(Quote).where(Quote.id == quote_id)).first()
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    if quote.status != QuoteStatus.DRAFT:
+        raise HTTPException(status_code=400, detail="Only draft quotes can store configurator layouts")
+
+    record = session.exec(
+        select(QuoteConfiguration).where(QuoteConfiguration.quote_id == quote_id)
+    ).first()
+    if record:
+        record.version += 1
+        record.configuration_json = payload.model_dump(mode="json")
+        record.updated_at = datetime.utcnow()
+        session.add(record)
+    else:
+        record = QuoteConfiguration(
+            quote_id=quote_id,
+            version=1,
+            configuration_json=payload.model_dump(mode="json"),
+            created_by_id=current_user.id,
+        )
+        session.add(record)
+    session.commit()
+    session.refresh(record)
+    return _serialize_quote_configuration(record)
+
+
+@router.post("/{quote_id}/configuration/apply", response_model=QuoteResponse)
+async def apply_quote_configuration(
+    quote_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_configurator_access),
+):
+    quote = session.exec(select(Quote).where(Quote.id == quote_id)).first()
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    if quote.status != QuoteStatus.DRAFT:
+        raise HTTPException(status_code=400, detail="Only draft quotes can apply configurator layouts")
+
+    record = _get_quote_configuration_record(session, quote_id)
+    payload = QuoteConfigurationPayload.model_validate(record.configuration_json or {})
+    preview = build_configurator_preview(payload, session)
+    if not preview.valid:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "Configurator layout has validation errors",
+                "issues": [issue.model_dump(mode="json") for issue in preview.issues],
+            },
+        )
+    if not preview.items:
+        raise HTTPException(status_code=422, detail="Configurator layout generated no quote lines")
+
+    try:
+        draft_payload = _build_duplicate_draft_payload_from_source(quote, session)
+    except HTTPException as exc:
+        if exc.status_code != 400:
+            raise
+        draft_payload = QuoteDraftUpdate(
+            valid_until=quote.valid_until,
+            terms_and_conditions=quote.terms_and_conditions,
+            notes=quote.notes,
+            deposit_amount=quote.deposit_amount,
+            items=[],
+            temperature=quote.temperature,
+            include_spec_sheets=quote.include_spec_sheets,
+            include_available_optional_extras=quote.include_available_optional_extras,
+            include_delivery_installation_contact_note=quote.include_delivery_installation_contact_note,
+        )
+    draft_payload.items = [_generated_line_to_quote_item(line) for line in preview.items]
+    draft_payload.include_spec_sheets = False
+    draft_payload.include_available_optional_extras = False
+    return _update_draft_quote_impl(quote_id, draft_payload, session, current_user)
 
 
 @router.post("/{quote_id}/duplicate-to-draft", response_model=QuoteResponse)

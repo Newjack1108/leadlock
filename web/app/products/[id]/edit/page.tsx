@@ -16,7 +16,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import ImageUpload from '@/components/ImageUpload';
-import { getProduct, updateProduct, getOptionalExtras } from '@/lib/api';
+import { getApiErrorDetail, getProduct, updateProduct, getOptionalExtras } from '@/lib/api';
 import { ProductCategory, Product, PRODUCT_SUBCATEGORIES } from '@/lib/types';
 import { toast } from 'sonner';
 import { ArrowLeft } from 'lucide-react';
@@ -50,6 +50,9 @@ export default function EditProductPage() {
     floor_plan_url: '',
     width: '',
     length: '',
+    configurator_width: '',
+    configurator_length: '',
+    allow_in_configurator: false,
     installation_hours: '',
     boxes_per_product: '',
   });
@@ -61,6 +64,7 @@ export default function EditProductPage() {
     !formData.subcategory || formData.subcategory.trim() === ''
       ? SUBCATEGORY_NONE
       : formData.subcategory;
+  const isConfiguratorCategory = formData.category === ProductCategory.CONFIGURATOR;
 
   useEffect(() => {
     if (productId) {
@@ -92,18 +96,21 @@ export default function EditProductPage() {
         floor_plan_url: product.floor_plan_url || '',
         width: product.width?.toString() || '',
         length: product.length?.toString() || '',
+        configurator_width: product.configurator_width?.toString() || '',
+        configurator_length: product.configurator_length?.toString() || '',
+        allow_in_configurator: product.allow_in_configurator ?? false,
         installation_hours: product.installation_hours?.toString() || '',
         boxes_per_product: product.boxes_per_product?.toString() || '',
       });
       if (product.optional_extras) {
         setSelectedExtras(product.optional_extras.map((e: Product) => e.id));
       }
-    } catch (error: any) {
-      if (error.response?.status === 404) {
+    } catch (error: unknown) {
+      if ((error as { response?: { status?: number } })?.response?.status === 404) {
         toast.error('Product not found');
         router.push('/products');
       } else {
-        toast.error('Failed to load product');
+        toast.error(getApiErrorDetail(error) || 'Failed to load product');
       }
     } finally {
       setPageLoading(false);
@@ -114,7 +121,7 @@ export default function EditProductPage() {
     try {
       const extras = await getOptionalExtras();
       setOptionalExtras(extras);
-    } catch (error) {
+    } catch {
       console.error('Failed to load optional extras');
     }
   };
@@ -124,6 +131,11 @@ export default function EditProductPage() {
 
     if (!formData.name.trim() || !formData.base_price) {
       toast.error('Name and base price are required');
+      return;
+    }
+
+    if (isConfiguratorCategory && !formData.is_extra && (!formData.configurator_width || !formData.configurator_length)) {
+      toast.error('Configurator products require configurator width and length');
       return;
     }
 
@@ -147,6 +159,9 @@ export default function EditProductPage() {
         floor_plan_url: formData.floor_plan_url.trim() || null,
         width: formData.width ? parseFloat(formData.width) : undefined,
         length: formData.length ? parseFloat(formData.length) : undefined,
+        configurator_width: formData.configurator_width ? parseFloat(formData.configurator_width) : null,
+        configurator_length: formData.configurator_length ? parseFloat(formData.configurator_length) : null,
+        allow_in_configurator: formData.allow_in_configurator,
       };
       if (formData.is_extra) {
         productData.image_url = null;
@@ -159,8 +174,8 @@ export default function EditProductPage() {
       await updateProduct(productId, productData);
       toast.success('Product updated successfully');
       router.push(`/products/${productId}`);
-    } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Failed to update product');
+    } catch (error: unknown) {
+      toast.error(getApiErrorDetail(error) || 'Failed to update product');
     } finally {
       setLoading(false);
     }
@@ -290,6 +305,26 @@ export default function EditProductPage() {
                     Allow trade dealers to sell this product
                   </Label>
                 </div>
+                {formData.is_extra && (
+                  <div className="flex items-center gap-2">
+                    <input
+                      id="allow_in_configurator"
+                      type="checkbox"
+                      checked={formData.allow_in_configurator}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          allow_in_configurator: e.target.checked,
+                        })
+                      }
+                      className="h-4 w-4"
+                      disabled={loading}
+                    />
+                    <Label htmlFor="allow_in_configurator">
+                      Allow this extra to be selected inside the configurator
+                    </Label>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="category">
@@ -607,6 +642,59 @@ export default function EditProductPage() {
                         Upload a floor plan diagram to include in product spec sheets
                       </p>
                     </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Configurator Footprint</CardTitle>
+                    <p className="text-sm font-normal text-muted-foreground">
+                      Used by the quote configurator layout grid. Required for configurator items.
+                    </p>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="configurator_width">
+                          Configurator Width (numeric)
+                          {isConfiguratorCategory && <span className="text-destructive"> *</span>}
+                        </Label>
+                        <Input
+                          id="configurator_width"
+                          type="number"
+                          step="0.01"
+                          value={formData.configurator_width}
+                          onChange={(e) =>
+                            setFormData({ ...formData, configurator_width: e.target.value })
+                          }
+                          placeholder="e.g. 3.0"
+                          disabled={loading}
+                          required={isConfiguratorCategory}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="configurator_length">
+                          Configurator Length (numeric)
+                          {isConfiguratorCategory && <span className="text-destructive"> *</span>}
+                        </Label>
+                        <Input
+                          id="configurator_length"
+                          type="number"
+                          step="0.01"
+                          value={formData.configurator_length}
+                          onChange={(e) =>
+                            setFormData({ ...formData, configurator_length: e.target.value })
+                          }
+                          placeholder="e.g. 4.0"
+                          disabled={loading}
+                          required={isConfiguratorCategory}
+                        />
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      These are separate from the spec sheet dimensions so the configurator uses a dedicated
+                      footprint.
+                    </p>
                   </CardContent>
                 </Card>
               </>

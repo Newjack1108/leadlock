@@ -6,11 +6,10 @@ import Header from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { getProduct, getCompanySettings } from '@/lib/api';
+import { getApiErrorDetail, getProduct, getCompanySettings } from '@/lib/api';
 import { Product, CompanySettings } from '@/lib/types';
 import { toast } from 'sonner';
-import { ArrowLeft, Edit, Package } from 'lucide-react';
-import Image from 'next/image';
+import { ArrowLeft, Edit } from 'lucide-react';
 
 export default function ProductDetailPage() {
   const router = useRouter();
@@ -33,12 +32,12 @@ export default function ProductDetailPage() {
       setLoading(true);
       const data = await getProduct(productId);
       setProduct(data);
-    } catch (error: any) {
-      if (error.response?.status === 404) {
+    } catch (error: unknown) {
+      if ((error as { response?: { status?: number } })?.response?.status === 404) {
         toast.error('Product not found');
         router.push('/products');
       } else {
-        toast.error('Failed to load product');
+        toast.error(getApiErrorDetail(error) || 'Failed to load product');
       }
     } finally {
       setLoading(false);
@@ -49,7 +48,7 @@ export default function ProductDetailPage() {
     try {
       const settings = await getCompanySettings();
       setCompanySettings(settings);
-    } catch (error) {
+    } catch {
       console.error('Failed to load company settings');
     }
   };
@@ -65,6 +64,7 @@ export default function ProductDetailPage() {
     STABLES: 'bg-blue-100 text-blue-700',
     SHEDS: 'bg-green-100 text-green-700',
     CABINS: 'bg-purple-100 text-purple-700',
+    CONFIGURATOR: 'bg-amber-100 text-amber-800',
   };
 
   if (loading) {
@@ -118,6 +118,9 @@ export default function ProductDetailPage() {
                 </Badge>
                 {product.is_extra && (
                   <Badge variant="outline">Extra</Badge>
+                )}
+                {product.allow_in_configurator && (
+                  <Badge variant="secondary">Configurator Extra</Badge>
                 )}
                 {product.subcategory && (
                   <Badge variant="secondary">{product.subcategory}</Badge>
@@ -184,6 +187,12 @@ export default function ProductDetailPage() {
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Boxes per product:</span>
                       <span>{product.boxes_per_product}</span>
+                    </div>
+                  )}
+                  {product.allow_in_configurator && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Configurator extra:</span>
+                      <span>Enabled</span>
                     </div>
                   )}
                   {installCost !== null && (
@@ -264,6 +273,26 @@ export default function ProductDetailPage() {
                       </div>
                     </div>
                   )}
+                </CardContent>
+              </Card>
+            )}
+
+            {(product.configurator_width != null || product.configurator_length != null) && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Configurator Footprint</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-1">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Width:</span>
+                      <span>{product.configurator_width != null ? `${product.configurator_width}m` : '—'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Length:</span>
+                      <span>{product.configurator_length != null ? `${product.configurator_length}m` : '—'}</span>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
             )}

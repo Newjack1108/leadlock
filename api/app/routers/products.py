@@ -1,4 +1,5 @@
 import re
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Response
 from sqlmodel import Session, select
@@ -26,12 +27,39 @@ def _build_product_response(product: Product, optional_extras: Optional[List[Pro
     return ProductResponse(**payload)
 
 
+def _validate_configurator_product_payload(payload: dict) -> None:
+    category = payload.get("category")
+    is_extra = bool(payload.get("is_extra"))
+    allow_in_configurator = bool(payload.get("allow_in_configurator"))
+    configurator_width = payload.get("configurator_width")
+    configurator_length = payload.get("configurator_length")
+
+    if allow_in_configurator and not is_extra:
+        raise HTTPException(
+            status_code=422,
+            detail="Only optional extras can opt into configurator usage",
+        )
+
+    if category == ProductCategory.CONFIGURATOR and not is_extra:
+        if configurator_width is None or configurator_length is None:
+            raise HTTPException(
+                status_code=422,
+                detail="Configurator products require configurator_width and configurator_length",
+            )
+        if Decimal(str(configurator_width)) <= 0 or Decimal(str(configurator_length)) <= 0:
+            raise HTTPException(
+                status_code=422,
+                detail="Configurator product dimensions must be greater than zero",
+            )
+
+
 @router.get("", response_model=List[ProductResponse])
 async def get_products(
     category: Optional[ProductCategory] = Query(None),
     is_extra: Optional[bool] = Query(None),
     is_active: Optional[bool] = Query(None),
     subcategory: Optional[str] = Query(None),
+    allow_in_configurator: Optional[bool] = Query(None),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
@@ -46,6 +74,9 @@ async def get_products(
 
     if subcategory:
         statement = statement.where(Product.subcategory == subcategory)
+
+    if allow_in_configurator is not None:
+        statement = statement.where(Product.allow_in_configurator == allow_in_configurator)
     
     # Default to active products if is_active is not specified
     if is_active is None:
@@ -228,6 +259,7 @@ async def create_product(
     """Create a new product. DIRECTOR and CLOSER."""
     product_dict = product_data.dict()
     optional_extras = product_dict.pop("optional_extras", None)
+    _validate_configurator_product_payload(product_dict)
     
     product = Product(**product_dict)
     session.add(product)
@@ -280,6 +312,14 @@ async def update_product(
     
     update_data = product_data.dict(exclude_unset=True)
     optional_extras = update_data.pop("optional_extras", None)
+    candidate_payload = {
+        "category": update_data.get("category", product.category),
+        "is_extra": update_data.get("is_extra", product.is_extra),
+        "allow_in_configurator": update_data.get("allow_in_configurator", product.allow_in_configurator),
+        "configurator_width": update_data.get("configurator_width", product.configurator_width),
+        "configurator_length": update_data.get("configurator_length", product.configurator_length),
+    }
+    _validate_configurator_product_payload(candidate_payload)
     
     for field, value in update_data.items():
         setattr(product, field, value)

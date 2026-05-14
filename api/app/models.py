@@ -53,6 +53,7 @@ class ProductCategory(str, Enum):
     STABLES = "STABLES"
     SHEDS = "SHEDS"
     CABINS = "CABINS"
+    CONFIGURATOR = "CONFIGURATOR"
 
 
 class LeadType(str, Enum):
@@ -393,6 +394,9 @@ class Product(SQLModel, table=True):
     floor_plan_url: Optional[str] = None  # URL to floor plan image
     width: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(10, 2)))  # Numeric width (for calculations)
     length: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(10, 2)))  # Numeric length (for calculations)
+    configurator_width: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(10, 2)))  # Footprint width used by configurator layout grid
+    configurator_length: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(10, 2)))  # Footprint length used by configurator layout grid
+    allow_in_configurator: bool = Field(default=False)  # Extra-level opt-in for configurator selections
     installation_hours: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(10, 2)))  # Hours required for installation
     boxes_per_product: Optional[int] = None  # Number of boxes per product (optional; used in installation calculation)
     production_product_id: Optional[int] = Field(default=None, index=True)  # Production app's product ID for sync
@@ -614,6 +618,19 @@ class QuoteItem(SQLModel, table=True):
     quote: Quote = Relationship(back_populates="items")
     product: Optional[Product] = Relationship(back_populates="quote_items")
     discounts: List["QuoteDiscount"] = Relationship(back_populates="quote_item")
+
+
+class QuoteConfiguration(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    quote_id: int = Field(foreign_key="quote.id", index=True, unique=True)
+    version: int = Field(default=1)
+    configuration_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    created_by_id: int = Field(foreign_key="user.id")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+    quote: Quote = Relationship(sa_relationship_kwargs={"uselist": False})
+    created_by: User = Relationship()
 
 
 class QuoteEmail(SQLModel, table=True):

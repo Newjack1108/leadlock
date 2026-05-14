@@ -6,7 +6,7 @@ import Header from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { deleteProduct, getOptionalExtras, getProducts } from '@/lib/api';
+import { deleteProduct, getApiErrorDetail, getOptionalExtras, getProducts } from '@/lib/api';
 import { Product, ProductCategory } from '@/lib/types';
 import { toast } from 'sonner';
 import { ArrowLeft, Plus, Edit, Package, Trash2 } from 'lucide-react';
@@ -48,11 +48,11 @@ export default function OptionalExtrasPage() {
       }
       
       setProductsUsingExtras(usageMap);
-    } catch (error: any) {
-      if (error.response?.status === 401) {
+    } catch (error: unknown) {
+      if ((error as { response?: { status?: number } })?.response?.status === 401) {
         router.push('/login');
       } else {
-        toast.error('Failed to load optional extras');
+        toast.error(getApiErrorDetail(error) || 'Failed to load optional extras');
       }
     } finally {
       setLoading(false);
@@ -71,8 +71,8 @@ export default function OptionalExtrasPage() {
       await deleteProduct(extra.id);
       toast.success('Optional extra deactivated');
       fetchOptionalExtras();
-    } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Failed to deactivate optional extra');
+    } catch (error: unknown) {
+      toast.error(getApiErrorDetail(error) || 'Failed to deactivate optional extra');
     }
   };
 
@@ -80,6 +80,7 @@ export default function OptionalExtrasPage() {
     STABLES: 'bg-blue-100 text-blue-700',
     SHEDS: 'bg-green-100 text-green-700',
     CABINS: 'bg-purple-100 text-purple-700',
+    CONFIGURATOR: 'bg-amber-100 text-amber-800',
   };
 
   return (
@@ -138,6 +139,9 @@ export default function OptionalExtrasPage() {
                         <Badge className={categoryColors[extra.category]}>
                           {extra.category}
                         </Badge>
+                        {extra.allow_in_configurator && (
+                          <Badge variant="secondary">Configurator</Badge>
+                        )}
                         {extra.subcategory && (
                           <Badge variant="secondary">{extra.subcategory}</Badge>
                         )}

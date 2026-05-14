@@ -22,13 +22,11 @@ export default function Home() {
           skipAuthRedirect: true,
         });
         if (cancelled) return;
-
         if (response.status === 401) {
           clearAuthStorage();
           window.location.replace('/login');
           return;
         }
-
         const role = response.data?.role;
         const path =
           role === 'CLOSER'

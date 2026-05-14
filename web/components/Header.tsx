@@ -21,11 +21,13 @@ import {
   MessageSquare,
   FolderOpen,
   LayoutDashboard,
+  LayoutGrid,
   Menu,
   ImageIcon,
 } from 'lucide-react';
 import api from '@/lib/api';
 import {
+  getAuthMe,
   getStaleSummary,
   getDiscountRequests,
   getUnreadSms,
@@ -62,6 +64,7 @@ export default function Header() {
   const router = useRouter();
   const pathname = usePathname();
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [canAccessConfigurator, setCanAccessConfigurator] = useState(false);
   const [reminderCount, setReminderCount] = useState<number>(0);
   const [newLeadsCount, setNewLeadsCount] = useState<number>(0);
   const [unreadMessagesCount, setUnreadMessagesCount] = useState<number>(0);
@@ -72,10 +75,12 @@ export default function Header() {
   useEffect(() => {
     const fetchUser = async () => {
       try {
-        const response = await api.get('/api/auth/me');
-        setUserRole(response.data.role);
+        const me = await getAuthMe();
+        setUserRole(me.role);
+        setCanAccessConfigurator(Boolean(me.can_access_configurator));
       } catch {
         setUserRole(null);
+        setCanAccessConfigurator(false);
       }
     };
     fetchUser();
@@ -178,6 +183,10 @@ export default function Header() {
   const isCloser = userRole === 'CLOSER';
   const isDealer = userRole === 'DEALER_ADMIN' || userRole === 'DEALER_USER';
   const canApproveDiscounts = userRole === 'DIRECTOR' || userRole === 'SALES_MANAGER';
+  const configuratorNavActive =
+    Boolean(pathname === '/quotes/configure' || pathname?.match(/^\/quotes\/\d+\/configure$/));
+  const quotesNavActive =
+    Boolean(pathname?.startsWith('/quotes')) && !configuratorNavActive;
 
   const mobileNavLinkClass =
     'flex w-full min-h-11 items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground';
@@ -311,10 +320,10 @@ export default function Header() {
           </div>}
           {!isDealer && <Link href="/quotes">
             <Button
-              variant={pathname?.startsWith('/quotes') ? 'default' : 'ghost'}
+              variant={quotesNavActive ? 'default' : 'ghost'}
               size="sm"
               className={
-                pathname?.startsWith('/quotes')
+                quotesNavActive
                   ? 'text-primary-foreground'
                   : 'text-muted-foreground hover:text-foreground'
               }
@@ -323,6 +332,22 @@ export default function Header() {
               Quotes
             </Button>
           </Link>}
+          {!isDealer && canAccessConfigurator && (
+            <Link href="/quotes/configure">
+              <Button
+                variant={configuratorNavActive ? 'default' : 'ghost'}
+                size="sm"
+                className={
+                  configuratorNavActive
+                    ? 'text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                }
+              >
+                <LayoutGrid className="h-4 w-4 mr-2" />
+                Configurator
+              </Button>
+            </Link>
+          )}
           {!isDealer && <Link href="/orders">
             <Button
               variant={pathname?.startsWith('/orders') ? 'default' : 'ghost'}
@@ -648,7 +673,7 @@ export default function Header() {
                   onClick={closeMobile}
                   className={cn(
                     mobileNavLinkClass,
-                    pathname?.startsWith('/quotes') && 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground'
+                    quotesNavActive && 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground'
                   )}
                 >
                   <span className="flex items-center gap-2">
@@ -656,6 +681,21 @@ export default function Header() {
                     Quotes
                   </span>
                 </Link>}
+                {!isDealer && canAccessConfigurator && (
+                  <Link
+                    href="/quotes/configure"
+                    onClick={closeMobile}
+                    className={cn(
+                      mobileNavLinkClass,
+                      configuratorNavActive && 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground'
+                    )}
+                  >
+                    <span className="flex items-center gap-2">
+                      <LayoutGrid className="h-4 w-4 shrink-0" />
+                      Configurator
+                    </span>
+                  </Link>
+                )}
                 {!isDealer && <Link
                   href="/orders"
                   onClick={closeMobile}

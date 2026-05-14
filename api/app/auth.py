@@ -36,6 +36,22 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     return encoded_jwt
 
 
+def _env_bool(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _normalize_email(value: Optional[str]) -> str:
+    return (value or "").strip().lower()
+
+
+def _env_csv(name: str) -> set[str]:
+    raw = os.getenv(name, "")
+    return {_normalize_email(item) for item in raw.split(",") if _normalize_email(item)}
+
+
 async def get_current_user(
     token: str = Depends(oauth2_scheme),
     session: Session = Depends(get_session)
@@ -99,6 +115,26 @@ async def require_non_dealer_user(current_user: User = Depends(get_current_user)
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Dashboard is not available for dealer accounts",
+        )
+    return current_user
+
+
+def has_configurator_access(user: User) -> bool:
+    if not _env_bool("CONFIGURATOR_ENABLED", default=False):
+        return False
+    if user.role in (UserRole.DEALER_ADMIN, UserRole.DEALER_USER):
+        return False
+    if _env_bool("CONFIGURATOR_ALLOW_DIRECTOR_OVERRIDE", default=False) and user.role == UserRole.DIRECTOR:
+        return True
+    allowed_emails = _env_csv("CONFIGURATOR_ALLOWED_EMAILS")
+    return _normalize_email(user.email) in allowed_emails
+
+
+async def require_configurator_access(current_user: User = Depends(get_current_user)) -> User:
+    if not has_configurator_access(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Configurator access is not enabled for this account",
         )
     return current_user
 

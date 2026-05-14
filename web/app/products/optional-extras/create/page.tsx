@@ -15,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { createProduct } from '@/lib/api';
+import { createProduct, getApiErrorDetail } from '@/lib/api';
 import { ProductCategory } from '@/lib/types';
 import { toast } from 'sonner';
 import { ArrowLeft } from 'lucide-react';
@@ -32,6 +32,7 @@ export default function CreateOptionalExtraPage() {
     unit: 'Unit',
     sku: '',
     specifications: '',
+    allow_in_configurator: false,
     installation_hours: '',
     boxes_per_product: '',
   });
@@ -55,6 +56,7 @@ export default function CreateOptionalExtraPage() {
         unit: formData.unit.trim() || 'Unit',
         sku: formData.sku.trim() || undefined,
         specifications: formData.specifications.trim() || undefined,
+        allow_in_configurator: formData.allow_in_configurator,
         installation_hours: formData.installation_hours
           ? parseFloat(formData.installation_hours)
           : undefined,
@@ -64,8 +66,8 @@ export default function CreateOptionalExtraPage() {
       });
       toast.success('Optional extra created successfully');
       router.push('/products/optional-extras');
-    } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Failed to create optional extra');
+    } catch (error: unknown) {
+      toast.error(getApiErrorDetail(error) || 'Failed to create optional extra');
     } finally {
       setLoading(false);
     }
@@ -132,6 +134,21 @@ export default function CreateOptionalExtraPage() {
                       disabled={loading}
                     />
                   </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    id="allow_in_configurator"
+                    type="checkbox"
+                    checked={formData.allow_in_configurator}
+                    onChange={(e) =>
+                      setFormData({ ...formData, allow_in_configurator: e.target.checked })
+                    }
+                    className="h-4 w-4"
+                    disabled={loading}
+                  />
+                  <Label htmlFor="allow_in_configurator">
+                    Allow this extra to be selected inside the configurator
+                  </Label>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="description">Description</Label>

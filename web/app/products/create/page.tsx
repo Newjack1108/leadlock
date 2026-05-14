@@ -16,10 +16,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import ImageUpload from '@/components/ImageUpload';
-import { createProduct, getOptionalExtras } from '@/lib/api';
+import { createProduct, getApiErrorDetail, getOptionalExtras } from '@/lib/api';
 import { ProductCategory, Product, PRODUCT_SUBCATEGORIES } from '@/lib/types';
 import { toast } from 'sonner';
-import { ArrowLeft, X } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 
 const PRODUCT_UNIT_OPTIONS = ['Per Box', 'Unit', 'Set'] as const;
 const SUBCATEGORY_NONE = '__NONE__';
@@ -46,9 +46,13 @@ export default function CreateProductPage() {
     floor_plan_url: '',
     width: '',
     length: '',
+    configurator_width: '',
+    configurator_length: '',
     installation_hours: '',
     boxes_per_product: '',
   });
+
+  const isConfiguratorCategory = formData.category === ProductCategory.CONFIGURATOR;
 
   useEffect(() => {
     fetchOptionalExtras();
@@ -58,7 +62,7 @@ export default function CreateProductPage() {
     try {
       const extras = await getOptionalExtras();
       setOptionalExtras(extras);
-    } catch (error) {
+    } catch {
       console.error('Failed to load optional extras');
     }
   };
@@ -68,6 +72,11 @@ export default function CreateProductPage() {
 
     if (!formData.name.trim() || !formData.base_price) {
       toast.error('Name and base price are required');
+      return;
+    }
+
+    if (isConfiguratorCategory && (!formData.configurator_width || !formData.configurator_length)) {
+      toast.error('Configurator products require configurator width and length');
       return;
     }
 
@@ -92,14 +101,16 @@ export default function CreateProductPage() {
         floor_plan_url: formData.floor_plan_url.trim() || undefined,
         width: formData.width ? parseFloat(formData.width) : undefined,
         length: formData.length ? parseFloat(formData.length) : undefined,
+        configurator_width: formData.configurator_width ? parseFloat(formData.configurator_width) : undefined,
+        configurator_length: formData.configurator_length ? parseFloat(formData.configurator_length) : undefined,
         optional_extras: selectedExtras.length > 0 ? selectedExtras : undefined,
       };
 
       const newProduct = await createProduct(productData);
       toast.success('Product created successfully');
       router.push(`/products/${newProduct.id}`);
-    } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Failed to create product');
+    } catch (error: unknown) {
+      toast.error(getApiErrorDetail(error) || 'Failed to create product');
     } finally {
       setLoading(false);
     }
@@ -502,6 +513,59 @@ export default function CreateProductPage() {
                     Upload a floor plan diagram to include in product spec sheets
                   </p>
                 </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Configurator Footprint</CardTitle>
+                <p className="text-sm font-normal text-muted-foreground">
+                  Used by the quote configurator layout grid. Required for configurator items.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="configurator_width">
+                      Configurator Width (numeric)
+                      {isConfiguratorCategory && <span className="text-destructive"> *</span>}
+                    </Label>
+                    <Input
+                      id="configurator_width"
+                      type="number"
+                      step="0.01"
+                      value={formData.configurator_width}
+                      onChange={(e) =>
+                        setFormData({ ...formData, configurator_width: e.target.value })
+                      }
+                      placeholder="e.g. 3.0"
+                      disabled={loading}
+                      required={isConfiguratorCategory}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="configurator_length">
+                      Configurator Length (numeric)
+                      {isConfiguratorCategory && <span className="text-destructive"> *</span>}
+                    </Label>
+                    <Input
+                      id="configurator_length"
+                      type="number"
+                      step="0.01"
+                      value={formData.configurator_length}
+                      onChange={(e) =>
+                        setFormData({ ...formData, configurator_length: e.target.value })
+                      }
+                      placeholder="e.g. 4.0"
+                      disabled={loading}
+                      required={isConfiguratorCategory}
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  These are separate from the product spec sheet dimensions so the configurator grid can use a
+                  dedicated footprint.
+                </p>
               </CardContent>
             </Card>
 

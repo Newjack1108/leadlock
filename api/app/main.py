@@ -10,7 +10,7 @@ from starlette.responses import Response
 from app.json_datetime import json_dumps_utf8, normalize_json_datetimes
 from app.database import create_db_and_tables, engine
 from sqlmodel import Session, select
-from app.routers import auth, leads, dashboard, reports, webhooks, products, settings, quotes, customers, emails, email_templates, quote_templates, sms_templates, reminders, discounts, discount_requests, sms, messenger, public, delivery_install, orders, customer_files, users, sales_documents, facebook_adverts, dealer_portal, dealer_discount_admin
+from app.routers import auth, leads, dashboard, reports, webhooks, products, settings, quotes, customers, emails, email_templates, quote_templates, sms_templates, reminders, discounts, discount_requests, sms, messenger, public, delivery_install, orders, customer_files, users, sales_documents, facebook_adverts, dealer_portal, dealer_discount_admin, configurator
 from app.models import User
 import os
 import traceback
@@ -170,6 +170,7 @@ app.include_router(sales_documents.router)
 app.include_router(public.router)
 app.include_router(dealer_portal.router)
 app.include_router(dealer_discount_admin.router)
+app.include_router(configurator.router)
 
 
 @app.on_event("startup")

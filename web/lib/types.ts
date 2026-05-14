@@ -36,6 +36,7 @@ export enum ProductCategory {
   STABLES = "STABLES",
   SHEDS = "SHEDS",
   CABINS = "CABINS",
+  CONFIGURATOR = "CONFIGURATOR",
 }
 
 /** Fixed subcategory labels for catalog filtering and forms (matches Product.subcategory). */
@@ -83,6 +84,15 @@ export interface User {
   email: string;
   full_name: string;
   role: string;
+  can_access_configurator?: boolean;
+}
+
+export interface AuthMe {
+  id: number;
+  email: string;
+  full_name: string;
+  role: string;
+  can_access_configurator: boolean;
 }
 
 export interface UserList {
@@ -94,6 +104,71 @@ export interface UserList {
   dealer_commission_pct?: number | null;
   is_active: boolean;
   created_at: string;
+}
+
+export interface ConfiguratorAccessStatus {
+  enabled: boolean;
+  mode: string;
+}
+
+export interface ConfiguratorBoxPlacement {
+  id: string;
+  product_id: number;
+  x: number;
+  y: number;
+  rotation: 0 | 90 | 180 | 270;
+}
+
+export interface ConfiguratorExtraSelection {
+  product_id: number;
+  quantity?: number;
+}
+
+export interface QuoteConfigurationPayload {
+  schema_version: number;
+  name?: string;
+  boxes: ConfiguratorBoxPlacement[];
+  extras: ConfiguratorExtraSelection[];
+}
+
+export interface ConfiguratorValidationIssue {
+  code: string;
+  severity: 'error' | 'warning';
+  message: string;
+  box_ids: string[];
+}
+
+export interface ConfiguratorGeneratedLine {
+  product_id?: number;
+  description: string;
+  quantity: number;
+  unit_price: number;
+  is_custom: boolean;
+  sort_order: number;
+  parent_index?: number;
+  include_in_building_discount: boolean;
+}
+
+export interface ConfiguratorPreviewResponse {
+  valid: boolean;
+  issues: ConfiguratorValidationIssue[];
+  items: ConfiguratorGeneratedLine[];
+  subtotal: number;
+  total_boxes: number;
+}
+
+export interface ConfiguratorCatalogResponse {
+  items: Product[];
+  extras: Product[];
+}
+
+export interface QuoteConfigurationResponse {
+  quote_id: number;
+  version: number;
+  configuration: QuoteConfigurationPayload;
+  created_by_id: number;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface UserEmailSettings {
@@ -472,6 +547,9 @@ export interface Product {
   floor_plan_url?: string;
   width?: number;
   length?: number;
+  configurator_width?: number;
+  configurator_length?: number;
+  allow_in_configurator: boolean;
   installation_hours?: number;
   boxes_per_product?: number;
   is_production_synced: boolean;

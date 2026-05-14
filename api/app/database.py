@@ -525,6 +525,16 @@ def create_db_and_tables():
                 error_str = str(e).lower()
                 if "already exists" not in error_str:
                     print(f"Warning: could not add leadstatus value CLOSED: {e}", file=sys.stderr, flush=True)
+
+        if inspector.has_table("product"):
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text("ALTER TYPE productcategory ADD VALUE IF NOT EXISTS 'CONFIGURATOR'"))
+                print("Ensured productcategory enum value: CONFIGURATOR", file=sys.stderr, flush=True)
+            except Exception as e:
+                error_str = str(e).lower()
+                if "already exists" not in error_str and "does not exist" not in error_str and "sqlite" not in error_str:
+                    print(f"Warning: could not add productcategory value CONFIGURATOR: {e}", file=sys.stderr, flush=True)
         
         # Step 0a: Create order tables (customer_order, orderitem) if missing - order-from-quote feature
         if has_quote_table and (not has_customer_order_table or not has_orderitem_table):
@@ -1923,6 +1933,8 @@ def create_db_and_tables():
                 ("floor_plan_url", "VARCHAR(2048)"),
                 ("width", "NUMERIC(10, 2)"),
                 ("length", "NUMERIC(10, 2)"),
+                ("configurator_width", "NUMERIC(10, 2)"),
+                ("configurator_length", "NUMERIC(10, 2)"),
             ]:
                 product_columns = [col["name"] for col in inspector.get_columns("product")]
                 if col_name not in product_columns:
@@ -1935,6 +1947,44 @@ def create_db_and_tables():
                         error_str = str(e).lower()
                         if "already exists" not in error_str and "duplicate" not in error_str:
                             print(f"Error adding {col_name} column: {e}", file=sys.stderr, flush=True)
+
+            product_columns = [col["name"] for col in inspector.get_columns("product")]
+            if "allow_in_configurator" not in product_columns:
+                print("Adding allow_in_configurator column to product table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE product ADD COLUMN allow_in_configurator BOOLEAN DEFAULT FALSE"))
+                    print("Added allow_in_configurator column to product table", file=sys.stderr, flush=True)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Error adding allow_in_configurator column: {e}", file=sys.stderr, flush=True)
+
+            if has_quote_table and not inspector.has_table("quoteconfiguration"):
+                print("Creating quoteconfiguration table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(
+                            text(
+                                """
+                                CREATE TABLE IF NOT EXISTS quoteconfiguration (
+                                    id SERIAL PRIMARY KEY,
+                                    quote_id INTEGER NOT NULL UNIQUE REFERENCES quote(id),
+                                    version INTEGER NOT NULL DEFAULT 1,
+                                    configuration_json JSON NOT NULL DEFAULT '{}'::json,
+                                    created_by_id INTEGER NOT NULL REFERENCES "user"(id),
+                                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                                )
+                                """
+                            )
+                        )
+                        conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_quoteconfiguration_quote_id ON quoteconfiguration (quote_id)"))
+                    print("Created quoteconfiguration table", file=sys.stderr, flush=True)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Error creating quoteconfiguration table: {e}", file=sys.stderr, flush=True)
 
         # Step 11: Add is_giveaway to DiscountTemplate table
         has_discount_template_table = inspector.has_table("discounttemplate")

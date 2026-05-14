@@ -41,6 +41,7 @@ class UserResponse(BaseModel):
     email: str
     full_name: str
     role: UserRole
+    can_access_configurator: bool = False
 
 
 class UserCreate(BaseModel):
@@ -101,6 +102,78 @@ class AssignableUserResponse(BaseModel):
     id: int
     full_name: str
     email: str
+
+
+class ConfiguratorAccessResponse(BaseModel):
+    enabled: bool
+    mode: str
+
+
+class ConfiguratorBoxPlacement(BaseModel):
+    id: str
+    product_id: int
+    x: Decimal = Decimal("0")
+    y: Decimal = Decimal("0")
+    rotation: int = 0
+
+    @field_validator("rotation")
+    @classmethod
+    def rotation_must_be_right_angle(cls, value: int) -> int:
+        if value not in (0, 90, 180, 270):
+            raise ValueError("rotation must be one of 0, 90, 180, 270")
+        return value
+
+
+class ConfiguratorExtraSelection(BaseModel):
+    product_id: int
+    quantity: Optional[Decimal] = None
+
+
+class QuoteConfigurationPayload(BaseModel):
+    schema_version: int = 1
+    name: Optional[str] = None
+    boxes: List[ConfiguratorBoxPlacement] = Field(default_factory=list)
+    extras: List[ConfiguratorExtraSelection] = Field(default_factory=list)
+
+
+class ConfiguratorValidationIssue(BaseModel):
+    code: str
+    severity: str
+    message: str
+    box_ids: List[str] = Field(default_factory=list)
+
+
+class ConfiguratorGeneratedLine(BaseModel):
+    product_id: Optional[int] = None
+    description: str
+    quantity: Decimal
+    unit_price: Decimal
+    is_custom: bool = False
+    sort_order: int = 0
+    parent_index: Optional[int] = None
+    include_in_building_discount: bool = True
+
+
+class ConfiguratorPreviewResponse(BaseModel):
+    valid: bool
+    issues: List[ConfiguratorValidationIssue] = Field(default_factory=list)
+    items: List[ConfiguratorGeneratedLine] = Field(default_factory=list)
+    subtotal: Decimal = Decimal("0")
+    total_boxes: int = 0
+
+
+class ConfiguratorCatalogResponse(BaseModel):
+    items: List["ProductResponse"] = Field(default_factory=list)
+    extras: List["ProductResponse"] = Field(default_factory=list)
+
+
+class QuoteConfigurationResponse(BaseModel):
+    quote_id: int
+    version: int
+    configuration: QuoteConfigurationPayload
+    created_by_id: int
+    created_at: datetime
+    updated_at: datetime
 
 
 class UserEmailSettingsUpdate(BaseModel):
@@ -981,6 +1054,9 @@ class ProductCreate(BaseModel):
     floor_plan_url: Optional[str] = None
     width: Optional[Decimal] = None
     length: Optional[Decimal] = None
+    configurator_width: Optional[Decimal] = None
+    configurator_length: Optional[Decimal] = None
+    allow_in_configurator: bool = False
     installation_hours: Optional[Decimal] = None
     boxes_per_product: Optional[int] = None  # Number of boxes per product (optional; used in installation calculation)
     optional_extras: Optional[List[int]] = None  # List of product IDs that are optional extras
@@ -1011,6 +1087,9 @@ class ProductUpdate(BaseModel):
     floor_plan_url: Optional[str] = None
     width: Optional[Decimal] = None
     length: Optional[Decimal] = None
+    configurator_width: Optional[Decimal] = None
+    configurator_length: Optional[Decimal] = None
+    allow_in_configurator: Optional[bool] = None
     installation_hours: Optional[Decimal] = None
     boxes_per_product: Optional[int] = None
     optional_extras: Optional[List[int]] = None  # List of product IDs that are optional extras
@@ -1044,6 +1123,9 @@ class ProductResponse(BaseModel):
     floor_plan_url: Optional[str] = None
     width: Optional[Decimal] = None
     length: Optional[Decimal] = None
+    configurator_width: Optional[Decimal] = None
+    configurator_length: Optional[Decimal] = None
+    allow_in_configurator: bool = False
     installation_hours: Optional[Decimal] = None
     boxes_per_product: Optional[int] = None
     is_production_synced: bool = False
@@ -2119,3 +2201,7 @@ class DealerProfileUpdate(BaseModel):
     vat_number: Optional[str] = None
     registration_number: Optional[str] = None
     website: Optional[str] = None
+
+
+ConfiguratorCatalogResponse.model_rebuild()
+ProductResponse.model_rebuild()

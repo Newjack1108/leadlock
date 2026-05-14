@@ -2,13 +2,29 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 from app.database import get_session
 from app.models import User, UserRole
-from app.auth import verify_password, create_access_token, get_current_user, get_password_hash
+from app.auth import (
+    verify_password,
+    create_access_token,
+    get_current_user,
+    get_password_hash,
+    has_configurator_access,
+)
 from app.system_user_service import system_user_email
 from app.schemas import Token, UserLogin, UserResponse, BootstrapCreate, LoginQuoteResponse
 from app.login_quote_service import generate_login_quote
 from datetime import timedelta
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+
+
+def _build_user_response(user: User) -> UserResponse:
+    return UserResponse(
+        id=user.id,
+        email=user.email,
+        full_name=user.full_name,
+        role=user.role,
+        can_access_configurator=has_configurator_access(user),
+    )
 
 
 @router.post("/bootstrap", response_model=UserResponse)
@@ -29,7 +45,7 @@ async def bootstrap(data: BootstrapCreate, session: Session = Depends(get_sessio
     session.add(user)
     session.commit()
     session.refresh(user)
-    return user
+    return _build_user_response(user)
 
 
 @router.post("/login", response_model=Token)
@@ -65,7 +81,7 @@ async def login(credentials: UserLogin, session: Session = Depends(get_session))
 
 @router.get("/me", response_model=UserResponse)
 async def get_current_user_info(current_user: User = Depends(get_current_user)):
-    return current_user
+    return _build_user_response(current_user)
 
 
 @router.get("/login-quote", response_model=LoginQuoteResponse)

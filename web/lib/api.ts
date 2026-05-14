@@ -9,6 +9,12 @@ import {
   type DateRangeQueryParams,
   type DealerProfile,
   type DealerSummary,
+  type AuthMe,
+  type ConfiguratorCatalogResponse,
+  type ConfiguratorAccessStatus,
+  type ConfiguratorPreviewResponse,
+  type QuoteConfigurationPayload,
+  type QuoteConfigurationResponse,
   type DealerDiscountPolicyAdminPayload,
   type DealerDiscountPolicyAdminResponse,
   type DealerAllowedDiscountPolicy,
@@ -1254,6 +1260,9 @@ export const createProduct = async (productData: {
   floor_plan_url?: string;
   width?: number;
   length?: number;
+  configurator_width?: number;
+  configurator_length?: number;
+  allow_in_configurator?: boolean;
   installation_hours?: number;
   boxes_per_product?: number;
   optional_extras?: number[];
@@ -1280,6 +1289,9 @@ export const updateProduct = async (productId: number, productData: {
   floor_plan_url?: string | null;
   width?: number;
   length?: number;
+  configurator_width?: number | null;
+  configurator_length?: number | null;
+  allow_in_configurator?: boolean;
   installation_hours?: number;
   boxes_per_product?: number;
   optional_extras?: number[];
@@ -1355,7 +1367,37 @@ export const getAssignableUsers = async () => {
 
 export const getAuthMe = async () => {
   const response = await api.get('/api/auth/me');
-  return response.data as { id: number; email: string; full_name: string; role: string };
+  return response.data as AuthMe;
+};
+
+export const getConfiguratorAccessStatus = async () => {
+  const response = await api.get('/api/configurator/access');
+  return response.data as ConfiguratorAccessStatus;
+};
+
+export const getConfiguratorCatalog = async () => {
+  const response = await api.get('/api/configurator/catalog');
+  return response.data as ConfiguratorCatalogResponse;
+};
+
+export const previewConfiguratorConfiguration = async (payload: QuoteConfigurationPayload) => {
+  const response = await api.post('/api/configurator/preview', payload);
+  return response.data as ConfiguratorPreviewResponse;
+};
+
+export const getQuoteConfiguration = async (quoteId: number) => {
+  const response = await api.get(`/api/quotes/${quoteId}/configuration`);
+  return response.data as QuoteConfigurationResponse;
+};
+
+export const saveQuoteConfiguration = async (quoteId: number, payload: QuoteConfigurationPayload) => {
+  const response = await api.put(`/api/quotes/${quoteId}/configuration`, payload);
+  return response.data as QuoteConfigurationResponse;
+};
+
+export const applyQuoteConfiguration = async (quoteId: number) => {
+  const response = await api.post(`/api/quotes/${quoteId}/configuration/apply`);
+  return response.data;
 };
 
 export const getLoginQuote = async (): Promise<{ quote: string; source: 'ai' | 'fallback' | string }> => {
