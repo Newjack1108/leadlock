@@ -62,6 +62,26 @@ function getFrontMarkerPosition(
   isCornerProfile: boolean,
   hasLeftBlockedCorner: boolean
 ) {
+  if (isCornerProfile && face === 'left') {
+    return {
+      containerClass: 'absolute bottom-1.5 left-0',
+      labelClass: '',
+      markerClass: 'h-14 w-1.5 rounded-r-sm bg-sky-500/95',
+      badgeClass: 'bg-transparent px-0 py-0 shadow-none',
+      textClass: 'sr-only text-[10px] font-semibold text-sky-700',
+    };
+  }
+
+  if (isCornerProfile && face === 'right') {
+    return {
+      containerClass: 'absolute bottom-1.5 right-0',
+      labelClass: '',
+      markerClass: 'h-14 w-1.5 rounded-l-sm bg-sky-500/95',
+      badgeClass: 'bg-transparent px-0 py-0 shadow-none',
+      textClass: 'sr-only text-[10px] font-semibold text-sky-700',
+    };
+  }
+
   if (isCornerProfile && face === 'bottom') {
     return {
       containerClass: cn(

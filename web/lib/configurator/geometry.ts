@@ -16,7 +16,6 @@ const POSITION_DECIMALS = 2;
 
 export type BoxFace = ConfiguratorFrontFace;
 const FACE_ORDER: readonly BoxFace[] = ['top', 'right', 'bottom', 'left'];
-const CORNER_PROFILE_FRONT_FACE: BoxFace = 'bottom';
 const CORNER_PROFILE_DEFAULT_ROTATION: Record<
   ConfiguratorConnectionProfile,
   ConfiguratorBoxPlacement['rotation']
@@ -99,8 +98,8 @@ interface EdgeInterval {
 }
 
 interface CornerBaseDefinition {
-  frontFace: 'bottom';
-  standardFace: 'left' | 'right';
+  frontFace: 'bottom' | 'left' | 'right';
+  standardFace: 'left' | 'right' | 'bottom';
   joinStart: number;
   joinEnd: number;
   blockedStart: number;
@@ -149,9 +148,9 @@ export function getFootprint(product: Product, rotation: number) {
 }
 
 export function getBaseFrontFace(product?: Product | null): BoxFace {
-  const profile = getConnectionProfile(product);
-  if (profile) {
-    return CORNER_PROFILE_FRONT_FACE;
+  const cornerBaseDefinition = getCornerBaseDefinition(product);
+  if (cornerBaseDefinition) {
+    return cornerBaseDefinition.frontFace;
   }
   const frontFace = product?.configurator_front_face;
   if (frontFace && FACE_ORDER.includes(frontFace)) {
@@ -183,14 +182,37 @@ export function getCornerBaseDefinition(product: Product | null | undefined): Co
 
   const { width, length } = getNativeDimensions(product);
   const joinLength = Math.min(width, length);
-  const blockedLength = Math.max(0, width - joinLength);
+  const frontLength = Math.max(width, length);
+  const blockedLength = Math.max(0, frontLength - joinLength);
+
+  if (length > width) {
+    if (profile === 'corner_left') {
+      return {
+        frontFace: 'right',
+        standardFace: 'bottom',
+        joinStart: 0,
+        joinEnd: joinLength,
+        blockedStart: joinLength,
+        blockedEnd: frontLength,
+      };
+    }
+
+    return {
+      frontFace: 'left',
+      standardFace: 'bottom',
+      joinStart: 0,
+      joinEnd: joinLength,
+      blockedStart: joinLength,
+      blockedEnd: frontLength,
+    };
+  }
 
   if (profile === 'corner_left') {
     return {
       frontFace: 'bottom',
       standardFace: 'left',
       joinStart: blockedLength,
-      joinEnd: width,
+      joinEnd: frontLength,
       blockedStart: 0,
       blockedEnd: blockedLength,
     };
@@ -202,7 +224,7 @@ export function getCornerBaseDefinition(product: Product | null | undefined): Co
     joinStart: 0,
     joinEnd: joinLength,
     blockedStart: joinLength,
-    blockedEnd: width,
+    blockedEnd: frontLength,
   };
 }
 
@@ -239,6 +261,40 @@ function getIntervalFromSegment(
   };
 }
 
+function getFaceSegmentPoints(params: {
+  face: CornerBaseDefinition['frontFace'] | CornerBaseDefinition['standardFace'];
+  start: number;
+  end: number;
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+}) {
+  const { face, start, end, left, right, top, bottom } = params;
+  if (face === 'bottom') {
+    return {
+      startPoint: { x: left + start, y: bottom },
+      endPoint: { x: left + end, y: bottom },
+    };
+  }
+  if (face === 'top') {
+    return {
+      startPoint: { x: left + start, y: top },
+      endPoint: { x: left + end, y: top },
+    };
+  }
+  if (face === 'left') {
+    return {
+      startPoint: { x: left, y: top + start },
+      endPoint: { x: left, y: top + end },
+    };
+  }
+  return {
+    startPoint: { x: right, y: top + start },
+    endPoint: { x: right, y: top + end },
+  };
+}
+
 function getRotatedCornerDefinition(
   box: ConfiguratorBoxPlacement,
   product: Product,
@@ -262,26 +318,53 @@ function getRotatedCornerDefinition(
   const rotateSegmentPoint = (x: number, y: number) =>
     rotatePoint(x, y, rect.centerX, rect.centerY, box.rotation);
 
-  const joinStartPoint = rotateSegmentPoint(left + base.joinStart, bottom);
-  const joinEndPoint = rotateSegmentPoint(left + base.joinEnd, bottom);
+  const joinSegment = getFaceSegmentPoints({
+    face: base.frontFace,
+    start: base.joinStart,
+    end: base.joinEnd,
+    left,
+    right,
+    top,
+    bottom,
+  });
+  const blockedSegment =
+    base.blockedEnd - base.blockedStart > EDGE_EPSILON
+      ? getFaceSegmentPoints({
+          face: base.frontFace,
+          start: base.blockedStart,
+          end: base.blockedEnd,
+          left,
+          right,
+          top,
+          bottom,
+        })
+      : null;
+  const standardSegment = getFaceSegmentPoints({
+    face: base.standardFace,
+    start: 0,
+    end: base.standardFace === 'bottom' || base.standardFace === 'top' ? width : length,
+    left,
+    right,
+    top,
+    bottom,
+  });
+
+  const joinStartPoint = rotateSegmentPoint(joinSegment.startPoint.x, joinSegment.startPoint.y);
+  const joinEndPoint = rotateSegmentPoint(joinSegment.endPoint.x, joinSegment.endPoint.y);
   const joinInterval = getIntervalFromSegment(joinStartPoint, joinEndPoint, rect);
 
   const blockedInterval =
-    base.blockedEnd - base.blockedStart > EDGE_EPSILON
+    blockedSegment
       ? getIntervalFromSegment(
-          rotateSegmentPoint(left + base.blockedStart, bottom),
-          rotateSegmentPoint(left + base.blockedEnd, bottom),
+          rotateSegmentPoint(blockedSegment.startPoint.x, blockedSegment.startPoint.y),
+          rotateSegmentPoint(blockedSegment.endPoint.x, blockedSegment.endPoint.y),
           rect
         )
       : null;
 
   const standardInterval = getIntervalFromSegment(
-    base.standardFace === 'right'
-      ? rotateSegmentPoint(right, top)
-      : rotateSegmentPoint(left, top),
-    base.standardFace === 'right'
-      ? rotateSegmentPoint(right, bottom)
-      : rotateSegmentPoint(left, bottom),
+    rotateSegmentPoint(standardSegment.startPoint.x, standardSegment.startPoint.y),
+    rotateSegmentPoint(standardSegment.endPoint.x, standardSegment.endPoint.y),
     rect
   );
 

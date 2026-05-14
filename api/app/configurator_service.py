@@ -108,9 +108,9 @@ def _edges_close(left: float, right: float) -> bool:
 
 
 def _base_front_face(product: Product) -> Face:
-    profile = _connection_profile(product)
-    if profile is not None:
-        return CORNER_PROFILE_FRONT_FACE
+    corner_base = _corner_base_definition(product)
+    if corner_base is not None:
+        return str(corner_base["front_face"])
     front_face = product.configurator_front_face
     if isinstance(front_face, ConfiguratorFrontFace):
         return front_face.value
@@ -144,14 +144,35 @@ def _corner_base_definition(product: Product) -> dict[str, float | Face] | None:
 
     width, length = _native_dimensions(product)
     join_length = min(width, length)
-    blocked_length = max(0.0, width - join_length)
+    front_length = max(width, length)
+    blocked_length = max(0.0, front_length - join_length)
+
+    if length > width:
+        if profile == ConfiguratorConnectionProfile.CORNER_LEFT.value:
+            return {
+                "front_face": "right",
+                "standard_face": "bottom",
+                "join_start": 0.0,
+                "join_end": join_length,
+                "blocked_start": join_length,
+                "blocked_end": front_length,
+            }
+
+        return {
+            "front_face": "left",
+            "standard_face": "bottom",
+            "join_start": 0.0,
+            "join_end": join_length,
+            "blocked_start": join_length,
+            "blocked_end": front_length,
+        }
 
     if profile == ConfiguratorConnectionProfile.CORNER_LEFT.value:
         return {
             "front_face": "bottom",
             "standard_face": "left",
             "join_start": blocked_length,
-            "join_end": width,
+            "join_end": front_length,
             "blocked_start": 0.0,
             "blocked_end": blocked_length,
         }
@@ -162,7 +183,7 @@ def _corner_base_definition(product: Product) -> dict[str, float | Face] | None:
         "join_start": 0.0,
         "join_end": join_length,
         "blocked_start": join_length,
-        "blocked_end": width,
+        "blocked_end": front_length,
     }
 
 
@@ -182,6 +203,24 @@ def _segment_interval(start_point: Point, end_point: Point, shape: LayoutShape) 
     average_x = (start_point[0] + end_point[0]) / 2
     face = "left" if abs(average_x - min_x) <= abs(average_x - max_x) else "right"
     return face, min(start_point[1], end_point[1]), max(start_point[1], end_point[1])
+
+
+def _face_segment_points(
+    face: Face,
+    start: float,
+    end: float,
+    left: float,
+    right: float,
+    top: float,
+    bottom: float,
+) -> Tuple[Point, Point]:
+    if face == "bottom":
+        return (left + start, bottom), (left + end, bottom)
+    if face == "top":
+        return (left + start, top), (left + end, top)
+    if face == "left":
+        return (left, top + start), (left, top + end)
+    return (right, top + start), (right, top + end)
 
 
 def _rotated_corner_definition(box, product: Product, shape: LayoutShape):
@@ -207,27 +246,36 @@ def _rotated_corner_definition(box, product: Product, shape: LayoutShape):
     join_end = float(base["join_end"])
     blocked_start = float(base["blocked_start"])
     blocked_end = float(base["blocked_end"])
+    front_face = str(base["front_face"])
     standard_face = str(base["standard_face"])
+    standard_length = width if standard_face in ("top", "bottom") else length
+
+    join_start_point, join_end_point = _face_segment_points(
+        front_face, join_start, join_end, left, right, top, bottom
+    )
 
     join_interval = _segment_interval(
-        rotate_segment_point(left + join_start, bottom),
-        rotate_segment_point(left + join_end, bottom),
+        rotate_segment_point(*join_start_point),
+        rotate_segment_point(*join_end_point),
         shape,
     )
 
     blocked_interval = (
         _segment_interval(
-            rotate_segment_point(left + blocked_start, bottom),
-            rotate_segment_point(left + blocked_end, bottom),
+            rotate_segment_point(*_face_segment_points(front_face, blocked_start, blocked_end, left, right, top, bottom)[0]),
+            rotate_segment_point(*_face_segment_points(front_face, blocked_start, blocked_end, left, right, top, bottom)[1]),
             shape,
         )
         if blocked_end - blocked_start > EDGE_EPSILON
         else None
     )
 
+    standard_start_point, standard_end_point = _face_segment_points(
+        standard_face, 0.0, standard_length, left, right, top, bottom
+    )
     standard_interval = _segment_interval(
-        rotate_segment_point(right if standard_face == "right" else left, top),
-        rotate_segment_point(right if standard_face == "right" else left, bottom),
+        rotate_segment_point(*standard_start_point),
+        rotate_segment_point(*standard_end_point),
         shape,
     )
 

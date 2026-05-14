@@ -867,3 +867,98 @@ def test_corner_connection_profiles_rotate_their_physical_front_and_side_rules()
     )
     assert right_front_blocked_rotated_270["valid"] is False
     assert any(issue["code"] == "INVALID_CONNECTION_SEGMENT" for issue in right_front_blocked_rotated_270["issues"])
+
+
+def test_tall_corner_profiles_keep_front_on_the_long_side():
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SQLModel.metadata.create_all(engine)
+    user = _seed_user(engine)
+
+    with Session(engine) as session:
+        standard_box = Product(
+            name="3.5 Box",
+            category=ProductCategory.CONFIGURATOR,
+            base_price=Decimal("1800.00"),
+            configurator_width=Decimal("3.50"),
+            configurator_length=Decimal("3.50"),
+        )
+        right_corner = Product(
+            name="Tall Right Corner Box",
+            category=ProductCategory.CONFIGURATOR,
+            base_price=Decimal("2400.00"),
+            configurator_width=Decimal("3.60"),
+            configurator_length=Decimal("4.90"),
+            configurator_front_face=ConfiguratorFrontFace.BOTTOM,
+            configurator_connection_profile=ConfiguratorConnectionProfile.CORNER_RIGHT,
+        )
+        left_corner = Product(
+            name="Tall Left Corner Box",
+            category=ProductCategory.CONFIGURATOR,
+            base_price=Decimal("2400.00"),
+            configurator_width=Decimal("3.60"),
+            configurator_length=Decimal("4.90"),
+            configurator_front_face=ConfiguratorFrontFace.BOTTOM,
+            configurator_connection_profile=ConfiguratorConnectionProfile.CORNER_LEFT,
+        )
+        session.add(standard_box)
+        session.add(right_corner)
+        session.add(left_corner)
+        session.commit()
+        session.refresh(standard_box)
+        session.refresh(right_corner)
+        session.refresh(left_corner)
+        standard_box_id = standard_box.id
+        right_corner_id = right_corner.id
+        left_corner_id = left_corner.id
+
+    client = TestClient(_make_app(engine, user))
+
+    def preview(boxes):
+        response = client.post(
+            "/api/configurator/preview",
+            json={
+                "schema_version": 1,
+                "boxes": boxes,
+                "extras": [],
+            },
+        )
+        assert response.status_code == 200
+        return response.json()
+
+    right_front_allowed = preview(
+        [
+            {"id": "corner", "product_id": right_corner_id, "x": "0", "y": "0", "rotation": 0},
+            {"id": "joiner", "product_id": standard_box_id, "x": "-3.50", "y": "0", "rotation": 0},
+        ]
+    )
+    assert right_front_allowed["valid"] is True
+
+    right_front_blocked = preview(
+        [
+            {"id": "corner", "product_id": right_corner_id, "x": "0", "y": "0", "rotation": 0},
+            {"id": "joiner", "product_id": standard_box_id, "x": "-3.50", "y": "1.40", "rotation": 0},
+        ]
+    )
+    assert right_front_blocked["valid"] is False
+    assert any(issue["code"] == "INVALID_CONNECTION_SEGMENT" for issue in right_front_blocked["issues"])
+
+    left_front_allowed = preview(
+        [
+            {"id": "corner", "product_id": left_corner_id, "x": "0", "y": "0", "rotation": 0},
+            {"id": "joiner", "product_id": standard_box_id, "x": "3.60", "y": "0", "rotation": 0},
+        ]
+    )
+    assert left_front_allowed["valid"] is True
+
+    left_front_blocked = preview(
+        [
+            {"id": "corner", "product_id": left_corner_id, "x": "0", "y": "0", "rotation": 0},
+            {"id": "joiner", "product_id": standard_box_id, "x": "3.60", "y": "1.40", "rotation": 0},
+        ]
+    )
+    assert left_front_blocked["valid"] is False
+    assert any(issue["code"] == "INVALID_CONNECTION_SEGMENT" for issue in left_front_blocked["issues"])
