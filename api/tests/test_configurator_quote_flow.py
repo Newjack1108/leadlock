@@ -147,6 +147,22 @@ def test_non_square_configurator_products_require_valid_front_face():
     assert invalid_corner_profile.status_code == 422
     assert "non-square configurator footprint" in invalid_corner_profile.json()["detail"]
 
+    conflicting_corner_front = client.post(
+        "/api/products",
+        json={
+            "name": "Right Hand Corner Box",
+            "category": "CONFIGURATOR",
+            "base_price": "2450.00",
+            "unit": "Unit",
+            "configurator_width": "5.00",
+            "configurator_length": "3.50",
+            "configurator_front_face": "top",
+            "configurator_connection_profile": "corner_right",
+        },
+    )
+    assert conflicting_corner_front.status_code == 422
+    assert "define the fixed front automatically" in conflicting_corner_front.json()["detail"]
+
     valid_corner_profile = client.post(
         "/api/products",
         json={
@@ -156,12 +172,12 @@ def test_non_square_configurator_products_require_valid_front_face():
             "unit": "Unit",
             "configurator_width": "5.00",
             "configurator_length": "3.50",
-            "configurator_front_face": "bottom",
             "configurator_connection_profile": "corner_right",
         },
     )
     assert valid_corner_profile.status_code == 200
     assert valid_corner_profile.json()["configurator_connection_profile"] == "corner_right"
+    assert valid_corner_profile.json()["configurator_front_face"] in (None, "bottom")
 
 
 def test_configurator_catalog_save_preview_and_apply_flow():

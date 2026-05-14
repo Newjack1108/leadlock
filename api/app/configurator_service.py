@@ -25,6 +25,7 @@ Face = str
 FACE_ORDER: Tuple[Face, Face, Face, Face] = ("top", "right", "bottom", "left")
 FaceContact = Tuple[Face, Face, float, float]
 FaceContactState = Literal["valid", "forbidden_face", "blocked_front_segment"]
+CORNER_PROFILE_FRONT_FACE: Face = "bottom"
 
 
 def _to_decimal(value: Decimal | int | float | str) -> Decimal:
@@ -107,6 +108,9 @@ def _edges_close(left: float, right: float) -> bool:
 
 
 def _base_front_face(product: Product) -> Face:
+    profile = _connection_profile(product)
+    if profile is not None:
+        return CORNER_PROFILE_FRONT_FACE
     front_face = product.configurator_front_face
     if isinstance(front_face, ConfiguratorFrontFace):
         return front_face.value

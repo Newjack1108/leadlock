@@ -84,12 +84,14 @@ export default function CreateProductPage() {
   });
 
   const isConfiguratorCategory = formData.category === ProductCategory.CONFIGURATOR;
+  const hasCornerConnectionProfile = formData.configurator_connection_profile !== '';
   const allowedConfiguratorFrontFaces = getAllowedConfiguratorFrontFaces(
     formData.configurator_width,
     formData.configurator_length
   );
   const requiresConfiguratorFrontFace =
     isConfiguratorCategory &&
+    !hasCornerConnectionProfile &&
     formData.configurator_width !== '' &&
     formData.configurator_length !== '' &&
     Number(formData.configurator_width) !== Number(formData.configurator_length);
@@ -107,6 +109,13 @@ export default function CreateProductPage() {
       }));
       return;
     }
+    if (hasCornerConnectionProfile && formData.configurator_front_face !== '') {
+      setFormData((prev) => ({
+        ...prev,
+        configurator_front_face: '',
+      }));
+      return;
+    }
     if (
       formData.configurator_front_face &&
       !allowedConfiguratorFrontFaces.includes(formData.configurator_front_face)
@@ -114,10 +123,14 @@ export default function CreateProductPage() {
       setFormData((prev) => ({
         ...prev,
         configurator_front_face: '',
-        configurator_connection_profile: '',
       }));
     }
-  }, [allowedConfiguratorFrontFaces, formData.configurator_front_face, isConfiguratorCategory]);
+  }, [
+    allowedConfiguratorFrontFaces,
+    formData.configurator_front_face,
+    hasCornerConnectionProfile,
+    isConfiguratorCategory,
+  ]);
 
   const fetchOptionalExtras = async () => {
     try {
@@ -169,7 +182,9 @@ export default function CreateProductPage() {
         length: formData.length ? parseFloat(formData.length) : undefined,
         configurator_width: formData.configurator_width ? parseFloat(formData.configurator_width) : undefined,
         configurator_length: formData.configurator_length ? parseFloat(formData.configurator_length) : undefined,
-        configurator_front_face: formData.configurator_front_face || undefined,
+        configurator_front_face: formData.configurator_connection_profile
+          ? undefined
+          : formData.configurator_front_face || undefined,
         configurator_connection_profile: formData.configurator_connection_profile || undefined,
         optional_extras: selectedExtras.length > 0 ? selectedExtras : undefined,
       };
@@ -637,45 +652,6 @@ export default function CreateProductPage() {
                 {isConfiguratorCategory && (
                   <>
                     <div className="space-y-2">
-                      <Label htmlFor="configurator_front_face">
-                        Configurator Front Side
-                        {requiresConfiguratorFrontFace && <span className="text-destructive"> *</span>}
-                      </Label>
-                      <Select
-                        value={formData.configurator_front_face || CONFIGURATOR_FRONT_FACE_NONE}
-                        onValueChange={(value) =>
-                          setFormData({
-                            ...formData,
-                            configurator_front_face:
-                              value === CONFIGURATOR_FRONT_FACE_NONE
-                                ? ''
-                                : (value as ConfiguratorFrontFace),
-                          })
-                        }
-                        disabled={loading}
-                      >
-                        <SelectTrigger id="configurator_front_face">
-                          <SelectValue placeholder="Choose the front side" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {!requiresConfiguratorFrontFace && (
-                            <SelectItem value={CONFIGURATOR_FRONT_FACE_NONE}>
-                              Default legacy front
-                            </SelectItem>
-                          )}
-                          {allowedConfiguratorFrontFaces.map((face) => (
-                            <SelectItem key={face} value={face}>
-                              {CONFIGURATOR_FRONT_FACE_LABELS[face]}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <p className="text-xs text-muted-foreground">
-                        For rectangular configurator products, choose one of the longest faces. New boxes will rotate
-                        so this front points toward the bottom of the layout by default.
-                      </p>
-                    </div>
-                    <div className="space-y-2">
                       <Label htmlFor="configurator_connection_profile">Connection Profile</Label>
                       <Select
                         value={formData.configurator_connection_profile || CONFIGURATOR_CONNECTION_PROFILE_NONE}
@@ -709,6 +685,55 @@ export default function CreateProductPage() {
                         section, leaving the remaining 1.5m fixed as front.
                       </p>
                     </div>
+                    {hasCornerConnectionProfile ? (
+                      <div className="space-y-2">
+                        <Label>Configurator Front Side</Label>
+                        <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+                          Derived from the corner connection profile. The fixed front is the bottom edge in the
+                          default orientation.
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <Label htmlFor="configurator_front_face">
+                          Configurator Front Side
+                          {requiresConfiguratorFrontFace && <span className="text-destructive"> *</span>}
+                        </Label>
+                        <Select
+                          value={formData.configurator_front_face || CONFIGURATOR_FRONT_FACE_NONE}
+                          onValueChange={(value) =>
+                            setFormData({
+                              ...formData,
+                              configurator_front_face:
+                                value === CONFIGURATOR_FRONT_FACE_NONE
+                                  ? ''
+                                  : (value as ConfiguratorFrontFace),
+                            })
+                          }
+                          disabled={loading}
+                        >
+                          <SelectTrigger id="configurator_front_face">
+                            <SelectValue placeholder="Choose the front side" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {!requiresConfiguratorFrontFace && (
+                              <SelectItem value={CONFIGURATOR_FRONT_FACE_NONE}>
+                                Default legacy front
+                              </SelectItem>
+                            )}
+                            {allowedConfiguratorFrontFaces.map((face) => (
+                              <SelectItem key={face} value={face}>
+                                {CONFIGURATOR_FRONT_FACE_LABELS[face]}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">
+                          For rectangular configurator products, choose one of the longest faces. New boxes will
+                          rotate so this front points toward the bottom of the layout by default.
+                        </p>
+                      </div>
+                    )}
                   </>
                 )}
               </CardContent>

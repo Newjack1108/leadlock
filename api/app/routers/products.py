@@ -93,13 +93,33 @@ def _validate_configurator_product_payload(payload: dict) -> None:
 
         width = Decimal(str(configurator_width))
         length = Decimal(str(configurator_length))
-        if width != length and configurator_front_face is None:
+        profile_selected = configurator_connection_profile is not None
+
+        if profile_selected and width == length:
+            raise HTTPException(
+                status_code=422,
+                detail="Corner connection profiles require a non-square configurator footprint",
+            )
+
+        if not profile_selected and width != length and configurator_front_face is None:
             raise HTTPException(
                 status_code=422,
                 detail="Non-square configurator products must set configurator_front_face",
             )
 
-        if configurator_front_face is not None:
+        if profile_selected and configurator_front_face is not None:
+            front_face = (
+                configurator_front_face.value
+                if isinstance(configurator_front_face, ConfiguratorFrontFace)
+                else str(configurator_front_face)
+            )
+            if front_face != ConfiguratorFrontFace.BOTTOM.value:
+                raise HTTPException(
+                    status_code=422,
+                    detail="Corner connection profiles define the fixed front automatically; configurator_front_face must be omitted or bottom",
+                )
+
+        if configurator_front_face is not None and not profile_selected:
             front_face = (
                 configurator_front_face.value
                 if isinstance(configurator_front_face, ConfiguratorFrontFace)
@@ -121,12 +141,6 @@ def _validate_configurator_product_payload(payload: dict) -> None:
                     status_code=422,
                     detail="For deeper configurator products, configurator_front_face must be left or right",
                 )
-
-        if configurator_connection_profile is not None and width == length:
-            raise HTTPException(
-                status_code=422,
-                detail="Corner connection profiles require a non-square configurator footprint",
-            )
 
 
 @router.get("", response_model=List[ProductResponse])

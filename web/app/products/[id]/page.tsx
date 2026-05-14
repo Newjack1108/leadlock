@@ -294,7 +294,11 @@ export default function ProductDetailPage() {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Front Side:</span>
-                      <span>{product.configurator_front_face ?? 'Legacy default'}</span>
+                      <span>
+                        {product.configurator_connection_profile
+                          ? 'bottom (from connection profile)'
+                          : product.configurator_front_face ?? 'Legacy default'}
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Connection Profile:</span>

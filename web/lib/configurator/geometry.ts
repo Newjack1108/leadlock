@@ -16,6 +16,7 @@ const POSITION_DECIMALS = 2;
 
 export type BoxFace = ConfiguratorFrontFace;
 const FACE_ORDER: readonly BoxFace[] = ['top', 'right', 'bottom', 'left'];
+const CORNER_PROFILE_FRONT_FACE: BoxFace = 'bottom';
 
 export interface PlacementRect {
   x1: number;
@@ -122,6 +123,10 @@ export function getFootprint(product: Product, rotation: number) {
 }
 
 export function getBaseFrontFace(product?: Product | null): BoxFace {
+  const profile = getConnectionProfile(product);
+  if (profile) {
+    return CORNER_PROFILE_FRONT_FACE;
+  }
   const frontFace = product?.configurator_front_face;
   if (frontFace && FACE_ORDER.includes(frontFace)) {
     return frontFace;
