@@ -574,7 +574,7 @@ def test_configurator_preview_uses_product_front_face_for_rectangular_items():
             "schema_version": 1,
             "boxes": [
                 {"id": "box-1", "product_id": item_id, "x": "0", "y": "0", "rotation": 90},
-                {"id": "box-2", "product_id": item_id, "x": "0", "y": "5.00", "rotation": 90},
+                {"id": "box-2", "product_id": item_id, "x": "0", "y": "3.50", "rotation": 90},
             ],
             "extras": [],
         },
@@ -590,7 +590,7 @@ def test_configurator_preview_uses_product_front_face_for_rectangular_items():
             "schema_version": 1,
             "boxes": [
                 {"id": "box-1", "product_id": item_id, "x": "0", "y": "0", "rotation": 90},
-                {"id": "box-2", "product_id": item_id, "x": "3.50", "y": "0", "rotation": 90},
+                {"id": "box-2", "product_id": item_id, "x": "5.00", "y": "0", "rotation": 90},
             ],
             "extras": [],
         },
@@ -803,7 +803,7 @@ def test_corner_connection_profiles_rotate_their_physical_front_and_side_rules()
     right_front_allowed_rotated_90 = preview(
         [
             {"id": "corner", "product_id": right_corner_id, "x": "0", "y": "0", "rotation": 90},
-            {"id": "joiner", "product_id": standard_box_id, "x": "-4.25", "y": "0", "rotation": 0},
+            {"id": "joiner", "product_id": standard_box_id, "x": "-2.75", "y": "-0.75", "rotation": 0},
         ]
     )
     assert right_front_allowed_rotated_90["valid"] is True
@@ -811,7 +811,7 @@ def test_corner_connection_profiles_rotate_their_physical_front_and_side_rules()
     right_front_blocked_rotated_90 = preview(
         [
             {"id": "corner", "product_id": right_corner_id, "x": "0", "y": "0", "rotation": 90},
-            {"id": "joiner", "product_id": standard_box_id, "x": "-4.25", "y": "1.50", "rotation": 0},
+            {"id": "joiner", "product_id": standard_box_id, "x": "-2.75", "y": "0.75", "rotation": 0},
         ]
     )
     assert right_front_blocked_rotated_90["valid"] is False
@@ -820,7 +820,7 @@ def test_corner_connection_profiles_rotate_their_physical_front_and_side_rules()
     left_standard_allowed_rotated_90 = preview(
         [
             {"id": "corner", "product_id": left_corner_id, "x": "0", "y": "0", "rotation": 90},
-            {"id": "joiner", "product_id": standard_box_id, "x": "-0.75", "y": "-2.75", "rotation": 0},
+            {"id": "joiner", "product_id": standard_box_id, "x": "0.75", "y": "-4.25", "rotation": 0},
         ]
     )
     assert left_standard_allowed_rotated_90["valid"] is True
@@ -828,7 +828,7 @@ def test_corner_connection_profiles_rotate_their_physical_front_and_side_rules()
     left_forbidden_face_rotated_90 = preview(
         [
             {"id": "corner", "product_id": left_corner_id, "x": "0", "y": "0", "rotation": 90},
-            {"id": "joiner", "product_id": standard_box_id, "x": "-0.75", "y": "4.25", "rotation": 0},
+            {"id": "joiner", "product_id": standard_box_id, "x": "0.75", "y": "4.25", "rotation": 0},
         ]
     )
     assert left_forbidden_face_rotated_90["valid"] is False
@@ -854,7 +854,7 @@ def test_corner_connection_profiles_rotate_their_physical_front_and_side_rules()
     right_front_allowed_rotated_270 = preview(
         [
             {"id": "corner", "product_id": right_corner_id, "x": "0", "y": "0", "rotation": 270},
-            {"id": "joiner", "product_id": standard_box_id, "x": "4.25", "y": "1.50", "rotation": 0},
+            {"id": "joiner", "product_id": standard_box_id, "x": "4.25", "y": "0.75", "rotation": 0},
         ]
     )
     assert right_front_allowed_rotated_270["valid"] is True
@@ -862,7 +862,7 @@ def test_corner_connection_profiles_rotate_their_physical_front_and_side_rules()
     right_front_blocked_rotated_270 = preview(
         [
             {"id": "corner", "product_id": right_corner_id, "x": "0", "y": "0", "rotation": 270},
-            {"id": "joiner", "product_id": standard_box_id, "x": "4.25", "y": "0", "rotation": 0},
+            {"id": "joiner", "product_id": standard_box_id, "x": "4.25", "y": "-0.75", "rotation": 0},
         ]
     )
     assert right_front_blocked_rotated_270["valid"] is False

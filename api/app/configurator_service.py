@@ -36,8 +36,7 @@ def _to_decimal(value: Decimal | int | float | str) -> Decimal:
 def _footprint(product: Product, rotation: int) -> Tuple[Decimal, Decimal]:
     width = _to_decimal(product.configurator_width or ZERO)
     length = _to_decimal(product.configurator_length or ZERO)
-    if rotation in (90, 270):
-        return length, width
+    _ = rotation
     return width, length
 
 

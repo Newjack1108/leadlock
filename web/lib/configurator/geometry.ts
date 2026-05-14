@@ -144,10 +144,7 @@ export function normalizeRotation(value: number): ConfiguratorBoxPlacement['rota
 export function getFootprint(product: Product, rotation: number) {
   const width = Number(product.configurator_width ?? 0);
   const length = Number(product.configurator_length ?? 0);
-  const normalized = normalizeRotation(rotation);
-  if (normalized === 90 || normalized === 270) {
-    return { width: length, length: width };
-  }
+  void rotation;
   return { width, length };
 }
 
