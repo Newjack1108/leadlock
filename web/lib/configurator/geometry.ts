@@ -7,6 +7,7 @@ export const DEFAULT_GRID_STEP = 0.25;
 const OVERLAP_EPSILON = 1e-6;
 const EDGE_EPSILON = 1e-6;
 const RIGHT_ANGLES = [0, 90, 180, 270] as const;
+const POSITION_DECIMALS = 2;
 
 export type BoxFace = 'top' | 'right' | 'bottom' | 'left';
 
@@ -74,6 +75,11 @@ export function roundLayoutValue(value: number, step = DEFAULT_GRID_STEP) {
   return Math.round(value / step) * step;
 }
 
+function roundPosition(value: number) {
+  if (!Number.isFinite(value)) return 0;
+  return Number(value.toFixed(POSITION_DECIMALS));
+}
+
 export function normalizeRotation(value: number): ConfiguratorBoxPlacement['rotation'] {
   const normalized = ((Math.round(value / 90) * 90) % 360 + 360) % 360;
   if (RIGHT_ANGLES.includes(normalized as (typeof RIGHT_ANGLES)[number])) {
@@ -83,9 +89,12 @@ export function normalizeRotation(value: number): ConfiguratorBoxPlacement['rota
 }
 
 export function getFootprint(product: Product, rotation: number) {
-  void rotation;
   const width = Number(product.configurator_width ?? 0);
   const length = Number(product.configurator_length ?? 0);
+  const normalized = normalizeRotation(rotation);
+  if (normalized === 90 || normalized === 270) {
+    return { width: length, length: width };
+  }
   return { width, length };
 }
 
@@ -460,8 +469,8 @@ export function findPlacementCandidate(params: {
   const movingProduct = productMap[movingBox.product_id];
   if (!movingProduct) {
     return {
-      x: roundLayoutValue(rawX),
-      y: roundLayoutValue(rawY),
+      x: roundPosition(rawX),
+      y: roundPosition(rawY),
       snapped: false,
       overlaps: false,
       connected: true,
@@ -483,7 +492,7 @@ export function findPlacementCandidate(params: {
   const xCandidate = getBestCandidate(
     otherEntries.flatMap((entry) => getSnapCandidates(baseX, 'x', movingInsets, initialRect, entry.rect, threshold))
   );
-  const snappedX = xCandidate ? roundLayoutValue(xCandidate.value) : baseX;
+  const snappedX = xCandidate ? roundPosition(xCandidate.value) : baseX;
 
   const rectAfterX = getPlacementRect({ ...movingBox, x: snappedX, y: baseY }, movingProduct);
   const movingInsetsAfterX = getAnchorInsets({ ...movingBox, x: snappedX, y: baseY }, rectAfterX);
@@ -492,7 +501,7 @@ export function findPlacementCandidate(params: {
       getSnapCandidates(baseY, 'y', movingInsetsAfterX, rectAfterX, entry.rect, threshold)
     )
   );
-  const snappedY = yCandidate ? roundLayoutValue(yCandidate.value) : baseY;
+  const snappedY = yCandidate ? roundPosition(yCandidate.value) : baseY;
 
   const nextBox = { ...movingBox, x: snappedX, y: snappedY };
   const nextRect = getPlacementRect(nextBox, movingProduct);
@@ -536,10 +545,10 @@ export function getSuggestedPlacement(
 
   for (const entry of orderedEntries) {
     const candidates = [
-      { x: roundLayoutValue(entry.rect.x2), y: roundLayoutValue(entry.rect.y1) },
-      { x: roundLayoutValue(entry.rect.x1), y: roundLayoutValue(entry.rect.y2) },
-      { x: roundLayoutValue(Math.max(0, entry.rect.x1 - footprint.width)), y: roundLayoutValue(entry.rect.y1) },
-      { x: roundLayoutValue(entry.rect.x1), y: roundLayoutValue(Math.max(0, entry.rect.y1 - footprint.length)) },
+      { x: roundPosition(entry.rect.x2), y: roundPosition(entry.rect.y1) },
+      { x: roundPosition(entry.rect.x1), y: roundPosition(entry.rect.y2) },
+      { x: roundPosition(Math.max(0, entry.rect.x1 - footprint.width)), y: roundPosition(entry.rect.y1) },
+      { x: roundPosition(entry.rect.x1), y: roundPosition(Math.max(0, entry.rect.y1 - footprint.length)) },
     ];
 
     for (const candidate of candidates) {
@@ -563,7 +572,7 @@ export function getSuggestedPlacement(
   const maxX = Math.max(...entries.map((entry) => entry.rect.x2));
 
   return {
-    x: roundLayoutValue(maxX),
+    x: roundPosition(maxX),
     y: 0,
   };
 }
