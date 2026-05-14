@@ -167,7 +167,7 @@ def test_configurator_catalog_save_preview_and_apply_flow():
     }
 
 
-def test_configurator_preview_rejects_disconnected_layouts_and_accepts_snap_tolerance():
+def test_configurator_preview_rejects_disconnected_layouts_keeps_touch_tolerance_and_allows_free_rotation():
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
@@ -207,7 +207,7 @@ def test_configurator_preview_rejects_disconnected_layouts_and_accepts_snap_tole
     assert disconnected_payload["valid"] is False
     assert any(issue["code"] == "DISCONNECTED_LAYOUT" for issue in disconnected_payload["issues"])
 
-    within_tolerance = client.post(
+    within_touch_tolerance = client.post(
         "/api/configurator/preview",
         json={
             "schema_version": 1,
@@ -218,7 +218,37 @@ def test_configurator_preview_rejects_disconnected_layouts_and_accepts_snap_tole
             "extras": [],
         },
     )
-    assert within_tolerance.status_code == 200
-    tolerant_payload = within_tolerance.json()
+    assert within_touch_tolerance.status_code == 200
+    tolerant_payload = within_touch_tolerance.json()
     assert tolerant_payload["valid"] is True
     assert all(issue["code"] != "DISCONNECTED_LAYOUT" for issue in tolerant_payload["issues"])
+
+    slight_overlap = client.post(
+        "/api/configurator/preview",
+        json={
+            "schema_version": 1,
+            "boxes": [
+                {"id": "box-1", "product_id": item_id, "x": "0", "y": "0", "rotation": 0},
+                {"id": "box-2", "product_id": item_id, "x": "2.99", "y": "0", "rotation": 0},
+            ],
+            "extras": [],
+        },
+    )
+    assert slight_overlap.status_code == 200
+    overlap_payload = slight_overlap.json()
+    assert overlap_payload["valid"] is False
+    assert any(issue["code"] == "OVERLAP" for issue in overlap_payload["issues"])
+
+    free_rotation = client.post(
+        "/api/configurator/preview",
+        json={
+            "schema_version": 1,
+            "boxes": [
+                {"id": "box-1", "product_id": item_id, "x": "0", "y": "0", "rotation": 37.5},
+            ],
+            "extras": [],
+        },
+    )
+    assert free_rotation.status_code == 200
+    free_rotation_payload = free_rotation.json()
+    assert free_rotation_payload["valid"] is True

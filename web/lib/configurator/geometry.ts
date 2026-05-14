@@ -1,17 +1,23 @@
 import type { ConfiguratorBoxPlacement, Product } from '@/lib/types';
 
 export const SNAP_THRESHOLD = 0.45;
-export const CONNECTION_TOLERANCE = 0.05;
+export const TOUCH_TOLERANCE = 0.05;
 export const DEFAULT_CANVAS_PADDING = 1;
 export const DEFAULT_GRID_STEP = 0.25;
+const OVERLAP_EPSILON = 1e-6;
 
 export interface PlacementRect {
   x1: number;
   y1: number;
   x2: number;
   y2: number;
-  width: number;
-  length: number;
+  boxWidth: number;
+  boxLength: number;
+  boundsWidth: number;
+  boundsHeight: number;
+  centerX: number;
+  centerY: number;
+  corners: Array<{ x: number; y: number }>;
 }
 
 export interface SnapGuide {
@@ -57,33 +63,98 @@ export function roundLayoutValue(value: number, step = DEFAULT_GRID_STEP) {
 }
 
 export function getFootprint(product: Product, rotation: number) {
+  void rotation;
   const width = Number(product.configurator_width ?? 0);
   const length = Number(product.configurator_length ?? 0);
-  if (rotation === 90 || rotation === 270) {
-    return { width: length, length: width };
-  }
   return { width, length };
+}
+
+function toRadians(rotation: number) {
+  return (rotation * Math.PI) / 180;
+}
+
+function rotatePoint(
+  x: number,
+  y: number,
+  centerX: number,
+  centerY: number,
+  rotation: number
+) {
+  const radians = toRadians(rotation);
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
+  const dx = x - centerX;
+  const dy = y - centerY;
+
+  return {
+    x: centerX + dx * cos - dy * sin,
+    y: centerY + dx * sin + dy * cos,
+  };
 }
 
 export function getPlacementRect(box: ConfiguratorBoxPlacement, product: Product): PlacementRect {
   const { width, length } = getFootprint(product, box.rotation);
+  const centerX = Number(box.x) + width / 2;
+  const centerY = Number(box.y) + length / 2;
+  const corners = [
+    rotatePoint(Number(box.x), Number(box.y), centerX, centerY, box.rotation),
+    rotatePoint(Number(box.x) + width, Number(box.y), centerX, centerY, box.rotation),
+    rotatePoint(Number(box.x) + width, Number(box.y) + length, centerX, centerY, box.rotation),
+    rotatePoint(Number(box.x), Number(box.y) + length, centerX, centerY, box.rotation),
+  ];
+  const xs = corners.map((corner) => corner.x);
+  const ys = corners.map((corner) => corner.y);
   return {
-    x1: Number(box.x),
-    y1: Number(box.y),
-    x2: Number(box.x) + width,
-    y2: Number(box.y) + length,
-    width,
-    length,
+    x1: Math.min(...xs),
+    y1: Math.min(...ys),
+    x2: Math.max(...xs),
+    y2: Math.max(...ys),
+    boxWidth: width,
+    boxLength: length,
+    boundsWidth: Math.max(...xs) - Math.min(...xs),
+    boundsHeight: Math.max(...ys) - Math.min(...ys),
+    centerX,
+    centerY,
+    corners,
   };
 }
 
-export function placementsOverlap(a: PlacementRect, b: PlacementRect, tolerance = CONNECTION_TOLERANCE) {
-  return (
-    a.x1 < b.x2 - tolerance &&
-    a.x2 > b.x1 + tolerance &&
-    a.y1 < b.y2 - tolerance &&
-    a.y2 > b.y1 + tolerance
-  );
+function getAxes(corners: PlacementRect['corners']) {
+  return corners.map((corner, index) => {
+    const next = corners[(index + 1) % corners.length];
+    const edgeX = next.x - corner.x;
+    const edgeY = next.y - corner.y;
+    const length = Math.hypot(edgeX, edgeY) || 1;
+    return {
+      x: -edgeY / length,
+      y: edgeX / length,
+    };
+  });
+}
+
+function projectCorners(corners: PlacementRect['corners'], axis: { x: number; y: number }) {
+  const projections = corners.map((corner) => corner.x * axis.x + corner.y * axis.y);
+  return {
+    min: Math.min(...projections),
+    max: Math.max(...projections),
+  };
+}
+
+export function placementsOverlap(a: PlacementRect, b: PlacementRect) {
+  const axes = [...getAxes(a.corners), ...getAxes(b.corners)];
+
+  for (const axis of axes) {
+    const projectionA = projectCorners(a.corners, axis);
+    const projectionB = projectCorners(b.corners, axis);
+    if (
+      projectionA.max <= projectionB.min + OVERLAP_EPSILON ||
+      projectionB.max <= projectionA.min + OVERLAP_EPSILON
+    ) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 export function rangesOverlap(
@@ -91,7 +162,7 @@ export function rangesOverlap(
   aEnd: number,
   bStart: number,
   bEnd: number,
-  tolerance = CONNECTION_TOLERANCE
+  tolerance = TOUCH_TOLERANCE
 ) {
   return Math.max(aStart, bStart) < Math.min(aEnd, bEnd) - tolerance;
 }
@@ -99,7 +170,7 @@ export function rangesOverlap(
 export function rectsTouch(
   a: PlacementRect,
   b: PlacementRect,
-  tolerance = CONNECTION_TOLERANCE
+  tolerance = TOUCH_TOLERANCE
 ) {
   const sharesVerticalEdge =
     (Math.abs(a.x2 - b.x1) <= tolerance || Math.abs(b.x2 - a.x1) <= tolerance) &&
@@ -148,7 +219,7 @@ export function getCanvasBounds(rects: PlacementRect[], padding = DEFAULT_CANVAS
   };
 }
 
-export function getConnectedBoxIds(entries: LayoutRectEntry[], tolerance = CONNECTION_TOLERANCE) {
+export function getConnectedBoxIds(entries: LayoutRectEntry[], tolerance = TOUCH_TOLERANCE) {
   if (entries.length === 0) return new Set<string>();
 
   const graph = new Map<string, Set<string>>();
@@ -177,7 +248,7 @@ export function getConnectedBoxIds(entries: LayoutRectEntry[], tolerance = CONNE
   return connected;
 }
 
-export function isLayoutConnected(entries: LayoutRectEntry[], tolerance = CONNECTION_TOLERANCE) {
+export function isLayoutConnected(entries: LayoutRectEntry[], tolerance = TOUCH_TOLERANCE) {
   if (entries.length <= 1) return true;
   return getConnectedBoxIds(entries, tolerance).size === entries.length;
 }
@@ -193,7 +264,7 @@ function getSnapCandidates(
     const overlap = rangesOverlap(movingRect.y1, movingRect.y2, otherRect.y1, otherRect.y2, 0);
     const candidates = [
       {
-        value: otherRect.x1 - movingRect.width,
+        value: otherRect.x1 - movingRect.boundsWidth,
         guide: {
           orientation: 'vertical' as const,
           position: otherRect.x1,
@@ -220,7 +291,7 @@ function getSnapCandidates(
         },
       },
       {
-        value: otherRect.x2 - movingRect.width,
+        value: otherRect.x2 - movingRect.boundsWidth,
         guide: {
           orientation: 'vertical' as const,
           position: otherRect.x2,
@@ -242,7 +313,7 @@ function getSnapCandidates(
   const overlap = rangesOverlap(movingRect.x1, movingRect.x2, otherRect.x1, otherRect.x2, 0);
   const candidates = [
     {
-      value: otherRect.y1 - movingRect.length,
+      value: otherRect.y1 - movingRect.boundsHeight,
       guide: {
         orientation: 'horizontal' as const,
         position: otherRect.y1,
@@ -269,7 +340,7 @@ function getSnapCandidates(
       },
     },
     {
-      value: otherRect.y2 - movingRect.length,
+      value: otherRect.y2 - movingRect.boundsHeight,
       guide: {
         orientation: 'horizontal' as const,
         position: otherRect.y2,
@@ -379,15 +450,17 @@ export function getSuggestedPlacement(
     ];
 
     for (const candidate of candidates) {
-      const nextRect: PlacementRect = {
-        x1: candidate.x,
-        y1: candidate.y,
-        x2: candidate.x + footprint.width,
-        y2: candidate.y + footprint.length,
-        width: footprint.width,
-        length: footprint.length,
-      };
-      const overlaps = entries.some((other) => placementsOverlap(nextRect, other.rect, 0));
+      const nextRect = getPlacementRect(
+        {
+          id: 'candidate',
+          product_id: product.id,
+          x: candidate.x,
+          y: candidate.y,
+          rotation: 0,
+        },
+        product
+      );
+      const overlaps = entries.some((other) => placementsOverlap(nextRect, other.rect));
       if (!overlaps) {
         return candidate;
       }

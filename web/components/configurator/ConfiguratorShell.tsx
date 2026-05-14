@@ -45,10 +45,8 @@ interface ConfiguratorShellProps {
   quote: Quote;
 }
 
-function normalizeRotation(value: number): 0 | 90 | 180 | 270 {
-  const next = ((value % 360) + 360) % 360;
-  if (next === 90 || next === 180 || next === 270) return next;
-  return 0;
+function normalizeRotation(value: number): number {
+  return Number((((value % 360) + 360) % 360).toFixed(1));
 }
 
 export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
@@ -168,7 +166,7 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
     });
   };
 
-  const handleRotateBox = (boxId: string, delta = 90) => {
+  const handleRotateBox = (boxId: string, delta = 15) => {
     const current = configuration.boxes.find((box) => box.id === boxId);
     if (!current) return;
     const rotatedBox = { ...current, rotation: normalizeRotation(current.rotation + delta) };
@@ -182,6 +180,29 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
     });
     if (!candidate.valid) {
       toast.error('Rotating here would create an overlap or disconnect the layout.');
+      return;
+    }
+    updateConfiguration({
+      ...configuration,
+      boxes: configuration.boxes.map((box) => (box.id === boxId ? rotatedBox : box)),
+    });
+  };
+
+  const handleSetRotation = (boxId: string, rotation: number) => {
+    if (!Number.isFinite(rotation)) return;
+    const current = configuration.boxes.find((box) => box.id === boxId);
+    if (!current) return;
+    const rotatedBox = { ...current, rotation: normalizeRotation(rotation) };
+    const candidate = findPlacementCandidate({
+      movingBox: rotatedBox,
+      rawX: rotatedBox.x,
+      rawY: rotatedBox.y,
+      boxes: configuration.boxes.map((box) => (box.id === boxId ? rotatedBox : box)),
+      productMap,
+      threshold: 0,
+    });
+    if (!candidate.valid) {
+      toast.error('That rotation would create an overlap or disconnect the layout.');
       return;
     }
     updateConfiguration({
@@ -308,6 +329,7 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
                 selectedBoxId={selectedBoxId}
                 onSelect={setSelectedBoxId}
                 onMoveBox={handleMoveBox}
+                onRotateBox={handleSetRotation}
               />
               <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
                 The front marker is visual only in this beta. It rotates with the box so you can quickly read layout
@@ -407,8 +429,21 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
                     </div>
                     <div>
                       <p className="text-muted-foreground">Rotation</p>
-                      <p className="font-medium">{selectedBox.rotation}°</p>
+                      <p className="font-medium">{selectedBox.rotation.toFixed(1)}°</p>
                     </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="box-rotation">Rotation</Label>
+                    <Input
+                      id="box-rotation"
+                      type="number"
+                      step="1"
+                      min={0}
+                      max={359.9}
+                      value={selectedBox.rotation}
+                      onChange={(event) => handleSetRotation(selectedBox.id, Number(event.target.value || 0))}
+                    />
                   </div>
 
                   <div className="space-y-2">
@@ -436,10 +471,19 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
                       type="button"
                       variant="outline"
                       size="sm"
-                      onClick={() => handleRotateBox(selectedBox.id, 90)}
+                      onClick={() => handleRotateBox(selectedBox.id, -15)}
                     >
                       <RotateCw className="mr-2 h-4 w-4" />
-                      Rotate 90°
+                      Rotate -15°
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleRotateBox(selectedBox.id, 15)}
+                    >
+                      <RotateCw className="mr-2 h-4 w-4" />
+                      Rotate +15°
                     </Button>
                     <Button type="button" variant="destructive" size="sm" onClick={handleRemoveSelectedBox}>
                       <Trash2 className="mr-2 h-4 w-4" />

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from math import cos, pi, sin
 from typing import Dict, List, Tuple
 
 from sqlmodel import Session, select
@@ -15,57 +16,99 @@ from app.schemas import (
 
 
 ZERO = Decimal("0")
-EDGE_TOLERANCE = Decimal("0.05")
+TOUCH_TOLERANCE = 0.05
+OVERLAP_EPSILON = 1e-6
+Point = Tuple[float, float]
+LayoutShape = Tuple[float, float, float, float, Tuple[Point, Point, Point, Point]]
 
 
 def _to_decimal(value: Decimal | int | float | str) -> Decimal:
     return value if isinstance(value, Decimal) else Decimal(str(value))
 
 
-def _footprint(product: Product, rotation: int) -> Tuple[Decimal, Decimal]:
+def _footprint(product: Product, rotation: float) -> Tuple[Decimal, Decimal]:
+    del rotation
     width = _to_decimal(product.configurator_width or ZERO)
     length = _to_decimal(product.configurator_length or ZERO)
-    if rotation in (90, 270):
-        return length, width
     return width, length
 
 
-def _rect(box, product: Product) -> Tuple[Decimal, Decimal, Decimal, Decimal]:
-    x = _to_decimal(box.x)
-    y = _to_decimal(box.y)
+def _rotate_point(x: float, y: float, center_x: float, center_y: float, rotation: float) -> Point:
+    radians = rotation * pi / 180
+    dx = x - center_x
+    dy = y - center_y
+    return (
+        center_x + dx * cos(radians) - dy * sin(radians),
+        center_y + dx * sin(radians) + dy * cos(radians),
+    )
+
+
+def _shape(box, product: Product) -> LayoutShape:
+    x = float(_to_decimal(box.x))
+    y = float(_to_decimal(box.y))
     width, length = _footprint(product, box.rotation)
-    return x, y, x + width, y + length
+    box_width = float(width)
+    box_length = float(length)
+    center_x = x + box_width / 2
+    center_y = y + box_length / 2
+    corners = (
+        _rotate_point(x, y, center_x, center_y, box.rotation),
+        _rotate_point(x + box_width, y, center_x, center_y, box.rotation),
+        _rotate_point(x + box_width, y + box_length, center_x, center_y, box.rotation),
+        _rotate_point(x, y + box_length, center_x, center_y, box.rotation),
+    )
+    xs = [point[0] for point in corners]
+    ys = [point[1] for point in corners]
+    return min(xs), min(ys), max(xs), max(ys), corners
 
 
-def _range_overlap(a_start: Decimal, a_end: Decimal, b_start: Decimal, b_end: Decimal) -> bool:
-    return max(a_start, b_start) < min(a_end, b_end)
+def _range_overlap(a_start: float, a_end: float, b_start: float, b_end: float, tolerance: float = 0.0) -> bool:
+    return max(a_start, b_start) < min(a_end, b_end) - tolerance
+
+
+def _get_axes(corners: Tuple[Point, Point, Point, Point]) -> List[Point]:
+    axes: List[Point] = []
+    for index, point in enumerate(corners):
+        next_point = corners[(index + 1) % len(corners)]
+        edge_x = next_point[0] - point[0]
+        edge_y = next_point[1] - point[1]
+        length = (edge_x**2 + edge_y**2) ** 0.5 or 1.0
+        axes.append((-edge_y / length, edge_x / length))
+    return axes
+
+
+def _project(corners: Tuple[Point, Point, Point, Point], axis: Point) -> Tuple[float, float]:
+    projections = [point[0] * axis[0] + point[1] * axis[1] for point in corners]
+    return min(projections), max(projections)
 
 
 def _rectangles_overlap(
-    left: Tuple[Decimal, Decimal, Decimal, Decimal],
-    right: Tuple[Decimal, Decimal, Decimal, Decimal],
+    left: LayoutShape,
+    right: LayoutShape,
 ) -> bool:
-    return (
-        left[0] < right[2] - EDGE_TOLERANCE
-        and left[2] > right[0] + EDGE_TOLERANCE
-        and left[1] < right[3] - EDGE_TOLERANCE
-        and left[3] > right[1] + EDGE_TOLERANCE
-    )
+    left_corners = left[4]
+    right_corners = right[4]
+    for axis in [*_get_axes(left_corners), *_get_axes(right_corners)]:
+        left_min, left_max = _project(left_corners, axis)
+        right_min, right_max = _project(right_corners, axis)
+        if left_max <= right_min + OVERLAP_EPSILON or right_max <= left_min + OVERLAP_EPSILON:
+            return False
+    return True
 
 
-def _edges_close(left: Decimal, right: Decimal) -> bool:
-    return abs(left - right) <= EDGE_TOLERANCE
+def _edges_close(left: float, right: float) -> bool:
+    return abs(left - right) <= TOUCH_TOLERANCE
 
 
 def _touching(
-    left: Tuple[Decimal, Decimal, Decimal, Decimal],
-    right: Tuple[Decimal, Decimal, Decimal, Decimal],
+    left: LayoutShape,
+    right: LayoutShape,
 ) -> bool:
     shares_vertical_edge = (_edges_close(left[2], right[0]) or _edges_close(right[2], left[0])) and _range_overlap(
-        left[1], left[3], right[1], right[3]
+        left[1], left[3], right[1], right[3], TOUCH_TOLERANCE
     )
     shares_horizontal_edge = (_edges_close(left[3], right[1]) or _edges_close(right[3], left[1])) and _range_overlap(
-        left[0], left[2], right[0], right[2]
+        left[0], left[2], right[0], right[2], TOUCH_TOLERANCE
     )
     return shares_vertical_edge or shares_horizontal_edge
 
@@ -107,7 +150,7 @@ def build_configurator_preview(
     box_products = _load_products(session, [box.product_id for box in payload.boxes])
     extra_products = _load_products(session, [extra.product_id for extra in payload.extras])
 
-    layout_rects: Dict[str, Tuple[Decimal, Decimal, Decimal, Decimal]] = {}
+    layout_rects: Dict[str, LayoutShape] = {}
     graph: Dict[str, set[str]] = {box.id: set() for box in payload.boxes}
 
     for box in payload.boxes:
@@ -153,7 +196,7 @@ def build_configurator_preview(
                 )
             )
             continue
-        layout_rects[box.id] = _rect(box, product)
+        layout_rects[box.id] = _shape(box, product)
 
     for index, box in enumerate(payload.boxes):
         rect = layout_rects.get(box.id)
