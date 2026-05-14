@@ -469,8 +469,8 @@ export default function ConfiguratorCanvas({
                 const frontMarkerPosition = getFrontMarkerPosition(
                   getBaseFrontFace(product),
                   product.configurator_connection_profile,
-                  rect.boxWidth,
-                  rect.boxLength
+                  Number(product.configurator_width ?? rect.boxWidth),
+                  Number(product.configurator_length ?? rect.boxLength)
                 );
 
                 return (

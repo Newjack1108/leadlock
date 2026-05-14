@@ -17,6 +17,13 @@ const POSITION_DECIMALS = 2;
 export type BoxFace = ConfiguratorFrontFace;
 const FACE_ORDER: readonly BoxFace[] = ['top', 'right', 'bottom', 'left'];
 const CORNER_PROFILE_FRONT_FACE: BoxFace = 'bottom';
+const CORNER_PROFILE_DEFAULT_ROTATION: Record<
+  ConfiguratorConnectionProfile,
+  ConfiguratorBoxPlacement['rotation']
+> = {
+  corner_left: 270,
+  corner_right: 90,
+};
 
 export interface PlacementRect {
   x1: number;
@@ -218,6 +225,10 @@ export function getRotationForFrontFace(
 }
 
 export function getDefaultBoxRotation(product: Product | null | undefined): ConfiguratorBoxPlacement['rotation'] {
+  const profile = getConnectionProfile(product);
+  if (profile) {
+    return CORNER_PROFILE_DEFAULT_ROTATION[profile];
+  }
   return getRotationForFrontFace(product, 'bottom');
 }
 

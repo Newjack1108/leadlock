@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { getApiErrorDetail, getProduct, getCompanySettings } from '@/lib/api';
-import { Product, CompanySettings } from '@/lib/types';
+import { Product, CompanySettings, ConfiguratorConnectionProfile } from '@/lib/types';
 import { toast } from 'sonner';
 import { ArrowLeft, Edit } from 'lucide-react';
 
@@ -65,6 +65,16 @@ export default function ProductDetailPage() {
     SHEDS: 'bg-green-100 text-green-700',
     CABINS: 'bg-purple-100 text-purple-700',
     CONFIGURATOR: 'bg-amber-100 text-amber-800',
+  };
+
+  const getDerivedCornerFrontLabel = (profile: ConfiguratorConnectionProfile | null | undefined) => {
+    if (profile === 'corner_left') {
+      return 'right wall (from connection profile)';
+    }
+    if (profile === 'corner_right') {
+      return 'left wall (from connection profile)';
+    }
+    return null;
   };
 
   if (loading) {
@@ -295,9 +305,9 @@ export default function ProductDetailPage() {
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Front Side:</span>
                       <span>
-                        {product.configurator_connection_profile
-                          ? 'bottom (from connection profile)'
-                          : product.configurator_front_face ?? 'Legacy default'}
+                        {getDerivedCornerFrontLabel(product.configurator_connection_profile) ??
+                          product.configurator_front_face ??
+                          'Legacy default'}
                       </span>
                     </div>
                     <div className="flex justify-between">
