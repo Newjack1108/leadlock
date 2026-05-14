@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, 
 from sqlmodel import Session, select
 from typing import Optional, List
 from app.database import get_session
-from app.models import Product, ProductCategory, User, ProductOptionalExtra
+from app.models import Product, ProductCategory, ConfiguratorFrontFace, User, ProductOptionalExtra
 from app.auth import get_current_user, require_role
 from app.schemas import ProductCreate, ProductUpdate, ProductResponse
 from app.models import UserRole
@@ -18,9 +18,18 @@ router = APIRouter(prefix="/api/products", tags=["products"])
 PRODUCT_EDITOR_ROLES = [UserRole.DIRECTOR, UserRole.CLOSER]
 
 
+def _coerce_configurator_front_face(value):
+    if isinstance(value, ConfiguratorFrontFace):
+        return value
+    if isinstance(value, str) and value:
+        return ConfiguratorFrontFace(value)
+    return None
+
+
 def _build_product_response(product: Product, optional_extras: Optional[List[ProductResponse]] = None) -> ProductResponse:
     payload = {
         **product.dict(),
+        "configurator_front_face": _coerce_configurator_front_face(product.configurator_front_face),
         "is_production_synced": product.production_product_id is not None,
         "optional_extras": optional_extras,
     }
@@ -33,11 +42,18 @@ def _validate_configurator_product_payload(payload: dict) -> None:
     allow_in_configurator = bool(payload.get("allow_in_configurator"))
     configurator_width = payload.get("configurator_width")
     configurator_length = payload.get("configurator_length")
+    configurator_front_face = payload.get("configurator_front_face")
 
     if allow_in_configurator and not is_extra:
         raise HTTPException(
             status_code=422,
             detail="Only optional extras can opt into configurator usage",
+        )
+
+    if configurator_front_face is not None and (category != ProductCategory.CONFIGURATOR or is_extra):
+        raise HTTPException(
+            status_code=422,
+            detail="Only non-extra configurator items can set configurator_front_face",
         )
 
     if category == ProductCategory.CONFIGURATOR and not is_extra:
@@ -51,6 +67,37 @@ def _validate_configurator_product_payload(payload: dict) -> None:
                 status_code=422,
                 detail="Configurator product dimensions must be greater than zero",
             )
+
+        width = Decimal(str(configurator_width))
+        length = Decimal(str(configurator_length))
+        if width != length and configurator_front_face is None:
+            raise HTTPException(
+                status_code=422,
+                detail="Non-square configurator products must set configurator_front_face",
+            )
+
+        if configurator_front_face is not None:
+            front_face = (
+                configurator_front_face.value
+                if isinstance(configurator_front_face, ConfiguratorFrontFace)
+                else str(configurator_front_face)
+            )
+            if width > length and front_face not in (
+                ConfiguratorFrontFace.TOP.value,
+                ConfiguratorFrontFace.BOTTOM.value,
+            ):
+                raise HTTPException(
+                    status_code=422,
+                    detail="For wider configurator products, configurator_front_face must be top or bottom",
+                )
+            if length > width and front_face not in (
+                ConfiguratorFrontFace.LEFT.value,
+                ConfiguratorFrontFace.RIGHT.value,
+            ):
+                raise HTTPException(
+                    status_code=422,
+                    detail="For deeper configurator products, configurator_front_face must be left or right",
+                )
 
 
 @router.get("", response_model=List[ProductResponse])
@@ -318,6 +365,7 @@ async def update_product(
         "allow_in_configurator": update_data.get("allow_in_configurator", product.allow_in_configurator),
         "configurator_width": update_data.get("configurator_width", product.configurator_width),
         "configurator_length": update_data.get("configurator_length", product.configurator_length),
+        "configurator_front_face": update_data.get("configurator_front_face", product.configurator_front_face),
     }
     _validate_configurator_product_payload(candidate_payload)
     

@@ -6,6 +6,7 @@ from enum import Enum
 from app.models import (
     Customer,
     LeadStatus, ActivityType, Timeframe, UserRole, ProductCategory,
+    ConfiguratorFrontFace,
     QuoteStatus, QuoteTemperature, DiscountType, DiscountScope, DiscountRequestStatus,
     LeadType, LeadSource, EmailDirection, ReminderPriority, ReminderType,
     SuggestedAction, OpportunityStage, LossCategory, InstallationLeadTime,
@@ -1056,6 +1057,7 @@ class ProductCreate(BaseModel):
     length: Optional[Decimal] = None
     configurator_width: Optional[Decimal] = None
     configurator_length: Optional[Decimal] = None
+    configurator_front_face: Optional[ConfiguratorFrontFace] = None
     allow_in_configurator: bool = False
     installation_hours: Optional[Decimal] = None
     boxes_per_product: Optional[int] = None  # Number of boxes per product (optional; used in installation calculation)
@@ -1089,6 +1091,7 @@ class ProductUpdate(BaseModel):
     length: Optional[Decimal] = None
     configurator_width: Optional[Decimal] = None
     configurator_length: Optional[Decimal] = None
+    configurator_front_face: Optional[ConfiguratorFrontFace] = None
     allow_in_configurator: Optional[bool] = None
     installation_hours: Optional[Decimal] = None
     boxes_per_product: Optional[int] = None
@@ -1125,6 +1128,7 @@ class ProductResponse(BaseModel):
     length: Optional[Decimal] = None
     configurator_width: Optional[Decimal] = None
     configurator_length: Optional[Decimal] = None
+    configurator_front_face: Optional[ConfiguratorFrontFace] = None
     allow_in_configurator: bool = False
     installation_hours: Optional[Decimal] = None
     boxes_per_product: Optional[int] = None

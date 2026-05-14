@@ -6,7 +6,7 @@ from typing import Dict, List, Tuple
 
 from sqlmodel import Session, select
 
-from app.models import Product, ProductCategory
+from app.models import ConfiguratorFrontFace, Product, ProductCategory
 from app.schemas import (
     ConfiguratorGeneratedLine,
     ConfiguratorPreviewResponse,
@@ -22,6 +22,7 @@ EDGE_EPSILON = 1e-6
 Point = Tuple[float, float]
 LayoutShape = Tuple[float, float, float, float, Tuple[Point, Point, Point, Point]]
 Face = str
+FACE_ORDER: Tuple[Face, Face, Face, Face] = ("top", "right", "bottom", "left")
 
 
 def _to_decimal(value: Decimal | int | float | str) -> Decimal:
@@ -103,14 +104,23 @@ def _edges_close(left: float, right: float) -> bool:
     return abs(left - right) <= TOUCH_TOLERANCE + EDGE_EPSILON
 
 
-def _front_face(rotation: int) -> Face:
-    if rotation == 90:
-        return "right"
-    if rotation == 180:
-        return "bottom"
-    if rotation == 270:
-        return "left"
+def _base_front_face(product: Product) -> Face:
+    front_face = product.configurator_front_face
+    if isinstance(front_face, ConfiguratorFrontFace):
+        return front_face.value
+    if isinstance(front_face, str) and front_face in FACE_ORDER:
+        return front_face
     return "top"
+
+
+def _rotate_face(face: Face, rotation: int) -> Face:
+    base_index = FACE_ORDER.index(face) if face in FACE_ORDER else 0
+    steps = rotation // 90
+    return FACE_ORDER[(base_index + steps) % len(FACE_ORDER)]
+
+
+def _front_face(product: Product, rotation: int) -> Face:
+    return _rotate_face(_base_front_face(product), rotation)
 
 
 def _shared_faces(left: LayoutShape, right: LayoutShape) -> List[Tuple[Face, Face]]:
@@ -268,7 +278,10 @@ def build_configurator_preview(
     for box in payload.boxes:
         if box.id not in layout_rects:
             continue
-        if _front_face(box.rotation) in joined_faces.get(box.id, set()):
+        product = box_products.get(box.product_id)
+        if not product:
+            continue
+        if _front_face(product, box.rotation) in joined_faces.get(box.id, set()):
             issues.append(
                 ConfiguratorValidationIssue(
                     code="FRONT_FACE_BLOCKED",

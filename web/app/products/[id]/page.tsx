@@ -292,6 +292,10 @@ export default function ProductDetailPage() {
                       <span className="text-muted-foreground">Length:</span>
                       <span>{product.configurator_length != null ? `${product.configurator_length}m` : '—'}</span>
                     </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Front Side:</span>
+                      <span>{product.configurator_front_face ?? 'Legacy default'}</span>
+                    </div>
                   </div>
                 </CardContent>
               </Card>

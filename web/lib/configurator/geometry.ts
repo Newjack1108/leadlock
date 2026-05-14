@@ -1,4 +1,4 @@
-import type { ConfiguratorBoxPlacement, Product } from '@/lib/types';
+import type { ConfiguratorBoxPlacement, ConfiguratorFrontFace, Product } from '@/lib/types';
 
 export const SNAP_THRESHOLD = 0.45;
 export const TOUCH_TOLERANCE = 0;
@@ -9,7 +9,8 @@ const EDGE_EPSILON = 1e-6;
 const RIGHT_ANGLES = [0, 90, 180, 270] as const;
 const POSITION_DECIMALS = 2;
 
-export type BoxFace = 'top' | 'right' | 'bottom' | 'left';
+export type BoxFace = ConfiguratorFrontFace;
+const FACE_ORDER: readonly BoxFace[] = ['top', 'right', 'bottom', 'left'];
 
 export interface PlacementRect {
   x1: number;
@@ -98,12 +99,38 @@ export function getFootprint(product: Product, rotation: number) {
   return { width, length };
 }
 
-export function getFrontFace(rotation: number): BoxFace {
-  const normalized = normalizeRotation(rotation);
-  if (normalized === 90) return 'right';
-  if (normalized === 180) return 'bottom';
-  if (normalized === 270) return 'left';
+export function getBaseFrontFace(product?: Product | null): BoxFace {
+  const frontFace = product?.configurator_front_face;
+  if (frontFace && FACE_ORDER.includes(frontFace)) {
+    return frontFace;
+  }
   return 'top';
+}
+
+function rotateFace(face: BoxFace, rotation: number): BoxFace {
+  const normalized = normalizeRotation(rotation);
+  const baseIndex = FACE_ORDER.indexOf(face);
+  const steps = normalized / 90;
+  return FACE_ORDER[(baseIndex + steps) % FACE_ORDER.length] ?? 'top';
+}
+
+export function getFrontFace(product: Product | null | undefined, rotation: number): BoxFace {
+  return rotateFace(getBaseFrontFace(product), rotation);
+}
+
+export function getRotationForFrontFace(
+  product: Product | null | undefined,
+  face: BoxFace
+): ConfiguratorBoxPlacement['rotation'] {
+  const baseFace = getBaseFrontFace(product);
+  const baseIndex = FACE_ORDER.indexOf(baseFace);
+  const targetIndex = FACE_ORDER.indexOf(face);
+  const steps = (targetIndex - baseIndex + FACE_ORDER.length) % FACE_ORDER.length;
+  return RIGHT_ANGLES[steps] ?? 0;
+}
+
+export function getDefaultBoxRotation(product: Product | null | undefined): ConfiguratorBoxPlacement['rotation'] {
+  return getRotationForFrontFace(product, 'bottom');
 }
 
 function toRadians(rotation: number) {
@@ -260,9 +287,10 @@ export function getJoinedFaces(entries: LayoutRectEntry[], tolerance = TOUCH_TOL
 
 export function isFrontFaceExposed(
   box: ConfiguratorBoxPlacement,
+  product: Product | null | undefined,
   joinedFaces: Map<string, Set<BoxFace>>
 ) {
-  return !joinedFaces.get(box.id)?.has(getFrontFace(box.rotation));
+  return !joinedFaces.get(box.id)?.has(getFrontFace(product, box.rotation));
 }
 
 function getAnchorInsets(box: ConfiguratorBoxPlacement, rect: PlacementRect): AnchorInsets {
@@ -512,7 +540,7 @@ export function findPlacementCandidate(params: {
   );
   const connected = isLayoutConnected(layoutEntries);
   const joinedFaces = getJoinedFaces(layoutEntries);
-  const frontBlocked = !isFrontFaceExposed(nextBox, joinedFaces);
+  const frontBlocked = !isFrontFaceExposed(nextBox, movingProduct, joinedFaces);
 
   return {
     x: snappedX,
@@ -532,12 +560,21 @@ export function getSuggestedPlacement(
   productMap: Record<number, Product>,
   anchorBoxId?: string | null
 ) {
+  const rotation = getDefaultBoxRotation(product);
   if (boxes.length === 0) {
-    return { x: 0, y: 0 };
+    return { x: 0, y: 0, rotation };
   }
 
   const entries = buildLayoutRectEntries(boxes, productMap);
-  const footprint = getFootprint(product, 0);
+  const referenceBox = {
+    id: 'candidate',
+    product_id: product.id,
+    x: 0,
+    y: 0,
+    rotation,
+  } satisfies ConfiguratorBoxPlacement;
+  const referenceRect = getPlacementRect(referenceBox, product);
+  const movingInsets = getAnchorInsets(referenceBox, referenceRect);
   const anchorEntry =
     entries.find((entry) => entry.box.id === anchorBoxId) ??
     entries[entries.length - 1];
@@ -545,10 +582,22 @@ export function getSuggestedPlacement(
 
   for (const entry of orderedEntries) {
     const candidates = [
-      { x: roundPosition(entry.rect.x2), y: roundPosition(entry.rect.y1) },
-      { x: roundPosition(entry.rect.x1), y: roundPosition(entry.rect.y2) },
-      { x: roundPosition(Math.max(0, entry.rect.x1 - footprint.width)), y: roundPosition(entry.rect.y1) },
-      { x: roundPosition(entry.rect.x1), y: roundPosition(Math.max(0, entry.rect.y1 - footprint.length)) },
+      {
+        x: roundPosition(entry.rect.x2 - movingInsets.left),
+        y: roundPosition(entry.rect.y1 - movingInsets.top),
+      },
+      {
+        x: roundPosition(entry.rect.x1 - movingInsets.left),
+        y: roundPosition(entry.rect.y2 - movingInsets.top),
+      },
+      {
+        x: roundPosition(Math.max(0, entry.rect.x1 - movingInsets.right)),
+        y: roundPosition(entry.rect.y1 - movingInsets.top),
+      },
+      {
+        x: roundPosition(entry.rect.x1 - movingInsets.left),
+        y: roundPosition(Math.max(0, entry.rect.y1 - movingInsets.bottom)),
+      },
     ];
 
     for (const candidate of candidates) {
@@ -558,13 +607,23 @@ export function getSuggestedPlacement(
           product_id: product.id,
           x: candidate.x,
           y: candidate.y,
-          rotation: 0,
+          rotation,
         },
         product
       );
       const overlaps = entries.some((other) => placementsOverlap(nextRect, other.rect));
       if (!overlaps) {
-        return candidate;
+        const nextBox = {
+          id: 'candidate',
+          product_id: product.id,
+          x: candidate.x,
+          y: candidate.y,
+          rotation,
+        } satisfies ConfiguratorBoxPlacement;
+        const joinedFaces = getJoinedFaces([...entries, { box: nextBox, product, rect: nextRect }]);
+        if (isFrontFaceExposed(nextBox, product, joinedFaces)) {
+          return { ...candidate, rotation };
+        }
       }
     }
   }
@@ -574,5 +633,6 @@ export function getSuggestedPlacement(
   return {
     x: roundPosition(maxX),
     y: 0,
+    rotation,
   };
 }

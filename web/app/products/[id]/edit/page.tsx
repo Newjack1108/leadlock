@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Header from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,12 +17,34 @@ import {
 } from '@/components/ui/select';
 import ImageUpload from '@/components/ImageUpload';
 import { getApiErrorDetail, getProduct, updateProduct, getOptionalExtras } from '@/lib/api';
-import { ProductCategory, Product, PRODUCT_SUBCATEGORIES } from '@/lib/types';
+import {
+  ProductCategory,
+  Product,
+  PRODUCT_SUBCATEGORIES,
+  CONFIGURATOR_FRONT_FACES,
+  type ConfiguratorFrontFace,
+} from '@/lib/types';
 import { toast } from 'sonner';
 import { ArrowLeft } from 'lucide-react';
 
 const PRODUCT_UNIT_OPTIONS = ['Per Box', 'Unit', 'Set'] as const;
 const SUBCATEGORY_NONE = '__NONE__';
+const CONFIGURATOR_FRONT_FACE_NONE = '__NONE__';
+const CONFIGURATOR_FRONT_FACE_LABELS: Record<ConfiguratorFrontFace, string> = {
+  top: 'Top edge',
+  right: 'Right edge',
+  bottom: 'Bottom edge',
+  left: 'Left edge',
+};
+
+function getAllowedConfiguratorFrontFaces(widthValue: string, lengthValue: string): ConfiguratorFrontFace[] {
+  const width = Number(widthValue);
+  const length = Number(lengthValue);
+  if (!Number.isFinite(width) || !Number.isFinite(length) || width <= 0 || length <= 0 || width === length) {
+    return [...CONFIGURATOR_FRONT_FACES];
+  }
+  return width > length ? ['top', 'bottom'] : ['left', 'right'];
+}
 
 export default function EditProductPage() {
   const router = useRouter();
@@ -52,6 +74,7 @@ export default function EditProductPage() {
     length: '',
     configurator_width: '',
     configurator_length: '',
+    configurator_front_face: '' as ConfiguratorFrontFace | '',
     allow_in_configurator: false,
     installation_hours: '',
     boxes_per_product: '',
@@ -65,15 +88,18 @@ export default function EditProductPage() {
       ? SUBCATEGORY_NONE
       : formData.subcategory;
   const isConfiguratorCategory = formData.category === ProductCategory.CONFIGURATOR;
+  const allowedConfiguratorFrontFaces = getAllowedConfiguratorFrontFaces(
+    formData.configurator_width,
+    formData.configurator_length
+  );
+  const requiresConfiguratorFrontFace =
+    isConfiguratorCategory &&
+    !formData.is_extra &&
+    formData.configurator_width !== '' &&
+    formData.configurator_length !== '' &&
+    Number(formData.configurator_width) !== Number(formData.configurator_length);
 
-  useEffect(() => {
-    if (productId) {
-      fetchProduct();
-      fetchOptionalExtras();
-    }
-  }, [productId]);
-
-  const fetchProduct = async () => {
+  const fetchProduct = useCallback(async () => {
     try {
       setPageLoading(true);
       const product = await getProduct(productId);
@@ -98,6 +124,7 @@ export default function EditProductPage() {
         length: product.length?.toString() || '',
         configurator_width: product.configurator_width?.toString() || '',
         configurator_length: product.configurator_length?.toString() || '',
+        configurator_front_face: product.configurator_front_face || '',
         allow_in_configurator: product.allow_in_configurator ?? false,
         installation_hours: product.installation_hours?.toString() || '',
         boxes_per_product: product.boxes_per_product?.toString() || '',
@@ -115,16 +142,41 @@ export default function EditProductPage() {
     } finally {
       setPageLoading(false);
     }
-  };
+  }, [productId, router]);
 
-  const fetchOptionalExtras = async () => {
+  const fetchOptionalExtras = useCallback(async () => {
     try {
       const extras = await getOptionalExtras();
       setOptionalExtras(extras);
     } catch {
       console.error('Failed to load optional extras');
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (productId) {
+      fetchProduct();
+      fetchOptionalExtras();
+    }
+  }, [fetchOptionalExtras, fetchProduct, productId]);
+
+  useEffect(() => {
+    if ((!isConfiguratorCategory || formData.is_extra) && formData.configurator_front_face !== '') {
+      setFormData((prev) => ({ ...prev, configurator_front_face: '' }));
+      return;
+    }
+    if (
+      formData.configurator_front_face &&
+      !allowedConfiguratorFrontFaces.includes(formData.configurator_front_face)
+    ) {
+      setFormData((prev) => ({ ...prev, configurator_front_face: '' }));
+    }
+  }, [
+    allowedConfiguratorFrontFaces,
+    formData.configurator_front_face,
+    formData.is_extra,
+    isConfiguratorCategory,
+  ]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -136,6 +188,11 @@ export default function EditProductPage() {
 
     if (isConfiguratorCategory && !formData.is_extra && (!formData.configurator_width || !formData.configurator_length)) {
       toast.error('Configurator products require configurator width and length');
+      return;
+    }
+
+    if (requiresConfiguratorFrontFace && !formData.configurator_front_face) {
+      toast.error('Non-square configurator products must choose a front side');
       return;
     }
 
@@ -161,6 +218,7 @@ export default function EditProductPage() {
         length: formData.length ? parseFloat(formData.length) : undefined,
         configurator_width: formData.configurator_width ? parseFloat(formData.configurator_width) : null,
         configurator_length: formData.configurator_length ? parseFloat(formData.configurator_length) : null,
+        configurator_front_face: formData.configurator_front_face || null,
         allow_in_configurator: formData.allow_in_configurator,
       };
       if (formData.is_extra) {
@@ -695,6 +753,47 @@ export default function EditProductPage() {
                       These are separate from the spec sheet dimensions so the configurator uses a dedicated
                       footprint.
                     </p>
+                    {isConfiguratorCategory && !formData.is_extra && (
+                      <div className="space-y-2">
+                        <Label htmlFor="configurator_front_face">
+                          Configurator Front Side
+                          {requiresConfiguratorFrontFace && <span className="text-destructive"> *</span>}
+                        </Label>
+                        <Select
+                          value={formData.configurator_front_face || CONFIGURATOR_FRONT_FACE_NONE}
+                          onValueChange={(value) =>
+                            setFormData({
+                              ...formData,
+                              configurator_front_face:
+                                value === CONFIGURATOR_FRONT_FACE_NONE
+                                  ? ''
+                                  : (value as ConfiguratorFrontFace),
+                            })
+                          }
+                          disabled={loading}
+                        >
+                          <SelectTrigger id="configurator_front_face">
+                            <SelectValue placeholder="Choose the front side" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {!requiresConfiguratorFrontFace && (
+                              <SelectItem value={CONFIGURATOR_FRONT_FACE_NONE}>
+                                Default legacy front
+                              </SelectItem>
+                            )}
+                            {allowedConfiguratorFrontFaces.map((face) => (
+                              <SelectItem key={face} value={face}>
+                                {CONFIGURATOR_FRONT_FACE_LABELS[face]}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">
+                          For rectangular configurator products, choose one of the longest faces. New boxes will
+                          rotate so this front points toward the bottom of the layout by default.
+                        </p>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </>

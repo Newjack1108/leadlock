@@ -1,6 +1,6 @@
 from sqlmodel import SQLModel, Field, Relationship, Column
 from sqlalchemy.orm import relationship
-from sqlalchemy import Numeric, JSON, UniqueConstraint, ForeignKey, Integer
+from sqlalchemy import Numeric, JSON, UniqueConstraint, ForeignKey, Integer, String
 from typing import Optional, List
 from datetime import datetime, date
 from enum import Enum
@@ -54,6 +54,13 @@ class ProductCategory(str, Enum):
     SHEDS = "SHEDS"
     CABINS = "CABINS"
     CONFIGURATOR = "CONFIGURATOR"
+
+
+class ConfiguratorFrontFace(str, Enum):
+    TOP = "top"
+    RIGHT = "right"
+    BOTTOM = "bottom"
+    LEFT = "left"
 
 
 class LeadType(str, Enum):
@@ -396,6 +403,7 @@ class Product(SQLModel, table=True):
     length: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(10, 2)))  # Numeric length (for calculations)
     configurator_width: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(10, 2)))  # Footprint width used by configurator layout grid
     configurator_length: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(10, 2)))  # Footprint length used by configurator layout grid
+    configurator_front_face: Optional[ConfiguratorFrontFace] = Field(default=None, sa_column=Column(String(16), nullable=True))  # Base face treated as the front before any layout rotation
     allow_in_configurator: bool = Field(default=False)  # Extra-level opt-in for configurator selections
     installation_hours: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(10, 2)))  # Hours required for installation
     boxes_per_product: Optional[int] = None  # Number of boxes per product (optional; used in installation calculation)

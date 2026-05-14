@@ -11,7 +11,7 @@ from sqlmodel import Session, SQLModel, create_engine
 
 from app.auth import get_current_user, require_configurator_access
 from app.database import get_session
-from app.models import Product, ProductCategory, Quote, QuoteStatus, User, UserRole
+from app.models import ConfiguratorFrontFace, Product, ProductCategory, Quote, QuoteStatus, User, UserRole
 from app.routers import configurator, products, quotes
 
 
@@ -66,6 +66,61 @@ def test_configurator_products_require_dimensions():
 
     assert response.status_code == 422
     assert "configurator_width" in response.json()["detail"]
+
+
+def test_non_square_configurator_products_require_valid_front_face():
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SQLModel.metadata.create_all(engine)
+    user = _seed_user(engine)
+    client = TestClient(_make_app(engine, user))
+
+    missing_front = client.post(
+        "/api/products",
+        json={
+            "name": "Rectangular Box",
+            "category": "CONFIGURATOR",
+            "base_price": "1450.00",
+            "unit": "Unit",
+            "configurator_width": "3.50",
+            "configurator_length": "5.00",
+        },
+    )
+    assert missing_front.status_code == 422
+    assert "configurator_front_face" in missing_front.json()["detail"]
+
+    invalid_front = client.post(
+        "/api/products",
+        json={
+            "name": "Rectangular Box",
+            "category": "CONFIGURATOR",
+            "base_price": "1450.00",
+            "unit": "Unit",
+            "configurator_width": "3.50",
+            "configurator_length": "5.00",
+            "configurator_front_face": "top",
+        },
+    )
+    assert invalid_front.status_code == 422
+    assert "left or right" in invalid_front.json()["detail"]
+
+    valid_front = client.post(
+        "/api/products",
+        json={
+            "name": "Rectangular Box",
+            "category": "CONFIGURATOR",
+            "base_price": "1450.00",
+            "unit": "Unit",
+            "configurator_width": "3.50",
+            "configurator_length": "5.00",
+            "configurator_front_face": "right",
+        },
+    )
+    assert valid_front.status_code == 200
+    assert valid_front.json()["configurator_front_face"] == "right"
 
 
 def test_configurator_catalog_save_preview_and_apply_flow():
@@ -300,3 +355,77 @@ def test_configurator_preview_enforces_zero_overlap_and_front_face_rules():
         },
     )
     assert invalid_rotation.status_code == 422
+
+
+def test_configurator_preview_uses_product_front_face_for_rectangular_items():
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SQLModel.metadata.create_all(engine)
+    user = _seed_user(engine)
+
+    with Session(engine) as session:
+        item = Product(
+            name="3.5 x 5 Rectangular Box",
+            category=ProductCategory.CONFIGURATOR,
+            base_price=Decimal("2200.00"),
+            configurator_width=Decimal("3.50"),
+            configurator_length=Decimal("5.00"),
+            configurator_front_face=ConfiguratorFrontFace.RIGHT,
+        )
+        session.add(item)
+        session.commit()
+        session.refresh(item)
+        item_id = item.id
+
+    client = TestClient(_make_app(engine, user))
+
+    right_side_blocked = client.post(
+        "/api/configurator/preview",
+        json={
+            "schema_version": 1,
+            "boxes": [
+                {"id": "box-1", "product_id": item_id, "x": "0", "y": "0", "rotation": 0},
+                {"id": "box-2", "product_id": item_id, "x": "3.50", "y": "0", "rotation": 0},
+            ],
+            "extras": [],
+        },
+    )
+    assert right_side_blocked.status_code == 200
+    right_payload = right_side_blocked.json()
+    assert right_payload["valid"] is False
+    assert any(issue["code"] == "FRONT_FACE_BLOCKED" for issue in right_payload["issues"])
+
+    bottom_blocked_after_rotation = client.post(
+        "/api/configurator/preview",
+        json={
+            "schema_version": 1,
+            "boxes": [
+                {"id": "box-1", "product_id": item_id, "x": "0", "y": "0", "rotation": 90},
+                {"id": "box-2", "product_id": item_id, "x": "0", "y": "5.00", "rotation": 90},
+            ],
+            "extras": [],
+        },
+    )
+    assert bottom_blocked_after_rotation.status_code == 200
+    bottom_payload = bottom_blocked_after_rotation.json()
+    assert bottom_payload["valid"] is False
+    assert any(issue["code"] == "FRONT_FACE_BLOCKED" for issue in bottom_payload["issues"])
+
+    side_join_with_bottom_front_exposed = client.post(
+        "/api/configurator/preview",
+        json={
+            "schema_version": 1,
+            "boxes": [
+                {"id": "box-1", "product_id": item_id, "x": "0", "y": "0", "rotation": 90},
+                {"id": "box-2", "product_id": item_id, "x": "3.50", "y": "0", "rotation": 90},
+            ],
+            "extras": [],
+        },
+    )
+    assert side_join_with_bottom_front_exposed.status_code == 200
+    exposed_payload = side_join_with_bottom_front_exposed.json()
+    assert exposed_payload["valid"] is True
+    assert all(issue["code"] != "FRONT_FACE_BLOCKED" for issue in exposed_payload["issues"])

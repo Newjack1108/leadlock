@@ -7,6 +7,7 @@ import type { ConfiguratorBoxPlacement, Product } from '@/lib/types';
 import {
   buildLayoutRectEntries,
   findPlacementCandidate,
+  getBaseFrontFace,
   getCanvasBounds,
   normalizeRotation,
   type CandidatePlacement,
@@ -53,6 +54,31 @@ interface PanState {
 
 function clampZoom(value: number) {
   return Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, Number(value.toFixed(2))));
+}
+
+function getFrontMarkerPosition(face: 'top' | 'right' | 'bottom' | 'left') {
+  if (face === 'right') {
+    return {
+      containerClass: 'absolute right-2 top-1/2 -translate-y-1/2',
+      labelClass: 'rotate-90',
+    };
+  }
+  if (face === 'bottom') {
+    return {
+      containerClass: 'absolute bottom-2 left-1/2 -translate-x-1/2',
+      labelClass: '',
+    };
+  }
+  if (face === 'left') {
+    return {
+      containerClass: 'absolute left-2 top-1/2 -translate-y-1/2',
+      labelClass: '-rotate-90',
+    };
+  }
+  return {
+    containerClass: 'absolute left-1/2 top-2 -translate-x-1/2',
+    labelClass: '',
+  };
 }
 
 export default function ConfiguratorCanvas({
@@ -356,6 +382,7 @@ export default function ConfiguratorCanvas({
                 const showFrontMarker = boxPixelWidth >= 104 && boxPixelHeight >= 70;
                 const showDimensions = boxPixelWidth >= 90 && boxPixelHeight >= 86;
                 const compactLabel = boxPixelWidth < 90 || boxPixelHeight < 64;
+                const frontMarkerPosition = getFrontMarkerPosition(getBaseFrontFace(product));
 
                 return (
                   <button
@@ -490,9 +517,16 @@ export default function ConfiguratorCanvas({
                   )}
                   {showFrontMarker && (
                     <span className="pointer-events-none absolute inset-0">
-                      <span className="absolute left-1/2 top-2 flex max-w-[calc(100%-12px)] -translate-x-1/2 items-center gap-1 overflow-hidden rounded-full bg-background/85 px-2 py-0.5 text-[10px] font-semibold shadow-sm">
-                        <span className="block h-1.5 w-6 shrink-0 rounded-full bg-sky-500" />
-                        <span className="truncate">Front</span>
+                      <span className={frontMarkerPosition.containerClass}>
+                        <span
+                          className={cn(
+                            'flex max-w-[calc(100%-12px)] items-center gap-1 overflow-hidden rounded-full bg-background/85 px-2 py-0.5 text-[10px] font-semibold shadow-sm',
+                            frontMarkerPosition.labelClass
+                          )}
+                        >
+                          <span className="block h-1.5 w-6 shrink-0 rounded-full bg-sky-500" />
+                          <span className="truncate">Front</span>
+                        </span>
                       </span>
                     </span>
                   )}

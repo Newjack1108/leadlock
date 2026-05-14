@@ -1935,6 +1935,7 @@ def create_db_and_tables():
                 ("length", "NUMERIC(10, 2)"),
                 ("configurator_width", "NUMERIC(10, 2)"),
                 ("configurator_length", "NUMERIC(10, 2)"),
+                ("configurator_front_face", "VARCHAR(16)"),
             ]:
                 product_columns = [col["name"] for col in inspector.get_columns("product")]
                 if col_name not in product_columns:

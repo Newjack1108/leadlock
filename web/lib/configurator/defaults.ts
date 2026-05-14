@@ -21,7 +21,7 @@ export function addProductToConfiguration(
   anchorBoxId?: string | null
 ): QuoteConfigurationPayload {
   const nextIndex = config.boxes.length + 1;
-  const { x, y } = getSuggestedPlacement(config.boxes, product, productMap, anchorBoxId);
+  const { x, y, rotation } = getSuggestedPlacement(config.boxes, product, productMap, anchorBoxId);
   return {
     ...config,
     boxes: [
@@ -31,7 +31,7 @@ export function addProductToConfiguration(
         product_id: product.id,
         x,
         y,
-        rotation: 0,
+        rotation,
       },
     ],
   };

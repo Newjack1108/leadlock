@@ -39,6 +39,9 @@ export enum ProductCategory {
   CONFIGURATOR = "CONFIGURATOR",
 }
 
+export const CONFIGURATOR_FRONT_FACES = ['top', 'right', 'bottom', 'left'] as const;
+export type ConfiguratorFrontFace = (typeof CONFIGURATOR_FRONT_FACES)[number];
+
 /** Fixed subcategory labels for catalog filtering and forms (matches Product.subcategory). */
 export const PRODUCT_SUBCATEGORIES = [
   "Standard",
@@ -549,6 +552,7 @@ export interface Product {
   length?: number;
   configurator_width?: number;
   configurator_length?: number;
+  configurator_front_face?: ConfiguratorFrontFace | null;
   allow_in_configurator: boolean;
   installation_hours?: number;
   boxes_per_product?: number;
