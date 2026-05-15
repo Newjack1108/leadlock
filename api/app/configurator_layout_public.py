@@ -328,18 +328,19 @@ def _segment_color(kind: str) -> str:
     return "#f87171"
 
 
-def _overlay_line_local(
+def _overlay_line_css_local(
     face: str, start_ratio: float, end_ratio: float, box_w: float, box_h: float
 ) -> Tuple[float, float, float, float]:
+    """Segment line in CSS box coords (origin top-left, y down). Matches web overlay bars."""
     start_ratio = min(start_ratio, end_ratio)
     end_ratio = max(start_ratio, end_ratio)
     if face == "bottom":
-        y = 0.0
+        y = box_h
         x1 = start_ratio * box_w
         x2 = end_ratio * box_w
         return x1, y, x2, y
     if face == "top":
-        y = box_h
+        y = 0.0
         x1 = start_ratio * box_w
         x2 = end_ratio * box_w
         return x1, y, x2, y
@@ -352,6 +353,20 @@ def _overlay_line_local(
     y1 = start_ratio * box_h
     y2 = end_ratio * box_h
     return x, y1, x, y2
+
+
+def _css_local_to_layout(
+    lx: float,
+    ly: float,
+    center_x: float,
+    center_y: float,
+    box_w: float,
+    box_h: float,
+    rotation: int,
+) -> Tuple[float, float]:
+    ux = center_x - box_w / 2 + lx
+    uy = center_y - box_h / 2 + ly
+    return _rotate_point(ux, uy, center_x, center_y, rotation)
 
 
 def layout_to_svg(layout: PublicQuoteLayoutResponse) -> bytes:
@@ -395,14 +410,14 @@ def layout_to_svg(layout: PublicQuoteLayoutResponse) -> bytes:
             f'fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5" rx="4"/>'
         )
         for seg in entry["segments"]:
-            x1, y1, x2, y2 = _overlay_line_local(
+            x1, y1, x2, y2 = _overlay_line_css_local(
                 seg.face, seg.start_ratio, seg.end_ratio, bw, bl
             )
             color = _segment_color(seg.kind)
             stroke_w = 6 if seg.kind == "blocked_front" else 4
             parts.append(
-                f'<line x1="{(x1 - bw / 2) * scale:.2f}" y1="{(bl / 2 - y1) * scale:.2f}" '
-                f'x2="{(x2 - bw / 2) * scale:.2f}" y2="{(bl / 2 - y2) * scale:.2f}" '
+                f'<line x1="{(x1 - bw / 2) * scale:.2f}" y1="{(y1 - bl / 2) * scale:.2f}" '
+                f'x2="{(x2 - bw / 2) * scale:.2f}" y2="{(y2 - bl / 2) * scale:.2f}" '
                 f'stroke="{color}" stroke-width="{stroke_w}" stroke-linecap="round"/>'
             )
         dim = f"{bw:g}m × {bl:g}m".replace("g", "")
@@ -460,32 +475,29 @@ def layout_to_png(layout: PublicQuoteLayoutResponse, pixels_per_meter: float = 4
         cx_layout = rect["center_x"]
         cy_layout = rect["center_y"]
 
-        def local_to_layout(lx: float, ly: float) -> Tuple[float, float]:
-            """Local box coords: origin bottom-left, y increases upward."""
-            ux = cx_layout - bw / 2 + lx
-            uy = cy_layout + bl / 2 - ly
-            return _rotate_point(ux, uy, cx_layout, cy_layout, rot)
+        def css_to_layout(lx: float, ly: float) -> Tuple[float, float]:
+            return _css_local_to_layout(lx, ly, cx_layout, cy_layout, bw, bl, rot)
 
         def to_pixel(x: float, y: float) -> Tuple[float, float]:
             return to_px_x(x), to_px_y(y)
 
-        corners_local = [(0, 0), (bw, 0), (bw, bl), (0, bl)]
-        poly = [to_pixel(*local_to_layout(x, y)) for x, y in corners_local]
+        corners_css = [(0, 0), (bw, 0), (bw, bl), (0, bl)]
+        poly = [to_pixel(*css_to_layout(x, y)) for x, y in corners_css]
         draw.polygon(poly, fill="#f1f5f9", outline="#94a3b8")
 
         for seg in entry["segments"]:
-            x1, y1, x2, y2 = _overlay_line_local(
+            x1, y1, x2, y2 = _overlay_line_css_local(
                 seg.face, seg.start_ratio, seg.end_ratio, bw, bl
             )
-            p1 = to_pixel(*local_to_layout(x1, y1))
-            p2 = to_pixel(*local_to_layout(x2, y2))
+            p1 = to_pixel(*css_to_layout(x1, y1))
+            p2 = to_pixel(*css_to_layout(x2, y2))
             color = _segment_color(seg.kind)
             width_px = 6 if seg.kind == "blocked_front" else 4
             draw.line([p1, p2], fill=hex_to_rgb(color), width=width_px)
 
         label = str(box.label)[:40]
         dim = f"{bw:g}m x {bl:g}".replace("g", "")
-        tx, ty = to_pixel(*local_to_layout(bw / 2, bl / 2))
+        tx, ty = to_pixel(*css_to_layout(bw / 2, bl / 2))
         bbox = draw.textbbox((0, 0), label, font=font)
         tw = bbox[2] - bbox[0]
         draw.text((tx - tw / 2, ty - 8), label, fill="#334155", font=font)
