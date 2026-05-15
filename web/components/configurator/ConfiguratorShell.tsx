@@ -288,8 +288,8 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
                 onRemoveBox={handleRemoveBox}
               />
               <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
-                Corner boxes are fixed-orientation products. Use separate catalog items for each layout pose (e.g. tall vs
-                wide).
+                <span className="font-medium text-foreground">Corner boxes:</span> green edge = exposed front (e.g.
+                1.3m), red edges = connection sides. Use separate catalog items for each layout pose (tall vs wide).
               </div>
             </CardContent>
           </Card>

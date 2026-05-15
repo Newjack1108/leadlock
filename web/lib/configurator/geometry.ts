@@ -98,6 +98,41 @@ interface CornerBaseDefinition {
   blockedEnd: number;
 }
 
+export type CornerOverlayKind = 'blocked_front' | 'joinable' | 'standard';
+
+export interface CornerOverlaySegment {
+  face: 'bottom' | 'left' | 'right';
+  kind: CornerOverlayKind;
+  startRatio: number;
+  endRatio: number;
+  lengthMeters: number;
+}
+
+export interface CornerOverlayBarStyle {
+  className: string;
+  style: {
+    left?: string;
+    right?: string;
+    top?: string;
+    bottom?: string;
+    width?: string;
+    height?: string;
+  };
+}
+
+export interface CornerOverlayLabelStyle {
+  className: string;
+  style: {
+    left?: string;
+    right?: string;
+    top?: string;
+    bottom?: string;
+    transform?: string;
+    transformOrigin?: string;
+  };
+  text: string;
+}
+
 interface CornerLayoutDefinition {
   frontFace: BoxFace;
   standardFace: BoxFace;
@@ -225,6 +260,170 @@ export function getCornerBaseDefinition(product: Product | null | undefined): Co
     joinEnd: joinLength,
     blockedStart: joinLength,
     blockedEnd: frontLength,
+  };
+}
+
+function getCornerFaceLength(face: CornerBaseDefinition['frontFace'], width: number, length: number) {
+  return face === 'bottom' ? width : length;
+}
+
+export function getCornerBlockedFrontLength(product: Product | null | undefined): number | null {
+  const base = getCornerBaseDefinition(product);
+  if (!base || base.blockedEnd - base.blockedStart <= EDGE_EPSILON) {
+    return null;
+  }
+  const { width, length } = getNativeDimensions(product);
+  return base.blockedEnd - base.blockedStart;
+}
+
+export function getCornerOverlaySegments(product: Product | null | undefined): CornerOverlaySegment[] {
+  const base = getCornerBaseDefinition(product);
+  if (!base) {
+    return [];
+  }
+
+  const { width, length } = getNativeDimensions(product);
+  if (width <= 0 || length <= 0) {
+    return [];
+  }
+
+  const frontEdgeLength = getCornerFaceLength(base.frontFace, width, length);
+  const standardEdgeLength = getCornerFaceLength(base.standardFace, width, length);
+  const segments: CornerOverlaySegment[] = [];
+
+  if (base.blockedEnd - base.blockedStart > EDGE_EPSILON) {
+    segments.push({
+      face: base.frontFace,
+      kind: 'blocked_front',
+      startRatio: base.blockedStart / frontEdgeLength,
+      endRatio: base.blockedEnd / frontEdgeLength,
+      lengthMeters: base.blockedEnd - base.blockedStart,
+    });
+  }
+
+  if (base.joinEnd - base.joinStart > EDGE_EPSILON) {
+    segments.push({
+      face: base.frontFace,
+      kind: 'joinable',
+      startRatio: base.joinStart / frontEdgeLength,
+      endRatio: base.joinEnd / frontEdgeLength,
+      lengthMeters: base.joinEnd - base.joinStart,
+    });
+  }
+
+  segments.push({
+    face: base.standardFace,
+    kind: 'standard',
+    startRatio: 0,
+    endRatio: 1,
+    lengthMeters: standardEdgeLength,
+  });
+
+  return segments;
+}
+
+const CORNER_OVERLAY_BAR_CLASS: Record<CornerOverlayKind, string> = {
+  blocked_front: 'bg-emerald-500 shadow-[0_0_0_1px_rgba(6,78,59,0.55)]',
+  joinable: 'bg-red-500/80 shadow-[0_0_0_1px_rgba(127,29,29,0.45)]',
+  standard: 'bg-red-500/55 shadow-[0_0_0_1px_rgba(127,29,29,0.35)]',
+};
+
+function buildHorizontalOverlayStyle(
+  startRatio: number,
+  endRatio: number,
+  thicknessPx: number
+): CornerOverlayBarStyle['style'] {
+  const span = Math.max(endRatio - startRatio, 0);
+  return {
+    left: `${startRatio * 100}%`,
+    width: `${span * 100}%`,
+    bottom: '0',
+    height: `${thicknessPx}px`,
+  };
+}
+
+function buildVerticalOverlayStyle(
+  face: 'left' | 'right',
+  startRatio: number,
+  endRatio: number,
+  thicknessPx: number
+): CornerOverlayBarStyle['style'] {
+  const span = Math.max(endRatio - startRatio, 0);
+  return {
+    top: `${startRatio * 100}%`,
+    height: `${span * 100}%`,
+    ...(face === 'left' ? { left: '0' } : { right: '0' }),
+    width: `${thicknessPx}px`,
+  };
+}
+
+export function getCornerOverlayBarStyles(
+  segment: CornerOverlaySegment,
+  thicknessPx = 6
+): CornerOverlayBarStyle {
+  const startRatio = Math.min(segment.startRatio, segment.endRatio);
+  const endRatio = Math.max(segment.startRatio, segment.endRatio);
+
+  if (segment.face === 'bottom') {
+    return {
+      className: CORNER_OVERLAY_BAR_CLASS[segment.kind],
+      style: buildHorizontalOverlayStyle(startRatio, endRatio, thicknessPx),
+    };
+  }
+
+  return {
+    className: CORNER_OVERLAY_BAR_CLASS[segment.kind],
+    style: buildVerticalOverlayStyle(segment.face, startRatio, endRatio, thicknessPx),
+  };
+}
+
+export function getCornerBlockedFrontLabelStyle(
+  segment: CornerOverlaySegment
+): CornerOverlayLabelStyle | null {
+  if (segment.kind !== 'blocked_front') {
+    return null;
+  }
+
+  const centerRatio = (segment.startRatio + segment.endRatio) / 2;
+  const lengthLabel = segment.lengthMeters.toFixed(1).replace(/\.0$/, '');
+
+  if (segment.face === 'bottom') {
+    return {
+      className:
+        'pointer-events-none absolute z-10 max-w-[90%] truncate rounded bg-emerald-950/90 px-1.5 py-0.5 text-[9px] font-semibold leading-none text-emerald-50',
+      style: {
+        left: `${centerRatio * 100}%`,
+        bottom: '8px',
+        transform: 'translateX(-50%)',
+      },
+      text: `Front ${lengthLabel}m`,
+    };
+  }
+
+  if (segment.face === 'left') {
+    return {
+      className:
+        'pointer-events-none absolute z-10 max-w-[90%] truncate rounded bg-emerald-950/90 px-1.5 py-0.5 text-[9px] font-semibold leading-none text-emerald-50',
+      style: {
+        top: `${centerRatio * 100}%`,
+        left: '8px',
+        transform: 'translateY(-50%) rotate(-90deg)',
+        transformOrigin: 'left center',
+      },
+      text: `Front ${lengthLabel}m`,
+    };
+  }
+
+  return {
+    className:
+      'pointer-events-none absolute z-10 max-w-[90%] truncate rounded bg-emerald-950/90 px-1.5 py-0.5 text-[9px] font-semibold leading-none text-emerald-50',
+    style: {
+      top: `${centerRatio * 100}%`,
+      right: '8px',
+      transform: 'translateY(-50%) rotate(90deg)',
+      transformOrigin: 'right center',
+    },
+    text: `Front ${lengthLabel}m`,
   };
 }
 

@@ -9,7 +9,9 @@ import {
   findPlacementCandidate,
   getBaseFrontFace,
   getCanvasBounds,
-  getCornerBaseDefinition,
+  getCornerBlockedFrontLabelStyle,
+  getCornerOverlayBarStyles,
+  getCornerOverlaySegments,
   isCornerRotationLocked,
   normalizeRotation,
   type CandidatePlacement,
@@ -58,44 +60,7 @@ function clampZoom(value: number) {
   return Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, Number(value.toFixed(2))));
 }
 
-function getFrontMarkerPosition(
-  face: 'top' | 'right' | 'bottom' | 'left',
-  isCornerProfile: boolean,
-  hasLeftBlockedCorner: boolean
-) {
-  if (isCornerProfile && face === 'left') {
-    return {
-      containerClass: 'absolute bottom-1.5 left-0',
-      labelClass: '',
-      markerClass: 'h-14 w-1.5 rounded-r-sm bg-sky-500/95',
-      badgeClass: 'bg-transparent px-0 py-0 shadow-none',
-      textClass: 'sr-only text-[10px] font-semibold text-sky-700',
-    };
-  }
-
-  if (isCornerProfile && face === 'right') {
-    return {
-      containerClass: 'absolute bottom-1.5 right-0',
-      labelClass: '',
-      markerClass: 'h-14 w-1.5 rounded-l-sm bg-sky-500/95',
-      badgeClass: 'bg-transparent px-0 py-0 shadow-none',
-      textClass: 'sr-only text-[10px] font-semibold text-sky-700',
-    };
-  }
-
-  if (isCornerProfile && face === 'bottom') {
-    return {
-      containerClass: cn(
-        'absolute bottom-0',
-        hasLeftBlockedCorner ? 'left-1.5' : 'right-1.5'
-      ),
-      labelClass: '',
-      markerClass: 'h-1.5 w-14 rounded-t-sm bg-sky-500/95',
-      badgeClass: 'bg-transparent px-0 py-0 shadow-none',
-      textClass: 'sr-only text-[10px] font-semibold text-sky-700',
-    };
-  }
-
+function getFrontMarkerPosition(face: 'top' | 'right' | 'bottom' | 'left') {
   if (face === 'right') {
     return {
       containerClass: cn(
@@ -311,7 +276,7 @@ export default function ConfiguratorCanvas({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Move className="h-4 w-4" />
-          <span>Drag background to pan. Use mouse wheel or controls to zoom.</span>
+          <span>Drag background to pan. Use + / − or Fit to zoom.</span>
         </div>
         <div className="flex items-center gap-2">
           <span className="min-w-14 text-right text-sm font-medium text-muted-foreground">
@@ -359,12 +324,6 @@ export default function ConfiguratorCanvas({
           panState ? 'cursor-grabbing' : 'cursor-grab'
         )}
         style={{ height: '72vh', minHeight: 560 }}
-        onWheel={(event) => {
-          if (isInteracting) return;
-          event.preventDefault();
-          const delta = event.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
-          zoomAroundPoint(zoom + delta, event.clientX, event.clientY);
-        }}
       >
         <div
           className="absolute left-0 top-0"
@@ -457,14 +416,19 @@ export default function ConfiguratorCanvas({
                 const showFrontMarker = boxPixelWidth >= 104 && boxPixelHeight >= 70;
                 const showDimensions = boxPixelWidth >= 90 && boxPixelHeight >= 86;
                 const compactLabel = boxPixelWidth < 90 || boxPixelHeight < 64;
-                const cornerBaseDefinition = getCornerBaseDefinition(product);
+                const cornerOverlaySegments = getCornerOverlaySegments(product);
+                const showCornerOverlays = cornerOverlaySegments.length > 0;
                 const rotationLocked = isCornerRotationLocked(product);
-                const frontMarkerPosition = getFrontMarkerPosition(
-                  cornerBaseDefinition?.frontFace ?? getBaseFrontFace(product),
-                  Boolean(cornerBaseDefinition),
-                  (cornerBaseDefinition?.blockedEnd ?? 0) > 0 &&
-                    Math.abs(cornerBaseDefinition?.blockedStart ?? 0) <= 1e-6
+                const blockedFrontLabelSegment = cornerOverlaySegments.find(
+                  (segment) => segment.kind === 'blocked_front'
                 );
+                const blockedFrontLabelStyle = blockedFrontLabelSegment
+                  ? getCornerBlockedFrontLabelStyle(blockedFrontLabelSegment)
+                  : null;
+                const showBlockedFrontLabel =
+                  Boolean(blockedFrontLabelStyle) && boxPixelWidth >= 88 && boxPixelHeight >= 64;
+                const frontMarkerPosition = getFrontMarkerPosition(getBaseFrontFace(product));
+                const overlayThickness = compactLabel ? 4 : 6;
 
                 return (
                   <button
@@ -602,11 +566,32 @@ export default function ConfiguratorCanvas({
                       </span>
                     </span>
                   )}
-                  {showFrontMarker && (
-                    <span className="pointer-events-none absolute inset-0">
-                      <span
-                        className={frontMarkerPosition.containerClass}
-                      >
+                  {showCornerOverlays && (
+                    <span className="pointer-events-none absolute inset-0 z-[1]">
+                      {cornerOverlaySegments.map((segment, index) => {
+                        const overlay = getCornerOverlayBarStyles(segment, overlayThickness);
+                        return (
+                          <span
+                            key={`${segment.face}-${segment.kind}-${index}`}
+                            className={cn('absolute', overlay.className)}
+                            style={overlay.style}
+                            aria-hidden
+                          />
+                        );
+                      })}
+                      {showBlockedFrontLabel && blockedFrontLabelStyle && (
+                        <span
+                          className={blockedFrontLabelStyle.className}
+                          style={blockedFrontLabelStyle.style}
+                        >
+                          {blockedFrontLabelStyle.text}
+                        </span>
+                      )}
+                    </span>
+                  )}
+                  {showFrontMarker && !showCornerOverlays && (
+                    <span className="pointer-events-none absolute inset-0 z-[1]">
+                      <span className={frontMarkerPosition.containerClass}>
                         <span
                           className={cn(
                             'flex max-w-[calc(100%-12px)] items-center gap-1 overflow-hidden rounded-full',
