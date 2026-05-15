@@ -1,6 +1,6 @@
 from sqlmodel import SQLModel, Field, Relationship, Column
 from sqlalchemy.orm import relationship
-from sqlalchemy import Numeric, JSON, UniqueConstraint, ForeignKey, Integer, String
+from sqlalchemy import Boolean, Numeric, JSON, UniqueConstraint, ForeignKey, Integer, String
 from typing import Optional, List
 from datetime import datetime, date
 from enum import Enum
@@ -410,6 +410,7 @@ class Product(SQLModel, table=True):
     configurator_length: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(10, 2)))  # Footprint length used by configurator layout grid
     configurator_front_face: Optional[ConfiguratorFrontFace] = Field(default=None, sa_column=Column(String(16), nullable=True))  # Base face treated as the front before any layout rotation
     configurator_connection_profile: Optional[ConfiguratorConnectionProfile] = Field(default=None, sa_column=Column(String(32), nullable=True))  # Optional corner-box connection rule derived from the product's fixed front and handedness
+    configurator_is_corner_box: bool = Field(default=False, sa_column=Column(Boolean, nullable=False, server_default="false"))  # Fixed-orientation corner SKU; disables layout rotation in the configurator
     allow_in_configurator: bool = Field(default=False)  # Extra-level opt-in for configurator selections
     installation_hours: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(10, 2)))  # Hours required for installation
     boxes_per_product: Optional[int] = None  # Number of boxes per product (optional; used in installation calculation)

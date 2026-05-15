@@ -1962,6 +1962,28 @@ def create_db_and_tables():
                     if "already exists" not in error_str and "duplicate" not in error_str:
                         print(f"Error adding allow_in_configurator column: {e}", file=sys.stderr, flush=True)
 
+            product_columns = [col["name"] for col in inspector.get_columns("product")]
+            if "configurator_is_corner_box" not in product_columns:
+                print("Adding configurator_is_corner_box column to product table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(
+                            text(
+                                "ALTER TABLE product ADD COLUMN configurator_is_corner_box BOOLEAN NOT NULL DEFAULT FALSE"
+                            )
+                        )
+                        conn.execute(
+                            text(
+                                "UPDATE product SET configurator_is_corner_box = TRUE "
+                                "WHERE configurator_connection_profile IS NOT NULL"
+                            )
+                        )
+                    print("Added configurator_is_corner_box column to product table", file=sys.stderr, flush=True)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Error adding configurator_is_corner_box column: {e}", file=sys.stderr, flush=True)
+
             if has_quote_table and not inspector.has_table("quoteconfiguration"):
                 print("Creating quoteconfiguration table...", file=sys.stderr, flush=True)
                 try:

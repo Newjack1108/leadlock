@@ -60,6 +60,7 @@ def _validate_configurator_product_payload(payload: dict) -> None:
     configurator_length = payload.get("configurator_length")
     configurator_front_face = payload.get("configurator_front_face")
     configurator_connection_profile = payload.get("configurator_connection_profile")
+    configurator_is_corner_box = bool(payload.get("configurator_is_corner_box"))
 
     if allow_in_configurator and not is_extra:
         raise HTTPException(
@@ -79,6 +80,12 @@ def _validate_configurator_product_payload(payload: dict) -> None:
             detail="Only non-extra configurator items can set configurator_connection_profile",
         )
 
+    if configurator_is_corner_box and (category != ProductCategory.CONFIGURATOR or is_extra):
+        raise HTTPException(
+            status_code=422,
+            detail="Only non-extra configurator items can be marked as corner boxes",
+        )
+
     if category == ProductCategory.CONFIGURATOR and not is_extra:
         if configurator_width is None or configurator_length is None:
             raise HTTPException(
@@ -94,6 +101,27 @@ def _validate_configurator_product_payload(payload: dict) -> None:
         width = Decimal(str(configurator_width))
         length = Decimal(str(configurator_length))
         profile_selected = configurator_connection_profile is not None
+
+        if configurator_is_corner_box and not profile_selected:
+            raise HTTPException(
+                status_code=422,
+                detail="Corner boxes require a left or right corner connection profile",
+            )
+
+        if configurator_is_corner_box and profile_selected and configurator_connection_profile is not None:
+            profile_value = (
+                configurator_connection_profile.value
+                if isinstance(configurator_connection_profile, ConfiguratorConnectionProfile)
+                else str(configurator_connection_profile)
+            )
+            if profile_value not in (
+                ConfiguratorConnectionProfile.CORNER_LEFT.value,
+                ConfiguratorConnectionProfile.CORNER_RIGHT.value,
+            ):
+                raise HTTPException(
+                    status_code=422,
+                    detail="Corner boxes must use a corner_left or corner_right connection profile",
+                )
 
         if profile_selected and width == length:
             raise HTTPException(

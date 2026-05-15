@@ -79,19 +79,23 @@ export default function CreateProductPage() {
     configurator_length: '',
     configurator_front_face: '' as ConfiguratorFrontFace | '',
     configurator_connection_profile: '' as ConfiguratorConnectionProfile | '',
+    configurator_is_corner_box: false,
     installation_hours: '',
     boxes_per_product: '',
   });
 
   const isConfiguratorCategory = formData.category === ProductCategory.CONFIGURATOR;
-  const hasCornerConnectionProfile = formData.configurator_connection_profile !== '';
+  const isCornerConfiguratorProduct =
+    isConfiguratorCategory && !formData.is_extra && formData.configurator_is_corner_box;
+  const hasCornerConnectionProfile =
+    isCornerConfiguratorProduct && formData.configurator_connection_profile !== '';
   const allowedConfiguratorFrontFaces = getAllowedConfiguratorFrontFaces(
     formData.configurator_width,
     formData.configurator_length
   );
   const requiresConfiguratorFrontFace =
     isConfiguratorCategory &&
-    !hasCornerConnectionProfile &&
+    !isCornerConfiguratorProduct &&
     formData.configurator_width !== '' &&
     formData.configurator_length !== '' &&
     Number(formData.configurator_width) !== Number(formData.configurator_length);
@@ -101,10 +105,18 @@ export default function CreateProductPage() {
   }, []);
 
   useEffect(() => {
-    if (!isConfiguratorCategory && formData.configurator_front_face !== '') {
+    if (!isConfiguratorCategory && (formData.configurator_front_face !== '' || formData.configurator_is_corner_box)) {
       setFormData((prev) => ({
         ...prev,
         configurator_front_face: '',
+        configurator_connection_profile: '',
+        configurator_is_corner_box: false,
+      }));
+      return;
+    }
+    if (isConfiguratorCategory && !formData.configurator_is_corner_box && formData.configurator_connection_profile !== '') {
+      setFormData((prev) => ({
+        ...prev,
         configurator_connection_profile: '',
       }));
       return;
@@ -128,6 +140,8 @@ export default function CreateProductPage() {
   }, [
     allowedConfiguratorFrontFaces,
     formData.configurator_front_face,
+    formData.configurator_is_corner_box,
+    formData.configurator_connection_profile,
     hasCornerConnectionProfile,
     isConfiguratorCategory,
   ]);
@@ -159,6 +173,11 @@ export default function CreateProductPage() {
       return;
     }
 
+    if (isCornerConfiguratorProduct && !formData.configurator_connection_profile) {
+      toast.error('Corner boxes must choose a left or right corner handedness');
+      return;
+    }
+
     setLoading(true);
     try {
       const productData = {
@@ -185,7 +204,11 @@ export default function CreateProductPage() {
         configurator_front_face: formData.configurator_connection_profile
           ? undefined
           : formData.configurator_front_face || undefined,
-        configurator_connection_profile: formData.configurator_connection_profile || undefined,
+        configurator_connection_profile: formData.configurator_is_corner_box
+          ? formData.configurator_connection_profile || undefined
+          : undefined,
+        configurator_is_corner_box:
+          isConfiguratorCategory && !formData.is_extra ? formData.configurator_is_corner_box : false,
         optional_extras: selectedExtras.length > 0 ? selectedExtras : undefined,
       };
 
@@ -649,10 +672,37 @@ export default function CreateProductPage() {
                   These are separate from the product spec sheet dimensions so the configurator grid can use a
                   dedicated footprint.
                 </p>
-                {isConfiguratorCategory && (
+                {isConfiguratorCategory && !formData.is_extra && (
+                  <div className="flex items-center gap-2">
+                    <input
+                      id="configurator_is_corner_box"
+                      type="checkbox"
+                      checked={formData.configurator_is_corner_box}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          configurator_is_corner_box: e.target.checked,
+                          configurator_connection_profile: e.target.checked
+                            ? formData.configurator_connection_profile
+                            : '',
+                          configurator_front_face: e.target.checked ? '' : formData.configurator_front_face,
+                        })
+                      }
+                      className="h-4 w-4"
+                      disabled={loading}
+                    />
+                    <Label htmlFor="configurator_is_corner_box">
+                      Corner box (fixed orientation — no rotation on the configurator canvas)
+                    </Label>
+                  </div>
+                )}
+                {isCornerConfiguratorProduct && (
                   <>
                     <div className="space-y-2">
-                      <Label htmlFor="configurator_connection_profile">Connection Profile</Label>
+                      <Label htmlFor="configurator_connection_profile">
+                        Corner Handedness
+                        <span className="text-destructive"> *</span>
+                      </Label>
                       <Select
                         value={formData.configurator_connection_profile || CONFIGURATOR_CONNECTION_PROFILE_NONE}
                         onValueChange={(value) =>
@@ -667,12 +717,9 @@ export default function CreateProductPage() {
                         disabled={loading}
                       >
                         <SelectTrigger id="configurator_connection_profile">
-                          <SelectValue placeholder="Use standard box joins" />
+                          <SelectValue placeholder="Choose left or right hand" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value={CONFIGURATOR_CONNECTION_PROFILE_NONE}>
-                            Standard box joins
-                          </SelectItem>
                           {CONFIGURATOR_CONNECTION_PROFILES.map((profile) => (
                             <SelectItem key={profile} value={profile}>
                               {CONFIGURATOR_CONNECTION_PROFILE_LABELS[profile]}
@@ -681,60 +728,60 @@ export default function CreateProductPage() {
                         </SelectContent>
                       </Select>
                       <p className="text-xs text-muted-foreground">
-                        Corner profiles allow one full side joint plus a front join only across the marked 3.5m
-                        section, leaving the remaining 1.5m fixed as front.
+                        Use separate products for each orientation (e.g. tall 3.6 x 4.9 vs wide 4.9 x 3.6). The shorter
+                        edge is the joinable front section; the remainder is the fixed exposed front (e.g. 1.3m on a
+                        4.9m side).
                       </p>
                     </div>
-                    {hasCornerConnectionProfile ? (
-                      <div className="space-y-2">
-                        <Label>Configurator Front Side</Label>
-                        <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
-                          Derived from the corner connection profile. The fixed front is the bottom edge in the
-                          default orientation.
-                        </div>
+                    <div className="space-y-2">
+                      <Label>Configurator Front Side</Label>
+                      <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+                        Derived from the corner handedness and footprint dimensions. Pick the product variant that
+                        matches how the box sits on the layout; do not rotate it on the canvas.
                       </div>
-                    ) : (
-                      <div className="space-y-2">
-                        <Label htmlFor="configurator_front_face">
-                          Configurator Front Side
-                          {requiresConfiguratorFrontFace && <span className="text-destructive"> *</span>}
-                        </Label>
-                        <Select
-                          value={formData.configurator_front_face || CONFIGURATOR_FRONT_FACE_NONE}
-                          onValueChange={(value) =>
-                            setFormData({
-                              ...formData,
-                              configurator_front_face:
-                                value === CONFIGURATOR_FRONT_FACE_NONE
-                                  ? ''
-                                  : (value as ConfiguratorFrontFace),
-                            })
-                          }
-                          disabled={loading}
-                        >
-                          <SelectTrigger id="configurator_front_face">
-                            <SelectValue placeholder="Choose the front side" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {!requiresConfiguratorFrontFace && (
-                              <SelectItem value={CONFIGURATOR_FRONT_FACE_NONE}>
-                                Default legacy front
-                              </SelectItem>
-                            )}
-                            {allowedConfiguratorFrontFaces.map((face) => (
-                              <SelectItem key={face} value={face}>
-                                {CONFIGURATOR_FRONT_FACE_LABELS[face]}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <p className="text-xs text-muted-foreground">
-                          For rectangular configurator products, choose one of the longest faces. New boxes will
-                          rotate so this front points toward the bottom of the layout by default.
-                        </p>
-                      </div>
-                    )}
+                    </div>
                   </>
+                )}
+                {isConfiguratorCategory && !isCornerConfiguratorProduct && (
+                  <div className="space-y-2">
+                    <Label htmlFor="configurator_front_face">
+                      Configurator Front Side
+                      {requiresConfiguratorFrontFace && <span className="text-destructive"> *</span>}
+                    </Label>
+                    <Select
+                      value={formData.configurator_front_face || CONFIGURATOR_FRONT_FACE_NONE}
+                      onValueChange={(value) =>
+                        setFormData({
+                          ...formData,
+                          configurator_front_face:
+                            value === CONFIGURATOR_FRONT_FACE_NONE
+                              ? ''
+                              : (value as ConfiguratorFrontFace),
+                        })
+                      }
+                      disabled={loading}
+                    >
+                      <SelectTrigger id="configurator_front_face">
+                        <SelectValue placeholder="Choose the front side" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {!requiresConfiguratorFrontFace && (
+                          <SelectItem value={CONFIGURATOR_FRONT_FACE_NONE}>
+                            Default legacy front
+                          </SelectItem>
+                        )}
+                        {allowedConfiguratorFrontFaces.map((face) => (
+                          <SelectItem key={face} value={face}>
+                            {CONFIGURATOR_FRONT_FACE_LABELS[face]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      For rectangular configurator products, choose one of the longest faces. New boxes will rotate so
+                      this front points toward the bottom of the layout by default.
+                    </p>
+                  </div>
                 )}
               </CardContent>
             </Card>

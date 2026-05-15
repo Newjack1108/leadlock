@@ -163,6 +163,21 @@ def test_non_square_configurator_products_require_valid_front_face():
     assert conflicting_corner_front.status_code == 422
     assert "define the fixed front automatically" in conflicting_corner_front.json()["detail"]
 
+    corner_without_profile = client.post(
+        "/api/products",
+        json={
+            "name": "Corner Missing Profile",
+            "category": "CONFIGURATOR",
+            "base_price": "2450.00",
+            "unit": "Unit",
+            "configurator_width": "4.90",
+            "configurator_length": "3.60",
+            "configurator_is_corner_box": True,
+        },
+    )
+    assert corner_without_profile.status_code == 422
+    assert "corner connection profile" in corner_without_profile.json()["detail"].lower()
+
     valid_corner_profile = client.post(
         "/api/products",
         json={
@@ -170,13 +185,15 @@ def test_non_square_configurator_products_require_valid_front_face():
             "category": "CONFIGURATOR",
             "base_price": "2450.00",
             "unit": "Unit",
-            "configurator_width": "5.00",
-            "configurator_length": "3.50",
+            "configurator_width": "4.90",
+            "configurator_length": "3.60",
+            "configurator_is_corner_box": True,
             "configurator_connection_profile": "corner_right",
         },
     )
     assert valid_corner_profile.status_code == 200
     assert valid_corner_profile.json()["configurator_connection_profile"] == "corner_right"
+    assert valid_corner_profile.json()["configurator_is_corner_box"] is True
     assert valid_corner_profile.json()["configurator_front_face"] in (None, "bottom")
 
 
@@ -626,6 +643,7 @@ def test_corner_connection_profiles_restrict_front_segment_and_side_faces():
             configurator_length=Decimal("3.50"),
             configurator_front_face=ConfiguratorFrontFace.BOTTOM,
             configurator_connection_profile=ConfiguratorConnectionProfile.CORNER_RIGHT,
+            configurator_is_corner_box=True,
         )
         left_corner = Product(
             name="Left Corner Box",
@@ -635,6 +653,7 @@ def test_corner_connection_profiles_restrict_front_segment_and_side_faces():
             configurator_length=Decimal("3.50"),
             configurator_front_face=ConfiguratorFrontFace.BOTTOM,
             configurator_connection_profile=ConfiguratorConnectionProfile.CORNER_LEFT,
+            configurator_is_corner_box=True,
         )
         session.add(standard_box)
         session.add(right_corner)
@@ -648,6 +667,21 @@ def test_corner_connection_profiles_restrict_front_segment_and_side_faces():
         left_corner_id = left_corner.id
 
     client = TestClient(_make_app(engine, user))
+
+    locked_rotation = client.post(
+        "/api/configurator/preview",
+        json={
+            "schema_version": 1,
+            "boxes": [
+                {"id": "corner", "product_id": right_corner_id, "x": "0", "y": "0", "rotation": 90},
+            ],
+            "extras": [],
+        },
+    )
+    assert locked_rotation.status_code == 200
+    locked_payload = locked_rotation.json()
+    assert locked_payload["valid"] is False
+    assert any(issue["code"] == "CORNER_ROTATION_LOCKED" for issue in locked_payload["issues"])
 
     right_front_allowed = client.post(
         "/api/configurator/preview",
@@ -765,6 +799,7 @@ def test_corner_connection_profiles_rotate_their_physical_front_and_side_rules()
             configurator_length=Decimal("3.50"),
             configurator_front_face=ConfiguratorFrontFace.BOTTOM,
             configurator_connection_profile=ConfiguratorConnectionProfile.CORNER_RIGHT,
+            configurator_is_corner_box=False,
         )
         left_corner = Product(
             name="Left Corner Box",
@@ -774,6 +809,7 @@ def test_corner_connection_profiles_rotate_their_physical_front_and_side_rules()
             configurator_length=Decimal("3.50"),
             configurator_front_face=ConfiguratorFrontFace.BOTTOM,
             configurator_connection_profile=ConfiguratorConnectionProfile.CORNER_LEFT,
+            configurator_is_corner_box=False,
         )
         session.add(standard_box)
         session.add(right_corner)
@@ -894,6 +930,7 @@ def test_tall_corner_profiles_keep_front_on_the_long_side():
             configurator_length=Decimal("4.90"),
             configurator_front_face=ConfiguratorFrontFace.BOTTOM,
             configurator_connection_profile=ConfiguratorConnectionProfile.CORNER_RIGHT,
+            configurator_is_corner_box=True,
         )
         left_corner = Product(
             name="Tall Left Corner Box",
@@ -903,6 +940,7 @@ def test_tall_corner_profiles_keep_front_on_the_long_side():
             configurator_length=Decimal("4.90"),
             configurator_front_face=ConfiguratorFrontFace.BOTTOM,
             configurator_connection_profile=ConfiguratorConnectionProfile.CORNER_LEFT,
+            configurator_is_corner_box=True,
         )
         session.add(standard_box)
         session.add(right_corner)

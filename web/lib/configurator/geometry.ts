@@ -16,14 +16,6 @@ const POSITION_DECIMALS = 2;
 
 export type BoxFace = ConfiguratorFrontFace;
 const FACE_ORDER: readonly BoxFace[] = ['top', 'right', 'bottom', 'left'];
-const CORNER_PROFILE_DEFAULT_ROTATION: Record<
-  ConfiguratorConnectionProfile,
-  ConfiguratorBoxPlacement['rotation']
-> = {
-  corner_left: 270,
-  corner_right: 90,
-};
-
 export interface PlacementRect {
   x1: number;
   y1: number;
@@ -165,6 +157,14 @@ function getConnectionProfile(product?: Product | null): ConfiguratorConnectionP
     return profile;
   }
   return null;
+}
+
+export function isCornerBoxProduct(product?: Product | null): boolean {
+  return Boolean(product?.configurator_is_corner_box);
+}
+
+export function isCornerRotationLocked(product?: Product | null): boolean {
+  return isCornerBoxProduct(product);
 }
 
 function getNativeDimensions(product: Product | null | undefined) {
@@ -390,9 +390,8 @@ export function getRotationForFrontFace(
 }
 
 export function getDefaultBoxRotation(product: Product | null | undefined): ConfiguratorBoxPlacement['rotation'] {
-  const profile = getConnectionProfile(product);
-  if (profile) {
-    return CORNER_PROFILE_DEFAULT_ROTATION[profile];
+  if (isCornerRotationLocked(product)) {
+    return 0;
   }
   return getRotationForFrontFace(product, 'bottom');
 }

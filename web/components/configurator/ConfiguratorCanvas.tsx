@@ -10,6 +10,7 @@ import {
   getBaseFrontFace,
   getCanvasBounds,
   getCornerBaseDefinition,
+  isCornerRotationLocked,
   normalizeRotation,
   type CandidatePlacement,
   type CanvasBounds,
@@ -457,6 +458,7 @@ export default function ConfiguratorCanvas({
                 const showDimensions = boxPixelWidth >= 90 && boxPixelHeight >= 86;
                 const compactLabel = boxPixelWidth < 90 || boxPixelHeight < 64;
                 const cornerBaseDefinition = getCornerBaseDefinition(product);
+                const rotationLocked = isCornerRotationLocked(product);
                 const frontMarkerPosition = getFrontMarkerPosition(
                   cornerBaseDefinition?.frontFace ?? getBaseFrontFace(product),
                   Boolean(cornerBaseDefinition),
@@ -550,36 +552,40 @@ export default function ConfiguratorCanvas({
                         transform: `translate(-50%, calc(-100% - 10px)) rotate(${-box.rotation}deg)`,
                       }}
                     >
-                      <span
-                        className="flex h-7 w-7 items-center justify-center rounded-full border border-primary/60 bg-background text-primary shadow-sm"
-                        onPointerCancel={(event) => {
-                          event.stopPropagation();
-                        }}
-                        onPointerDown={(event) => {
-                          event.stopPropagation();
-                        }}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          onRotateBox(box.id, normalizeRotation(box.rotation - 90));
-                        }}
-                      >
-                        <RotateCcw className="h-3.5 w-3.5" />
-                      </span>
-                      <span
-                        className="flex h-7 w-7 items-center justify-center rounded-full border border-primary/60 bg-background text-primary shadow-sm"
-                        onPointerCancel={(event) => {
-                          event.stopPropagation();
-                        }}
-                        onPointerDown={(event) => {
-                          event.stopPropagation();
-                        }}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          onRotateBox(box.id, normalizeRotation(box.rotation + 90));
-                        }}
-                      >
-                        <RotateCw className="h-3.5 w-3.5" />
-                      </span>
+                      {!rotationLocked && (
+                        <>
+                          <span
+                            className="flex h-7 w-7 items-center justify-center rounded-full border border-primary/60 bg-background text-primary shadow-sm"
+                            onPointerCancel={(event) => {
+                              event.stopPropagation();
+                            }}
+                            onPointerDown={(event) => {
+                              event.stopPropagation();
+                            }}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              onRotateBox(box.id, normalizeRotation(box.rotation - 90));
+                            }}
+                          >
+                            <RotateCcw className="h-3.5 w-3.5" />
+                          </span>
+                          <span
+                            className="flex h-7 w-7 items-center justify-center rounded-full border border-primary/60 bg-background text-primary shadow-sm"
+                            onPointerCancel={(event) => {
+                              event.stopPropagation();
+                            }}
+                            onPointerDown={(event) => {
+                              event.stopPropagation();
+                            }}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              onRotateBox(box.id, normalizeRotation(box.rotation + 90));
+                            }}
+                          >
+                            <RotateCw className="h-3.5 w-3.5" />
+                          </span>
+                        </>
+                      )}
                       <span
                         className="flex h-7 w-7 items-center justify-center rounded-full border border-red-300 bg-background text-red-600 shadow-sm"
                         onPointerDown={(event) => {

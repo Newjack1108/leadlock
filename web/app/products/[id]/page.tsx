@@ -311,6 +311,10 @@ export default function ProductDetailPage() {
                       </span>
                     </div>
                     <div className="flex justify-between">
+                      <span className="text-muted-foreground">Corner box:</span>
+                      <span>{product.configurator_is_corner_box ? 'Yes (fixed orientation)' : 'No'}</span>
+                    </div>
+                    <div className="flex justify-between">
                       <span className="text-muted-foreground">Connection Profile:</span>
                       <span>{product.configurator_connection_profile ?? 'Standard joins'}</span>
                     </div>

@@ -131,6 +131,10 @@ def _connection_profile(product: Product) -> str | None:
     return None
 
 
+def _corner_rotation_locked(product: Product) -> bool:
+    return bool(getattr(product, "configurator_is_corner_box", False))
+
+
 def _native_dimensions(product: Product) -> Tuple[float, float]:
     return float(_to_decimal(product.configurator_width or ZERO)), float(
         _to_decimal(product.configurator_length or ZERO)
@@ -406,6 +410,19 @@ def build_configurator_preview(
                     code="MISSING_DIMENSIONS",
                     severity="error",
                     message=f"{product.name} is missing configurator dimensions.",
+                    box_ids=[box.id],
+                )
+            )
+            continue
+        if _corner_rotation_locked(product) and int(box.rotation or 0) % 360 != 0:
+            issues.append(
+                ConfiguratorValidationIssue(
+                    code="CORNER_ROTATION_LOCKED",
+                    severity="error",
+                    message=(
+                        f"{product.name} is a fixed-orientation corner box. "
+                        "Use a different corner product instead of rotating it on the canvas."
+                    ),
                     box_ids=[box.id],
                 )
             )

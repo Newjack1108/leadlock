@@ -155,6 +155,11 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
     if (!Number.isFinite(rotation)) return;
     const current = configuration.boxes.find((box) => box.id === boxId);
     if (!current) return;
+    const product = productMap[current.product_id];
+    if (product?.configurator_is_corner_box) {
+      toast.error('Corner boxes use a fixed orientation. Choose a different corner product instead of rotating.');
+      return;
+    }
     const rotatedBox = { ...current, rotation: normalizeRotation(rotation) };
     const candidate = findPlacementCandidate({
       movingBox: rotatedBox,
@@ -225,8 +230,8 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
             {quote.quote_number} · {quote.customer_name || 'Draft quote'}
           </p>
           <p className="mt-2 text-sm text-muted-foreground">
-            Drag boxes on the canvas to build the layout. Boxes snap to valid edges, cannot overlap, and the front
-            marker rotates with each box. Corner-box fronts stay attached to the physical box as it turns.
+            Drag boxes on the canvas to build the layout. Boxes snap to valid edges and cannot overlap. Standard boxes
+            can be rotated; corner boxes use fixed-orientation products and cannot be turned on the canvas.
           </p>
         </div>
         <div className="flex flex-wrap gap-3">
@@ -249,8 +254,8 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
               <div>
                 <CardTitle>Layout Canvas</CardTitle>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  The canvas is the main workspace. Drag boxes to reposition them, and use rotation on the selected
-                  box when you need to turn a corner.
+                  The canvas is the main workspace. Drag boxes to reposition them. Use rotation on standard boxes only;
+                  pick the correct corner product variant instead of rotating corners.
                 </p>
               </div>
               <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
@@ -283,7 +288,8 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
                 onRemoveBox={handleRemoveBox}
               />
               <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
-                Corner boxes now keep their marked front section attached to the box through each right-angle rotation.
+                Corner boxes are fixed-orientation products. Use separate catalog items for each layout pose (e.g. tall vs
+                wide).
               </div>
             </CardContent>
           </Card>
