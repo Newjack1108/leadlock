@@ -276,7 +276,7 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="space-y-6">
           <Card>
-            <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <CardHeader className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <CardTitle>Layout Canvas</CardTitle>
                 <p className="mt-1 text-sm text-muted-foreground">
@@ -284,22 +284,21 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
                   pick the correct corner product variant instead of rotating corners.
                 </p>
               </div>
-              <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
-                <div className="rounded-md border px-3 py-2">
+              <div className="grid min-w-0 shrink-0 grid-cols-2 gap-2 text-sm sm:w-52">
+                <div className="min-w-0 rounded-md border px-3 py-2">
                   <p className="text-muted-foreground">Boxes</p>
-                  <p className="text-lg font-semibold">{preview?.total_boxes ?? configuration.boxes.length}</p>
+                  <p className="truncate text-lg font-semibold tabular-nums">
+                    {preview?.total_boxes ?? configuration.boxes.length}
+                  </p>
                 </div>
-                <div className="rounded-md border px-3 py-2">
-                  <p className="text-muted-foreground">Errors</p>
-                  <p className="text-lg font-semibold">{errorCount}</p>
-                </div>
-                <div className="rounded-md border px-3 py-2">
-                  <p className="text-muted-foreground">Warnings</p>
-                  <p className="text-lg font-semibold">{warningCount}</p>
-                </div>
-                <div className="rounded-md border px-3 py-2">
+                <div className="min-w-0 rounded-md border px-3 py-2">
                   <p className="text-muted-foreground">Subtotal</p>
-                  <p className="text-lg font-semibold">{formatCurrency(preview?.subtotal ?? 0)}</p>
+                  <p
+                    className="truncate text-sm font-semibold tabular-nums sm:text-base"
+                    title={formatCurrency(preview?.subtotal ?? 0)}
+                  >
+                    {formatCurrency(preview?.subtotal ?? 0)}
+                  </p>
                 </div>
               </div>
             </CardHeader>
@@ -392,6 +391,36 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
               <CardTitle>Validation</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div
+                  className={`min-w-0 rounded-md border px-3 py-2 ${
+                    errorCount > 0 ? 'border-red-200 bg-red-50/50' : ''
+                  }`}
+                >
+                  <p className="text-muted-foreground">Errors</p>
+                  <p
+                    className={`truncate text-lg font-semibold tabular-nums ${
+                      errorCount > 0 ? 'text-red-700' : ''
+                    }`}
+                  >
+                    {errorCount}
+                  </p>
+                </div>
+                <div
+                  className={`min-w-0 rounded-md border px-3 py-2 ${
+                    warningCount > 0 ? 'border-amber-200 bg-amber-50/50' : ''
+                  }`}
+                >
+                  <p className="text-muted-foreground">Warnings</p>
+                  <p
+                    className={`truncate text-lg font-semibold tabular-nums ${
+                      warningCount > 0 ? 'text-amber-800' : ''
+                    }`}
+                  >
+                    {warningCount}
+                  </p>
+                </div>
+              </div>
               {preview?.issues?.length ? (
                 preview.issues.map((issue, index) => (
                   <div
