@@ -7,11 +7,11 @@ import type { ConfiguratorBoxPlacement, Product } from '@/lib/types';
 import {
   buildLayoutRectEntries,
   findPlacementCandidate,
-  getBaseFrontFace,
   getCanvasBounds,
   getCornerBlockedFrontLabelStyle,
   getCornerOverlayBarStyles,
   getCornerOverlaySegments,
+  getStandardFrontOverlaySegment,
   isCornerRotationLocked,
   normalizeRotation,
   type CandidatePlacement,
@@ -58,67 +58,6 @@ interface PanState {
 
 function clampZoom(value: number) {
   return Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, Number(value.toFixed(2))));
-}
-
-function getFrontMarkerPosition(face: 'top' | 'right' | 'bottom' | 'left') {
-  if (face === 'right') {
-    return {
-      containerClass: cn(
-        'absolute top-1/2 -translate-y-1/2',
-        'right-2'
-      ),
-      labelClass: 'rotate-90',
-      markerClass: cn(
-        'bg-sky-500/95',
-        'h-1.5 w-6 rounded-full'
-      ),
-      badgeClass: 'bg-background/85 px-2 py-0.5 shadow-sm',
-      textClass: 'text-[10px] font-semibold text-sky-700',
-    };
-  }
-  if (face === 'bottom') {
-    return {
-      containerClass: cn(
-        'absolute left-1/2 -translate-x-1/2',
-        'bottom-2'
-      ),
-      labelClass: '',
-      markerClass: cn(
-        'bg-sky-500/95',
-        'h-1.5 w-6 rounded-full'
-      ),
-      badgeClass: 'bg-background/85 px-2 py-0.5 shadow-sm',
-      textClass: 'text-[10px] font-semibold text-sky-700',
-    };
-  }
-  if (face === 'left') {
-    return {
-      containerClass: cn(
-        'absolute top-1/2 -translate-y-1/2',
-        'left-2'
-      ),
-      labelClass: '-rotate-90',
-      markerClass: cn(
-        'bg-sky-500/95',
-        'h-1.5 w-6 rounded-full'
-      ),
-      badgeClass: 'bg-background/85 px-2 py-0.5 shadow-sm',
-      textClass: 'text-[10px] font-semibold text-sky-700',
-    };
-  }
-  return {
-    containerClass: cn(
-      'absolute left-1/2 -translate-x-1/2',
-      'top-2'
-    ),
-    labelClass: '',
-    markerClass: cn(
-      'bg-sky-500/95',
-      'h-1.5 w-6 rounded-full'
-    ),
-    badgeClass: 'bg-background/85 px-2 py-0.5 shadow-sm',
-    textClass: 'text-[10px] font-semibold text-sky-700',
-  };
 }
 
 export default function ConfiguratorCanvas({
@@ -413,13 +352,18 @@ export default function ConfiguratorCanvas({
                 const activeInvalid = isDragging && dragCandidate && !dragCandidate.valid;
                 const boxPixelWidth = rect.boxWidth * SCALE;
                 const boxPixelHeight = rect.boxLength * SCALE;
-                const showFrontMarker = boxPixelWidth >= 104 && boxPixelHeight >= 70;
                 const showDimensions = boxPixelWidth >= 90 && boxPixelHeight >= 86;
                 const compactLabel = boxPixelWidth < 90 || boxPixelHeight < 64;
                 const cornerOverlaySegments = getCornerOverlaySegments(product);
-                const showCornerOverlays = cornerOverlaySegments.length > 0;
+                const standardFrontSegment = getStandardFrontOverlaySegment(product);
+                const edgeOverlaySegments = cornerOverlaySegments.length
+                  ? cornerOverlaySegments
+                  : standardFrontSegment
+                    ? [standardFrontSegment]
+                    : [];
+                const showEdgeOverlays = edgeOverlaySegments.length > 0;
                 const rotationLocked = isCornerRotationLocked(product);
-                const blockedFrontLabelSegment = cornerOverlaySegments.find(
+                const blockedFrontLabelSegment = edgeOverlaySegments.find(
                   (segment) => segment.kind === 'blocked_front'
                 );
                 const blockedFrontLabelStyle = blockedFrontLabelSegment
@@ -427,7 +371,6 @@ export default function ConfiguratorCanvas({
                   : null;
                 const showBlockedFrontLabel =
                   Boolean(blockedFrontLabelStyle) && boxPixelWidth >= 88 && boxPixelHeight >= 64;
-                const frontMarkerPosition = getFrontMarkerPosition(getBaseFrontFace(product));
                 const overlayThickness = compactLabel ? 4 : 6;
 
                 return (
@@ -566,9 +509,9 @@ export default function ConfiguratorCanvas({
                       </span>
                     </span>
                   )}
-                  {showCornerOverlays && (
+                  {showEdgeOverlays && (
                     <span className="pointer-events-none absolute inset-0 z-[1]">
-                      {cornerOverlaySegments.map((segment, index) => {
+                      {edgeOverlaySegments.map((segment, index) => {
                         const overlay = getCornerOverlayBarStyles(segment, overlayThickness);
                         return (
                           <span
@@ -587,22 +530,6 @@ export default function ConfiguratorCanvas({
                           {blockedFrontLabelStyle.text}
                         </span>
                       )}
-                    </span>
-                  )}
-                  {showFrontMarker && !showCornerOverlays && (
-                    <span className="pointer-events-none absolute inset-0 z-[1]">
-                      <span className={frontMarkerPosition.containerClass}>
-                        <span
-                          className={cn(
-                            'flex max-w-[calc(100%-12px)] items-center gap-1 overflow-hidden rounded-full',
-                            frontMarkerPosition.badgeClass,
-                            frontMarkerPosition.labelClass
-                          )}
-                        >
-                          <span className={cn('block shrink-0', frontMarkerPosition.markerClass)} />
-                          <span className={cn('truncate', frontMarkerPosition.textClass)}>Front</span>
-                        </span>
-                      </span>
                     </span>
                   )}
                   <span

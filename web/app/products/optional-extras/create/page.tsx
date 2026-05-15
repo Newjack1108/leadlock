@@ -147,9 +147,13 @@ export default function CreateOptionalExtraPage() {
                     disabled={loading}
                   />
                   <Label htmlFor="allow_in_configurator">
-                    Allow this extra to be selected inside the configurator
+                    Allow in configurator
                   </Label>
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  When checked, this extra appears under Configurator Extras on the quote configurator. Leave unchecked
+                  to keep it off the layout tool.
+                </p>
                 <div className="space-y-2">
                   <Label htmlFor="description">Description</Label>
                   <Textarea

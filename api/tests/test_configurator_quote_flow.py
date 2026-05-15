@@ -197,6 +197,62 @@ def test_non_square_configurator_products_require_valid_front_face():
     assert valid_corner_profile.json()["configurator_front_face"] in (None, "bottom")
 
 
+def test_configurator_catalog_only_lists_extras_opted_into_configurator():
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SQLModel.metadata.create_all(engine)
+    user = _seed_user(engine)
+
+    with Session(engine) as session:
+        allowed_extra = Product(
+            name="Configurator Rubber Mat",
+            category=ProductCategory.STABLES,
+            is_extra=True,
+            allow_in_configurator=True,
+            unit="Per Box",
+            base_price=Decimal("125.00"),
+        )
+        blocked_extra = Product(
+            name="Quote-only Mat",
+            category=ProductCategory.STABLES,
+            is_extra=True,
+            allow_in_configurator=False,
+            unit="Unit",
+            base_price=Decimal("99.00"),
+        )
+        session.add(allowed_extra)
+        session.add(blocked_extra)
+        session.commit()
+        session.refresh(allowed_extra)
+        session.refresh(blocked_extra)
+        allowed_extra_id = allowed_extra.id
+        blocked_extra_id = blocked_extra.id
+
+    client = TestClient(_make_app(engine, user))
+
+    catalog_response = client.get("/api/configurator/catalog")
+    assert catalog_response.status_code == 200
+    catalog_extra_ids = [row["id"] for row in catalog_response.json()["extras"]]
+    assert allowed_extra_id in catalog_extra_ids
+    assert blocked_extra_id not in catalog_extra_ids
+
+    preview_response = client.post(
+        "/api/configurator/preview",
+        json={
+            "schema_version": 1,
+            "boxes": [],
+            "extras": [{"product_id": blocked_extra_id, "quantity": 1}],
+        },
+    )
+    assert preview_response.status_code == 200
+    preview_payload = preview_response.json()
+    assert preview_payload["valid"] is False
+    assert any(issue["code"] == "INVALID_EXTRA" for issue in preview_payload["issues"])
+
+
 def test_configurator_catalog_save_preview_and_apply_flow():
     engine = create_engine(
         "sqlite://",

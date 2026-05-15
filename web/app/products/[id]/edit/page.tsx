@@ -416,23 +416,26 @@ export default function EditProductPage() {
                   </Label>
                 </div>
                 {formData.is_extra && (
-                  <div className="flex items-center gap-2">
-                    <input
-                      id="allow_in_configurator"
-                      type="checkbox"
-                      checked={formData.allow_in_configurator}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          allow_in_configurator: e.target.checked,
-                        })
-                      }
-                      className="h-4 w-4"
-                      disabled={loading}
-                    />
-                    <Label htmlFor="allow_in_configurator">
-                      Allow this extra to be selected inside the configurator
-                    </Label>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <input
+                        id="allow_in_configurator"
+                        type="checkbox"
+                        checked={formData.allow_in_configurator}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            allow_in_configurator: e.target.checked,
+                          })
+                        }
+                        className="h-4 w-4"
+                        disabled={loading}
+                      />
+                      <Label htmlFor="allow_in_configurator">Allow in configurator</Label>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      When checked, this extra appears under Configurator Extras on the quote configurator.
+                    </p>
                   </div>
                 )}
                 <div className="grid grid-cols-2 gap-4">

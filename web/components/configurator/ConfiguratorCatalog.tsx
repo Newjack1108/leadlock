@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -65,7 +67,11 @@ export default function ConfiguratorCatalog({
         <CardContent className="space-y-4">
           {extras.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No optional extras have opted into configurator use yet.
+              No configurator extras are available yet. On each optional extra, enable{' '}
+              <span className="font-medium text-foreground">Allow in configurator</span> so it appears here.{' '}
+              <Link href="/products/optional-extras" className="font-medium text-primary underline-offset-4 hover:underline">
+                Manage optional extras
+              </Link>
             </p>
           ) : (
             extras.map((product) => {

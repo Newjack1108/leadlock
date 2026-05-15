@@ -36,6 +36,28 @@ interface ConfiguratorShellProps {
   quote: Quote;
 }
 
+function filterConfiguratorCatalogExtras(
+  catalog: ConfiguratorCatalogResponse
+): ConfiguratorCatalogResponse {
+  return {
+    ...catalog,
+    extras: catalog.extras.filter((product) => product.allow_in_configurator),
+  };
+}
+
+function pruneConfigurationExtras(
+  configuration: QuoteConfigurationPayload,
+  allowedExtraProductIds: Set<number>
+): QuoteConfigurationPayload {
+  if (configuration.extras.length === 0) {
+    return configuration;
+  }
+  return {
+    ...configuration,
+    extras: configuration.extras.filter((extra) => allowedExtraProductIds.has(extra.product_id)),
+  };
+}
+
 export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
   const router = useRouter();
   const [catalog, setCatalog] = useState<ConfiguratorCatalogResponse>({ items: [], extras: [] });
@@ -72,8 +94,12 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
           }),
         ]);
         if (cancelled) return;
-        setCatalog(catalogResponse);
-        const nextConfiguration = savedConfiguration?.configuration ?? createEmptyConfiguration(quote.quote_number);
+        const catalog = filterConfiguratorCatalogExtras(catalogResponse);
+        const allowedExtraProductIds = new Set(catalog.extras.map((product) => product.id));
+        const loadedConfiguration =
+          savedConfiguration?.configuration ?? createEmptyConfiguration(quote.quote_number);
+        const nextConfiguration = pruneConfigurationExtras(loadedConfiguration, allowedExtraProductIds);
+        setCatalog(catalog);
         setConfiguration(nextConfiguration);
         setSelectedBoxId(nextConfiguration.boxes[0]?.id ?? null);
       } catch (error) {
@@ -288,8 +314,9 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
                 onRemoveBox={handleRemoveBox}
               />
               <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
-                <span className="font-medium text-foreground">Corner boxes:</span> green edge = exposed front (e.g.
-                1.3m), red edges = connection sides. Use separate catalog items for each layout pose (tall vs wide).
+                <span className="font-medium text-foreground">Front edges:</span> green = exposed front (full side on
+                standard boxes; partial on corners). Corner boxes also show red connection edges. Use separate corner
+                products for each layout pose (tall vs wide).
               </div>
             </CardContent>
           </Card>

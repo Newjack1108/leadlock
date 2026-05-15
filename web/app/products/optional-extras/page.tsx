@@ -100,7 +100,9 @@ export default function OptionalExtrasPage() {
             <div>
               <h1 className="text-3xl font-semibold mb-2">Optional Extras</h1>
               <p className="text-muted-foreground">
-                Manage optional extras that can be added to products
+                Manage optional extras that can be added to products. Enable{' '}
+                <span className="font-medium text-foreground">Allow in configurator</span> on an extra to show it in
+                the quote configurator.
               </p>
             </div>
             <Button asChild>

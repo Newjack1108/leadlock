@@ -101,7 +101,7 @@ interface CornerBaseDefinition {
 export type CornerOverlayKind = 'blocked_front' | 'joinable' | 'standard';
 
 export interface CornerOverlaySegment {
-  face: 'bottom' | 'left' | 'right';
+  face: 'top' | 'bottom' | 'left' | 'right';
   kind: CornerOverlayKind;
   startRatio: number;
   endRatio: number;
@@ -322,6 +322,40 @@ export function getCornerOverlaySegments(product: Product | null | undefined): C
   return segments;
 }
 
+function getOverlayFaceLength(
+  face: CornerOverlaySegment['face'],
+  width: number,
+  length: number
+): number {
+  return face === 'left' || face === 'right' ? length : width;
+}
+
+export function getStandardFrontOverlaySegment(
+  product: Product | null | undefined
+): CornerOverlaySegment | null {
+  if (!product || getCornerBaseDefinition(product)) {
+    return null;
+  }
+
+  const { width, length } = getNativeDimensions(product);
+  if (width <= 0 || length <= 0) {
+    return null;
+  }
+
+  const face = getBaseFrontFace(product);
+  if (face !== 'top' && face !== 'bottom' && face !== 'left' && face !== 'right') {
+    return null;
+  }
+
+  return {
+    face,
+    kind: 'blocked_front',
+    startRatio: 0,
+    endRatio: 1,
+    lengthMeters: getOverlayFaceLength(face, width, length),
+  };
+}
+
 const CORNER_OVERLAY_BAR_CLASS: Record<CornerOverlayKind, string> = {
   blocked_front: 'bg-emerald-500 shadow-[0_0_0_1px_rgba(6,78,59,0.55)]',
   joinable: 'bg-red-500/80 shadow-[0_0_0_1px_rgba(127,29,29,0.45)]',
@@ -329,6 +363,7 @@ const CORNER_OVERLAY_BAR_CLASS: Record<CornerOverlayKind, string> = {
 };
 
 function buildHorizontalOverlayStyle(
+  edge: 'top' | 'bottom',
   startRatio: number,
   endRatio: number,
   thicknessPx: number
@@ -337,7 +372,7 @@ function buildHorizontalOverlayStyle(
   return {
     left: `${startRatio * 100}%`,
     width: `${span * 100}%`,
-    bottom: '0',
+    ...(edge === 'bottom' ? { bottom: '0' } : { top: '0' }),
     height: `${thicknessPx}px`,
   };
 }
@@ -364,10 +399,10 @@ export function getCornerOverlayBarStyles(
   const startRatio = Math.min(segment.startRatio, segment.endRatio);
   const endRatio = Math.max(segment.startRatio, segment.endRatio);
 
-  if (segment.face === 'bottom') {
+  if (segment.face === 'bottom' || segment.face === 'top') {
     return {
       className: CORNER_OVERLAY_BAR_CLASS[segment.kind],
-      style: buildHorizontalOverlayStyle(startRatio, endRatio, thicknessPx),
+      style: buildHorizontalOverlayStyle(segment.face, startRatio, endRatio, thicknessPx),
     };
   }
 
@@ -394,6 +429,19 @@ export function getCornerBlockedFrontLabelStyle(
       style: {
         left: `${centerRatio * 100}%`,
         bottom: '8px',
+        transform: 'translateX(-50%)',
+      },
+      text: `Front ${lengthLabel}m`,
+    };
+  }
+
+  if (segment.face === 'top') {
+    return {
+      className:
+        'pointer-events-none absolute z-10 max-w-[90%] truncate rounded bg-emerald-950/90 px-1.5 py-0.5 text-[9px] font-semibold leading-none text-emerald-50',
+      style: {
+        left: `${centerRatio * 100}%`,
+        top: '8px',
         transform: 'translateX(-50%)',
       },
       text: `Front ${lengthLabel}m`,
