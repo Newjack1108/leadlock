@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/select';
 import ImageUpload from '@/components/ImageUpload';
 import { getApiErrorDetail, getProduct, updateProduct, getOptionalExtras } from '@/lib/api';
+import { getAllowedConfiguratorFrontFaces } from '@/lib/configurator/productFrontFace';
 import {
   ProductCategory,
   Product,
@@ -43,15 +44,6 @@ const CONFIGURATOR_CONNECTION_PROFILE_LABELS: Record<ConfiguratorConnectionProfi
   corner_left: 'Corner box - left hand',
   corner_right: 'Corner box - right hand',
 };
-
-function getAllowedConfiguratorFrontFaces(widthValue: string, lengthValue: string): ConfiguratorFrontFace[] {
-  const width = Number(widthValue);
-  const length = Number(lengthValue);
-  if (!Number.isFinite(width) || !Number.isFinite(length) || width <= 0 || length <= 0 || width === length) {
-    return [...CONFIGURATOR_FRONT_FACES];
-  }
-  return width > length ? ['top', 'bottom'] : ['left', 'right'];
-}
 
 export default function EditProductPage() {
   const router = useRouter();
@@ -232,7 +224,9 @@ export default function EditProductPage() {
     }
 
     if (requiresConfiguratorFrontFace && !formData.configurator_front_face) {
-      toast.error('Non-square configurator products must choose a front side');
+      toast.error(
+        'Non-square configurator products must choose a front side on one of the shortest edges'
+      );
       return;
     }
 
@@ -914,7 +908,8 @@ export default function EditProductPage() {
                           </SelectContent>
                         </Select>
                         <p className="text-xs text-muted-foreground">
-                          For rectangular configurator products, choose one of the longest faces. New boxes will rotate
+                          For rectangular configurator products, choose one of the shortest edges as the front. New
+                          boxes will rotate
                           so this front points toward the bottom of the layout by default.
                         </p>
                       </div>

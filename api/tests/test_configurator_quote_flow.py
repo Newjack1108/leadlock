@@ -110,11 +110,11 @@ def test_non_square_configurator_products_require_valid_front_face():
             "unit": "Unit",
             "configurator_width": "3.50",
             "configurator_length": "5.00",
-            "configurator_front_face": "top",
+            "configurator_front_face": "right",
         },
     )
     assert invalid_front.status_code == 422
-    assert "left or right" in invalid_front.json()["detail"]
+    assert "top or bottom" in invalid_front.json()["detail"]
 
     valid_front = client.post(
         "/api/products",
@@ -125,11 +125,11 @@ def test_non_square_configurator_products_require_valid_front_face():
             "unit": "Unit",
             "configurator_width": "3.50",
             "configurator_length": "5.00",
-            "configurator_front_face": "right",
+            "configurator_front_face": "top",
         },
     )
     assert valid_front.status_code == 200
-    assert valid_front.json()["configurator_front_face"] == "right"
+    assert valid_front.json()["configurator_front_face"] == "top"
 
     invalid_corner_profile = client.post(
         "/api/products",
@@ -616,7 +616,7 @@ def test_configurator_preview_uses_product_front_face_for_rectangular_items():
             base_price=Decimal("2200.00"),
             configurator_width=Decimal("3.50"),
             configurator_length=Decimal("5.00"),
-            configurator_front_face=ConfiguratorFrontFace.RIGHT,
+            configurator_front_face=ConfiguratorFrontFace.TOP,
         )
         session.add(item)
         session.commit()
@@ -625,7 +625,8 @@ def test_configurator_preview_uses_product_front_face_for_rectangular_items():
 
     client = TestClient(_make_app(engine, user))
 
-    right_side_blocked = client.post(
+    # Front on top (short edge); boxes joined along vertical faces — front stays exposed.
+    side_join_front_exposed = client.post(
         "/api/configurator/preview",
         json={
             "schema_version": 1,
@@ -636,42 +637,27 @@ def test_configurator_preview_uses_product_front_face_for_rectangular_items():
             "extras": [],
         },
     )
-    assert right_side_blocked.status_code == 200
-    right_payload = right_side_blocked.json()
-    assert right_payload["valid"] is False
-    assert any(issue["code"] == "FRONT_FACE_BLOCKED" for issue in right_payload["issues"])
-
-    bottom_blocked_after_rotation = client.post(
-        "/api/configurator/preview",
-        json={
-            "schema_version": 1,
-            "boxes": [
-                {"id": "box-1", "product_id": item_id, "x": "0", "y": "0", "rotation": 90},
-                {"id": "box-2", "product_id": item_id, "x": "0", "y": "3.50", "rotation": 90},
-            ],
-            "extras": [],
-        },
-    )
-    assert bottom_blocked_after_rotation.status_code == 200
-    bottom_payload = bottom_blocked_after_rotation.json()
-    assert bottom_payload["valid"] is False
-    assert any(issue["code"] == "FRONT_FACE_BLOCKED" for issue in bottom_payload["issues"])
-
-    side_join_with_bottom_front_exposed = client.post(
-        "/api/configurator/preview",
-        json={
-            "schema_version": 1,
-            "boxes": [
-                {"id": "box-1", "product_id": item_id, "x": "0", "y": "0", "rotation": 90},
-                {"id": "box-2", "product_id": item_id, "x": "5.00", "y": "0", "rotation": 90},
-            ],
-            "extras": [],
-        },
-    )
-    assert side_join_with_bottom_front_exposed.status_code == 200
-    exposed_payload = side_join_with_bottom_front_exposed.json()
+    assert side_join_front_exposed.status_code == 200
+    exposed_payload = side_join_front_exposed.json()
     assert exposed_payload["valid"] is True
     assert all(issue["code"] != "FRONT_FACE_BLOCKED" for issue in exposed_payload["issues"])
+
+    # Stack along y so top/bottom (front) faces meet.
+    top_front_blocked = client.post(
+        "/api/configurator/preview",
+        json={
+            "schema_version": 1,
+            "boxes": [
+                {"id": "box-1", "product_id": item_id, "x": "0", "y": "0", "rotation": 0},
+                {"id": "box-2", "product_id": item_id, "x": "0", "y": "5.00", "rotation": 0},
+            ],
+            "extras": [],
+        },
+    )
+    assert top_front_blocked.status_code == 200
+    top_payload = top_front_blocked.json()
+    assert top_payload["valid"] is False
+    assert any(issue["code"] == "FRONT_FACE_BLOCKED" for issue in top_payload["issues"])
 
 
 def test_corner_connection_profiles_restrict_front_segment_and_side_faces():

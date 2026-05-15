@@ -154,20 +154,20 @@ def _validate_configurator_product_payload(payload: dict) -> None:
                 else str(configurator_front_face)
             )
             if width > length and front_face not in (
-                ConfiguratorFrontFace.TOP.value,
-                ConfiguratorFrontFace.BOTTOM.value,
-            ):
-                raise HTTPException(
-                    status_code=422,
-                    detail="For wider configurator products, configurator_front_face must be top or bottom",
-                )
-            if length > width and front_face not in (
                 ConfiguratorFrontFace.LEFT.value,
                 ConfiguratorFrontFace.RIGHT.value,
             ):
                 raise HTTPException(
                     status_code=422,
-                    detail="For deeper configurator products, configurator_front_face must be left or right",
+                    detail="For wider configurator products, configurator_front_face must be left or right (short edges)",
+                )
+            if length > width and front_face not in (
+                ConfiguratorFrontFace.TOP.value,
+                ConfiguratorFrontFace.BOTTOM.value,
+            ):
+                raise HTTPException(
+                    status_code=422,
+                    detail="For deeper configurator products, configurator_front_face must be top or bottom (short edges)",
                 )
 
 
