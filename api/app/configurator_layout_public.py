@@ -538,8 +538,8 @@ def append_layout_pdf_elements(
     elements.append(Paragraph("Stable layout plan", heading_style))
     elements.append(
         Paragraph(
-            "Indicative top-down plan of the stable boxes included in this quote. "
-            "Final positions may be confirmed at site survey.",
+            "Plan view of the stable boxes included in this quote. "
+            "Final positions may be confirmed at order stage.",
             normal_style,
         )
     )

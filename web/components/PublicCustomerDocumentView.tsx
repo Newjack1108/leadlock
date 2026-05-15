@@ -157,8 +157,8 @@ export default function PublicCustomerDocumentView() {
                   <p className="text-sm text-muted-foreground mb-2">{data.layout.name}</p>
                 )}
                 <p className="text-sm text-muted-foreground mb-4">
-                  Indicative top-down plan of the stable boxes in this quote. Final positions may be
-                  confirmed at site survey.
+                  Plan view of the stable boxes included in this quote. Final positions may be
+                  confirmed at order stage.
                 </p>
                 <div className="max-w-3xl">
                   <LayoutDiagram layout={data.layout} />
