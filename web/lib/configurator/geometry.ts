@@ -1145,6 +1145,7 @@ export function findPlacementCandidate(params: {
   const connected = getConnectedIdsFromGraph(analysis.graph, layoutEntries[0]?.box.id).size === layoutEntries.length;
   const connectionBlocked = analysis.connectionBlocked.has(nextBox.id);
   const frontBlocked = analysis.frontBlocked.has(nextBox.id);
+  const touchesOthers = otherEntries.some((entry) => rectsTouch(nextRect, entry.rect));
 
   return {
     x: snappedX,
@@ -1154,7 +1155,7 @@ export function findPlacementCandidate(params: {
     connected,
     connectionBlocked,
     frontBlocked,
-    valid: !overlaps && connected && !connectionBlocked && !frontBlocked,
+    valid: !overlaps && !connectionBlocked && !frontBlocked && (!touchesOthers || connected),
     guides: [xCandidate?.guide, yCandidate?.guide].filter((guide): guide is SnapGuide => Boolean(guide)),
   } satisfies CandidatePlacement;
 }
