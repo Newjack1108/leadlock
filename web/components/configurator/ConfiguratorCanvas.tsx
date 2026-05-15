@@ -27,11 +27,13 @@ const ZOOM_STEP = 0.15;
 interface ConfiguratorCanvasProps {
   boxes: ConfiguratorBoxPlacement[];
   productMap: Record<number, Product>;
-  selectedBoxId: string | null;
-  onSelect: (boxId: string) => void;
-  onMoveBox: (boxId: string, nextBox: Pick<ConfiguratorBoxPlacement, 'x' | 'y'>) => void;
-  onRotateBox: (boxId: string, rotation: number) => void;
-  onRemoveBox: (boxId: string) => void;
+  selectedBoxId?: string | null;
+  onSelect?: (boxId: string) => void;
+  onMoveBox?: (boxId: string, nextBox: Pick<ConfiguratorBoxPlacement, 'x' | 'y'>) => void;
+  onRotateBox?: (boxId: string, rotation: number) => void;
+  onRemoveBox?: (boxId: string) => void;
+  readOnly?: boolean;
+  viewportHeight?: string;
 }
 
 interface InteractionSnapshot {
@@ -63,12 +65,15 @@ function clampZoom(value: number) {
 export default function ConfiguratorCanvas({
   boxes,
   productMap,
-  selectedBoxId,
+  selectedBoxId = null,
   onSelect,
   onMoveBox,
   onRotateBox,
   onRemoveBox,
+  readOnly = false,
+  viewportHeight = '72vh',
 }: ConfiguratorCanvasProps) {
+  const interactive = !readOnly && Boolean(onMoveBox);
   const viewportRef = useRef<HTMLDivElement>(null);
   const [dragState, setDragState] = useState<DragState | null>(null);
   const [dragCandidate, setDragCandidate] = useState<CandidatePlacement | null>(null);
@@ -203,7 +208,7 @@ export default function ConfiguratorCanvas({
   };
 
   const finalizeDrag = () => {
-    if (dragState && dragCandidate?.valid) {
+    if (dragState && dragCandidate?.valid && onMoveBox) {
       onMoveBox(dragState.boxId, { x: dragCandidate.x, y: dragCandidate.y });
     }
     setDragState(null);
@@ -215,7 +220,11 @@ export default function ConfiguratorCanvas({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Move className="h-4 w-4" />
-          <span>Drag background to pan. Use + / − or Fit to zoom.</span>
+          <span>
+            {readOnly
+              ? 'Drag the background to pan. Use + / − or Fit to zoom.'
+              : 'Drag background to pan. Use + / − or Fit to zoom.'}
+          </span>
         </div>
         <div className="flex items-center gap-2">
           <span className="min-w-14 text-right text-sm font-medium text-muted-foreground">
@@ -262,7 +271,7 @@ export default function ConfiguratorCanvas({
           'relative overflow-hidden rounded-md border bg-muted/20',
           panState ? 'cursor-grabbing' : 'cursor-grab'
         )}
-        style={{ height: '72vh', minHeight: 560 }}
+        style={{ height: viewportHeight, minHeight: readOnly ? 360 : 560 }}
       >
         <div
           className="absolute left-0 top-0"
@@ -373,86 +382,29 @@ export default function ConfiguratorCanvas({
                   Boolean(blockedFrontLabelStyle) && boxPixelWidth >= 88 && boxPixelHeight >= 64;
                 const overlayThickness = compactLabel ? 4 : 6;
 
-                return (
-                  <button
-                    key={box.id}
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onSelect(box.id);
-                    }}
-                    onPointerDown={(event) => {
-                      if (event.button !== 0) return;
-                      event.stopPropagation();
-                      const snapshot = getInteractionSnapshot();
-                      const point = getLayoutPoint(event.clientX, event.clientY, snapshot);
-                      setDragState({
-                        boxId: box.id,
-                        pointerId: event.pointerId,
-                        offsetX: point.x - box.x,
-                        offsetY: point.y - box.y,
-                        snapshot,
-                      });
-                      setDragCandidate({
-                        x: box.x,
-                        y: box.y,
-                        snapped: false,
-                        overlaps: false,
-                        connected: true,
-                        connectionBlocked: false,
-                        frontBlocked: false,
-                        valid: true,
-                        guides: [],
-                      });
-                      onSelect(box.id);
-                      event.currentTarget.setPointerCapture(event.pointerId);
-                    }}
-                    onPointerMove={(event) => {
-                      if (!dragState || dragState.boxId !== box.id) return;
-                      const point = getLayoutPoint(event.clientX, event.clientY, dragState.snapshot);
-                      const candidate = findPlacementCandidate({
-                        movingBox: box,
-                        rawX: point.x - dragState.offsetX,
-                        rawY: point.y - dragState.offsetY,
-                        boxes,
-                        productMap,
-                      });
-                      setDragCandidate(candidate);
-                    }}
-                    onPointerUp={(event) => {
-                      if (dragState?.boxId !== box.id || dragState.pointerId !== event.pointerId) return;
-                      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-                        event.currentTarget.releasePointerCapture(event.pointerId);
-                      }
-                      finalizeDrag();
-                    }}
-                    onPointerCancel={(event) => {
-                      if (dragState?.boxId !== box.id || dragState.pointerId !== event.pointerId) return;
-                      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-                        event.currentTarget.releasePointerCapture(event.pointerId);
-                      }
-                      setDragState(null);
-                      setDragCandidate(null);
-                    }}
-                    className={cn(
-                      'absolute overflow-visible touch-none rounded-md border text-left text-xs font-medium transition-colors',
-                      activeInvalid
-                        ? 'cursor-grabbing border-red-500 bg-red-100/90 text-red-900 shadow-lg'
-                        : isDragging
-                          ? 'cursor-grabbing border-primary bg-primary/20 text-primary shadow-lg'
-                          : selectedBoxId === box.id
-                            ? 'cursor-grab border-primary bg-primary/15 text-primary shadow-sm'
-                            : 'cursor-grab border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
-                    )}
-                    style={{
-                      left: `${toCanvasPosition(rect.centerX, displayBounds.minX)}px`,
-                      top: `${toCanvasPosition(rect.centerY, displayBounds.minY)}px`,
-                      width: `${rect.boxWidth * SCALE}px`,
-                      height: `${rect.boxLength * SCALE}px`,
-                      transform: `translate(-50%, -50%) rotate(${box.rotation}deg)`,
-                    }}
-                  >
-                  {selectedBoxId === box.id && (
+                const boxStyle = {
+                  left: `${toCanvasPosition(rect.centerX, displayBounds.minX)}px`,
+                  top: `${toCanvasPosition(rect.centerY, displayBounds.minY)}px`,
+                  width: `${rect.boxWidth * SCALE}px`,
+                  height: `${rect.boxLength * SCALE}px`,
+                  transform: `translate(-50%, -50%) rotate(${box.rotation}deg)`,
+                };
+                const boxClassName = cn(
+                  'absolute overflow-visible rounded-md border text-left text-xs font-medium transition-colors',
+                  readOnly
+                    ? 'pointer-events-none border-slate-300 bg-slate-100 text-slate-700'
+                    : activeInvalid
+                      ? 'touch-none cursor-grabbing border-red-500 bg-red-100/90 text-red-900 shadow-lg'
+                      : isDragging
+                        ? 'touch-none cursor-grabbing border-primary bg-primary/20 text-primary shadow-lg'
+                        : selectedBoxId === box.id
+                          ? 'touch-none cursor-grab border-primary bg-primary/15 text-primary shadow-sm'
+                          : 'touch-none cursor-grab border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
+                );
+
+                const boxContent = (
+                  <>
+                  {selectedBoxId === box.id && !readOnly && onRotateBox && onRemoveBox && (
                     <span
                       className="absolute left-1/2 top-0 z-20 flex items-center gap-2"
                       style={{
@@ -555,7 +507,83 @@ export default function ConfiguratorCanvas({
                       </span>
                     )}
                   </span>
-                </button>
+                  </>
+                );
+
+                if (readOnly) {
+                  return (
+                    <div key={box.id} className={boxClassName} style={boxStyle}>
+                      {boxContent}
+                    </div>
+                  );
+                }
+
+                return (
+                  <button
+                    key={box.id}
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onSelect?.(box.id);
+                    }}
+                    onPointerDown={(event) => {
+                      if (!interactive || event.button !== 0) return;
+                      event.stopPropagation();
+                      const snapshot = getInteractionSnapshot();
+                      const point = getLayoutPoint(event.clientX, event.clientY, snapshot);
+                      setDragState({
+                        boxId: box.id,
+                        pointerId: event.pointerId,
+                        offsetX: point.x - box.x,
+                        offsetY: point.y - box.y,
+                        snapshot,
+                      });
+                      setDragCandidate({
+                        x: box.x,
+                        y: box.y,
+                        snapped: false,
+                        overlaps: false,
+                        connected: true,
+                        connectionBlocked: false,
+                        frontBlocked: false,
+                        valid: true,
+                        guides: [],
+                      });
+                      onSelect?.(box.id);
+                      event.currentTarget.setPointerCapture(event.pointerId);
+                    }}
+                    onPointerMove={(event) => {
+                      if (!dragState || dragState.boxId !== box.id) return;
+                      const point = getLayoutPoint(event.clientX, event.clientY, dragState.snapshot);
+                      const candidate = findPlacementCandidate({
+                        movingBox: box,
+                        rawX: point.x - dragState.offsetX,
+                        rawY: point.y - dragState.offsetY,
+                        boxes,
+                        productMap,
+                      });
+                      setDragCandidate(candidate);
+                    }}
+                    onPointerUp={(event) => {
+                      if (dragState?.boxId !== box.id || dragState.pointerId !== event.pointerId) return;
+                      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                        event.currentTarget.releasePointerCapture(event.pointerId);
+                      }
+                      finalizeDrag();
+                    }}
+                    onPointerCancel={(event) => {
+                      if (dragState?.boxId !== box.id || dragState.pointerId !== event.pointerId) return;
+                      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                        event.currentTarget.releasePointerCapture(event.pointerId);
+                      }
+                      setDragState(null);
+                      setDragCandidate(null);
+                    }}
+                    className={boxClassName}
+                    style={boxStyle}
+                  >
+                    {boxContent}
+                  </button>
                 );
               })}
 

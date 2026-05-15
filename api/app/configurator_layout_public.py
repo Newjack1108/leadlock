@@ -1,0 +1,536 @@
+"""
+Build customer-safe layout payloads and render layout diagrams (SVG / PDF).
+Geometry mirrors web/lib/configurator/geometry.ts (SCALE = 40 on web).
+"""
+from __future__ import annotations
+
+import math
+from dataclasses import dataclass
+from decimal import Decimal
+from io import BytesIO
+from typing import Any, List, Optional, Tuple
+from xml.sax.saxutils import escape
+
+from sqlmodel import Session, select
+
+from app.models import ConfiguratorConnectionProfile, ConfiguratorFrontFace, Product, ProductCategory, QuoteConfiguration
+from app.schemas import (
+    ConfiguratorBoxPlacement,
+    PublicLayoutBoxResponse,
+    PublicQuoteLayoutResponse,
+    QuoteConfigurationPayload,
+)
+
+EDGE_EPSILON = 1e-6
+PDF_LAYOUT_TARGET_WIDTH_PT = 170 * 2.834645669  # ~170mm in points
+PDF_LAYOUT_MAX_HEIGHT_PT = 220 * 2.834645669
+DEFAULT_CANVAS_PADDING = 1.0
+
+# Web canvas uses SCALE=40 px per meter; PDF uses points per meter derived from fit scale.
+
+
+@dataclass
+class _CornerBaseDefinition:
+    front_face: str
+    standard_face: str
+    join_start: float
+    join_end: float
+    blocked_start: float
+    blocked_end: float
+
+
+@dataclass
+class _OverlaySegment:
+    face: str
+    kind: str  # blocked_front | joinable | standard
+    start_ratio: float
+    end_ratio: float
+    length_meters: float
+
+
+def _to_float(value: Any) -> float:
+    if value is None:
+        return 0.0
+    return float(value)
+
+
+def _get_native_dimensions(product: Product) -> Tuple[float, float]:
+    return _to_float(product.configurator_width), _to_float(product.configurator_length)
+
+
+def _get_corner_base_definition(product: Product) -> Optional[_CornerBaseDefinition]:
+    profile = product.configurator_connection_profile
+    if not profile:
+        return None
+    if isinstance(profile, ConfiguratorConnectionProfile):
+        profile_value = profile.value
+    else:
+        profile_value = str(profile)
+
+    width, length = _get_native_dimensions(product)
+    join_length = min(width, length)
+    front_length = max(width, length)
+    blocked_length = max(0.0, front_length - join_length)
+
+    if length > width:
+        if profile_value == ConfiguratorConnectionProfile.CORNER_LEFT.value:
+            return _CornerBaseDefinition("right", "bottom", 0.0, join_length, join_length, front_length)
+        return _CornerBaseDefinition("left", "bottom", 0.0, join_length, join_length, front_length)
+
+    if profile_value == ConfiguratorConnectionProfile.CORNER_LEFT.value:
+        return _CornerBaseDefinition("bottom", "left", blocked_length, front_length, 0.0, blocked_length)
+    return _CornerBaseDefinition("bottom", "right", 0.0, join_length, join_length, front_length)
+
+
+def _corner_face_length(face: str, width: float, length: float) -> float:
+    return length if face in ("left", "right") else width
+
+
+def _get_corner_blocked_front_length(product: Product) -> Optional[Decimal]:
+    base = _get_corner_base_definition(product)
+    if not base or base.blocked_end - base.blocked_start <= EDGE_EPSILON:
+        return None
+    return Decimal(str(round(base.blocked_end - base.blocked_start, 2)))
+
+
+def _get_corner_overlay_segments(product: Product) -> List[_OverlaySegment]:
+    base = _get_corner_base_definition(product)
+    if not base:
+        return []
+    width, length = _get_native_dimensions(product)
+    if width <= 0 or length <= 0:
+        return []
+
+    front_edge_length = _corner_face_length(base.front_face, width, length)
+    standard_edge_length = _corner_face_length(base.standard_face, width, length)
+    segments: List[_OverlaySegment] = []
+
+    if base.blocked_end - base.blocked_start > EDGE_EPSILON:
+        segments.append(
+            _OverlaySegment(
+                base.front_face,
+                "blocked_front",
+                base.blocked_start / front_edge_length,
+                base.blocked_end / front_edge_length,
+                base.blocked_end - base.blocked_start,
+            )
+        )
+    if base.join_end - base.join_start > EDGE_EPSILON:
+        segments.append(
+            _OverlaySegment(
+                base.front_face,
+                "joinable",
+                base.join_start / front_edge_length,
+                base.join_end / front_edge_length,
+                base.join_end - base.join_start,
+            )
+        )
+    segments.append(_OverlaySegment(base.standard_face, "standard", 0.0, 1.0, standard_edge_length))
+    return segments
+
+
+def _get_base_front_face(product: Product) -> str:
+    base = _get_corner_base_definition(product)
+    if base:
+        return base.front_face
+    face = product.configurator_front_face
+    if face:
+        return face.value if hasattr(face, "value") else str(face)
+    return "top"
+
+
+def _get_standard_front_overlay_segment(product: Product) -> Optional[_OverlaySegment]:
+    if _get_corner_base_definition(product):
+        return None
+    width, length = _get_native_dimensions(product)
+    if width <= 0 or length <= 0:
+        return None
+    face = _get_base_front_face(product)
+    if face not in ("top", "bottom", "left", "right"):
+        return None
+    edge_len = length if face in ("left", "right") else width
+    return _OverlaySegment(face, "blocked_front", 0.0, 1.0, edge_len)
+
+
+def _edge_overlay_segments(product: Product) -> List[_OverlaySegment]:
+    corner = _get_corner_overlay_segments(product)
+    if corner:
+        return corner
+    standard = _get_standard_front_overlay_segment(product)
+    return [standard] if standard else []
+
+
+def _rotate_point(x: float, y: float, cx: float, cy: float, rotation: int) -> Tuple[float, float]:
+    rad = math.radians(rotation)
+    cos_r = math.cos(rad)
+    sin_r = math.sin(rad)
+    dx = x - cx
+    dy = y - cy
+    return cx + dx * cos_r - dy * sin_r, cy + dx * sin_r + dy * cos_r
+
+
+def _placement_rect(box: ConfiguratorBoxPlacement, width: float, length: float) -> dict:
+    cx = _to_float(box.x) + width / 2
+    cy = _to_float(box.y) + length / 2
+    rot = int(box.rotation)
+    corners = [
+        _rotate_point(_to_float(box.x), _to_float(box.y), cx, cy, rot),
+        _rotate_point(_to_float(box.x) + width, _to_float(box.y), cx, cy, rot),
+        _rotate_point(_to_float(box.x) + width, _to_float(box.y) + length, cx, cy, rot),
+        _rotate_point(_to_float(box.x), _to_float(box.y) + length, cx, cy, rot),
+    ]
+    xs = [c[0] for c in corners]
+    ys = [c[1] for c in corners]
+    return {
+        "x1": min(xs),
+        "y1": min(ys),
+        "x2": max(xs),
+        "y2": max(ys),
+        "box_width": width,
+        "box_length": length,
+        "center_x": cx,
+        "center_y": cy,
+        "rotation": rot,
+    }
+
+
+def _canvas_bounds(rects: List[dict], padding: float = DEFAULT_CANVAS_PADDING) -> dict:
+    if not rects:
+        return {"min_x": 0.0, "min_y": 0.0, "width": 10.0, "height": 7.0, "padding": padding}
+    min_x = min(0.0, math.floor(min(r["x1"] for r in rects)))
+    min_y = min(0.0, math.floor(min(r["y1"] for r in rects)))
+    max_x = max(r["x2"] for r in rects)
+    max_y = max(r["y2"] for r in rects)
+    return {
+        "min_x": min_x,
+        "min_y": min_y,
+        "width": max(10.0, math.ceil(max_x - min_x + padding * 2)),
+        "height": max(7.0, math.ceil(max_y - min_y + padding * 2)),
+        "padding": padding,
+    }
+
+
+def _product_from_layout_box(box: PublicLayoutBoxResponse) -> Product:
+    """Minimal product stand-in for geometry (not persisted)."""
+    profile = None
+    if box.connection_profile:
+        try:
+            profile = ConfiguratorConnectionProfile(box.connection_profile)
+        except ValueError:
+            profile = None
+    front_face = None
+    if box.front_face:
+        try:
+            front_face = ConfiguratorFrontFace(box.front_face)
+        except ValueError:
+            front_face = None
+    return Product(
+        id=0,
+        name=box.label,
+        category=ProductCategory.CONFIGURATOR,
+        base_price=Decimal("0"),
+        configurator_width=box.width,
+        configurator_length=box.length,
+        configurator_is_corner_box=box.is_corner_box,
+        configurator_connection_profile=profile,
+        configurator_front_face=front_face,
+    )
+
+
+def build_layout_for_public_view(session: Session, quote_id: int) -> Optional[PublicQuoteLayoutResponse]:
+    record = session.exec(
+        select(QuoteConfiguration).where(QuoteConfiguration.quote_id == quote_id)
+    ).first()
+    if not record:
+        return None
+
+    payload = QuoteConfigurationPayload.model_validate(record.configuration_json or {})
+    if not payload.boxes:
+        return None
+
+    boxes_out: List[PublicLayoutBoxResponse] = []
+    for placement in payload.boxes:
+        product = session.get(Product, placement.product_id)
+        if not product:
+            continue
+        width = product.configurator_width
+        length = product.configurator_length
+        if not width or not length or _to_float(width) <= 0 or _to_float(length) <= 0:
+            continue
+
+        front_face = None
+        if product.configurator_front_face:
+            front_face = (
+                product.configurator_front_face.value
+                if hasattr(product.configurator_front_face, "value")
+                else str(product.configurator_front_face)
+            )
+        connection_profile = None
+        if product.configurator_connection_profile:
+            connection_profile = (
+                product.configurator_connection_profile.value
+                if hasattr(product.configurator_connection_profile, "value")
+                else str(product.configurator_connection_profile)
+            )
+
+        boxes_out.append(
+            PublicLayoutBoxResponse(
+                id=placement.id,
+                label=product.name,
+                x=placement.x,
+                y=placement.y,
+                rotation=placement.rotation,
+                width=width,
+                length=length,
+                is_corner_box=bool(product.configurator_is_corner_box),
+                front_face=front_face,
+                connection_profile=connection_profile,
+                blocked_front_m=_get_corner_blocked_front_length(product),
+            )
+        )
+
+    if not boxes_out:
+        return None
+
+    return PublicQuoteLayoutResponse(name=payload.name, boxes=boxes_out)
+
+
+def _layout_entries(layout: PublicQuoteLayoutResponse) -> List[dict]:
+    entries = []
+    for box in layout.boxes:
+        product = _product_from_layout_box(box)
+        width = _to_float(box.width)
+        length = _to_float(box.length)
+        placement = ConfiguratorBoxPlacement(
+            id=box.id,
+            product_id=0,
+            x=box.x,
+            y=box.y,
+            rotation=box.rotation,
+        )
+        rect = _placement_rect(placement, width, length)
+        entries.append(
+            {
+                "box": box,
+                "product": product,
+                "rect": rect,
+                "segments": _edge_overlay_segments(product),
+            }
+        )
+    return entries
+
+
+def _segment_color(kind: str) -> str:
+    if kind == "blocked_front":
+        return "#10b981"
+    if kind == "joinable":
+        return "#ef4444"
+    return "#f87171"
+
+
+def _overlay_line_local(
+    face: str, start_ratio: float, end_ratio: float, box_w: float, box_h: float
+) -> Tuple[float, float, float, float]:
+    start_ratio = min(start_ratio, end_ratio)
+    end_ratio = max(start_ratio, end_ratio)
+    if face == "bottom":
+        y = 0.0
+        x1 = start_ratio * box_w
+        x2 = end_ratio * box_w
+        return x1, y, x2, y
+    if face == "top":
+        y = box_h
+        x1 = start_ratio * box_w
+        x2 = end_ratio * box_w
+        return x1, y, x2, y
+    if face == "left":
+        x = 0.0
+        y1 = start_ratio * box_h
+        y2 = end_ratio * box_h
+        return x, y1, x, y2
+    x = box_w
+    y1 = start_ratio * box_h
+    y2 = end_ratio * box_h
+    return x, y1, x, y2
+
+
+def layout_to_svg(layout: PublicQuoteLayoutResponse) -> bytes:
+    """Top-down layout diagram as SVG (fit ~800px wide)."""
+    entries = _layout_entries(layout)
+    if not entries:
+        return b'<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>'
+
+    rects = [e["rect"] for e in entries]
+    bounds = _canvas_bounds(rects)
+    scale = 40.0
+    pad = bounds["padding"]
+    svg_w = bounds["width"] * scale
+    svg_h = bounds["height"] * scale
+
+    def to_svg_x(x: float) -> float:
+        return (x - bounds["min_x"] + pad) * scale
+
+    def to_svg_y(y: float) -> float:
+        return (y - bounds["min_y"] + pad) * scale
+
+    parts = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{svg_w:.1f}" height="{svg_h:.1f}" '
+        f'viewBox="0 0 {svg_w:.1f} {svg_h:.1f}">',
+        '<rect width="100%" height="100%" fill="#f8fafc"/>',
+    ]
+
+    for entry in entries:
+        box = entry["box"]
+        rect = entry["rect"]
+        bw = rect["box_width"]
+        bl = rect["box_length"]
+        cx = to_svg_x(rect["center_x"])
+        cy = to_svg_y(rect["center_y"])
+        rot = rect["rotation"]
+        label = escape(str(box.label))
+        parts.append(
+            f'<g transform="translate({cx:.2f},{cy:.2f}) rotate({rot})">'
+            f'<rect x="{-bw * scale / 2:.2f}" y="{-bl * scale / 2:.2f}" '
+            f'width="{bw * scale:.2f}" height="{bl * scale:.2f}" '
+            f'fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5" rx="4"/>'
+        )
+        for seg in entry["segments"]:
+            x1, y1, x2, y2 = _overlay_line_local(
+                seg.face, seg.start_ratio, seg.end_ratio, bw, bl
+            )
+            color = _segment_color(seg.kind)
+            stroke_w = 6 if seg.kind == "blocked_front" else 4
+            parts.append(
+                f'<line x1="{(x1 - bw / 2) * scale:.2f}" y1="{(bl / 2 - y1) * scale:.2f}" '
+                f'x2="{(x2 - bw / 2) * scale:.2f}" y2="{(bl / 2 - y2) * scale:.2f}" '
+                f'stroke="{color}" stroke-width="{stroke_w}" stroke-linecap="round"/>'
+            )
+        dim = f"{bw:g}m × {bl:g}m".replace("g", "")
+        parts.append(
+            f'<text x="0" y="0" text-anchor="middle" dominant-baseline="middle" '
+            f'font-family="Helvetica,Arial,sans-serif" font-size="11" fill="#334155">'
+            f'<tspan x="0" dy="-6">{label}</tspan>'
+            f'<tspan x="0" dy="14" font-size="9" fill="#64748b">{dim}</tspan>'
+            f"</text></g>"
+        )
+
+    parts.append("</svg>")
+    return "".join(parts).encode("utf-8")
+
+
+def layout_to_png(layout: PublicQuoteLayoutResponse, pixels_per_meter: float = 40.0) -> bytes:
+    """Rasterize layout for PDF embedding (Pillow)."""
+    from PIL import Image, ImageDraw, ImageFont
+
+    entries = _layout_entries(layout)
+    if not entries:
+        return b""
+
+    rects = [e["rect"] for e in entries]
+    bounds = _canvas_bounds(rects)
+    pad = bounds["padding"]
+    img_w = max(1, int(bounds["width"] * pixels_per_meter))
+    img_h = max(1, int(bounds["height"] * pixels_per_meter))
+    image = Image.new("RGB", (img_w, img_h), "#f8fafc")
+    draw = ImageDraw.Draw(image)
+
+    try:
+        font = ImageFont.truetype("arial.ttf", 11)
+        font_sm = ImageFont.truetype("arial.ttf", 9)
+    except OSError:
+        font = ImageFont.load_default()
+        font_sm = font
+
+    def to_px_x(x: float) -> float:
+        return (x - bounds["min_x"] + pad) * pixels_per_meter
+
+    def to_px_y(y: float) -> float:
+        return (y - bounds["min_y"] + pad) * pixels_per_meter
+
+    def hex_to_rgb(color: str) -> Tuple[int, int, int]:
+        color = color.lstrip("#")
+        return tuple(int(color[i : i + 2], 16) for i in (0, 2, 4))  # type: ignore[return-value]
+
+    for entry in entries:
+        box = entry["box"]
+        rect = entry["rect"]
+        bw = rect["box_width"]
+        bl = rect["box_length"]
+        rot = int(rect["rotation"])
+        cx_layout = rect["center_x"]
+        cy_layout = rect["center_y"]
+
+        def local_to_layout(lx: float, ly: float) -> Tuple[float, float]:
+            """Local box coords: origin bottom-left, y increases upward."""
+            ux = cx_layout - bw / 2 + lx
+            uy = cy_layout + bl / 2 - ly
+            return _rotate_point(ux, uy, cx_layout, cy_layout, rot)
+
+        def to_pixel(x: float, y: float) -> Tuple[float, float]:
+            return to_px_x(x), to_px_y(y)
+
+        corners_local = [(0, 0), (bw, 0), (bw, bl), (0, bl)]
+        poly = [to_pixel(*local_to_layout(x, y)) for x, y in corners_local]
+        draw.polygon(poly, fill="#f1f5f9", outline="#94a3b8")
+
+        for seg in entry["segments"]:
+            x1, y1, x2, y2 = _overlay_line_local(
+                seg.face, seg.start_ratio, seg.end_ratio, bw, bl
+            )
+            p1 = to_pixel(*local_to_layout(x1, y1))
+            p2 = to_pixel(*local_to_layout(x2, y2))
+            color = _segment_color(seg.kind)
+            width_px = 6 if seg.kind == "blocked_front" else 4
+            draw.line([p1, p2], fill=hex_to_rgb(color), width=width_px)
+
+        label = str(box.label)[:40]
+        dim = f"{bw:g}m x {bl:g}".replace("g", "")
+        tx, ty = to_pixel(*local_to_layout(bw / 2, bl / 2))
+        bbox = draw.textbbox((0, 0), label, font=font)
+        tw = bbox[2] - bbox[0]
+        draw.text((tx - tw / 2, ty - 8), label, fill="#334155", font=font)
+        bbox2 = draw.textbbox((0, 0), dim, font=font_sm)
+        tw2 = bbox2[2] - bbox2[0]
+        draw.text((tx - tw2 / 2, ty + 4), dim, fill="#64748b", font=font_sm)
+
+    out = BytesIO()
+    image.save(out, format="PNG")
+    return out.getvalue()
+
+
+def append_layout_pdf_elements(
+    elements: list,
+    layout: PublicQuoteLayoutResponse,
+    heading_style: Any,
+    normal_style: Any,
+) -> None:
+    """Add a layout plan page to a ReportLab story."""
+    from reportlab.lib.units import mm
+    from reportlab.platypus import Image, PageBreak, Paragraph, Spacer
+
+    png_bytes = layout_to_png(layout)
+    if not png_bytes:
+        return
+
+    from PIL import Image as PILImage
+
+    pil = PILImage.open(BytesIO(png_bytes))
+    img_w, img_h = pil.size
+    max_w = PDF_LAYOUT_TARGET_WIDTH_PT
+    max_h = PDF_LAYOUT_MAX_HEIGHT_PT
+    scale = min(max_w / img_w, max_h / img_h, 1.0)
+    display_w = img_w * scale
+    display_h = img_h * scale
+
+    elements.append(PageBreak())
+    elements.append(Paragraph("Stable layout plan", heading_style))
+    elements.append(
+        Paragraph(
+            "Indicative top-down plan of the stable boxes included in this quote. "
+            "Final positions may be confirmed at site survey.",
+            normal_style,
+        )
+    )
+    elements.append(Spacer(1, 6 * mm))
+    elements.append(Image(BytesIO(png_bytes), width=display_w, height=display_h))
+    elements.append(Spacer(1, 8 * mm))

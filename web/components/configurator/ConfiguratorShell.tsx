@@ -259,6 +259,11 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
             Drag boxes on the canvas to build the layout. Boxes snap to valid edges and cannot overlap. Standard boxes
             can be rotated; corner boxes use fixed-orientation products and cannot be turned on the canvas.
           </p>
+          {configuration.boxes.length > 0 && (
+            <p className="mt-2 text-sm text-muted-foreground">
+              Customers will see this layout on the quote link and PDF after you save it.
+            </p>
+          )}
         </div>
         <div className="flex flex-wrap gap-3">
           <Button variant="outline" onClick={() => router.push(`/quotes/${quote.id}`)}>

@@ -1579,6 +1579,27 @@ class PublicQuoteCompanyDisplay(BaseModel):
     account_number: Optional[str] = None
 
 
+class PublicLayoutBoxResponse(BaseModel):
+    """Resolved box footprint for customer layout diagram (no product IDs)."""
+    id: str
+    label: str
+    x: Decimal
+    y: Decimal
+    rotation: int
+    width: Decimal
+    length: Decimal
+    is_corner_box: bool = False
+    front_face: Optional[str] = None
+    connection_profile: Optional[str] = None
+    blocked_front_m: Optional[Decimal] = None
+
+
+class PublicQuoteLayoutResponse(BaseModel):
+    """Saved configurator layout for public quote view / PDF."""
+    name: Optional[str] = None
+    boxes: List[PublicLayoutBoxResponse] = Field(default_factory=list)
+
+
 class PublicQuoteViewResponse(BaseModel):
     """Quote payload for public view page (no auth)."""
     quote_number: str
@@ -1599,6 +1620,7 @@ class PublicQuoteViewResponse(BaseModel):
     company_display: Optional[PublicQuoteCompanyDisplay] = None
     available_optional_extras: Optional[List[AvailableExtraResponse]] = None
     delivery_installation_contact_note: Optional[str] = None  # Full text when quote opts in
+    layout: Optional[PublicQuoteLayoutResponse] = None
 
 
 class QuoteSendRequest(BaseModel):

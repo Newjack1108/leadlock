@@ -549,6 +549,7 @@ def generate_quote_pdf(
     available_optional_extras: Optional[List[Any]] = None,
     dealer_profile: Optional[Dict[str, str]] = None,
     trader_logo_url: Optional[str] = None,
+    layout: Optional[Any] = None,
 ) -> BytesIO:
     """
     Generate a PDF document for a quote.
@@ -967,7 +968,16 @@ def generate_quote_pdf(
     #     elements.append(Spacer(1, 10))
     #     elements.append(Paragraph("Internal Notes:", heading_style))
     #     elements.append(Paragraph(quote.notes, normal_style))
-    
+
+    if layout is None and session is not None:
+        from app.configurator_layout_public import build_layout_for_public_view
+
+        layout = build_layout_for_public_view(session, quote.id)
+    if layout is not None and getattr(layout, "boxes", None):
+        from app.configurator_layout_public import append_layout_pdf_elements
+
+        append_layout_pdf_elements(elements, layout, heading_style, normal_style)
+
     # Build PDF (footer drawn on every page by canvas callback)
     if footer_drawer:
         doc.build(elements, onFirstPage=footer_drawer, onLaterPages=footer_drawer)

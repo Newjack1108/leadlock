@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { getPublicQuoteView, downloadPublicQuotePdf } from '@/lib/api';
 import { QUOTE_BALANCE_BEFORE_DELIVERY_NOTE } from '@/lib/quoteCopy';
 import type { PublicQuoteView } from '@/lib/types';
+import LayoutDiagram from '@/components/configurator/LayoutDiagram';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
@@ -148,6 +149,22 @@ export default function PublicCustomerDocumentView() {
                 </tbody>
               </table>
             </div>
+
+            {data.layout && data.layout.boxes.length > 0 && (
+              <div className="border-t pt-6 print:break-before-page">
+                <h3 className="font-medium mb-1">Stable layout</h3>
+                {data.layout.name && (
+                  <p className="text-sm text-muted-foreground mb-2">{data.layout.name}</p>
+                )}
+                <p className="text-sm text-muted-foreground mb-4">
+                  Indicative top-down plan of the stable boxes in this quote. Final positions may be
+                  confirmed at site survey.
+                </p>
+                <div className="max-w-3xl">
+                  <LayoutDiagram layout={data.layout} />
+                </div>
+              </div>
+            )}
 
             <div className="border-t pt-4 space-y-1 text-sm">
               {data.discount_total > 0 &&

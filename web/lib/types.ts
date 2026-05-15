@@ -1261,6 +1261,25 @@ export interface PublicQuoteDiscountLine {
   discount_amount: number;
 }
 
+export interface PublicLayoutBox {
+  id: string;
+  label: string;
+  x: number;
+  y: number;
+  rotation: 0 | 90 | 180 | 270;
+  width: number;
+  length: number;
+  is_corner_box: boolean;
+  front_face?: ConfiguratorFrontFace;
+  connection_profile?: ConfiguratorConnectionProfile;
+  blocked_front_m?: number | null;
+}
+
+export interface PublicQuoteLayout {
+  name?: string | null;
+  boxes: PublicLayoutBox[];
+}
+
 export interface PublicQuoteView {
   quote_number: string;
   order_number?: string | null;
@@ -1283,6 +1302,7 @@ export interface PublicQuoteView {
   available_optional_extras?: AvailableExtraResponse[];
   /** Full message when quote opts in; omitted when disabled */
   delivery_installation_contact_note?: string | null;
+  layout?: PublicQuoteLayout | null;
 }
 
 export interface QuoteCreate {

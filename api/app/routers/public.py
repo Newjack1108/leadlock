@@ -27,6 +27,7 @@ from app.models import (
     Order,
 )
 from app.available_optional_extras import get_available_optional_extras_for_quote
+from app.configurator_layout_public import build_layout_for_public_view
 from app.schemas import (
     PublicQuoteViewResponse,
     PublicQuoteViewItemResponse,
@@ -239,6 +240,7 @@ def get_public_quote_view(
             if getattr(quote, "include_delivery_installation_contact_note", False)
             else None
         ),
+        layout=build_layout_for_public_view(session, quote.id),
     )
 
 
@@ -303,9 +305,14 @@ def get_public_quote_pdf(
             else None
         )
         pdf_buffer = generate_quote_pdf(
-            quote, customer, list(quote_items), company_settings, session,
+            quote,
+            customer,
+            list(quote_items),
+            company_settings,
+            session,
             include_spec_sheets=include_spec_sheets,
             available_optional_extras=available_extras,
+            layout=build_layout_for_public_view(session, quote.id),
         )
         pdf_content = pdf_buffer.read()
     except Exception as e:
