@@ -279,10 +279,14 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
               <p className="text-xs text-muted-foreground">Boxes</p>
               <p className="text-lg font-semibold tabular-nums">{boxTotal}</p>
             </div>
-            <div className="min-w-[9rem] shrink-0 rounded-md border px-3 py-2 sm:min-w-[10rem]">
+            <div className="min-w-[11rem] shrink-0 rounded-md border px-3 py-2.5 sm:min-w-[12rem]">
               <p className="text-xs text-muted-foreground">Subtotal</p>
-              <p className="whitespace-nowrap text-base font-semibold tabular-nums" title={subtotalFormatted}>
-                {subtotalFormatted}
+              <p
+                className="mt-0.5 flex flex-wrap items-baseline gap-x-1.5 gap-y-0 whitespace-nowrap tabular-nums"
+                title={`${subtotalFormatted} + VAT`}
+              >
+                <span className="text-xl font-semibold sm:text-2xl">{subtotalFormatted}</span>
+                <span className="text-sm font-medium text-muted-foreground">+ VAT</span>
               </p>
             </div>
           </div>
