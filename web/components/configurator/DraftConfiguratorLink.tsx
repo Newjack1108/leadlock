@@ -4,14 +4,16 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { LayoutGrid } from 'lucide-react';
 
-import { Button, type ButtonProps } from '@/components/ui/button';
+import { type VariantProps } from 'class-variance-authority';
+
+import { Button, buttonVariants } from '@/components/ui/button';
 import { getAuthMe } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 interface DraftConfiguratorLinkProps {
   quoteId: number;
-  variant?: ButtonProps['variant'];
-  size?: ButtonProps['size'];
+  variant?: VariantProps<typeof buttonVariants>['variant'];
+  size?: VariantProps<typeof buttonVariants>['size'];
   className?: string;
   label?: string;
 }
