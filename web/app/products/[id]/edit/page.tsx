@@ -76,6 +76,7 @@ export default function EditProductPage() {
     configurator_front_face: '' as ConfiguratorFrontFace | '',
     configurator_connection_profile: '' as ConfiguratorConnectionProfile | '',
     configurator_is_corner_box: false,
+    configurator_is_starter_box: false,
     allow_in_configurator: false,
     installation_hours: '',
     boxes_per_product: '',
@@ -134,6 +135,7 @@ export default function EditProductPage() {
         configurator_connection_profile: product.configurator_connection_profile || '',
         configurator_is_corner_box:
           product.configurator_is_corner_box ?? Boolean(product.configurator_connection_profile),
+        configurator_is_starter_box: product.configurator_is_starter_box ?? false,
         allow_in_configurator: product.allow_in_configurator ?? false,
         installation_hours: product.installation_hours?.toString() || '',
         boxes_per_product: product.boxes_per_product?.toString() || '',
@@ -170,12 +172,18 @@ export default function EditProductPage() {
   }, [fetchOptionalExtras, fetchProduct, productId]);
 
   useEffect(() => {
-    if ((!isConfiguratorCategory || formData.is_extra) && (formData.configurator_front_face !== '' || formData.configurator_is_corner_box)) {
+    if (
+      (!isConfiguratorCategory || formData.is_extra) &&
+      (formData.configurator_front_face !== '' ||
+        formData.configurator_is_corner_box ||
+        formData.configurator_is_starter_box)
+    ) {
       setFormData((prev) => ({
         ...prev,
         configurator_front_face: '',
         configurator_connection_profile: '',
         configurator_is_corner_box: false,
+        configurator_is_starter_box: false,
       }));
       return;
     }
@@ -265,10 +273,12 @@ export default function EditProductPage() {
           : null,
         configurator_is_corner_box:
           isConfiguratorCategory && !formData.is_extra ? formData.configurator_is_corner_box : false,
+        configurator_is_starter_box:
+          isConfiguratorCategory && !formData.is_extra ? formData.configurator_is_starter_box : false,
         allow_in_configurator: formData.allow_in_configurator,
       };
       if (formData.is_extra) {
-        productData.image_url = null;
+        productData.image_url = formData.image_url?.trim() || null;
         // Extras cannot link other extras; omit optional_extras
       } else {
         productData.image_url = formData.image_url?.trim() || null;
@@ -636,9 +646,18 @@ export default function EditProductPage() {
 
             {formData.is_extra && (
               <Card>
-                <CardContent className="pt-6">
-                  <p className="text-sm text-muted-foreground">
-                    This is an optional extra. Image is not used.
+                <CardHeader>
+                  <CardTitle>Configurator icon</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <ImageUpload
+                    value={formData.image_url}
+                    onChange={(url) => setFormData({ ...formData, image_url: url })}
+                    disabled={loading}
+                    label="Configurator icon"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Small image shown as the toggle button in Configurator Extras when allow in configurator is enabled.
                   </p>
                 </CardContent>
               </Card>
@@ -803,27 +822,47 @@ export default function EditProductPage() {
                       footprint.
                     </p>
                     {isConfiguratorCategory && !formData.is_extra && (
-                      <div className="flex items-center gap-2">
-                        <input
-                          id="configurator_is_corner_box"
-                          type="checkbox"
-                          checked={formData.configurator_is_corner_box}
-                          onChange={(e) =>
-                            setFormData({
-                              ...formData,
-                              configurator_is_corner_box: e.target.checked,
-                              configurator_connection_profile: e.target.checked
-                                ? formData.configurator_connection_profile
-                                : '',
-                              configurator_front_face: e.target.checked ? '' : formData.configurator_front_face,
-                            })
-                          }
-                          className="h-4 w-4"
-                          disabled={loading}
-                        />
-                        <Label htmlFor="configurator_is_corner_box">
-                          Corner box (fixed orientation — no rotation on the configurator canvas)
-                        </Label>
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2">
+                          <input
+                            id="configurator_is_corner_box"
+                            type="checkbox"
+                            checked={formData.configurator_is_corner_box}
+                            onChange={(e) =>
+                              setFormData({
+                                ...formData,
+                                configurator_is_corner_box: e.target.checked,
+                                configurator_connection_profile: e.target.checked
+                                  ? formData.configurator_connection_profile
+                                  : '',
+                                configurator_front_face: e.target.checked ? '' : formData.configurator_front_face,
+                              })
+                            }
+                            className="h-4 w-4"
+                            disabled={loading}
+                          />
+                          <Label htmlFor="configurator_is_corner_box">
+                            Corner box (fixed orientation — no rotation on the configurator canvas)
+                          </Label>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            id="configurator_is_starter_box"
+                            type="checkbox"
+                            checked={formData.configurator_is_starter_box}
+                            onChange={(e) =>
+                              setFormData({
+                                ...formData,
+                                configurator_is_starter_box: e.target.checked,
+                              })
+                            }
+                            className="h-4 w-4"
+                            disabled={loading}
+                          />
+                          <Label htmlFor="configurator_is_starter_box">
+                            Starter box (users must place this product before adding other configurator items)
+                          </Label>
+                        </div>
                       </div>
                     )}
                     {isCornerConfiguratorProduct && (

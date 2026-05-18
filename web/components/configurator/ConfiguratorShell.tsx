@@ -19,7 +19,13 @@ import {
   previewConfiguratorConfiguration,
   saveQuoteConfiguration,
 } from '@/lib/api';
-import { addProductToConfiguration, createEmptyConfiguration } from '@/lib/configurator/defaults';
+import {
+  addProductToConfiguration,
+  canAddConfiguratorProduct,
+  canRemoveConfiguratorBox,
+  createEmptyConfiguration,
+  getStarterProducts,
+} from '@/lib/configurator/defaults';
 import { findPlacementCandidate, normalizeRotation } from '@/lib/configurator/geometry';
 import { formatCurrency, getPreviewIssueCount } from '@/lib/configurator/summary';
 import type {
@@ -75,6 +81,9 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
       return acc;
     }, {});
   }, [catalog]);
+
+  const starterProducts = useMemo(() => getStarterProducts(catalog.items), [catalog.items]);
+  const layoutStarted = configuration.boxes.length > 0;
 
   const errorCount = getPreviewIssueCount(preview, 'error');
   const warningCount = getPreviewIssueCount(preview, 'warning');
@@ -137,6 +146,10 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
   };
 
   const handleAddItem = (product: Product) => {
+    if (!canAddConfiguratorProduct(configuration.boxes, product)) {
+      toast.error('Place a starter box first.');
+      return;
+    }
     const next = addProductToConfiguration(configuration, product, productMap, selectedBoxId);
     updateConfiguration(next);
     setSelectedBoxId(next.boxes[next.boxes.length - 1]?.id ?? null);
@@ -214,6 +227,10 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
   };
 
   const handleRemoveBox = (boxId: string) => {
+    if (!canRemoveConfiguratorBox(configuration.boxes, boxId, productMap)) {
+      toast.error('Remove other boxes before deleting the starter.');
+      return;
+    }
     updateConfiguration({
       ...configuration,
       boxes: configuration.boxes.filter((box) => box.id !== boxId),
@@ -256,8 +273,9 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
             {quote.quote_number} · {quote.customer_name || 'Draft quote'}
           </p>
           <p className="mt-2 text-sm text-muted-foreground">
-            Drag boxes on the canvas to build the layout. Boxes snap to valid edges and cannot overlap. Standard boxes
-            can be rotated; corner boxes use fixed-orientation products and cannot be turned on the canvas.
+            Start by adding a starter box from the catalogue, then build the layout on the canvas. Boxes snap to valid
+            edges and cannot overlap. Standard boxes can be rotated; corner boxes use fixed-orientation products and
+            cannot be turned on the canvas.
           </p>
           {configuration.boxes.length > 0 && (
             <p className="mt-2 text-sm text-muted-foreground">
@@ -316,6 +334,7 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
                 onMoveBox={handleMoveBox}
                 onRotateBox={handleSetRotation}
                 onRemoveBox={handleRemoveBox}
+                canRemoveBox={(boxId) => canRemoveConfiguratorBox(configuration.boxes, boxId, productMap)}
               />
               <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
                 <span className="font-medium text-foreground">Front edges:</span> green = exposed front (full side on
@@ -464,8 +483,10 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
 
           <ConfiguratorCatalog
             items={catalog.items}
+            starterProducts={starterProducts}
             extras={catalog.extras}
             configuration={configuration}
+            layoutStarted={layoutStarted}
             onAddItem={handleAddItem}
             onToggleExtra={handleToggleExtra}
             onUpdateExtra={handleUpdateExtra}

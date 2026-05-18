@@ -1,5 +1,38 @@
 import { getSuggestedPlacement } from '@/lib/configurator/geometry';
-import type { Product, QuoteConfigurationPayload } from '@/lib/types';
+import type { ConfiguratorBoxPlacement, Product, QuoteConfigurationPayload } from '@/lib/types';
+
+export function getStarterProducts(items: Product[]): Product[] {
+  return items.filter((product) => product.configurator_is_starter_box);
+}
+
+export function canAddConfiguratorProduct(
+  boxes: ConfiguratorBoxPlacement[],
+  product: Product
+): boolean {
+  if (boxes.length === 0) {
+    return Boolean(product.configurator_is_starter_box);
+  }
+  return true;
+}
+
+export function canRemoveConfiguratorBox(
+  boxes: ConfiguratorBoxPlacement[],
+  boxId: string,
+  productMap: Record<number, Product>
+): boolean {
+  const box = boxes.find((entry) => entry.id === boxId);
+  if (!box) return true;
+  const product = productMap[box.product_id];
+  if (!product?.configurator_is_starter_box) return true;
+  return boxes.length <= 1;
+}
+
+export function layoutHasStarterBox(
+  boxes: ConfiguratorBoxPlacement[],
+  productMap: Record<number, Product>
+): boolean {
+  return boxes.some((box) => Boolean(productMap[box.product_id]?.configurator_is_starter_box));
+}
 
 export function createEmptyConfiguration(name?: string): QuoteConfigurationPayload {
   return {

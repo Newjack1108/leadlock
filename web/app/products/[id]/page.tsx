@@ -132,6 +132,9 @@ export default function ProductDetailPage() {
                 {product.allow_in_configurator && (
                   <Badge variant="secondary">Configurator Extra</Badge>
                 )}
+                {product.configurator_is_starter_box && (
+                  <Badge variant="secondary">Starter</Badge>
+                )}
                 {product.subcategory && (
                   <Badge variant="secondary">{product.subcategory}</Badge>
                 )}
@@ -313,6 +316,10 @@ export default function ProductDetailPage() {
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Corner box:</span>
                       <span>{product.configurator_is_corner_box ? 'Yes (fixed orientation)' : 'No'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Starter box:</span>
+                      <span>{product.configurator_is_starter_box ? 'Yes' : 'No'}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Connection Profile:</span>

@@ -11,11 +11,15 @@ import type {
   Product,
   QuoteConfigurationPayload,
 } from '@/lib/types';
+import ConfiguratorExtraIconButton from '@/components/configurator/ConfiguratorExtraIconButton';
+import { cn } from '@/lib/utils';
 
 interface ConfiguratorCatalogProps {
   items: Product[];
+  starterProducts: Product[];
   extras: Product[];
   configuration: QuoteConfigurationPayload;
+  layoutStarted: boolean;
   onAddItem: (product: Product) => void;
   onToggleExtra: (product: Product, checked: boolean) => void;
   onUpdateExtra: (productId: number, updater: (current: ConfiguratorExtraSelection) => ConfiguratorExtraSelection) => void;
@@ -23,8 +27,10 @@ interface ConfiguratorCatalogProps {
 
 export default function ConfiguratorCatalog({
   items,
+  starterProducts,
   extras,
   configuration,
+  layoutStarted,
   onAddItem,
   onToggleExtra,
   onUpdateExtra,
@@ -33,12 +39,46 @@ export default function ConfiguratorCatalog({
 
   return (
     <div className="space-y-6">
-      <Card>
+      {!layoutStarted && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Starter boxes</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {starterProducts.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No starter boxes are configured yet. Edit a CONFIGURATOR product and enable{' '}
+                <span className="font-medium text-foreground">Starter box</span> so users can begin a layout.
+              </p>
+            ) : (
+              starterProducts.map((product) => (
+                <div key={product.id} className="flex items-center justify-between gap-3 rounded-md border p-3">
+                  <div>
+                    <p className="font-medium">{product.name}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {product.configurator_width ?? '—'}m x {product.configurator_length ?? '—'}m
+                    </p>
+                  </div>
+                  <Button type="button" variant="outline" onClick={() => onAddItem(product)}>
+                    Add
+                  </Button>
+                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      <Card className={cn(!layoutStarted && 'opacity-60')}>
         <CardHeader>
           <CardTitle>Configurator Items</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          {items.length === 0 ? (
+          {!layoutStarted ? (
+            <p className="text-sm text-muted-foreground">
+              Add a starter box on the canvas to unlock the rest of the catalogue.
+            </p>
+          ) : items.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               No configurator products are active yet. Create products with the `CONFIGURATOR` category first.
             </p>
@@ -86,15 +126,11 @@ export default function ConfiguratorCatalog({
                         £{Number(product.base_price).toFixed(2)} {product.unit ? `· ${product.unit}` : ''}
                       </p>
                     </div>
-                    <label className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={Boolean(selected)}
-                        onChange={(event) => onToggleExtra(product, event.target.checked)}
-                        className="h-4 w-4"
-                      />
-                      Include
-                    </label>
+                    <ConfiguratorExtraIconButton
+                      product={product}
+                      selected={Boolean(selected)}
+                      onToggle={() => onToggleExtra(product, !selected)}
+                    />
                   </div>
                   {selected && !isPerBox && (
                     <div className="mt-3 space-y-2">

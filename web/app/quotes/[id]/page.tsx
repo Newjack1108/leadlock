@@ -27,6 +27,7 @@ import { toast } from 'sonner';
 import Link from 'next/link';
 import { formatDateTime } from '@/lib/utils';
 import { ArrowLeft, Mail, Eye, Tag, Pencil, ChevronDown, ChevronUp, Send, ExternalLink, CheckCircle, ShoppingBag, XCircle, MinusCircle, FileSearch, Trash2, Copy, AlertTriangle } from 'lucide-react';
+import DraftConfiguratorLink from '@/components/configurator/DraftConfiguratorLink';
 import {
   Dialog,
   DialogContent,
@@ -282,6 +283,7 @@ export default function QuoteDetailPage() {
                       Edit Draft
                     </Link>
                   </Button>
+                  <DraftConfiguratorLink quoteId={quote.id} variant="outline" />
                   <Button
                     variant="destructive"
                     onClick={() => setCancelDialogOpen(true)}

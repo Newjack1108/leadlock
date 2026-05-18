@@ -36,6 +36,7 @@ interface ConfiguratorCanvasProps {
   onMoveBox?: (boxId: string, nextBox: Pick<ConfiguratorBoxPlacement, 'x' | 'y'>) => void;
   onRotateBox?: (boxId: string, rotation: number) => void;
   onRemoveBox?: (boxId: string) => void;
+  canRemoveBox?: (boxId: string) => boolean;
   readOnly?: boolean;
   viewportHeight?: string;
 }
@@ -74,6 +75,7 @@ export default function ConfiguratorCanvas({
   onMoveBox,
   onRotateBox,
   onRemoveBox,
+  canRemoveBox,
   readOnly = false,
   viewportHeight = '72vh',
 }: ConfiguratorCanvasProps) {
@@ -451,20 +453,22 @@ export default function ConfiguratorCanvas({
                           </span>
                         </>
                       )}
-                      <span
-                        className="flex h-7 w-7 items-center justify-center rounded-full border border-red-300 bg-background text-red-600 shadow-sm"
-                        onPointerDown={(event) => {
-                          event.stopPropagation();
-                        }}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setDragState(null);
-                          setDragCandidate(null);
-                          onRemoveBox(box.id);
-                        }}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </span>
+                      {(canRemoveBox?.(box.id) ?? true) && (
+                        <span
+                          className="flex h-7 w-7 items-center justify-center rounded-full border border-red-300 bg-background text-red-600 shadow-sm"
+                          onPointerDown={(event) => {
+                            event.stopPropagation();
+                          }}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setDragState(null);
+                            setDragCandidate(null);
+                            onRemoveBox(box.id);
+                          }}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </span>
+                      )}
                     </span>
                   )}
                   {showEdgeOverlays && (
@@ -634,7 +638,7 @@ export default function ConfiguratorCanvas({
 
               {rectEntries.length === 0 && (
                 <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">
-                  Add configurator items from the catalogue to start the layout.
+                  Add a starter box from the catalogue to begin the layout.
                 </div>
               )}
 

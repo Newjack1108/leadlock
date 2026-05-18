@@ -102,7 +102,8 @@ export default function OptionalExtrasPage() {
               <p className="text-muted-foreground">
                 Manage optional extras that can be added to products. Enable{' '}
                 <span className="font-medium text-foreground">Allow in configurator</span> on an extra to show it in
-                the quote configurator.
+                the quote configurator. Upload a configurator icon image on each extra for the small toggle buttons in
+                the configurator panel.
               </p>
             </div>
             <Button asChild>

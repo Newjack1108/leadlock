@@ -360,6 +360,7 @@ export default function ProductsPage() {
                           </Badge>
                           {product.is_extra && <Badge variant="outline">Extra</Badge>}
                           {product.allow_in_configurator && <Badge variant="secondary">Configurator Extra</Badge>}
+                          {product.configurator_is_starter_box && <Badge variant="secondary">Starter</Badge>}
                         </div>
                       </td>
                       <td className="p-3 font-semibold">£{Number(product.base_price).toFixed(2)}</td>
@@ -406,6 +407,9 @@ export default function ProductsPage() {
                         )}
                         {product.allow_in_configurator && (
                           <Badge variant="secondary">Configurator Extra</Badge>
+                        )}
+                        {product.configurator_is_starter_box && (
+                          <Badge variant="secondary">Starter</Badge>
                         )}
                         {product.is_production_synced && (
                           <Badge variant="secondary">Production</Badge>

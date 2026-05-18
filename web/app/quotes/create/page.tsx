@@ -33,7 +33,9 @@ import {
   buildUpdateDraftPayload,
   quoteItemsToFormItems,
   DRAFT_PLACEHOLDER_LINE_DESCRIPTION,
+  isPlaceholderOnlyDraftItems,
 } from '@/lib/quoteDraftPayload';
+import DraftConfiguratorCallout from '@/components/configurator/DraftConfiguratorCallout';
 import {
   optionalExtraIdSetFromList,
   isRootQuoteLevelOptionalExtraLine,
@@ -769,9 +771,7 @@ function CreateQuoteContent() {
       return;
     }
 
-    const onlyPlaceholder =
-      validItems.length === 1 && validItems[0].description.trim() === DRAFT_PLACEHOLDER_LINE_DESCRIPTION;
-    if (onlyPlaceholder) {
+    if (isPlaceholderOnlyDraftItems(validItems)) {
       toast.error('Please add real quote lines before finishing');
       return;
     }
@@ -867,6 +867,8 @@ function CreateQuoteContent() {
 
         <form onSubmit={handleSubmit}>
           <div className="space-y-6">
+            <DraftConfiguratorCallout quoteId={draftQuoteId} items={items} />
+
             {/* Quote Items */}
             <Card>
               <CardHeader>

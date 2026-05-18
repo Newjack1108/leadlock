@@ -15,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import ImageUpload from '@/components/ImageUpload';
 import { createProduct, getApiErrorDetail } from '@/lib/api';
 import { ProductCategory } from '@/lib/types';
 import { toast } from 'sonner';
@@ -35,6 +36,7 @@ export default function CreateOptionalExtraPage() {
     allow_in_configurator: false,
     installation_hours: '',
     boxes_per_product: '',
+    image_url: '',
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -63,6 +65,7 @@ export default function CreateOptionalExtraPage() {
         boxes_per_product: formData.boxes_per_product
           ? parseInt(formData.boxes_per_product, 10)
           : undefined,
+        image_url: formData.image_url.trim() || undefined,
       });
       toast.success('Optional extra created successfully');
       router.push('/products/optional-extras');
@@ -242,6 +245,24 @@ export default function CreateOptionalExtraPage() {
                     Used in installation calculation. Leave blank if not boxed.
                   </p>
                 </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Configurator icon</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <ImageUpload
+                  value={formData.image_url}
+                  onChange={(url) => setFormData({ ...formData, image_url: url })}
+                  disabled={loading}
+                  label="Configurator icon"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Small image shown as the toggle button in Configurator Extras when this extra is enabled for the
+                  configurator.
+                </p>
               </CardContent>
             </Card>
 

@@ -51,6 +51,7 @@ import { prefetchProductDetailsForQuoteItems } from '@/lib/prefetchQuoteProductD
 import { useDraftAutosave } from '@/hooks/useDraftAutosave';
 import { formatHoursMinutes } from '@/lib/utils';
 import { Plus, Trash2, ArrowLeft, X, ChevronDown, ChevronUp, Send, FileSearch } from 'lucide-react';
+import DraftConfiguratorLink from '@/components/configurator/DraftConfiguratorLink';
 import RequestDiscountDialog from '@/components/RequestDiscountDialog';
 import {
   Dialog,
@@ -702,6 +703,7 @@ function EditQuoteContent() {
               <Trash2 className="h-4 w-4 mr-2" />
               Cancel Draft
             </Button>
+            <DraftConfiguratorLink quoteId={quoteId} variant="outline" />
           </div>
           <div>
             <h1 className="text-3xl font-semibold">Edit Draft: {quote.quote_number}</h1>

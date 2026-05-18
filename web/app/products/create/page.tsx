@@ -72,6 +72,7 @@ export default function CreateProductPage() {
     configurator_front_face: '' as ConfiguratorFrontFace | '',
     configurator_connection_profile: '' as ConfiguratorConnectionProfile | '',
     configurator_is_corner_box: false,
+    configurator_is_starter_box: false,
     installation_hours: '',
     boxes_per_product: '',
   });
@@ -97,12 +98,18 @@ export default function CreateProductPage() {
   }, []);
 
   useEffect(() => {
-    if (!isConfiguratorCategory && (formData.configurator_front_face !== '' || formData.configurator_is_corner_box)) {
+    if (
+      !isConfiguratorCategory &&
+      (formData.configurator_front_face !== '' ||
+        formData.configurator_is_corner_box ||
+        formData.configurator_is_starter_box)
+    ) {
       setFormData((prev) => ({
         ...prev,
         configurator_front_face: '',
         configurator_connection_profile: '',
         configurator_is_corner_box: false,
+        configurator_is_starter_box: false,
       }));
       return;
     }
@@ -203,6 +210,8 @@ export default function CreateProductPage() {
           : undefined,
         configurator_is_corner_box:
           isConfiguratorCategory && !formData.is_extra ? formData.configurator_is_corner_box : false,
+        configurator_is_starter_box:
+          isConfiguratorCategory && !formData.is_extra ? formData.configurator_is_starter_box : false,
         optional_extras: selectedExtras.length > 0 ? selectedExtras : undefined,
       };
 
@@ -667,6 +676,7 @@ export default function CreateProductPage() {
                   dedicated footprint.
                 </p>
                 {isConfiguratorCategory && !formData.is_extra && (
+                  <div className="space-y-3">
                   <div className="flex items-center gap-2">
                     <input
                       id="configurator_is_corner_box"
@@ -688,6 +698,25 @@ export default function CreateProductPage() {
                     <Label htmlFor="configurator_is_corner_box">
                       Corner box (fixed orientation — no rotation on the configurator canvas)
                     </Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      id="configurator_is_starter_box"
+                      type="checkbox"
+                      checked={formData.configurator_is_starter_box}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          configurator_is_starter_box: e.target.checked,
+                        })
+                      }
+                      className="h-4 w-4"
+                      disabled={loading}
+                    />
+                    <Label htmlFor="configurator_is_starter_box">
+                      Starter box (users must place this product before adding other configurator items)
+                    </Label>
+                  </div>
                   </div>
                 )}
                 {isCornerConfiguratorProduct && (
@@ -800,3 +829,4 @@ export default function CreateProductPage() {
     </div>
   );
 }
+

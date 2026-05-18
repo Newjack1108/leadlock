@@ -557,6 +557,7 @@ export interface Product {
   configurator_front_face?: ConfiguratorFrontFace | null;
   configurator_connection_profile?: ConfiguratorConnectionProfile | null;
   configurator_is_corner_box?: boolean;
+  configurator_is_starter_box?: boolean;
   allow_in_configurator: boolean;
   installation_hours?: number;
   boxes_per_product?: number;

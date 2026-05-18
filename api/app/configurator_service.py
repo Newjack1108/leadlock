@@ -377,6 +377,19 @@ def build_configurator_preview(
     box_products = _load_products(session, [box.product_id for box in payload.boxes])
     extra_products = _load_products(session, [extra.product_id for extra in payload.extras])
 
+    if payload.boxes and not any(
+        bool(getattr(box_products.get(box.product_id), "configurator_is_starter_box", False))
+        for box in payload.boxes
+    ):
+        issues.append(
+            ConfiguratorValidationIssue(
+                code="STARTER_BOX_REQUIRED",
+                severity="error",
+                message="Layout must include a starter box.",
+                box_ids=[box.id for box in payload.boxes],
+            )
+        )
+
     layout_rects: Dict[str, LayoutShape] = {}
     graph: Dict[str, set[str]] = {box.id: set() for box in payload.boxes}
     joined_faces: Dict[str, set[Face]] = {box.id: set() for box in payload.boxes}

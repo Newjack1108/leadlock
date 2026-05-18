@@ -61,6 +61,7 @@ def _validate_configurator_product_payload(payload: dict) -> None:
     configurator_front_face = payload.get("configurator_front_face")
     configurator_connection_profile = payload.get("configurator_connection_profile")
     configurator_is_corner_box = bool(payload.get("configurator_is_corner_box"))
+    configurator_is_starter_box = bool(payload.get("configurator_is_starter_box"))
 
     if allow_in_configurator and not is_extra:
         raise HTTPException(
@@ -84,6 +85,12 @@ def _validate_configurator_product_payload(payload: dict) -> None:
         raise HTTPException(
             status_code=422,
             detail="Only non-extra configurator items can be marked as corner boxes",
+        )
+
+    if configurator_is_starter_box and (category != ProductCategory.CONFIGURATOR or is_extra):
+        raise HTTPException(
+            status_code=422,
+            detail="Only non-extra configurator items can be marked as starter boxes",
         )
 
     if category == ProductCategory.CONFIGURATOR and not is_extra:

@@ -24,6 +24,18 @@ export function quoteItemsToFormItems(items: QuoteItem[]): QuoteItemCreate[] {
 /** Single placeholder line when nothing valid is on the quote (API requires ≥1 item). */
 export const DRAFT_PLACEHOLDER_LINE_DESCRIPTION = 'Draft — in progress';
 
+export function isPlaceholderOnlyDraftItems(
+  items: Array<{ description: string; quantity?: number; unit_price?: number }>
+): boolean {
+  const validItems = items.filter(
+    (item) => item.description.trim() && Number(item.quantity) > 0 && Number(item.unit_price) >= 0
+  );
+  return (
+    validItems.length === 1 &&
+    validItems[0].description.trim() === DRAFT_PLACEHOLDER_LINE_DESCRIPTION
+  );
+}
+
 export type QuoteDraftPayload = {
   valid_until?: string;
   terms_and_conditions?: string;

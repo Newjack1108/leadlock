@@ -266,6 +266,7 @@ def test_configurator_catalog_save_preview_and_apply_flow():
         item = Product(
             name="3m Front Box",
             category=ProductCategory.CONFIGURATOR,
+            configurator_is_starter_box=True,
             base_price=Decimal("2500.00"),
             configurator_width=Decimal("3.00"),
             configurator_length=Decimal("3.00"),
@@ -365,6 +366,7 @@ def test_deleted_boxes_do_not_reappear_after_save_and_reapply():
         first_item = Product(
             name="Front Box A",
             category=ProductCategory.CONFIGURATOR,
+            configurator_is_starter_box=True,
             base_price=Decimal("2500.00"),
             configurator_width=Decimal("3.00"),
             configurator_length=Decimal("3.00"),
@@ -372,6 +374,7 @@ def test_deleted_boxes_do_not_reappear_after_save_and_reapply():
         second_item = Product(
             name="Front Box B",
             category=ProductCategory.CONFIGURATOR,
+            configurator_is_starter_box=True,
             base_price=Decimal("2750.00"),
             configurator_width=Decimal("3.00"),
             configurator_length=Decimal("3.00"),
@@ -478,6 +481,7 @@ def test_configurator_preview_enforces_zero_overlap_and_front_face_rules():
         item = Product(
             name="3m Side Box",
             category=ProductCategory.CONFIGURATOR,
+            configurator_is_starter_box=True,
             base_price=Decimal("1800.00"),
             configurator_width=Decimal("3.00"),
             configurator_length=Decimal("3.00"),
@@ -613,6 +617,7 @@ def test_configurator_preview_uses_product_front_face_for_rectangular_items():
         item = Product(
             name="3.5 x 5 Rectangular Box",
             category=ProductCategory.CONFIGURATOR,
+            configurator_is_starter_box=True,
             base_price=Decimal("2200.00"),
             configurator_width=Decimal("3.50"),
             configurator_length=Decimal("5.00"),
@@ -673,6 +678,7 @@ def test_corner_connection_profiles_restrict_front_segment_and_side_faces():
         standard_box = Product(
             name="3.5 Box",
             category=ProductCategory.CONFIGURATOR,
+            configurator_is_starter_box=True,
             base_price=Decimal("1800.00"),
             configurator_width=Decimal("3.50"),
             configurator_length=Decimal("3.50"),
@@ -680,6 +686,7 @@ def test_corner_connection_profiles_restrict_front_segment_and_side_faces():
         right_corner = Product(
             name="Right Corner Box",
             category=ProductCategory.CONFIGURATOR,
+            configurator_is_starter_box=True,
             base_price=Decimal("2400.00"),
             configurator_width=Decimal("5.00"),
             configurator_length=Decimal("3.50"),
@@ -690,6 +697,7 @@ def test_corner_connection_profiles_restrict_front_segment_and_side_faces():
         left_corner = Product(
             name="Left Corner Box",
             category=ProductCategory.CONFIGURATOR,
+            configurator_is_starter_box=True,
             base_price=Decimal("2400.00"),
             configurator_width=Decimal("5.00"),
             configurator_length=Decimal("3.50"),
@@ -829,6 +837,7 @@ def test_corner_connection_profiles_rotate_their_physical_front_and_side_rules()
         standard_box = Product(
             name="3.5 Box",
             category=ProductCategory.CONFIGURATOR,
+            configurator_is_starter_box=True,
             base_price=Decimal("1800.00"),
             configurator_width=Decimal("3.50"),
             configurator_length=Decimal("3.50"),
@@ -836,6 +845,7 @@ def test_corner_connection_profiles_rotate_their_physical_front_and_side_rules()
         right_corner = Product(
             name="Right Corner Box",
             category=ProductCategory.CONFIGURATOR,
+            configurator_is_starter_box=True,
             base_price=Decimal("2400.00"),
             configurator_width=Decimal("5.00"),
             configurator_length=Decimal("3.50"),
@@ -846,6 +856,7 @@ def test_corner_connection_profiles_rotate_their_physical_front_and_side_rules()
         left_corner = Product(
             name="Left Corner Box",
             category=ProductCategory.CONFIGURATOR,
+            configurator_is_starter_box=True,
             base_price=Decimal("2400.00"),
             configurator_width=Decimal("5.00"),
             configurator_length=Decimal("3.50"),
@@ -960,6 +971,7 @@ def test_tall_corner_profiles_keep_front_on_the_long_side():
         standard_box = Product(
             name="3.5 Box",
             category=ProductCategory.CONFIGURATOR,
+            configurator_is_starter_box=True,
             base_price=Decimal("1800.00"),
             configurator_width=Decimal("3.50"),
             configurator_length=Decimal("3.50"),
@@ -967,6 +979,7 @@ def test_tall_corner_profiles_keep_front_on_the_long_side():
         right_corner = Product(
             name="Tall Right Corner Box",
             category=ProductCategory.CONFIGURATOR,
+            configurator_is_starter_box=True,
             base_price=Decimal("2400.00"),
             configurator_width=Decimal("3.60"),
             configurator_length=Decimal("4.90"),
@@ -977,6 +990,7 @@ def test_tall_corner_profiles_keep_front_on_the_long_side():
         left_corner = Product(
             name="Tall Left Corner Box",
             category=ProductCategory.CONFIGURATOR,
+            configurator_is_starter_box=True,
             base_price=Decimal("2400.00"),
             configurator_width=Decimal("3.60"),
             configurator_length=Decimal("4.90"),
@@ -1042,3 +1056,118 @@ def test_tall_corner_profiles_keep_front_on_the_long_side():
     )
     assert left_front_blocked["valid"] is False
     assert any(issue["code"] == "INVALID_CONNECTION_SEGMENT" for issue in left_front_blocked["issues"])
+
+
+def test_optional_extra_cannot_be_marked_starter_box():
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SQLModel.metadata.create_all(engine)
+    user = _seed_user(engine)
+    client = TestClient(_make_app(engine, user))
+
+    response = client.post(
+        "/api/products",
+        json={
+            "name": "Extra Starter",
+            "category": "STABLES",
+            "is_extra": True,
+            "base_price": "50.00",
+            "unit": "Unit",
+            "configurator_is_starter_box": True,
+        },
+    )
+    assert response.status_code == 422
+    assert "starter boxes" in response.json()["detail"].lower()
+
+
+def test_configurator_preview_requires_starter_box_in_layout():
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SQLModel.metadata.create_all(engine)
+    user = _seed_user(engine)
+
+    with Session(engine) as session:
+        starter = Product(
+            name="Starter SKU",
+            category=ProductCategory.CONFIGURATOR,
+            configurator_is_starter_box=True,
+            base_price=Decimal("1000.00"),
+            configurator_width=Decimal("3.00"),
+            configurator_length=Decimal("3.00"),
+        )
+        regular = Product(
+            name="Regular SKU",
+            category=ProductCategory.CONFIGURATOR,
+            configurator_is_starter_box=False,
+            base_price=Decimal("1200.00"),
+            configurator_width=Decimal("3.00"),
+            configurator_length=Decimal("3.00"),
+        )
+        session.add(starter)
+        session.add(regular)
+        session.commit()
+        session.refresh(starter)
+        session.refresh(regular)
+        regular_id = regular.id
+
+    client = TestClient(_make_app(engine, user))
+    preview = client.post(
+        "/api/configurator/preview",
+        json={
+            "schema_version": 1,
+            "boxes": [
+                {"id": "box-1", "product_id": regular_id, "x": "0", "y": "0", "rotation": 0},
+            ],
+            "extras": [],
+        },
+    )
+    assert preview.status_code == 200
+    payload = preview.json()
+    assert payload["valid"] is False
+    assert any(issue["code"] == "STARTER_BOX_REQUIRED" for issue in payload["issues"])
+
+
+def test_configurator_preview_accepts_layout_with_starter_box():
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SQLModel.metadata.create_all(engine)
+    user = _seed_user(engine)
+
+    with Session(engine) as session:
+        starter = Product(
+            name="Starter SKU",
+            category=ProductCategory.CONFIGURATOR,
+            configurator_is_starter_box=True,
+            base_price=Decimal("1000.00"),
+            configurator_width=Decimal("3.00"),
+            configurator_length=Decimal("3.00"),
+        )
+        session.add(starter)
+        session.commit()
+        session.refresh(starter)
+        starter_id = starter.id
+
+    client = TestClient(_make_app(engine, user))
+    preview = client.post(
+        "/api/configurator/preview",
+        json={
+            "schema_version": 1,
+            "boxes": [
+                {"id": "box-1", "product_id": starter_id, "x": "0", "y": "0", "rotation": 0},
+            ],
+            "extras": [],
+        },
+    )
+    assert preview.status_code == 200
+    payload = preview.json()
+    assert payload["valid"] is True
+    assert not any(issue["code"] == "STARTER_BOX_REQUIRED" for issue in payload["issues"])

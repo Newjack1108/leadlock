@@ -1061,6 +1061,7 @@ class ProductCreate(BaseModel):
     configurator_front_face: Optional[ConfiguratorFrontFace] = None
     configurator_connection_profile: Optional[ConfiguratorConnectionProfile] = None
     configurator_is_corner_box: bool = False
+    configurator_is_starter_box: bool = False
     allow_in_configurator: bool = False
     installation_hours: Optional[Decimal] = None
     boxes_per_product: Optional[int] = None  # Number of boxes per product (optional; used in installation calculation)
@@ -1097,6 +1098,7 @@ class ProductUpdate(BaseModel):
     configurator_front_face: Optional[ConfiguratorFrontFace] = None
     configurator_connection_profile: Optional[ConfiguratorConnectionProfile] = None
     configurator_is_corner_box: Optional[bool] = None
+    configurator_is_starter_box: Optional[bool] = None
     allow_in_configurator: Optional[bool] = None
     installation_hours: Optional[Decimal] = None
     boxes_per_product: Optional[int] = None
@@ -1136,6 +1138,7 @@ class ProductResponse(BaseModel):
     configurator_front_face: Optional[ConfiguratorFrontFace] = None
     configurator_connection_profile: Optional[ConfiguratorConnectionProfile] = None
     configurator_is_corner_box: bool = False
+    configurator_is_starter_box: bool = False
     allow_in_configurator: bool = False
     installation_hours: Optional[Decimal] = None
     boxes_per_product: Optional[int] = None

@@ -100,7 +100,9 @@ export default function QuoteConfiguratorPage() {
                 <p className="text-sm text-muted-foreground">Loading draft quotes...</p>
               ) : draftQuotes.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  No draft quotes are available yet. Create a draft quote in the normal flow first, then return here.
+                  No draft quotes are available yet. Create a draft from a lead or customer, then use{' '}
+                  <span className="font-medium text-foreground">Configure layout</span> on the draft quote or create
+                  page to open the configurator here.
                 </p>
               ) : (
                 draftQuotes.map((quote) => (
