@@ -22,6 +22,8 @@ from app.schemas import (
 )
 
 EDGE_EPSILON = 1e-6
+TOUCH_TOLERANCE = 0.0
+OVERALL_CAPTION_OFFSET_M = 0.4
 PDF_LAYOUT_TARGET_WIDTH_PT = 170 * 2.834645669  # ~170mm in points
 PDF_LAYOUT_MAX_HEIGHT_PT = 220 * 2.834645669
 DEFAULT_CANVAS_PADDING = 1.0
@@ -208,6 +210,216 @@ def _canvas_bounds(rects: List[dict], padding: float = DEFAULT_CANVAS_PADDING) -
         "height": max(7.0, math.ceil(max_y - min_y + padding * 2)),
         "padding": padding,
     }
+
+
+def _ranges_overlap(
+    a_start: float,
+    a_end: float,
+    b_start: float,
+    b_end: float,
+    tolerance: float = TOUCH_TOLERANCE,
+) -> bool:
+    return max(a_start, b_start) < min(a_end, b_end) - tolerance - EDGE_EPSILON
+
+
+def _edges_close(a: float, b: float, tolerance: float = TOUCH_TOLERANCE) -> bool:
+    return abs(a - b) <= tolerance + EDGE_EPSILON
+
+
+def _rects_touch(a: dict, b: dict, tolerance: float = TOUCH_TOLERANCE) -> bool:
+    if _edges_close(a["x2"], b["x1"], tolerance) and _ranges_overlap(
+        a["y1"], a["y2"], b["y1"], b["y2"], tolerance
+    ):
+        return True
+    if _edges_close(b["x2"], a["x1"], tolerance) and _ranges_overlap(
+        a["y1"], a["y2"], b["y1"], b["y2"], tolerance
+    ):
+        return True
+    if _edges_close(a["y2"], b["y1"], tolerance) and _ranges_overlap(
+        a["x1"], a["x2"], b["x1"], b["x2"], tolerance
+    ):
+        return True
+    if _edges_close(b["y2"], a["y1"], tolerance) and _ranges_overlap(
+        a["x1"], a["x2"], b["x1"], b["x2"], tolerance
+    ):
+        return True
+    return False
+
+
+def _connected_components(entries: List[dict], tolerance: float = TOUCH_TOLERANCE) -> List[set[str]]:
+    if not entries:
+        return []
+
+    graph: dict[str, set[str]] = {entry["box"].id: set() for entry in entries}
+    for index, left in enumerate(entries):
+        for right in entries[index + 1 :]:
+            if _rects_touch(left["rect"], right["rect"], tolerance):
+                graph[left["box"].id].add(right["box"].id)
+                graph[right["box"].id].add(left["box"].id)
+
+    visited: set[str] = set()
+    components: List[set[str]] = []
+    for entry in entries:
+        box_id = entry["box"].id
+        if box_id in visited:
+            continue
+        component: set[str] = set()
+        queue = [box_id]
+        while queue:
+            current = queue.pop()
+            if current in visited:
+                continue
+            visited.add(current)
+            component.add(current)
+            queue.extend(graph.get(current, set()) - visited)
+        components.append(component)
+    return components
+
+
+def _format_layout_dimension_meters(value: float) -> str:
+    rounded = round(value, 2)
+    if rounded == int(rounded):
+        return str(int(rounded))
+    text = f"{rounded:.2f}".rstrip("0").rstrip(".")
+    return text
+
+
+def _rect_envelope_area(rect: dict) -> float:
+    return (rect["x2"] - rect["x1"]) * (rect["y2"] - rect["y1"])
+
+
+def _main_layout_envelope(entries: List[dict], tolerance: float = TOUCH_TOLERANCE) -> dict:
+    empty = {
+        "min_x": 0.0,
+        "min_y": 0.0,
+        "max_x": 0.0,
+        "max_y": 0.0,
+        "width_m": 0.0,
+        "height_m": 0.0,
+        "box_count": 0,
+    }
+    if not entries:
+        return empty
+
+    components = _connected_components(entries, tolerance)
+    if not components:
+        return empty
+
+    entry_by_id = {entry["box"].id: entry for entry in entries}
+
+    def component_area(ids: set[str]) -> float:
+        return sum(_rect_envelope_area(entry_by_id[box_id]["rect"]) for box_id in ids if box_id in entry_by_id)
+
+    main_ids = max(
+        components,
+        key=lambda ids: (len(ids), component_area(ids)),
+    )
+    main_entries = [entry for entry in entries if entry["box"].id in main_ids]
+    if not main_entries:
+        return empty
+
+    min_x = min(entry["rect"]["x1"] for entry in main_entries)
+    min_y = min(entry["rect"]["y1"] for entry in main_entries)
+    max_x = max(entry["rect"]["x2"] for entry in main_entries)
+    max_y = max(entry["rect"]["y2"] for entry in main_entries)
+    return {
+        "min_x": min_x,
+        "min_y": min_y,
+        "max_x": max_x,
+        "max_y": max_y,
+        "width_m": max_x - min_x,
+        "height_m": max_y - min_y,
+        "box_count": len(main_entries),
+    }
+
+
+def _draw_dashed_line(
+    draw: Any,
+    p1: Tuple[float, float],
+    p2: Tuple[float, float],
+    fill: Tuple[int, int, int],
+    width: int = 1,
+    dash_length: float = 6,
+    gap_length: float = 4,
+) -> None:
+    x1, y1 = p1
+    x2, y2 = p2
+    length = math.hypot(x2 - x1, y2 - y1)
+    if length < 1e-6:
+        return
+    dx = (x2 - x1) / length
+    dy = (y2 - y1) / length
+    pos = 0.0
+    draw_on = True
+    while pos < length:
+        segment = min(dash_length if draw_on else gap_length, length - pos)
+        if draw_on:
+            sx = x1 + dx * pos
+            sy = y1 + dy * pos
+            ex = x1 + dx * (pos + segment)
+            ey = y1 + dy * (pos + segment)
+            draw.line([(sx, sy), (ex, ey)], fill=fill, width=width)
+        pos += segment
+        draw_on = not draw_on
+
+
+def _draw_main_layout_overlay_png(
+    draw: Any,
+    envelope: dict,
+    to_px_x: Any,
+    to_px_y: Any,
+    font_sm: Any,
+) -> None:
+    if envelope["box_count"] <= 0:
+        return
+
+    stroke = (100, 116, 139)
+    x0 = to_px_x(envelope["min_x"])
+    y0 = to_px_y(envelope["min_y"])
+    x1 = to_px_x(envelope["max_x"])
+    y1 = to_px_y(envelope["max_y"])
+    for edge in ((x0, y0, x1, y0), (x1, y0, x1, y1), (x1, y1, x0, y1), (x0, y1, x0, y0)):
+        _draw_dashed_line(draw, (edge[0], edge[1]), (edge[2], edge[3]), stroke, width=1)
+
+    caption = (
+        f"Overall: {_format_layout_dimension_meters(envelope['width_m'])} m × "
+        f"{_format_layout_dimension_meters(envelope['height_m'])} m"
+    )
+    cx = to_px_x((envelope["min_x"] + envelope["max_x"]) / 2)
+    cy = to_px_y(envelope["max_y"] + OVERALL_CAPTION_OFFSET_M)
+    bbox = draw.textbbox((0, 0), caption, font=font_sm)
+    tw = bbox[2] - bbox[0]
+    draw.text((cx - tw / 2, cy), caption, fill=stroke, font=font_sm)
+
+
+def _append_main_layout_overlay_svg(
+    parts: List[str],
+    envelope: dict,
+    to_svg_x: Any,
+    to_svg_y: Any,
+) -> None:
+    if envelope["box_count"] <= 0:
+        return
+
+    x0 = to_svg_x(envelope["min_x"])
+    y0 = to_svg_y(envelope["min_y"])
+    x1 = to_svg_x(envelope["max_x"])
+    y1 = to_svg_y(envelope["max_y"])
+    parts.append(
+        f'<rect x="{x0:.2f}" y="{y0:.2f}" width="{x1 - x0:.2f}" height="{y1 - y0:.2f}" '
+        f'fill="none" stroke="#64748b" stroke-width="1.5" stroke-dasharray="6 4"/>'
+    )
+    caption = (
+        f"Overall: {_format_layout_dimension_meters(envelope['width_m'])} m × "
+        f"{_format_layout_dimension_meters(envelope['height_m'])} m"
+    )
+    cx = to_svg_x((envelope["min_x"] + envelope["max_x"]) / 2)
+    cy = to_svg_y(envelope["max_y"] + OVERALL_CAPTION_OFFSET_M)
+    parts.append(
+        f'<text x="{cx:.2f}" y="{cy:.2f}" text-anchor="middle" '
+        f'font-family="Helvetica,Arial,sans-serif" font-size="10" fill="#64748b">'
+        f"{escape(caption)}</text>"
+    )
 
 
 def _product_from_layout_box(box: PublicLayoutBoxResponse) -> Product:
@@ -429,6 +641,8 @@ def layout_to_svg(layout: PublicQuoteLayoutResponse) -> bytes:
             f"</text></g>"
         )
 
+    _append_main_layout_overlay_svg(parts, _main_layout_envelope(entries), to_svg_x, to_svg_y)
+
     parts.append("</svg>")
     return "".join(parts).encode("utf-8")
 
@@ -504,6 +718,14 @@ def layout_to_png(layout: PublicQuoteLayoutResponse, pixels_per_meter: float = 4
         bbox2 = draw.textbbox((0, 0), dim, font=font_sm)
         tw2 = bbox2[2] - bbox2[0]
         draw.text((tx - tw2 / 2, ty + 4), dim, fill="#64748b", font=font_sm)
+
+    _draw_main_layout_overlay_png(
+        draw,
+        _main_layout_envelope(entries),
+        to_px_x,
+        to_px_y,
+        font_sm,
+    )
 
     out = BytesIO()
     image.save(out, format="PNG")

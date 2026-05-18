@@ -7,10 +7,12 @@ import type { ConfiguratorBoxPlacement, Product } from '@/lib/types';
 import {
   buildLayoutRectEntries,
   findPlacementCandidate,
+  formatLayoutDimensionMeters,
   getCanvasBounds,
   getCornerBlockedFrontLabelStyle,
   getCornerOverlayBarStyles,
   getCornerOverlaySegments,
+  getMainLayoutEnvelope,
   getStandardFrontOverlaySegment,
   isCornerRotationLocked,
   normalizeRotation,
@@ -20,6 +22,8 @@ import {
 import { cn } from '@/lib/utils';
 
 const SCALE = 40;
+const OVERALL_CAPTION_OFFSET_M = 0.4;
+const MIN_OVERALL_CAPTION_PX = 48;
 const MIN_ZOOM = 0.35;
 const MAX_ZOOM = 2.25;
 const ZOOM_STEP = 0.15;
@@ -95,6 +99,8 @@ export default function ConfiguratorCanvas({
     () => buildLayoutRectEntries(renderBoxes, productMap),
     [renderBoxes, productMap]
   );
+
+  const mainEnvelope = useMemo(() => getMainLayoutEnvelope(rectEntries), [rectEntries]);
 
   const bounds = getCanvasBounds(rectEntries.map((entry) => entry.rect));
   const interactionSnapshot = dragState?.snapshot ?? null;
@@ -586,6 +592,45 @@ export default function ConfiguratorCanvas({
                   </button>
                 );
               })}
+
+              {mainEnvelope.boxCount > 0 && (
+                <>
+                  <div
+                    className="pointer-events-none absolute z-[1] rounded-sm border border-dashed border-slate-500/70"
+                    style={{
+                      left: `${toCanvasPosition(mainEnvelope.minX, displayBounds.minX)}px`,
+                      top: `${toCanvasPosition(mainEnvelope.minY, displayBounds.minY)}px`,
+                      width: `${mainEnvelope.widthM * SCALE}px`,
+                      height: `${mainEnvelope.heightM * SCALE}px`,
+                    }}
+                    aria-hidden
+                  />
+                  {(() => {
+                    const caption = `Overall: ${formatLayoutDimensionMeters(mainEnvelope.widthM)} m × ${formatLayoutDimensionMeters(mainEnvelope.heightM)} m`;
+                    const captionWidthPx = caption.length * 6.5;
+                    if (captionWidthPx * displayZoom < MIN_OVERALL_CAPTION_PX) return null;
+                    const captionCenterX = toCanvasPosition(
+                      (mainEnvelope.minX + mainEnvelope.maxX) / 2,
+                      displayBounds.minX
+                    );
+                    const captionTop = toCanvasPosition(
+                      mainEnvelope.maxY + OVERALL_CAPTION_OFFSET_M,
+                      displayBounds.minY
+                    );
+                    return (
+                      <div
+                        className="pointer-events-none absolute z-[1] -translate-x-1/2 whitespace-nowrap text-xs text-muted-foreground"
+                        style={{
+                          left: `${captionCenterX}px`,
+                          top: `${captionTop}px`,
+                        }}
+                      >
+                        {caption}
+                      </div>
+                    );
+                  })()}
+                </>
+              )}
 
               {rectEntries.length === 0 && (
                 <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">

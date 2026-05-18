@@ -976,6 +976,91 @@ export function isLayoutConnected(entries: LayoutRectEntry[], tolerance = TOUCH_
   return getConnectedBoxIds(entries, tolerance).size === entries.length;
 }
 
+export interface MainLayoutEnvelope {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+  widthM: number;
+  heightM: number;
+  boxCount: number;
+}
+
+export function formatLayoutDimensionMeters(value: number): string {
+  const rounded = Math.round(value * 100) / 100;
+  return Number.isInteger(rounded) ? String(rounded) : String(rounded).replace(/\.?0+$/, '');
+}
+
+export function getConnectedComponents(
+  entries: LayoutRectEntry[],
+  tolerance = TOUCH_TOLERANCE
+): Set<string>[] {
+  if (entries.length === 0) return [];
+
+  const { graph } = analyzeLayoutConnections(entries, tolerance);
+  const visited = new Set<string>();
+  const components: Set<string>[] = [];
+
+  for (const entry of entries) {
+    if (visited.has(entry.box.id)) continue;
+    const component = getConnectedIdsFromGraph(graph, entry.box.id);
+    component.forEach((id) => visited.add(id));
+    components.push(component);
+  }
+
+  return components;
+}
+
+export function getLargestConnectedComponentIds(
+  entries: LayoutRectEntry[],
+  tolerance = TOUCH_TOLERANCE
+): Set<string> {
+  const components = getConnectedComponents(entries, tolerance);
+  if (components.length === 0) return new Set<string>();
+
+  const entryById = new Map(entries.map((entry) => [entry.box.id, entry]));
+
+  const componentArea = (ids: Set<string>) =>
+    [...ids].reduce((sum, id) => {
+      const entry = entryById.get(id);
+      if (!entry) return sum;
+      return sum + entry.rect.boundsWidth * entry.rect.boundsHeight;
+    }, 0);
+
+  return components.reduce((best, current) => {
+    if (current.size > best.size) return current;
+    if (current.size < best.size) return best;
+    return componentArea(current) > componentArea(best) ? current : best;
+  });
+}
+
+export function getMainLayoutEnvelope(
+  entries: LayoutRectEntry[],
+  tolerance = TOUCH_TOLERANCE
+): MainLayoutEnvelope {
+  const mainIds = getLargestConnectedComponentIds(entries, tolerance);
+  const mainEntries = entries.filter((entry) => mainIds.has(entry.box.id));
+
+  if (mainEntries.length === 0) {
+    return { minX: 0, minY: 0, maxX: 0, maxY: 0, widthM: 0, heightM: 0, boxCount: 0 };
+  }
+
+  const minX = Math.min(...mainEntries.map((entry) => entry.rect.x1));
+  const minY = Math.min(...mainEntries.map((entry) => entry.rect.y1));
+  const maxX = Math.max(...mainEntries.map((entry) => entry.rect.x2));
+  const maxY = Math.max(...mainEntries.map((entry) => entry.rect.y2));
+
+  return {
+    minX,
+    minY,
+    maxX,
+    maxY,
+    widthM: maxX - minX,
+    heightM: maxY - minY,
+    boxCount: mainEntries.length,
+  };
+}
+
 function getSnapCandidates(
   rawValue: number,
   axis: 'x' | 'y',

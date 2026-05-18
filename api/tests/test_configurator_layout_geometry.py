@@ -1,5 +1,8 @@
 """Layout diagram overlay geometry matches web canvas (CSS-local coords)."""
 import os
+from types import SimpleNamespace
+
+import pytest
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 
@@ -7,10 +10,14 @@ from decimal import Decimal
 
 from app.configurator_layout_public import (
     _css_local_to_layout,
+    _format_layout_dimension_meters,
     _get_corner_overlay_segments,
+    _main_layout_envelope,
     _overlay_line_css_local,
+    _placement_rect,
 )
 from app.models import ConfiguratorConnectionProfile, ConfiguratorFrontFace, Product, ProductCategory
+from app.schemas import ConfiguratorBoxPlacement
 
 
 def _corner_product(
@@ -85,3 +92,55 @@ def test_standard_front_on_bottom_face():
     assert y1 == y2 == 4.0
     assert x1 == 0.0
     assert x2 == 3.0
+
+
+def _layout_entry(box_id: str, x: float, y: float, width: float, length: float, rotation: int = 0) -> dict:
+    placement = ConfiguratorBoxPlacement(
+        id=box_id,
+        product_id=0,
+        x=x,
+        y=y,
+        rotation=rotation,
+    )
+    return {
+        "box": SimpleNamespace(id=box_id),
+        "rect": _placement_rect(placement, width, length),
+    }
+
+
+def test_main_layout_envelope_two_touching_boxes():
+    entries = [
+        _layout_entry("a", 0.0, 0.0, 3.6, 3.6),
+        _layout_entry("b", 3.6, 0.0, 3.6, 3.6),
+    ]
+    envelope = _main_layout_envelope(entries)
+    assert envelope["box_count"] == 2
+    assert envelope["width_m"] == 7.2
+    assert envelope["height_m"] == 3.6
+
+
+def test_main_layout_envelope_excludes_detached_box():
+    entries = [
+        _layout_entry("a", 0.0, 0.0, 3.6, 3.6),
+        _layout_entry("b", 3.6, 0.0, 3.6, 3.6),
+        _layout_entry("detached", 0.0, 8.0, 2.4, 3.6),
+    ]
+    envelope = _main_layout_envelope(entries)
+    assert envelope["box_count"] == 2
+    assert envelope["width_m"] == 7.2
+    assert envelope["height_m"] == 3.6
+
+
+def test_main_layout_envelope_single_box():
+    entries = [_layout_entry("solo", 1.0, 2.0, 3.6, 3.6)]
+    envelope = _main_layout_envelope(entries)
+    assert envelope["box_count"] == 1
+    assert envelope["width_m"] == pytest.approx(3.6)
+    assert envelope["height_m"] == pytest.approx(3.6)
+    assert envelope["min_x"] == pytest.approx(1.0)
+    assert envelope["min_y"] == pytest.approx(2.0)
+
+
+def test_format_layout_dimension_meters_trims_trailing_zeros():
+    assert _format_layout_dimension_meters(7.2) == "7.2"
+    assert _format_layout_dimension_meters(3.0) == "3"
