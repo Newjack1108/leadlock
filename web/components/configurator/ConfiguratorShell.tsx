@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import ConfiguratorCanvas from '@/components/configurator/ConfiguratorCanvas';
 import ConfiguratorCatalog from '@/components/configurator/ConfiguratorCatalog';
+import ConfiguratorLogo from '@/components/configurator/ConfiguratorLogo';
 import {
   applyQuoteConfiguration,
   getApiErrorDetail,
@@ -266,33 +267,37 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-semibold">Quote Configurator</h1>
-          <p className="mt-1 text-muted-foreground">
-            {quote.quote_number} · {quote.customer_name || 'Draft quote'}
-          </p>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Start by adding a starter box from the catalogue, then build the layout on the canvas. Boxes snap to valid
-            edges and cannot overlap. Standard boxes can be rotated; corner boxes use fixed-orientation products and
-            cannot be turned on the canvas.
-          </p>
-          {configuration.boxes.length > 0 && (
-            <p className="mt-2 text-sm text-muted-foreground">
-              Customers will see this layout on the quote link and PDF after you save it.
-            </p>
-          )}
+      <div className="space-y-4">
+        <div className="flex justify-center">
+          <ConfiguratorLogo />
         </div>
-        <div className="flex flex-wrap gap-3">
-          <Button variant="outline" onClick={() => router.push(`/quotes/${quote.id}`)}>
-            Back to Quote
-          </Button>
-          <Button variant="secondary" onClick={() => void handleSave()} disabled={loading || saving}>
-            {saving ? 'Saving...' : 'Save Layout'}
-          </Button>
-          <Button onClick={() => void handleApply()} disabled={loading || applying || !preview?.valid}>
-            {applying ? 'Applying...' : 'Apply to Draft Quote'}
-          </Button>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-muted-foreground">
+              {quote.quote_number} · {quote.customer_name || 'Draft quote'}
+            </p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Start by adding a starter box from the catalogue, then build the layout on the canvas. Boxes snap to valid
+              edges and cannot overlap. Standard boxes can be rotated; corner boxes use fixed-orientation products and
+              cannot be turned on the canvas.
+            </p>
+            {configuration.boxes.length > 0 && (
+              <p className="mt-2 text-sm text-muted-foreground">
+                Customers will see this layout on the quote link and PDF after you save it.
+              </p>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <Button variant="outline" onClick={() => router.push(`/quotes/${quote.id}`)}>
+              Back to Quote
+            </Button>
+            <Button variant="secondary" onClick={() => void handleSave()} disabled={loading || saving}>
+              {saving ? 'Saving...' : 'Save Layout'}
+            </Button>
+            <Button onClick={() => void handleApply()} disabled={loading || applying || !preview?.valid}>
+              {applying ? 'Applying...' : 'Apply to Draft Quote'}
+            </Button>
+          </div>
         </div>
       </div>
 

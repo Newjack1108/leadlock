@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Header from '@/components/Header';
+import ConfiguratorLogo from '@/components/configurator/ConfiguratorLogo';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { getApiErrorDetail, getAuthMe, getConfiguratorAccessStatus, getQuotes } from '@/lib/api';
@@ -57,9 +58,9 @@ export default function QuoteConfiguratorPage() {
       <Header />
       <main className="container mx-auto px-4 py-8 sm:px-6">
         <div className="max-w-3xl space-y-6">
-          <div>
-            <h1 className="text-3xl font-semibold">Quote Configurator</h1>
-            <p className="mt-2 text-muted-foreground">
+          <div className="flex flex-col items-center gap-3 text-center">
+            <ConfiguratorLogo />
+            <p className="text-muted-foreground">
               Hidden beta route for the internal configurator. Live sales users stay on the existing quote flow.
             </p>
           </div>
