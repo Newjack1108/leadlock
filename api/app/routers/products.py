@@ -62,6 +62,7 @@ def _validate_configurator_product_payload(payload: dict) -> None:
     configurator_connection_profile = payload.get("configurator_connection_profile")
     configurator_is_corner_box = bool(payload.get("configurator_is_corner_box"))
     configurator_is_starter_box = bool(payload.get("configurator_is_starter_box"))
+    configurator_per_box = bool(payload.get("configurator_per_box"))
 
     if allow_in_configurator and not is_extra:
         raise HTTPException(
@@ -91,6 +92,18 @@ def _validate_configurator_product_payload(payload: dict) -> None:
         raise HTTPException(
             status_code=422,
             detail="Only non-extra configurator items can be marked as starter boxes",
+        )
+
+    if configurator_per_box and not is_extra:
+        raise HTTPException(
+            status_code=422,
+            detail="Only optional extras can use configurator per-box quantity",
+        )
+
+    if configurator_per_box and not allow_in_configurator:
+        raise HTTPException(
+            status_code=422,
+            detail="Configurator per-box quantity requires allow in configurator",
         )
 
     if category == ProductCategory.CONFIGURATOR and not is_extra:

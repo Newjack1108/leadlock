@@ -34,6 +34,7 @@ export default function CreateOptionalExtraPage() {
     sku: '',
     specifications: '',
     allow_in_configurator: false,
+    configurator_per_box: false,
     installation_hours: '',
     boxes_per_product: '',
     image_url: '',
@@ -59,6 +60,7 @@ export default function CreateOptionalExtraPage() {
         sku: formData.sku.trim() || undefined,
         specifications: formData.specifications.trim() || undefined,
         allow_in_configurator: formData.allow_in_configurator,
+        configurator_per_box: formData.allow_in_configurator ? formData.configurator_per_box : false,
         installation_hours: formData.installation_hours
           ? parseFloat(formData.installation_hours)
           : undefined,
@@ -144,7 +146,11 @@ export default function CreateOptionalExtraPage() {
                     type="checkbox"
                     checked={formData.allow_in_configurator}
                     onChange={(e) =>
-                      setFormData({ ...formData, allow_in_configurator: e.target.checked })
+                      setFormData({
+                        ...formData,
+                        allow_in_configurator: e.target.checked,
+                        configurator_per_box: e.target.checked ? formData.configurator_per_box : false,
+                      })
                     }
                     className="h-4 w-4"
                     disabled={loading}
@@ -157,6 +163,26 @@ export default function CreateOptionalExtraPage() {
                   When checked, this extra appears under Configurator Extras on the quote configurator. Leave unchecked
                   to keep it off the layout tool.
                 </p>
+                {formData.allow_in_configurator && (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <input
+                        id="configurator_per_box"
+                        type="checkbox"
+                        checked={formData.configurator_per_box}
+                        onChange={(e) =>
+                          setFormData({ ...formData, configurator_per_box: e.target.checked })
+                        }
+                        className="h-4 w-4"
+                        disabled={loading}
+                      />
+                      <Label htmlFor="configurator_per_box">Quantity per box in configurator</Label>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      In the configurator, quantity equals the number of boxes on the layout. Quote unit is unchanged.
+                    </p>
+                  </>
+                )}
                 <div className="space-y-2">
                   <Label htmlFor="description">Description</Label>
                   <Textarea

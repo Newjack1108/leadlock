@@ -2000,6 +2000,28 @@ def create_db_and_tables():
                     if "already exists" not in error_str and "duplicate" not in error_str:
                         print(f"Error adding configurator_is_starter_box column: {e}", file=sys.stderr, flush=True)
 
+            product_columns = [col["name"] for col in inspector.get_columns("product")]
+            if "configurator_per_box" not in product_columns:
+                print("Adding configurator_per_box column to product table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(
+                            text(
+                                "ALTER TABLE product ADD COLUMN configurator_per_box BOOLEAN NOT NULL DEFAULT FALSE"
+                            )
+                        )
+                        conn.execute(
+                            text(
+                                "UPDATE product SET configurator_per_box = TRUE "
+                                "WHERE is_extra = TRUE AND allow_in_configurator = TRUE AND unit = 'Per Box'"
+                            )
+                        )
+                    print("Added configurator_per_box column to product table", file=sys.stderr, flush=True)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Error adding configurator_per_box column: {e}", file=sys.stderr, flush=True)
+
             if has_quote_table and not inspector.has_table("quoteconfiguration"):
                 print("Creating quoteconfiguration table...", file=sys.stderr, flush=True)
                 try:

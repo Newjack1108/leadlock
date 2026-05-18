@@ -212,7 +212,8 @@ def test_configurator_catalog_only_lists_extras_opted_into_configurator():
             category=ProductCategory.STABLES,
             is_extra=True,
             allow_in_configurator=True,
-            unit="Per Box",
+            configurator_per_box=True,
+            unit="Unit",
             base_price=Decimal("125.00"),
         )
         blocked_extra = Product(
@@ -276,7 +277,8 @@ def test_configurator_catalog_save_preview_and_apply_flow():
             category=ProductCategory.STABLES,
             is_extra=True,
             allow_in_configurator=True,
-            unit="Per Box",
+            configurator_per_box=True,
+            unit="Unit",
             base_price=Decimal("125.00"),
         )
         quote = Quote(
@@ -351,6 +353,60 @@ def test_configurator_catalog_save_preview_and_apply_flow():
         "3m Front Box",
         "Rubber Matting",
     }
+    mat_line = next(row for row in applied["items"] if row["description"] == "Rubber Matting")
+    assert Decimal(mat_line["quantity"]) == Decimal("1")
+
+
+def test_configurator_per_box_extra_quantity_tracks_box_count():
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SQLModel.metadata.create_all(engine)
+    user = _seed_user(engine)
+
+    with Session(engine) as session:
+        item = Product(
+            name="3m Front Box",
+            category=ProductCategory.CONFIGURATOR,
+            configurator_is_starter_box=True,
+            base_price=Decimal("2500.00"),
+            configurator_width=Decimal("3.00"),
+            configurator_length=Decimal("3.00"),
+        )
+        extra = Product(
+            name="Rubber Matting",
+            category=ProductCategory.STABLES,
+            is_extra=True,
+            allow_in_configurator=True,
+            configurator_per_box=True,
+            unit="Unit",
+            base_price=Decimal("125.00"),
+        )
+        session.add(item)
+        session.add(extra)
+        session.commit()
+        session.refresh(item)
+        session.refresh(extra)
+        item_id = item.id
+        extra_id = extra.id
+
+    client = TestClient(_make_app(engine, user))
+
+    two_box_payload = {
+        "schema_version": 1,
+        "boxes": [
+            {"id": "box-1", "product_id": item_id, "x": "0", "y": "0", "rotation": 0},
+            {"id": "box-2", "product_id": item_id, "x": "3", "y": "0", "rotation": 0},
+        ],
+        "extras": [{"product_id": extra_id, "quantity": 1}],
+    }
+    preview = client.post("/api/configurator/preview", json=two_box_payload).json()
+    assert preview["valid"] is True
+    mat_line = next(row for row in preview["items"] if row["description"] == "Rubber Matting")
+    assert Decimal(mat_line["quantity"]) == Decimal("2")
+    assert Decimal(preview["subtotal"]) == Decimal("5250.00")
 
 
 def test_deleted_boxes_do_not_reappear_after_save_and_reapply():

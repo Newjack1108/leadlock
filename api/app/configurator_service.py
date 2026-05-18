@@ -579,7 +579,7 @@ def build_configurator_preview(
                     message=f"{product.name} is not enabled for configurator use.",
                 )
             )
-        if extra.quantity is not None and _to_decimal(extra.quantity) <= ZERO:
+        if not product.configurator_per_box and extra.quantity is not None and _to_decimal(extra.quantity) <= ZERO:
             issues.append(
                 ConfiguratorValidationIssue(
                     code="INVALID_EXTRA_QUANTITY",
@@ -612,11 +612,12 @@ def build_configurator_preview(
         product = extra_products.get(extra.product_id)
         if not product or not product.is_extra or not product.allow_in_configurator:
             continue
-        quantity = (
-            _to_decimal(extra.quantity)
-            if extra.quantity is not None
-            else Decimal(box_count if product.unit == "Per Box" else 1)
-        )
+        if product.configurator_per_box:
+            quantity = Decimal(box_count)
+        elif extra.quantity is not None:
+            quantity = _to_decimal(extra.quantity)
+        else:
+            quantity = Decimal("1")
         lines.append(
             ConfiguratorGeneratedLine(
                 product_id=product.id,

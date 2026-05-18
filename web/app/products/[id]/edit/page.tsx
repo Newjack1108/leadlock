@@ -78,6 +78,7 @@ export default function EditProductPage() {
     configurator_is_corner_box: false,
     configurator_is_starter_box: false,
     allow_in_configurator: false,
+    configurator_per_box: false,
     installation_hours: '',
     boxes_per_product: '',
   });
@@ -137,6 +138,7 @@ export default function EditProductPage() {
           product.configurator_is_corner_box ?? Boolean(product.configurator_connection_profile),
         configurator_is_starter_box: product.configurator_is_starter_box ?? false,
         allow_in_configurator: product.allow_in_configurator ?? false,
+        configurator_per_box: product.configurator_per_box ?? false,
         installation_hours: product.installation_hours?.toString() || '',
         boxes_per_product: product.boxes_per_product?.toString() || '',
       });
@@ -276,6 +278,7 @@ export default function EditProductPage() {
         configurator_is_starter_box:
           isConfiguratorCategory && !formData.is_extra ? formData.configurator_is_starter_box : false,
         allow_in_configurator: formData.allow_in_configurator,
+        configurator_per_box: formData.is_extra && formData.allow_in_configurator ? formData.configurator_per_box : false,
       };
       if (formData.is_extra) {
         productData.image_url = formData.image_url?.trim() || null;
@@ -430,6 +433,7 @@ export default function EditProductPage() {
                           setFormData({
                             ...formData,
                             allow_in_configurator: e.target.checked,
+                            configurator_per_box: e.target.checked ? formData.configurator_per_box : false,
                           })
                         }
                         className="h-4 w-4"
@@ -440,6 +444,27 @@ export default function EditProductPage() {
                     <p className="text-xs text-muted-foreground">
                       When checked, this extra appears under Configurator Extras on the quote configurator.
                     </p>
+                    {formData.allow_in_configurator && (
+                      <>
+                        <div className="flex items-center gap-2">
+                          <input
+                            id="configurator_per_box"
+                            type="checkbox"
+                            checked={formData.configurator_per_box}
+                            onChange={(e) =>
+                              setFormData({ ...formData, configurator_per_box: e.target.checked })
+                            }
+                            className="h-4 w-4"
+                            disabled={loading}
+                          />
+                          <Label htmlFor="configurator_per_box">Quantity per box in configurator</Label>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          In the configurator, quantity equals the number of boxes on the layout. Quote unit is
+                          unchanged.
+                        </p>
+                      </>
+                    )}
                   </div>
                 )}
                 <div className="grid grid-cols-2 gap-4">

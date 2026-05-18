@@ -559,6 +559,7 @@ export interface Product {
   configurator_is_corner_box?: boolean;
   configurator_is_starter_box?: boolean;
   allow_in_configurator: boolean;
+  configurator_per_box?: boolean;
   installation_hours?: number;
   boxes_per_product?: number;
   is_production_synced: boolean;

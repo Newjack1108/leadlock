@@ -3,12 +3,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { AlertTriangle, CheckCircle2 } from 'lucide-react';
-
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import ConfiguratorCanvas from '@/components/configurator/ConfiguratorCanvas';
 import ConfiguratorCatalog from '@/components/configurator/ConfiguratorCatalog';
 import ConfiguratorLogo from '@/components/configurator/ConfiguratorLogo';
@@ -265,113 +262,170 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
     }
   };
 
+
+  const subtotalFormatted = formatCurrency(preview?.subtotal ?? 0);
+  const boxTotal = preview?.total_boxes ?? configuration.boxes.length;
+
   return (
-    <div className="space-y-6">
-      <div className="space-y-4">
-        <div className="flex justify-center">
-          <ConfiguratorLogo />
-        </div>
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <p className="text-muted-foreground">
-              {quote.quote_number} · {quote.customer_name || 'Draft quote'}
-            </p>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Start by adding a starter box from the catalogue, then build the layout on the canvas. Boxes snap to valid
-              edges and cannot overlap. Standard boxes can be rotated; corner boxes use fixed-orientation products and
-              cannot be turned on the canvas.
-            </p>
-            {configuration.boxes.length > 0 && (
-              <p className="mt-2 text-sm text-muted-foreground">
-                Customers will see this layout on the quote link and PDF after you save it.
+    <div className="space-y-4">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-wrap items-center gap-4">
+          <ConfiguratorLogo className="h-10" />
+          <p className="text-sm text-muted-foreground">
+            {quote.quote_number} · {quote.customer_name || 'Draft quote'}
+          </p>
+          <div className="flex flex-wrap items-stretch gap-2 text-sm">
+            <div className="min-w-[4.5rem] shrink-0 rounded-md border px-3 py-2">
+              <p className="text-xs text-muted-foreground">Boxes</p>
+              <p className="text-lg font-semibold tabular-nums">{boxTotal}</p>
+            </div>
+            <div className="min-w-[9rem] shrink-0 rounded-md border px-3 py-2 sm:min-w-[10rem]">
+              <p className="text-xs text-muted-foreground">Subtotal</p>
+              <p className="whitespace-nowrap text-base font-semibold tabular-nums" title={subtotalFormatted}>
+                {subtotalFormatted}
               </p>
-            )}
+            </div>
           </div>
-          <div className="flex flex-wrap gap-3">
-            <Button variant="outline" onClick={() => router.push(`/quotes/${quote.id}`)}>
-              Back to Quote
-            </Button>
-            <Button variant="secondary" onClick={() => void handleSave()} disabled={loading || saving}>
-              {saving ? 'Saving...' : 'Save Layout'}
-            </Button>
-            <Button onClick={() => void handleApply()} disabled={loading || applying || !preview?.valid}>
-              {applying ? 'Applying...' : 'Apply to Draft Quote'}
-            </Button>
-          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={() => router.push(`/quotes/${quote.id}`)}>
+            Back to Quote
+          </Button>
+          <Button variant="secondary" size="sm" onClick={() => void handleSave()} disabled={loading || saving}>
+            {saving ? 'Saving...' : 'Save Layout'}
+          </Button>
+          <Button size="sm" onClick={() => void handleApply()} disabled={loading || applying || !preview?.valid}>
+            {applying ? 'Applying...' : 'Apply to Draft Quote'}
+          </Button>
         </div>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="space-y-6">
+      <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)_260px] lg:items-start">
+        <ConfiguratorCatalog
+          className="lg:sticky lg:top-4 lg:max-h-[calc(100vh-8rem)]"
+          items={catalog.items}
+          starterProducts={starterProducts}
+          extras={catalog.extras}
+          configuration={configuration}
+          layoutStarted={layoutStarted}
+          boxCount={configuration.boxes.length}
+          extraQuantityByProductId={
+            new Map(
+              (preview?.items ?? [])
+                .filter((item) => item.product_id != null)
+                .map((item) => [item.product_id as number, Number(item.quantity)])
+            )
+          }
+          onAddItem={handleAddItem}
+          onToggleExtra={handleToggleExtra}
+          onUpdateExtra={handleUpdateExtra}
+        />
+
+        <Card className="min-w-0">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Layout</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <ConfiguratorCanvas
+              boxes={configuration.boxes}
+              productMap={productMap}
+              selectedBoxId={selectedBoxId}
+              onSelect={setSelectedBoxId}
+              onMoveBox={handleMoveBox}
+              onRotateBox={handleSetRotation}
+              onRemoveBox={handleRemoveBox}
+              canRemoveBox={(boxId) => canRemoveConfiguratorBox(configuration.boxes, boxId, productMap)}
+            />
+            <details className="text-xs text-muted-foreground">
+              <summary className="cursor-pointer font-medium text-foreground">Canvas help</summary>
+              <p className="mt-1">
+                Drag to move. Green edges = exposed front. Corner boxes use fixed products (no rotate). Add a starter
+                box from the catalogue on the left first.
+              </p>
+            </details>
+          </CardContent>
+        </Card>
+
+        <div className="flex flex-col gap-4 lg:sticky lg:top-4 lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto">
           <Card>
-            <CardHeader className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <CardTitle>Layout Canvas</CardTitle>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  The canvas is the main workspace. Drag boxes to reposition them. Use rotation on standard boxes only;
-                  pick the correct corner product variant instead of rotating corners.
-                </p>
-              </div>
-              <div className="grid min-w-0 shrink-0 grid-cols-2 gap-2 text-sm sm:w-52">
-                <div className="min-w-0 rounded-md border px-3 py-2">
-                  <p className="text-muted-foreground">Boxes</p>
-                  <p className="truncate text-lg font-semibold tabular-nums">
-                    {preview?.total_boxes ?? configuration.boxes.length}
-                  </p>
-                </div>
-                <div className="min-w-0 rounded-md border px-3 py-2">
-                  <p className="text-muted-foreground">Subtotal</p>
-                  <p
-                    className="truncate text-sm font-semibold tabular-nums sm:text-base"
-                    title={formatCurrency(preview?.subtotal ?? 0)}
-                  >
-                    {formatCurrency(preview?.subtotal ?? 0)}
-                  </p>
-                </div>
-              </div>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Layout name</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <ConfiguratorCanvas
-                boxes={configuration.boxes}
-                productMap={productMap}
-                selectedBoxId={selectedBoxId}
-                onSelect={setSelectedBoxId}
-                onMoveBox={handleMoveBox}
-                onRotateBox={handleSetRotation}
-                onRemoveBox={handleRemoveBox}
-                canRemoveBox={(boxId) => canRemoveConfiguratorBox(configuration.boxes, boxId, productMap)}
+            <CardContent>
+              <Input
+                id="layout-name"
+                value={configuration.name ?? ''}
+                onChange={(event) =>
+                  updateConfiguration({
+                    ...configuration,
+                    name: event.target.value,
+                  })
+                }
+                placeholder="e.g. Four-box L shape"
+                className="h-9"
               />
-              <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
-                <span className="font-medium text-foreground">Front edges:</span> green = exposed front (full side on
-                standard boxes; partial on corners). Corner boxes also show red connection edges. Use separate corner
-                products for each layout pose (tall vs wide).
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Validation</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div className={`rounded-md border px-2 py-1.5 ${errorCount > 0 ? 'border-red-200 bg-red-50/50' : ''}`}>
+                  <p className="text-xs text-muted-foreground">Errors</p>
+                  <p className={`text-lg font-semibold tabular-nums ${errorCount > 0 ? 'text-red-700' : ''}`}>{errorCount}</p>
+                </div>
+                <div className={`rounded-md border px-2 py-1.5 ${warningCount > 0 ? 'border-amber-200 bg-amber-50/50' : ''}`}>
+                  <p className="text-xs text-muted-foreground">Warnings</p>
+                  <p className={`text-lg font-semibold tabular-nums ${warningCount > 0 ? 'text-amber-800' : ''}`}>{warningCount}</p>
+                </div>
+              </div>
+              <div className="max-h-36 space-y-1.5 overflow-y-auto">
+                {preview?.issues?.length ? (
+                  preview.issues.map((issue, index) => (
+                    <div
+                      key={`${issue.code}-${index}`}
+                      className={`rounded-md border px-2 py-1.5 text-xs ${
+                        issue.severity === 'error'
+                          ? 'border-red-200 bg-red-50 text-red-800'
+                          : 'border-amber-200 bg-amber-50 text-amber-800'
+                      }`}
+                    >
+                      <p className="font-medium">{issue.message}</p>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-xs text-emerald-700">No validation issues.</p>
+                )}
               </div>
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader>
-              <CardTitle>Quote Lines Preview</CardTitle>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Lines preview</CardTitle>
             </CardHeader>
             <CardContent>
               {preview?.items?.length ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
+                <div className="max-h-40 overflow-auto">
+                  <table className="w-full text-xs">
                     <thead>
-                      <tr className="border-b">
-                        <th className="py-2 text-left">Description</th>
-                        <th className="py-2 text-right">Qty</th>
-                        <th className="py-2 text-right">Unit Price</th>
-                        <th className="py-2 text-right">Line Total</th>
+                      <tr className="border-b text-muted-foreground">
+                        <th className="py-1 text-left font-medium">Item</th>
+                        <th className="py-1 text-right font-medium">Qty</th>
+                        <th className="py-1 text-right font-medium">Total</th>
                       </tr>
                     </thead>
                     <tbody>
                       {preview.items.map((item, index) => (
-                        <tr key={`${item.description}-${index}`} className="border-b last:border-0">
-                          <td className="py-2">{item.description}</td>
-                          <td className="py-2 text-right">{Number(item.quantity).toFixed(2)}</td>
-                          <td className="py-2 text-right">{formatCurrency(item.unit_price)}</td>
-                          <td className="py-2 text-right">
+                        <tr key={`${item.description}-${index}`} className="border-b border-border/50 last:border-0">
+                          <td className="max-w-[7rem] truncate py-1 pr-2" title={item.description}>
+                            {item.description}
+                          </td>
+                          <td className="py-1 text-right tabular-nums">{Number(item.quantity).toFixed(0)}</td>
+                          <td className="py-1 text-right tabular-nums whitespace-nowrap">
                             {formatCurrency(Number(item.quantity) * Number(item.unit_price))}
                           </td>
                         </tr>
@@ -380,124 +434,13 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
                   </table>
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground">
-                  Add configurator items to generate a quote line preview.
-                </p>
+                <p className="text-xs text-muted-foreground">Add boxes to preview lines.</p>
               )}
             </CardContent>
           </Card>
-        </div>
-
-        <div className="space-y-6 xl:sticky xl:top-4 xl:self-start">
-          <Card>
-            <CardHeader>
-              <CardTitle>Layout Metadata</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="layout-name">Saved Layout Name</Label>
-                <Input
-                  id="layout-name"
-                  value={configuration.name ?? ''}
-                  onChange={(event) =>
-                    updateConfiguration({
-                      ...configuration,
-                      name: event.target.value,
-                    })
-                  }
-                  placeholder="e.g. Four-box L shape"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Schema Version</Label>
-                <Input value={String(configuration.schema_version ?? 1)} disabled />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Validation</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <div
-                  className={`min-w-0 rounded-md border px-3 py-2 ${
-                    errorCount > 0 ? 'border-red-200 bg-red-50/50' : ''
-                  }`}
-                >
-                  <p className="text-muted-foreground">Errors</p>
-                  <p
-                    className={`truncate text-lg font-semibold tabular-nums ${
-                      errorCount > 0 ? 'text-red-700' : ''
-                    }`}
-                  >
-                    {errorCount}
-                  </p>
-                </div>
-                <div
-                  className={`min-w-0 rounded-md border px-3 py-2 ${
-                    warningCount > 0 ? 'border-amber-200 bg-amber-50/50' : ''
-                  }`}
-                >
-                  <p className="text-muted-foreground">Warnings</p>
-                  <p
-                    className={`truncate text-lg font-semibold tabular-nums ${
-                      warningCount > 0 ? 'text-amber-800' : ''
-                    }`}
-                  >
-                    {warningCount}
-                  </p>
-                </div>
-              </div>
-              {preview?.issues?.length ? (
-                preview.issues.map((issue, index) => (
-                  <div
-                    key={`${issue.code}-${index}`}
-                    className={`rounded-md border p-3 text-sm ${
-                      issue.severity === 'error'
-                        ? 'border-red-200 bg-red-50 text-red-800'
-                        : 'border-amber-200 bg-amber-50 text-amber-800'
-                    }`}
-                  >
-                    <div className="flex items-start gap-2">
-                      {issue.severity === 'error' ? (
-                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                      ) : (
-                        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
-                      )}
-                      <div>
-                        <p className="font-medium">{issue.message}</p>
-                        {issue.box_ids.length > 0 && (
-                          <p className="mt-1 text-xs opacity-80">Items: {issue.box_ids.join(', ')}</p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-                  <div className="flex items-start gap-2">
-                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
-                    <p>No validation issues. This layout is ready to save or apply.</p>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <ConfiguratorCatalog
-            items={catalog.items}
-            starterProducts={starterProducts}
-            extras={catalog.extras}
-            configuration={configuration}
-            layoutStarted={layoutStarted}
-            onAddItem={handleAddItem}
-            onToggleExtra={handleToggleExtra}
-            onUpdateExtra={handleUpdateExtra}
-          />
         </div>
       </div>
     </div>
   );
+
 }

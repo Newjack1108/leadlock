@@ -20,9 +20,45 @@ interface ConfiguratorCatalogProps {
   extras: Product[];
   configuration: QuoteConfigurationPayload;
   layoutStarted: boolean;
+  boxCount: number;
+  extraQuantityByProductId: Map<number, number>;
   onAddItem: (product: Product) => void;
   onToggleExtra: (product: Product, checked: boolean) => void;
   onUpdateExtra: (productId: number, updater: (current: ConfiguratorExtraSelection) => ConfiguratorExtraSelection) => void;
+  className?: string;
+}
+
+function CatalogSection({
+  title,
+  children,
+  className,
+}: {
+  title: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <section className={cn('space-y-1.5', className)}>
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</h3>
+      {children}
+    </section>
+  );
+}
+
+function ProductRow({ product, onAdd }: { product: Product; onAdd: () => void }) {
+  return (
+    <div className="flex items-center gap-2 rounded-md border px-2 py-1.5">
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium leading-tight">{product.name}</p>
+        <p className="text-xs text-muted-foreground tabular-nums">
+          {product.configurator_width ?? '—'}m × {product.configurator_length ?? '—'}m
+        </p>
+      </div>
+      <Button type="button" variant="outline" size="sm" className="h-7 shrink-0 px-2" onClick={onAdd}>
+        Add
+      </Button>
+    </div>
+  );
 }
 
 export default function ConfiguratorCatalog({
@@ -31,99 +67,70 @@ export default function ConfiguratorCatalog({
   extras,
   configuration,
   layoutStarted,
+  boxCount,
+  extraQuantityByProductId,
   onAddItem,
   onToggleExtra,
   onUpdateExtra,
+  className,
 }: ConfiguratorCatalogProps) {
   const selectedExtras = new Map(configuration.extras.map((extra) => [extra.product_id, extra]));
 
   return (
-    <div className="space-y-6">
-      {!layoutStarted && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Starter boxes</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
+    <Card className={cn('flex max-h-[inherit] flex-col', className)}>
+      <CardHeader className="shrink-0 pb-3">
+        <CardTitle className="text-base">Catalogue</CardTitle>
+      </CardHeader>
+      <CardContent className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain pb-4">
+        {!layoutStarted && (
+          <CatalogSection title="Starter boxes">
             {starterProducts.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No starter boxes are configured yet. Edit a CONFIGURATOR product and enable{' '}
-                <span className="font-medium text-foreground">Starter box</span> so users can begin a layout.
-              </p>
+              <p className="text-xs text-muted-foreground">No starter boxes configured.</p>
             ) : (
               starterProducts.map((product) => (
-                <div key={product.id} className="flex items-center justify-between gap-3 rounded-md border p-3">
-                  <div>
-                    <p className="font-medium">{product.name}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {product.configurator_width ?? '—'}m x {product.configurator_length ?? '—'}m
-                    </p>
-                  </div>
-                  <Button type="button" variant="outline" onClick={() => onAddItem(product)}>
-                    Add
-                  </Button>
-                </div>
+                <ProductRow key={product.id} product={product} onAdd={() => onAddItem(product)} />
               ))
             )}
-          </CardContent>
-        </Card>
-      )}
+          </CatalogSection>
+        )}
 
-      <Card className={cn(!layoutStarted && 'opacity-60')}>
-        <CardHeader>
-          <CardTitle>Configurator Items</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
+        <CatalogSection
+          title="Boxes"
+          className={cn(!layoutStarted && 'border-t pt-3', !layoutStarted && 'opacity-60')}
+        >
           {!layoutStarted ? (
-            <p className="text-sm text-muted-foreground">
-              Add a starter box on the canvas to unlock the rest of the catalogue.
-            </p>
+            <p className="text-xs text-muted-foreground">Add a starter box to unlock.</p>
           ) : items.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No configurator products are active yet. Create products with the `CONFIGURATOR` category first.
-            </p>
+            <p className="text-xs text-muted-foreground">No configurator products yet.</p>
           ) : (
             items.map((product) => (
-              <div key={product.id} className="flex items-center justify-between gap-3 rounded-md border p-3">
-                <div>
-                  <p className="font-medium">{product.name}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {product.configurator_width ?? '—'}m x {product.configurator_length ?? '—'}m
-                  </p>
-                </div>
-                <Button type="button" variant="outline" onClick={() => onAddItem(product)}>
-                  Add
-                </Button>
-              </div>
+              <ProductRow key={product.id} product={product} onAdd={() => onAddItem(product)} />
             ))
           )}
-        </CardContent>
-      </Card>
+        </CatalogSection>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Configurator Extras</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+        <CatalogSection title="Extras" className="border-t pt-3">
           {extras.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No configurator extras are available yet. On each optional extra, enable{' '}
-              <span className="font-medium text-foreground">Allow in configurator</span> so it appears here.{' '}
-              <Link href="/products/optional-extras" className="font-medium text-primary underline-offset-4 hover:underline">
-                Manage optional extras
+            <p className="text-xs text-muted-foreground">
+              Enable extras in{' '}
+              <Link href="/products/optional-extras" className="text-primary underline-offset-4 hover:underline">
+                optional extras
               </Link>
+              .
             </p>
           ) : (
             extras.map((product) => {
               const selected = selectedExtras.get(product.id);
-              const isPerBox = product.unit === 'Per Box';
+              const isPerBox = Boolean(product.configurator_per_box);
+              const resolvedQuantity = extraQuantityByProductId.get(product.id) ?? (isPerBox ? boxCount : undefined);
               return (
-                <div key={product.id} className="rounded-md border p-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="font-medium">{product.name}</p>
-                      <p className="text-sm text-muted-foreground">
-                        £{Number(product.base_price).toFixed(2)} {product.unit ? `· ${product.unit}` : ''}
+                <div key={product.id} className="rounded-md border px-2 py-1.5">
+                  <div className="flex items-center gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium leading-tight">{product.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        £{Number(product.base_price).toFixed(2)}
+                        {product.unit ? ` · ${product.unit}` : ''}
                       </p>
                     </div>
                     <ConfiguratorExtraIconButton
@@ -133,13 +140,16 @@ export default function ConfiguratorCatalog({
                     />
                   </div>
                   {selected && !isPerBox && (
-                    <div className="mt-3 space-y-2">
-                      <Label htmlFor={`extra-qty-${product.id}`}>Quantity</Label>
+                    <div className="mt-1.5 flex items-center gap-2">
+                      <Label htmlFor={`extra-qty-${product.id}`} className="sr-only">
+                        Quantity
+                      </Label>
                       <Input
                         id={`extra-qty-${product.id}`}
                         type="number"
                         min={1}
                         step="1"
+                        className="h-8 w-20"
                         value={selected.quantity ?? 1}
                         onChange={(event) =>
                           onUpdateExtra(product.id, (current) => ({
@@ -151,17 +161,20 @@ export default function ConfiguratorCatalog({
                     </div>
                   )}
                   {selected && isPerBox && (
-                    <p className="mt-3 text-xs text-muted-foreground">
-                      Quantity is calculated automatically from the number of boxes because this extra uses the
-                      `Per Box` unit.
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Qty{' '}
+                      <span className="font-medium text-foreground tabular-nums">
+                        {resolvedQuantity ?? boxCount}
+                      </span>{' '}
+                      · {boxCount} {boxCount === 1 ? 'box' : 'boxes'}
                     </p>
                   )}
                 </div>
               );
             })
           )}
-        </CardContent>
-      </Card>
-    </div>
+        </CatalogSection>
+      </CardContent>
+    </Card>
   );
 }

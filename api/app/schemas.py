@@ -1063,6 +1063,7 @@ class ProductCreate(BaseModel):
     configurator_is_corner_box: bool = False
     configurator_is_starter_box: bool = False
     allow_in_configurator: bool = False
+    configurator_per_box: bool = False
     installation_hours: Optional[Decimal] = None
     boxes_per_product: Optional[int] = None  # Number of boxes per product (optional; used in installation calculation)
     optional_extras: Optional[List[int]] = None  # List of product IDs that are optional extras
@@ -1100,6 +1101,7 @@ class ProductUpdate(BaseModel):
     configurator_is_corner_box: Optional[bool] = None
     configurator_is_starter_box: Optional[bool] = None
     allow_in_configurator: Optional[bool] = None
+    configurator_per_box: Optional[bool] = None
     installation_hours: Optional[Decimal] = None
     boxes_per_product: Optional[int] = None
     optional_extras: Optional[List[int]] = None  # List of product IDs that are optional extras
@@ -1140,6 +1142,7 @@ class ProductResponse(BaseModel):
     configurator_is_corner_box: bool = False
     configurator_is_starter_box: bool = False
     allow_in_configurator: bool = False
+    configurator_per_box: bool = False
     installation_hours: Optional[Decimal] = None
     boxes_per_product: Optional[int] = None
     is_production_synced: bool = False

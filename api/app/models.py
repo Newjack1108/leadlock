@@ -413,6 +413,10 @@ class Product(SQLModel, table=True):
     configurator_is_corner_box: bool = Field(default=False, sa_column=Column(Boolean, nullable=False, server_default="false"))  # Fixed-orientation corner SKU; disables layout rotation in the configurator
     configurator_is_starter_box: bool = Field(default=False, sa_column=Column(Boolean, nullable=False, server_default="false"))  # Eligible first box when starting a configurator layout
     allow_in_configurator: bool = Field(default=False)  # Extra-level opt-in for configurator selections
+    configurator_per_box: bool = Field(
+        default=False,
+        sa_column=Column(Boolean, nullable=False, server_default="false"),
+    )  # Configurator extra quantity tracks layout box count
     installation_hours: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(10, 2)))  # Hours required for installation
     boxes_per_product: Optional[int] = None  # Number of boxes per product (optional; used in installation calculation)
     production_product_id: Optional[int] = Field(default=None, index=True)  # Production app's product ID for sync

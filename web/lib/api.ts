@@ -1267,6 +1267,7 @@ export const createProduct = async (productData: {
   configurator_is_corner_box?: boolean;
   configurator_is_starter_box?: boolean;
   allow_in_configurator?: boolean;
+  configurator_per_box?: boolean;
   installation_hours?: number;
   boxes_per_product?: number;
   optional_extras?: number[];
@@ -1300,6 +1301,7 @@ export const updateProduct = async (productId: number, productData: {
   configurator_is_corner_box?: boolean;
   configurator_is_starter_box?: boolean;
   allow_in_configurator?: boolean;
+  configurator_per_box?: boolean;
   installation_hours?: number;
   boxes_per_product?: number;
   optional_extras?: number[];

@@ -145,6 +145,9 @@ export default function OptionalExtrasPage() {
                         {extra.allow_in_configurator && (
                           <Badge variant="secondary">Configurator</Badge>
                         )}
+                        {extra.configurator_per_box && (
+                          <Badge variant="secondary">Per box</Badge>
+                        )}
                         {extra.subcategory && (
                           <Badge variant="secondary">{extra.subcategory}</Badge>
                         )}
