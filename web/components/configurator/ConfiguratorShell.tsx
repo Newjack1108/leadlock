@@ -16,7 +16,12 @@ import {
   getQuoteConfiguration,
   previewConfiguratorConfiguration,
   saveQuoteConfiguration,
+  updateDraftQuote,
 } from '@/lib/api';
+import {
+  buildPlaceholderOnlyDraftPayloadFromQuote,
+  isPlaceholderOnlyDraftItems,
+} from '@/lib/quoteDraftPayload';
 import {
   addProductToConfiguration,
   canAddConfiguratorProduct,
@@ -73,6 +78,10 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [applying, setApplying] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [draftIsPlaceholderOnly, setDraftIsPlaceholderOnly] = useState(() =>
+    isPlaceholderOnlyDraftItems(quote.items)
+  );
   const [selectedBoxId, setSelectedBoxId] = useState<string | null>(null);
 
   const productMap = useMemo(() => {
@@ -93,6 +102,15 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
 
   const errorCount = getPreviewIssueCount(preview, 'error');
   const warningCount = getPreviewIssueCount(preview, 'warning');
+
+  const isDesignBlank =
+    configuration.boxes.length === 0 &&
+    configuration.extras.length === 0 &&
+    draftIsPlaceholderOnly;
+
+  useEffect(() => {
+    setDraftIsPlaceholderOnly(isPlaceholderOnlyDraftItems(quote.items));
+  }, [quote.items]);
 
   useEffect(() => {
     let cancelled = false;
@@ -274,6 +292,40 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
     }
   };
 
+  const handleResetDesign = async () => {
+    if (
+      !window.confirm(
+        'Reset this design? All boxes and extras on the layout will be removed, and draft quote lines will return to a blank placeholder. This cannot be undone except by rebuilding the layout.'
+      )
+    ) {
+      return;
+    }
+
+    const blank = createEmptyConfiguration(quote.quote_number);
+    try {
+      setResetting(true);
+      await saveQuoteConfiguration(quote.id, blank);
+      try {
+        await updateDraftQuote(quote.id, buildPlaceholderOnlyDraftPayloadFromQuote(quote));
+      } catch (draftError) {
+        setConfiguration(blank);
+        setSelectedBoxId(null);
+        toast.error(
+          getApiErrorDetail(draftError) ||
+            'Layout was cleared but quote lines could not be reset. Open quote edit to fix lines.'
+        );
+        return;
+      }
+      setConfiguration(blank);
+      setSelectedBoxId(null);
+      setDraftIsPlaceholderOnly(true);
+      toast.success('Design reset.');
+    } catch (error) {
+      toast.error(getApiErrorDetail(error) || 'Failed to reset design');
+    } finally {
+      setResetting(false);
+    }
+  };
 
   const subtotalFormatted = formatCurrency(preview?.subtotal ?? 0);
   const boxTotal = preview?.total_boxes ?? configuration.boxes.length;
@@ -307,10 +359,23 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
           <Button variant="outline" size="sm" onClick={() => router.push(`/quotes/${quote.id}`)}>
             Back to Quote
           </Button>
-          <Button variant="secondary" size="sm" onClick={() => void handleSave()} disabled={loading || saving}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+            onClick={() => void handleResetDesign()}
+            disabled={loading || saving || applying || resetting || isDesignBlank}
+          >
+            {resetting ? 'Resetting...' : 'Reset design'}
+          </Button>
+          <Button variant="secondary" size="sm" onClick={() => void handleSave()} disabled={loading || saving || resetting}>
             {saving ? 'Saving...' : 'Save Layout'}
           </Button>
-          <Button size="sm" onClick={() => void handleApply()} disabled={loading || applying || !preview?.valid}>
+          <Button
+            size="sm"
+            onClick={() => void handleApply()}
+            disabled={loading || applying || resetting || !preview?.valid}
+          >
             {applying ? 'Applying...' : 'Apply to Draft Quote'}
           </Button>
         </div>

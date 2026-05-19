@@ -1,4 +1,4 @@
-import type { QuoteItem, QuoteItemCreate, QuoteTemperature } from '@/lib/types';
+import type { Quote, QuoteItem, QuoteItemCreate, QuoteTemperature } from '@/lib/types';
 
 /** Map API quote lines to create/edit form lines (same as edit page). */
 export function quoteItemsToFormItems(items: QuoteItem[]): QuoteItemCreate[] {
@@ -176,4 +176,40 @@ export function buildUpdateDraftPayload(input: BuildDraftPayloadInput): QuoteDra
 
 export function stableDraftPayloadKey(payload: QuoteDraftPayload): string {
   return JSON.stringify(payload);
+}
+
+/** Reset draft quote lines to bootstrap placeholder while preserving quote metadata. */
+export function buildPlaceholderOnlyDraftPayloadFromQuote(quote: Quote): QuoteDraftPayload {
+  const payload: QuoteDraftPayload = {
+    items: [
+      {
+        description: DRAFT_PLACEHOLDER_LINE_DESCRIPTION,
+        quantity: 1,
+        unit_price: 0,
+        is_custom: true,
+        sort_order: 0,
+      },
+    ],
+    include_spec_sheets: quote.include_spec_sheets,
+    include_available_optional_extras: quote.include_available_optional_extras,
+    include_delivery_installation_contact_note: quote.include_delivery_installation_contact_note,
+  };
+
+  if (quote.valid_until) {
+    payload.valid_until = quote.valid_until;
+  }
+  if (quote.terms_and_conditions?.trim()) {
+    payload.terms_and_conditions = quote.terms_and_conditions.trim();
+  }
+  if (quote.notes?.trim()) {
+    payload.notes = quote.notes.trim();
+  }
+  if (quote.temperature) {
+    payload.temperature = quote.temperature;
+  }
+  if (quote.deposit_amount != null) {
+    payload.deposit_amount = Number(quote.deposit_amount);
+  }
+
+  return payload;
 }

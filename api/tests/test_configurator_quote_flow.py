@@ -1331,3 +1331,71 @@ def test_configurator_preview_accepts_starter_plus_non_starter_box():
     payload = preview.json()
     assert payload["valid"] is True
     assert not any(issue["code"] == "MULTIPLE_STARTER_BOXES" for issue in payload["issues"])
+
+
+def test_save_empty_configuration_and_placeholder_draft_reset():
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SQLModel.metadata.create_all(engine)
+    user = _seed_user(engine)
+
+    with Session(engine) as session:
+        quote = Quote(
+            quote_number="QT-RESET-001",
+            status=QuoteStatus.DRAFT,
+            subtotal=Decimal("1000.00"),
+            discount_total=Decimal("0.00"),
+            total_amount=Decimal("1000.00"),
+            deposit_amount=Decimal("0.00"),
+            balance_amount=Decimal("1000.00"),
+            created_by_id=user.id,
+        )
+        session.add(quote)
+        session.commit()
+        session.refresh(quote)
+        quote_id = quote.id
+
+    client = TestClient(_make_app(engine, user))
+
+    empty_payload = {
+        "schema_version": 1,
+        "name": "QT-RESET-001",
+        "boxes": [],
+        "extras": [],
+    }
+
+    preview_response = client.post("/api/configurator/preview", json=empty_payload)
+    assert preview_response.status_code == 200
+    preview = preview_response.json()
+    assert preview["valid"] is False
+    assert preview["items"] == []
+    assert any(issue["code"] == "EMPTY_LAYOUT" for issue in preview["issues"])
+
+    save_response = client.put(f"/api/quotes/{quote_id}/configuration", json=empty_payload)
+    assert save_response.status_code == 200
+    saved = save_response.json()
+    assert saved["configuration"]["boxes"] == []
+    assert saved["configuration"]["extras"] == []
+
+    draft_response = client.put(
+        f"/api/quotes/{quote_id}/draft",
+        json={
+            "items": [
+                {
+                    "description": "Draft — in progress",
+                    "quantity": 1,
+                    "unit_price": 0,
+                    "is_custom": True,
+                    "sort_order": 0,
+                }
+            ],
+        },
+    )
+    assert draft_response.status_code == 200
+    draft = draft_response.json()
+    assert len(draft["items"]) == 1
+    assert draft["items"][0]["description"] == "Draft — in progress"
+    assert Decimal(draft["subtotal"]) == Decimal("0")

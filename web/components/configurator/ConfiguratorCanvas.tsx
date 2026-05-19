@@ -266,9 +266,10 @@ export default function ConfiguratorCanvas({
             type="button"
             className="rounded-md border px-3 py-1 text-sm hover:bg-accent"
             onClick={resetView}
+            aria-label="Reset view"
           >
             <RotateCcw className="mr-1 inline h-4 w-4" />
-            Reset
+            Reset view
           </button>
         </div>
       </div>
