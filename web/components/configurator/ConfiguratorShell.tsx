@@ -22,7 +22,10 @@ import {
   canAddConfiguratorProduct,
   canRemoveConfiguratorBox,
   createEmptyConfiguration,
+  getCatalogBoxProducts,
+  getPlacedStarterProduct,
   getStarterProducts,
+  layoutHasStarterBox,
 } from '@/lib/configurator/defaults';
 import { findPlacementCandidate, normalizeRotation } from '@/lib/configurator/geometry';
 import { formatCurrency, getPreviewIssueCount } from '@/lib/configurator/summary';
@@ -81,7 +84,12 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
   }, [catalog]);
 
   const starterProducts = useMemo(() => getStarterProducts(catalog.items), [catalog.items]);
-  const layoutStarted = configuration.boxes.length > 0;
+  const catalogBoxProducts = useMemo(() => getCatalogBoxProducts(catalog.items), [catalog.items]);
+  const placedStarterProduct = useMemo(
+    () => getPlacedStarterProduct(configuration.boxes, productMap),
+    [configuration.boxes, productMap]
+  );
+  const hasStarterOnLayout = layoutHasStarterBox(configuration.boxes, productMap);
 
   const errorCount = getPreviewIssueCount(preview, 'error');
   const warningCount = getPreviewIssueCount(preview, 'warning');
@@ -144,8 +152,12 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
   };
 
   const handleAddItem = (product: Product) => {
-    if (!canAddConfiguratorProduct(configuration.boxes, product)) {
-      toast.error('Place a starter box first.');
+    if (!canAddConfiguratorProduct(configuration.boxes, product, productMap)) {
+      if (product.configurator_is_starter_box && hasStarterOnLayout) {
+        toast.error('Only one starter box per layout.');
+      } else {
+        toast.error('Place a starter box first.');
+      }
       return;
     }
     const next = addProductToConfiguration(configuration, product, productMap, selectedBoxId);
@@ -307,11 +319,12 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
       <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)_260px] lg:items-start">
         <ConfiguratorCatalog
           className="lg:sticky lg:top-4 lg:max-h-[calc(100vh-8rem)]"
-          items={catalog.items}
+          boxProducts={catalogBoxProducts}
           starterProducts={starterProducts}
+          placedStarterProduct={placedStarterProduct}
+          hasStarterOnLayout={hasStarterOnLayout}
           extras={catalog.extras}
           configuration={configuration}
-          layoutStarted={layoutStarted}
           boxCount={configuration.boxes.length}
           extraQuantityByProductId={
             new Map(

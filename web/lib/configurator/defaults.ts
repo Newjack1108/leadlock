@@ -5,12 +5,33 @@ export function getStarterProducts(items: Product[]): Product[] {
   return items.filter((product) => product.configurator_is_starter_box);
 }
 
+export function getCatalogBoxProducts(items: Product[]): Product[] {
+  return items.filter((product) => !product.configurator_is_starter_box);
+}
+
+export function getPlacedStarterProduct(
+  boxes: ConfiguratorBoxPlacement[],
+  productMap: Record<number, Product>
+): Product | null {
+  for (const box of boxes) {
+    const product = productMap[box.product_id];
+    if (product?.configurator_is_starter_box) {
+      return product;
+    }
+  }
+  return null;
+}
+
 export function canAddConfiguratorProduct(
   boxes: ConfiguratorBoxPlacement[],
-  product: Product
+  product: Product,
+  productMap: Record<number, Product>
 ): boolean {
   if (boxes.length === 0) {
     return Boolean(product.configurator_is_starter_box);
+  }
+  if (product.configurator_is_starter_box) {
+    return !layoutHasStarterBox(boxes, productMap);
   }
   return true;
 }

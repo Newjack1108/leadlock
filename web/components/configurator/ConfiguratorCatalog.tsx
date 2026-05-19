@@ -15,11 +15,12 @@ import ConfiguratorExtraIconButton from '@/components/configurator/ConfiguratorE
 import { cn } from '@/lib/utils';
 
 interface ConfiguratorCatalogProps {
-  items: Product[];
+  boxProducts: Product[];
   starterProducts: Product[];
+  placedStarterProduct: Product | null;
+  hasStarterOnLayout: boolean;
   extras: Product[];
   configuration: QuoteConfigurationPayload;
-  layoutStarted: boolean;
   boxCount: number;
   extraQuantityByProductId: Map<number, number>;
   onAddItem: (product: Product) => void;
@@ -61,12 +62,25 @@ function ProductRow({ product, onAdd }: { product: Product; onAdd: () => void })
   );
 }
 
+function PlacedStarterRow({ product }: { product: Product }) {
+  return (
+    <div className="rounded-md border border-primary/30 bg-primary/5 px-2 py-1.5">
+      <p className="truncate text-sm font-medium leading-tight">{product.name}</p>
+      <p className="text-xs text-muted-foreground tabular-nums">
+        {product.configurator_width ?? '—'}m × {product.configurator_length ?? '—'}m
+      </p>
+      <p className="mt-1 text-xs text-muted-foreground">Starter for this layout</p>
+    </div>
+  );
+}
+
 export default function ConfiguratorCatalog({
-  items,
+  boxProducts,
   starterProducts,
+  placedStarterProduct,
+  hasStarterOnLayout,
   extras,
   configuration,
-  layoutStarted,
   boxCount,
   extraQuantityByProductId,
   onAddItem,
@@ -82,28 +96,28 @@ export default function ConfiguratorCatalog({
         <CardTitle className="text-base">Catalogue</CardTitle>
       </CardHeader>
       <CardContent className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain pb-4">
-        {!layoutStarted && (
-          <CatalogSection title="Starter boxes">
-            {starterProducts.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No starter boxes configured.</p>
-            ) : (
-              starterProducts.map((product) => (
-                <ProductRow key={product.id} product={product} onAdd={() => onAddItem(product)} />
-              ))
-            )}
-          </CatalogSection>
-        )}
+        <CatalogSection title="Starter box">
+          {hasStarterOnLayout && placedStarterProduct ? (
+            <PlacedStarterRow product={placedStarterProduct} />
+          ) : starterProducts.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No starter boxes configured.</p>
+          ) : (
+            starterProducts.map((product) => (
+              <ProductRow key={product.id} product={product} onAdd={() => onAddItem(product)} />
+            ))
+          )}
+        </CatalogSection>
 
         <CatalogSection
           title="Boxes"
-          className={cn(!layoutStarted && 'border-t pt-3', !layoutStarted && 'opacity-60')}
+          className={cn('border-t pt-3', !hasStarterOnLayout && 'opacity-60')}
         >
-          {!layoutStarted ? (
+          {!hasStarterOnLayout ? (
             <p className="text-xs text-muted-foreground">Add a starter box to unlock.</p>
-          ) : items.length === 0 ? (
+          ) : boxProducts.length === 0 ? (
             <p className="text-xs text-muted-foreground">No configurator products yet.</p>
           ) : (
-            items.map((product) => (
+            boxProducts.map((product) => (
               <ProductRow key={product.id} product={product} onAdd={() => onAddItem(product)} />
             ))
           )}

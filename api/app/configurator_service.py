@@ -377,16 +377,27 @@ def build_configurator_preview(
     box_products = _load_products(session, [box.product_id for box in payload.boxes])
     extra_products = _load_products(session, [extra.product_id for extra in payload.extras])
 
-    if payload.boxes and not any(
-        bool(getattr(box_products.get(box.product_id), "configurator_is_starter_box", False))
+    starter_box_ids = [
+        box.id
         for box in payload.boxes
-    ):
+        if bool(getattr(box_products.get(box.product_id), "configurator_is_starter_box", False))
+    ]
+    if payload.boxes and not starter_box_ids:
         issues.append(
             ConfiguratorValidationIssue(
                 code="STARTER_BOX_REQUIRED",
                 severity="error",
                 message="Layout must include a starter box.",
                 box_ids=[box.id for box in payload.boxes],
+            )
+        )
+    if len(starter_box_ids) > 1:
+        issues.append(
+            ConfiguratorValidationIssue(
+                code="MULTIPLE_STARTER_BOXES",
+                severity="error",
+                message="Layout can only include one starter box.",
+                box_ids=starter_box_ids,
             )
         )
 

@@ -1227,3 +1227,107 @@ def test_configurator_preview_accepts_layout_with_starter_box():
     payload = preview.json()
     assert payload["valid"] is True
     assert not any(issue["code"] == "STARTER_BOX_REQUIRED" for issue in payload["issues"])
+
+
+def test_configurator_preview_rejects_multiple_starter_boxes():
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SQLModel.metadata.create_all(engine)
+    user = _seed_user(engine)
+
+    with Session(engine) as session:
+        starter_a = Product(
+            name="Starter A",
+            category=ProductCategory.CONFIGURATOR,
+            configurator_is_starter_box=True,
+            base_price=Decimal("1000.00"),
+            configurator_width=Decimal("3.00"),
+            configurator_length=Decimal("3.00"),
+        )
+        starter_b = Product(
+            name="Starter B",
+            category=ProductCategory.CONFIGURATOR,
+            configurator_is_starter_box=True,
+            base_price=Decimal("1100.00"),
+            configurator_width=Decimal("3.00"),
+            configurator_length=Decimal("3.00"),
+        )
+        session.add(starter_a)
+        session.add(starter_b)
+        session.commit()
+        session.refresh(starter_a)
+        session.refresh(starter_b)
+        starter_a_id = starter_a.id
+        starter_b_id = starter_b.id
+
+    client = TestClient(_make_app(engine, user))
+    preview = client.post(
+        "/api/configurator/preview",
+        json={
+            "schema_version": 1,
+            "boxes": [
+                {"id": "box-1", "product_id": starter_a_id, "x": "0", "y": "0", "rotation": 0},
+                {"id": "box-2", "product_id": starter_b_id, "x": "3", "y": "0", "rotation": 0},
+            ],
+            "extras": [],
+        },
+    )
+    assert preview.status_code == 200
+    payload = preview.json()
+    assert payload["valid"] is False
+    assert any(issue["code"] == "MULTIPLE_STARTER_BOXES" for issue in payload["issues"])
+
+
+def test_configurator_preview_accepts_starter_plus_non_starter_box():
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SQLModel.metadata.create_all(engine)
+    user = _seed_user(engine)
+
+    with Session(engine) as session:
+        starter = Product(
+            name="Starter SKU",
+            category=ProductCategory.CONFIGURATOR,
+            configurator_is_starter_box=True,
+            base_price=Decimal("1000.00"),
+            configurator_width=Decimal("3.00"),
+            configurator_length=Decimal("3.00"),
+        )
+        extension = Product(
+            name="Extension Box",
+            category=ProductCategory.CONFIGURATOR,
+            configurator_is_starter_box=False,
+            base_price=Decimal("900.00"),
+            configurator_width=Decimal("3.00"),
+            configurator_length=Decimal("3.00"),
+        )
+        session.add(starter)
+        session.add(extension)
+        session.commit()
+        session.refresh(starter)
+        session.refresh(extension)
+        starter_id = starter.id
+        extension_id = extension.id
+
+    client = TestClient(_make_app(engine, user))
+    preview = client.post(
+        "/api/configurator/preview",
+        json={
+            "schema_version": 1,
+            "boxes": [
+                {"id": "box-1", "product_id": starter_id, "x": "0", "y": "0", "rotation": 0},
+                {"id": "box-2", "product_id": extension_id, "x": "3", "y": "0", "rotation": 0},
+            ],
+            "extras": [],
+        },
+    )
+    assert preview.status_code == 200
+    payload = preview.json()
+    assert payload["valid"] is True
+    assert not any(issue["code"] == "MULTIPLE_STARTER_BOXES" for issue in payload["issues"])
