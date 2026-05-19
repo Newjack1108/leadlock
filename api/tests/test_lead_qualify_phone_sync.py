@@ -184,6 +184,51 @@ def test_sync_skips_phone_when_lead_phone_empty_but_updates_other_fields(sqlite_
         assert customer.name == "John Updated"
 
 
+def test_sync_skips_postcode_when_lead_postcode_empty(sqlite_engine):
+    with Session(sqlite_engine) as session:
+        user = User(
+            email="u-qpost@example.com",
+            hashed_password="x",
+            full_name="Sales",
+            role=UserRole.DIRECTOR,
+        )
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+
+        customer = Customer(
+            customer_number="CUST-2026-905",
+            name="Sam",
+            email="sam@example.com",
+            phone="+441200000099",
+            postcode="BN1 1AA",
+        )
+        session.add(customer)
+        session.commit()
+        session.refresh(customer)
+
+        lead = Lead(
+            name="Sam",
+            email="sam@example.com",
+            phone="+441200000099",
+            postcode=None,
+            status=LeadStatus.QUALIFIED,
+            customer_id=customer.id,
+            assigned_to_id=user.id,
+            lead_type=LeadType.UNKNOWN,
+            lead_source=LeadSource.MANUAL_ENTRY,
+        )
+        session.add(lead)
+        session.commit()
+        session.refresh(lead)
+
+        sync_customer_contact_from_lead_on_qualify(session, lead)
+        session.commit()
+        session.refresh(customer)
+
+        assert customer.postcode == "BN1 1AA"
+
+
 def test_auto_transition_to_qualified_syncs_customer_phone(sqlite_engine):
     with Session(sqlite_engine) as session:
         user = User(

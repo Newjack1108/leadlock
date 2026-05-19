@@ -180,8 +180,8 @@ def sync_customer_contact_from_lead_on_qualify(session: Session, lead: Lead) -> 
     correct name, email, phone, or postcode on the lead before qualifying. The customer profile
     should match the lead for CRM and outreach.
 
-    Phone is only updated when the lead has a non-empty phone after strip, so clearing the lead
-    phone does not wipe a known-good customer number used for SMS and quoting.
+    Phone and postcode are only updated when the lead has a non-empty value after strip, so
+    clearing them on the lead does not wipe known-good customer contact data used for SMS and quoting.
     """
     if not lead.customer_id:
         return
@@ -195,7 +195,8 @@ def sync_customer_contact_from_lead_on_qualify(session: Session, lead: Lead) -> 
 
     new_name = (lead.name or "").strip() or customer.name
     new_email = _norm_optional(lead.email)
-    new_postcode = _norm_optional(lead.postcode)
+    postcode_stripped = (lead.postcode or "").strip()
+    new_postcode = postcode_stripped if postcode_stripped else None
     phone_stripped = (lead.phone or "").strip()
     new_phone = phone_stripped if phone_stripped else None
 
@@ -206,7 +207,7 @@ def sync_customer_contact_from_lead_on_qualify(session: Session, lead: Lead) -> 
     if customer.email != new_email:
         customer.email = new_email
         dirty = True
-    if customer.postcode != new_postcode:
+    if new_postcode is not None and customer.postcode != new_postcode:
         customer.postcode = new_postcode
         dirty = True
     if new_phone is not None and customer.phone != new_phone:
