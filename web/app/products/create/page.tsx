@@ -168,9 +168,7 @@ export default function CreateProductPage() {
     }
 
     if (requiresConfiguratorFrontFace && !formData.configurator_front_face) {
-      toast.error(
-        'Non-square configurator products must choose a front side on one of the shortest edges'
-      );
+      toast.error('Non-square configurator products must choose which edge is the front');
       return;
     }
 
@@ -801,8 +799,8 @@ export default function CreateProductPage() {
                       </SelectContent>
                     </Select>
                     <p className="text-xs text-muted-foreground">
-                      For rectangular configurator products, choose one of the shortest edges as the front. New boxes
-                      will rotate so this front points toward the bottom of the layout by default.
+                      Choose which edge is the customer-facing front (top/bottom use width; left/right use length). New
+                      boxes will rotate so this front points toward the bottom of the layout by default.
                     </p>
                   </div>
                 )}

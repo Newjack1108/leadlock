@@ -27,7 +27,7 @@ def _make_app(engine, user: User) -> FastAPI:
     return app
 
 
-def test_wider_configurator_product_allows_short_edge_front_only():
+def test_wider_configurator_product_allows_any_front_face():
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
@@ -47,25 +47,10 @@ def test_wider_configurator_product_allows_short_edge_front_only():
 
     client = TestClient(_make_app(engine, user))
 
-    invalid = client.post(
+    short_edge = client.post(
         "/api/products",
         json={
-            "name": "Wide Box",
-            "category": "CONFIGURATOR",
-            "base_price": "1500.00",
-            "unit": "Unit",
-            "configurator_width": "5.00",
-            "configurator_length": "3.50",
-            "configurator_front_face": "bottom",
-        },
-    )
-    assert invalid.status_code == 422
-    assert "left or right" in invalid.json()["detail"]
-
-    valid = client.post(
-        "/api/products",
-        json={
-            "name": "Wide Box",
+            "name": "Wide Box Short Front",
             "category": "CONFIGURATOR",
             "base_price": "1500.00",
             "unit": "Unit",
@@ -74,5 +59,56 @@ def test_wider_configurator_product_allows_short_edge_front_only():
             "configurator_front_face": "left",
         },
     )
-    assert valid.status_code == 200
-    assert valid.json()["configurator_front_face"] == "left"
+    assert short_edge.status_code == 200
+    assert short_edge.json()["configurator_front_face"] == "left"
+
+    long_edge = client.post(
+        "/api/products",
+        json={
+            "name": "Wide Box Long Front",
+            "category": "CONFIGURATOR",
+            "base_price": "1500.00",
+            "unit": "Unit",
+            "configurator_width": "5.00",
+            "configurator_length": "3.50",
+            "configurator_front_face": "bottom",
+        },
+    )
+    assert long_edge.status_code == 200
+    assert long_edge.json()["configurator_front_face"] == "bottom"
+
+
+def test_deeper_configurator_product_allows_long_edge_front():
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SQLModel.metadata.create_all(engine)
+    with Session(engine) as session:
+        user = User(
+            email="front-deep@example.com",
+            hashed_password="dummy",
+            full_name="Front Tester",
+            role=UserRole.DIRECTOR,
+        )
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+
+    client = TestClient(_make_app(engine, user))
+
+    response = client.post(
+        "/api/products",
+        json={
+            "name": "3 x 3.6 Box",
+            "category": "CONFIGURATOR",
+            "base_price": "1500.00",
+            "unit": "Unit",
+            "configurator_width": "3.00",
+            "configurator_length": "3.60",
+            "configurator_front_face": "right",
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["configurator_front_face"] == "right"

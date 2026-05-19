@@ -167,29 +167,6 @@ def _validate_configurator_product_payload(payload: dict) -> None:
                     detail="Corner connection profiles define the fixed front automatically; configurator_front_face must be omitted or bottom",
                 )
 
-        if configurator_front_face is not None and not profile_selected:
-            front_face = (
-                configurator_front_face.value
-                if isinstance(configurator_front_face, ConfiguratorFrontFace)
-                else str(configurator_front_face)
-            )
-            if width > length and front_face not in (
-                ConfiguratorFrontFace.LEFT.value,
-                ConfiguratorFrontFace.RIGHT.value,
-            ):
-                raise HTTPException(
-                    status_code=422,
-                    detail="For wider configurator products, configurator_front_face must be left or right (short edges)",
-                )
-            if length > width and front_face not in (
-                ConfiguratorFrontFace.TOP.value,
-                ConfiguratorFrontFace.BOTTOM.value,
-            ):
-                raise HTTPException(
-                    status_code=422,
-                    detail="For deeper configurator products, configurator_front_face must be top or bottom (short edges)",
-                )
-
 
 @router.get("", response_model=List[ProductResponse])
 async def get_products(

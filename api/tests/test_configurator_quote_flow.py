@@ -101,10 +101,10 @@ def test_non_square_configurator_products_require_valid_front_face():
     assert missing_front.status_code == 422
     assert "configurator_front_face" in missing_front.json()["detail"]
 
-    invalid_front = client.post(
+    long_edge_front = client.post(
         "/api/products",
         json={
-            "name": "Rectangular Box",
+            "name": "Rectangular Box Long Edge Front",
             "category": "CONFIGURATOR",
             "base_price": "1450.00",
             "unit": "Unit",
@@ -113,8 +113,8 @@ def test_non_square_configurator_products_require_valid_front_face():
             "configurator_front_face": "right",
         },
     )
-    assert invalid_front.status_code == 422
-    assert "top or bottom" in invalid_front.json()["detail"]
+    assert long_edge_front.status_code == 200
+    assert long_edge_front.json()["configurator_front_face"] == "right"
 
     valid_front = client.post(
         "/api/products",
