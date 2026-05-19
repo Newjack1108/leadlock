@@ -50,7 +50,9 @@ function ProductRow({ product, onAdd }: { product: Product; onAdd: () => void })
   return (
     <div className="flex items-center gap-2 rounded-md border px-2 py-1.5">
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium leading-tight">{product.name}</p>
+        <p className="text-sm font-medium leading-snug break-words" title={product.name}>
+          {product.name}
+        </p>
         <p className="text-xs text-muted-foreground tabular-nums">
           {product.configurator_width ?? '—'}m × {product.configurator_length ?? '—'}m
         </p>
@@ -65,7 +67,9 @@ function ProductRow({ product, onAdd }: { product: Product; onAdd: () => void })
 function PlacedStarterRow({ product }: { product: Product }) {
   return (
     <div className="rounded-md border border-primary/30 bg-primary/5 px-2 py-1.5">
-      <p className="truncate text-sm font-medium leading-tight">{product.name}</p>
+      <p className="text-sm font-medium leading-snug break-words" title={product.name}>
+        {product.name}
+      </p>
       <p className="text-xs text-muted-foreground tabular-nums">
         {product.configurator_width ?? '—'}m × {product.configurator_length ?? '—'}m
       </p>
@@ -141,7 +145,9 @@ export default function ConfiguratorCatalog({
                 <div key={product.id} className="rounded-md border px-2 py-1.5">
                   <div className="flex items-center gap-2">
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium leading-tight">{product.name}</p>
+                      <p className="text-sm font-medium leading-snug break-words" title={product.name}>
+          {product.name}
+        </p>
                       <p className="text-xs text-muted-foreground">
                         £{Number(product.base_price).toFixed(2)}
                         {product.unit ? ` · ${product.unit}` : ''}
