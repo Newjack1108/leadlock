@@ -3,14 +3,18 @@
 from sqlmodel import Session, select
 
 from app.models import (
+    AutomatedReminderCleanupSuppression,
+    ConfiguratorInvite,
     CustomerFile,
     CustomerOutreachSend,
     DiscountRequest,
     Quote,
+    QuoteConfiguration,
     QuoteDiscount,
     QuoteEmail,
     QuoteItem,
     Reminder,
+    WeeklyPlanItem,
 )
 from app.customer_file_service import delete_customer_file_from_cloudinary
 
@@ -50,6 +54,29 @@ def delete_quote_cascade(session: Session, quote_id: int) -> None:
     session.flush()
     for qe in session.exec(select(QuoteEmail).where(QuoteEmail.quote_id == quote_id)).all():
         session.delete(qe)
+    session.flush()
+    for cfg in session.exec(
+        select(QuoteConfiguration).where(QuoteConfiguration.quote_id == quote_id)
+    ).all():
+        session.delete(cfg)
+    session.flush()
+    for inv in session.exec(
+        select(ConfiguratorInvite).where(ConfiguratorInvite.quote_id == quote_id)
+    ).all():
+        session.delete(inv)
+    session.flush()
+    for sup in session.exec(
+        select(AutomatedReminderCleanupSuppression).where(
+            AutomatedReminderCleanupSuppression.quote_id == quote_id
+        )
+    ).all():
+        session.delete(sup)
+    session.flush()
+    for plan_item in session.exec(
+        select(WeeklyPlanItem).where(WeeklyPlanItem.quote_id == quote_id)
+    ).all():
+        plan_item.quote_id = None
+        session.add(plan_item)
     session.flush()
     quote = session.get(Quote, quote_id)
     if quote:

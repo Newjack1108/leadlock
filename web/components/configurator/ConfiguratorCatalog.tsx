@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 
 import { Button } from '@/components/ui/button';
@@ -57,6 +58,14 @@ function CatalogSection({
 }
 
 function ProductRow({ product, onAdd }: { product: Product; onAdd: () => void }) {
+  const [justAdded, setJustAdded] = useState(false);
+
+  const handleAdd = () => {
+    onAdd();
+    setJustAdded(true);
+    window.setTimeout(() => setJustAdded(false), 500);
+  };
+
   return (
     <div className="flex items-center gap-2 rounded-md border px-2 py-1.5">
       <div className="min-w-0 flex-1">
@@ -67,8 +76,20 @@ function ProductRow({ product, onAdd }: { product: Product; onAdd: () => void })
           {product.configurator_width ?? '—'}m × {product.configurator_length ?? '—'}m
         </p>
       </div>
-      <Button type="button" variant="outline" size="sm" className="h-7 shrink-0 px-2" onClick={onAdd}>
-        Add
+      <Button
+        type="button"
+        variant={justAdded ? 'default' : 'outline'}
+        size="sm"
+        className={cn(
+          'h-10 min-h-[44px] min-w-[4.25rem] shrink-0 px-3 text-sm font-semibold touch-manipulation',
+          'transition-all duration-150 active:scale-[0.96]',
+          !justAdded &&
+            'active:border-primary active:bg-primary active:text-primary-foreground',
+          justAdded && 'bg-emerald-600 text-white hover:bg-emerald-600/90 border-emerald-600'
+        )}
+        onClick={handleAdd}
+      >
+        {justAdded ? 'Added' : 'Add'}
       </Button>
     </div>
   );
