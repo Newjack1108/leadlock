@@ -674,6 +674,7 @@ class ConfiguratorInvite(SQLModel, table=True):
     assigned_to_id: Optional[int] = Field(default=None, foreign_key="user.id")
     campaign_slug: Optional[str] = Field(default=None, index=True)
     submitted_at: Optional[datetime] = None
+    staff_viewed_at: Optional[datetime] = None
     expires_at: Optional[datetime] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)

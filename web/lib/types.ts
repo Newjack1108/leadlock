@@ -114,8 +114,13 @@ export interface ConfiguratorInvite {
   assigned_to_id?: number | null;
   campaign_slug?: string | null;
   submitted_at?: string | null;
+  staff_viewed_at?: string | null;
   expires_at?: string | null;
   created_at: string;
+}
+
+export function isConfiguratorSubmissionUnread(invite: ConfiguratorInvite): boolean {
+  return invite.status === 'SUBMITTED' && !invite.staff_viewed_at;
 }
 
 export interface User {

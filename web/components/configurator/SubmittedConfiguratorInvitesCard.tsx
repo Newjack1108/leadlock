@@ -2,14 +2,18 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { listConfiguratorInvites } from '@/lib/api';
+import { openConfiguratorSubmission } from '@/lib/configurator/openSubmission';
 import type { ConfiguratorInvite } from '@/lib/types';
 
 export default function SubmittedConfiguratorInvitesCard() {
+  const router = useRouter();
   const [items, setItems] = useState<ConfiguratorInvite[]>([]);
   const [loading, setLoading] = useState(true);
+  const [openingId, setOpeningId] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -28,6 +32,22 @@ export default function SubmittedConfiguratorInvitesCard() {
       cancelled = true;
     };
   }, []);
+
+  const handleReview = async (invite: ConfiguratorInvite) => {
+    try {
+      setOpeningId(invite.id);
+      await openConfiguratorSubmission(invite, router);
+      setItems((prev) =>
+        prev.map((row) =>
+          row.id === invite.id
+            ? { ...row, staff_viewed_at: row.staff_viewed_at ?? new Date().toISOString() }
+            : row
+        )
+      );
+    } finally {
+      setOpeningId(null);
+    }
+  };
 
   if (loading || items.length === 0) return null;
 
@@ -57,15 +77,18 @@ export default function SubmittedConfiguratorInvitesCard() {
                 </Button>
               )}
               {invite.quote_id != null && (
-                <>
-                  <Button variant="outline" size="sm" asChild>
-                    <Link href={`/quotes/${invite.quote_id}/configure`}>Configurator</Link>
-                  </Button>
-                  <Button variant="default" size="sm" asChild>
-                    <Link href={`/quotes/${invite.quote_id}/edit`}>Quote</Link>
-                  </Button>
-                </>
+                <Button variant="default" size="sm" asChild>
+                  <Link href={`/quotes/${invite.quote_id}/edit`}>Quote</Link>
+                </Button>
               )}
+              <Button
+                variant={invite.quote_id != null ? 'outline' : 'default'}
+                size="sm"
+                disabled={openingId === invite.id || (invite.quote_id == null && invite.lead_id == null)}
+                onClick={() => void handleReview(invite)}
+              >
+                {openingId === invite.id ? 'Opening…' : 'Review'}
+              </Button>
             </div>
           </div>
         ))}

@@ -7,7 +7,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import ConfiguratorCanvas from '@/components/configurator/ConfiguratorCanvas';
 import ConfiguratorCatalog from '@/components/configurator/ConfiguratorCatalog';
-import ConfiguratorLogo from '@/components/configurator/ConfiguratorLogo';
 import {
   getApiErrorDetail,
   getPublicConfiguratorCatalog,
@@ -352,7 +351,6 @@ export default function PublicConfiguratorShell({
     <div className="space-y-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-wrap items-center gap-4">
-          <ConfiguratorLogo className="h-10" />
           <p className="text-sm text-muted-foreground">
             {initialContext.customer_name ? `Hi ${initialContext.customer_name}` : 'Design your layout'}
             {autosaveStatus === 'saving' && (

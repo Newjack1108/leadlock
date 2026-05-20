@@ -228,3 +228,82 @@ def test_expired_invite_returns_410():
 
     response = client.get("/api/public/configurator/expired-token-test")
     assert response.status_code == 410
+
+
+def _submit_public_invite(client: TestClient, engine, user: User) -> int:
+    """Register, save layout, submit; return invite id."""
+    item_id = _seed_starter_product(engine, user)
+    start = client.post("/api/public/configurator/start", json={})
+    token = start.json()["access_token"]
+    client.post(
+        f"/api/public/configurator/{token}/register",
+        json={"name": "Unread Test", "email": "unread@example.com", "postcode": "M1 1AA"},
+    )
+    payload = {
+        "schema_version": 1,
+        "boxes": [
+            {
+                "id": "box-1",
+                "product_id": item_id,
+                "x": "0",
+                "y": "0",
+                "rotation": 0,
+            }
+        ],
+        "extras": [],
+        "delivery_estimate_inclusion": "none",
+    }
+    client.put(f"/api/public/configurator/{token}/configuration", json=payload)
+    with patch(
+        "app.configurator_service.compute_delivery_install_estimate",
+        side_effect=AssertionError("should not estimate for none"),
+    ):
+        submit = client.post(f"/api/public/configurator/{token}/submit")
+    assert submit.status_code == 200
+    with Session(engine) as session:
+        invite = session.exec(
+            select(ConfiguratorInvite).where(ConfiguratorInvite.access_token == token)
+        ).first()
+        assert invite is not None
+        return invite.id
+
+
+def test_unread_count_after_submit():
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SQLModel.metadata.create_all(engine)
+    user = _seed_user(engine)
+    client = TestClient(_make_app(engine, user))
+
+    _submit_public_invite(client, engine, user)
+
+    unread = client.get("/api/configurator-invites/unread-count")
+    assert unread.status_code == 200
+    assert unread.json()["count"] == 1
+
+
+def test_mark_viewed_clears_unread():
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SQLModel.metadata.create_all(engine)
+    user = _seed_user(engine)
+    client = TestClient(_make_app(engine, user))
+
+    invite_id = _submit_public_invite(client, engine, user)
+
+    before = client.get("/api/configurator-invites/unread-count")
+    assert before.json()["count"] == 1
+
+    marked = client.post(f"/api/configurator-invites/{invite_id}/mark-viewed")
+    assert marked.status_code == 200
+    assert marked.json()["staff_viewed_at"] is not None
+
+    after = client.get("/api/configurator-invites/unread-count")
+    assert after.status_code == 200
+    assert after.json()["count"] == 0

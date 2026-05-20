@@ -615,11 +615,33 @@ export const createConfiguratorInvite = async (body: {
 export const listConfiguratorInvites = async (params?: {
   status?: string;
   assigned_to_me?: boolean;
+  unread_only?: boolean;
   limit?: number;
 }) => {
   const response = await api.get('/api/configurator-invites', { params });
   return response.data as { items: ConfiguratorInvite[]; total: number };
 };
+
+export const getUnreadConfiguratorSubmissionsCount = async (): Promise<{ count: number }> => {
+  const response = await api.get('/api/configurator-invites/unread-count');
+  return response.data as { count: number };
+};
+
+export const markConfiguratorInviteViewed = async (inviteId: number): Promise<ConfiguratorInvite> => {
+  const response = await api.post(`/api/configurator-invites/${inviteId}/mark-viewed`);
+  dispatchRefreshConfiguratorSubmissions();
+  return response.data as ConfiguratorInvite;
+};
+
+/** Dispatched after a submission is opened so the header badge updates. */
+export const LEADLOCK_REFRESH_CONFIGURATOR_SUBMISSIONS_EVENT =
+  'leadlock:refreshConfiguratorSubmissions';
+
+export function dispatchRefreshConfiguratorSubmissions(): void {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(LEADLOCK_REFRESH_CONFIGURATOR_SUBMISSIONS_EVENT));
+  }
+}
 
 /** Company logo URL for header and login page (no auth required). */
 export const getPublicCompanyLogo = async (): Promise<{ logo_url: string | null }> => {

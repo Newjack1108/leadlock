@@ -686,6 +686,38 @@ def create_db_and_tables():
                 print(f"Error creating configuratorinvite table: {e}", file=sys.stderr, flush=True)
                 import traceback
                 print(traceback.format_exc(), file=sys.stderr, flush=True)
+
+        if inspector.has_table("configuratorinvite"):
+            configurator_invite_columns = [
+                col["name"] for col in inspector.get_columns("configuratorinvite")
+            ]
+            if "staff_viewed_at" not in configurator_invite_columns:
+                print(
+                    "Adding staff_viewed_at column to configuratorinvite table...",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(
+                            text(
+                                "ALTER TABLE configuratorinvite "
+                                "ADD COLUMN staff_viewed_at TIMESTAMP"
+                            )
+                        )
+                    print(
+                        "Added staff_viewed_at column to configuratorinvite table",
+                        file=sys.stderr,
+                        flush=True,
+                    )
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(
+                            f"Error adding staff_viewed_at to configuratorinvite: {e}",
+                            file=sys.stderr,
+                            flush=True,
+                        )
         
         # Step 0: Facebook Messenger - messenger_psid on Customer/Lead (run first so it's never skipped)
         if has_customer_table:

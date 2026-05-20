@@ -254,8 +254,13 @@ class ConfiguratorInviteResponse(BaseModel):
     assigned_to_id: Optional[int] = None
     campaign_slug: Optional[str] = None
     submitted_at: Optional[datetime] = None
+    staff_viewed_at: Optional[datetime] = None
     expires_at: Optional[datetime] = None
     created_at: datetime
+
+
+class ConfiguratorInviteUnreadCountResponse(BaseModel):
+    count: int
 
 
 class ConfiguratorInviteListResponse(BaseModel):

@@ -189,9 +189,34 @@ def invite_to_response(invite: ConfiguratorInvite, session: Session) -> Configur
         assigned_to_id=invite.assigned_to_id,
         campaign_slug=invite.campaign_slug,
         submitted_at=invite.submitted_at,
+        staff_viewed_at=invite.staff_viewed_at,
         expires_at=invite.expires_at,
         created_at=invite.created_at,
     )
+
+
+def count_unread_submitted_invites(session: Session) -> int:
+    rows = session.exec(
+        select(ConfiguratorInvite).where(
+            ConfiguratorInvite.status == ConfiguratorInviteStatus.SUBMITTED,
+            ConfiguratorInvite.staff_viewed_at.is_(None),
+        )
+    ).all()
+    return len(rows)
+
+
+def mark_invite_viewed_by_staff(session: Session, invite_id: int) -> ConfiguratorInvite:
+    invite = session.get(ConfiguratorInvite, invite_id)
+    if not invite:
+        raise HTTPException(status_code=404, detail="Configurator invite not found")
+    if invite.status == ConfiguratorInviteStatus.SUBMITTED and invite.staff_viewed_at is None:
+        now = datetime.utcnow()
+        invite.staff_viewed_at = now
+        invite.updated_at = now
+        session.add(invite)
+        session.commit()
+        session.refresh(invite)
+    return invite
 
 
 def start_organic_invite(session: Session, campaign_slug: Optional[str] = None) -> ConfiguratorInvite:
