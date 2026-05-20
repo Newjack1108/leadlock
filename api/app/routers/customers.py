@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from fastapi.responses import Response
-from sqlmodel import Session, select, or_, func
+from sqlalchemy import and_, exists, func, true
+from sqlmodel import Session, select, or_
 from typing import Optional, List
+from app.constants import LIST_PAGE_SIZE_DEFAULT, LIST_PAGE_SIZE_MAX
 from app.database import get_session
 from app.models import (
     Activity,
@@ -34,6 +36,7 @@ from app.schemas import (
     ChannelDirectionCounts,
     CustomerCommunicationStats,
     CustomerResponse,
+    CustomerListResponse,
     customer_to_response,
     CustomerUpdate,
     ActivityCreate,
@@ -59,6 +62,33 @@ from datetime import datetime
 router = APIRouter(prefix="/api/customers", tags=["customers"])
 
 
+def _customer_has_unread_exists():
+    """Customer has at least one unread received SMS, Messenger, or email."""
+    return or_(
+        exists(
+            select(SmsMessage.id).where(
+                SmsMessage.customer_id == Customer.id,
+                SmsMessage.direction == SmsDirection.RECEIVED,
+                SmsMessage.read_at.is_(None),
+            )
+        ),
+        exists(
+            select(MessengerMessage.id).where(
+                MessengerMessage.customer_id == Customer.id,
+                MessengerMessage.direction == MessengerDirection.RECEIVED,
+                MessengerMessage.read_at.is_(None),
+            )
+        ),
+        exists(
+            select(Email.id).where(
+                Email.customer_id == Customer.id,
+                Email.direction == EmailDirection.RECEIVED,
+                Email.read_at.is_(None),
+            )
+        ),
+    )
+
+
 def quote_item_to_response(item: QuoteItem) -> QuoteItemResponse:
     """Convert a QuoteItem SQLModel instance to QuoteItemResponse."""
     return QuoteItemResponse(
@@ -79,35 +109,58 @@ def quote_item_to_response(item: QuoteItem) -> QuoteItemResponse:
     )
 
 
-@router.get("", response_model=List[CustomerResponse])
+@router.get("", response_model=CustomerListResponse)
 async def get_customers(
     search: Optional[str] = Query(None),
     sms_opted_out: Optional[bool] = Query(None),
+    has_unread: Optional[bool] = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(LIST_PAGE_SIZE_DEFAULT, ge=1, le=LIST_PAGE_SIZE_MAX),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
-    """Get all customers."""
-    statement = select(Customer)
-    
-    if search:
-        search_term = f"%{search}%"
-        statement = statement.where(
+    """Paginated customers list."""
+    conditions = []
+
+    if search and search.strip():
+        search_term = f"%{search.strip()}%"
+        conditions.append(
             or_(
                 Customer.name.ilike(search_term),
                 Customer.email.ilike(search_term),
                 Customer.phone.ilike(search_term),
                 Customer.customer_number.ilike(search_term),
-                Customer.postcode.ilike(search_term)
+                Customer.postcode.ilike(search_term),
             )
         )
 
     if sms_opted_out is not None:
-        statement = statement.where(Customer.automated_reminder_outreach_opt_out == sms_opted_out)
-    
-    statement = statement.order_by(Customer.created_at.desc())
+        conditions.append(Customer.automated_reminder_outreach_opt_out == sms_opted_out)
+
+    if has_unread:
+        conditions.append(_customer_has_unread_exists())
+
+    where_clause = and_(*conditions) if conditions else true()
+
+    count_stmt = select(func.count()).select_from(Customer).where(where_clause)
+    _total_row = session.exec(count_stmt).one()
+    total = int(_total_row[0]) if isinstance(_total_row, (tuple, list)) else int(_total_row)
+
+    statement = (
+        select(Customer)
+        .where(where_clause)
+        .order_by(Customer.created_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
     customers = session.exec(statement).all()
-    
-    return [customer_to_response(customer) for customer in customers]
+
+    return CustomerListResponse(
+        items=[customer_to_response(customer) for customer in customers],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
 
 
 @router.get("/{customer_id}", response_model=CustomerResponse)

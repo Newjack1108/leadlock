@@ -28,6 +28,7 @@ import {
   type QuoteTemperature,
   type QuoteStatus,
   type QuoteListPayload,
+  type CustomerListPayload,
   type AutomatedReminderCleanupResult,
   type StaleSummary,
   type WeeklyPlanListResponse,
@@ -384,6 +385,23 @@ export const getDashboardCommunicationTotals = async (
 export const getUnreadCountsByCustomer = async (): Promise<{ customer_id: number; unread_count: number }[]> => {
   const response = await api.get('/api/dashboard/unread-by-customer');
   return response.data;
+};
+
+export const getCustomers = async (options?: {
+  search?: string;
+  sms_opted_out?: boolean;
+  has_unread?: boolean;
+  page?: number;
+  page_size?: number;
+}) => {
+  const params: Record<string, string | number | boolean> = {};
+  if (options?.search?.trim()) params.search = options.search.trim();
+  if (options?.sms_opted_out) params.sms_opted_out = true;
+  if (options?.has_unread) params.has_unread = true;
+  if (options?.page != null) params.page = options.page;
+  if (options?.page_size != null) params.page_size = options.page_size;
+  const response = await api.get('/api/customers', { params: Object.keys(params).length ? params : undefined });
+  return response.data as CustomerListPayload;
 };
 
 export type CustomerUnreadChannels = {

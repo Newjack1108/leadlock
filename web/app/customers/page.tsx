@@ -1,18 +1,20 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Header from '@/components/Header';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import api, { getUnreadCountsByCustomer } from '@/lib/api';
+import { getCustomers, getUnreadCountsByCustomer } from '@/lib/api';
 import { Customer } from '@/lib/types';
 import { getTelUrl } from '@/lib/utils';
 import { toast } from 'sonner';
 import { Search, ChevronRight, X } from 'lucide-react';
 import CallNotesDialog from '@/components/CallNotesDialog';
 import NinoxBadge from '@/components/NinoxBadge';
+
+const CUSTOMERS_PAGE_SIZE = 50;
 
 function CustomersPageContent() {
   const router = useRouter();
@@ -24,21 +26,31 @@ function CustomersPageContent() {
   const [loading, setLoading] = useState(true);
   const [searchDraft, setSearchDraft] = useState('');
   const [searchApplied, setSearchApplied] = useState('');
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
   const [callNotesOpen, setCallNotesOpen] = useState(false);
   const [callNotesCustomer, setCallNotesCustomer] = useState<{ id: number; name: string; phone: string } | null>(null);
 
-  const fetchCustomers = async () => {
+  useLayoutEffect(() => {
+    setPage(1);
+  }, [searchApplied, smsOptedOutFilter, hasUnreadFilter]);
+
+  const fetchCustomers = useCallback(async () => {
     try {
       setLoading(true);
-      const searchValue = searchApplied.trim();
-      const params: Record<string, string | boolean> = {};
-      if (searchValue) params.search = searchValue;
-      if (smsOptedOutFilter) params.sms_opted_out = true;
-      const [customersRes, unreadRes] = await Promise.all([
-        api.get('/api/customers', { params }),
+      const searchValue = searchApplied.trim() || undefined;
+      const [customersData, unreadRes] = await Promise.all([
+        getCustomers({
+          search: searchValue,
+          sms_opted_out: smsOptedOutFilter || undefined,
+          has_unread: hasUnreadFilter || undefined,
+          page,
+          page_size: CUSTOMERS_PAGE_SIZE,
+        }),
         getUnreadCountsByCustomer().catch(() => []),
       ]);
-      setCustomers(customersRes.data);
+      setCustomers(customersData.items);
+      setTotal(customersData.total);
       setUnreadByCustomer(
         Object.fromEntries((unreadRes || []).map((d) => [d.customer_id, d.unread_count]))
       );
@@ -50,11 +62,11 @@ function CustomersPageContent() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [searchApplied, smsOptedOutFilter, hasUnreadFilter, page, router]);
 
   useEffect(() => {
     void fetchCustomers();
-  }, [searchApplied, smsOptedOutFilter]);
+  }, [fetchCustomers]);
 
   function locationText(c: Customer): string {
     if (c.city && c.county) return `${c.city}, ${c.county}`;
@@ -63,9 +75,7 @@ function CustomersPageContent() {
     return '—';
   }
 
-  const displayedCustomers = hasUnreadFilter
-    ? customers.filter((c) => (unreadByCustomer[c.id] ?? 0) > 0)
-    : customers;
+  const totalPages = Math.max(1, Math.ceil(total / CUSTOMERS_PAGE_SIZE));
 
   if (loading) {
     return (
@@ -125,7 +135,12 @@ function CustomersPageContent() {
                 variant="ghost"
                 size="sm"
                 className="h-7 gap-1 px-2"
-                onClick={() => router.push('/customers')}
+                onClick={() => {
+                  const next = new URLSearchParams(searchParams.toString());
+                  next.delete('has_unread');
+                  const qs = next.toString();
+                  router.push(qs ? `/customers?${qs}` : '/customers');
+                }}
               >
                 <X className="h-3.5 w-3.5" />
                 Clear filter
@@ -171,18 +186,20 @@ function CustomersPageContent() {
                 </tr>
               </thead>
               <tbody>
-                {displayedCustomers.length === 0 ? (
+                {customers.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="p-8 text-center text-muted-foreground">
                       {hasUnreadFilter
                         ? 'No customers with unread SMS, Messenger, or email'
                         : smsOptedOutFilter
                         ? 'No customers currently flagged as SMS opted out'
+                        : searchApplied.trim()
+                        ? 'No customers match your search'
                         : 'No customers found'}
                     </td>
                   </tr>
                 ) : (
-                  displayedCustomers.map((customer) => (
+                  customers.map((customer) => (
                     <tr
                       key={customer.id}
                       className="border-b last:border-0 hover:bg-muted/30 cursor-pointer transition-colors"
@@ -251,6 +268,33 @@ function CustomersPageContent() {
             </table>
           </div>
         </Card>
+
+        {total > 0 && (
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 mt-6 py-4 border-t">
+            <p className="text-sm text-muted-foreground">
+              Showing {(page - 1) * CUSTOMERS_PAGE_SIZE + 1}–{Math.min(page * CUSTOMERS_PAGE_SIZE, total)} of {total}
+              {totalPages > 1 ? ` · Page ${page} of ${totalPages}` : ''}
+            </p>
+            <div className="flex gap-2 justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
+                Previous
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        )}
       </main>
 
       {callNotesCustomer && (
