@@ -15,6 +15,7 @@ import type {
   QuoteConfigurationPayload,
 } from '@/lib/types';
 import ConfiguratorExtraIconButton from '@/components/configurator/ConfiguratorExtraIconButton';
+import ConfiguratorExtraInfoHint from '@/components/configurator/ConfiguratorExtraInfoHint';
 import ConfiguratorIconToggleButton from '@/components/configurator/ConfiguratorIconToggleButton';
 import { cn } from '@/lib/utils';
 
@@ -160,9 +161,12 @@ export default function ConfiguratorCatalog({
                 <div key={product.id} className="rounded-md border px-2 py-1.5">
                   <div className="flex items-center gap-2">
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium leading-snug break-words" title={product.name}>
-          {product.name}
-        </p>
+                      <div className="flex min-w-0 items-start gap-1">
+                        <p className="text-sm font-medium leading-snug break-words" title={product.name}>
+                          {product.name}
+                        </p>
+                        <ConfiguratorExtraInfoHint product={product} />
+                      </div>
                       <p className="text-xs text-muted-foreground">
                         £{Number(product.base_price).toFixed(2)}
                         {product.unit ? ` · ${product.unit}` : ''}
