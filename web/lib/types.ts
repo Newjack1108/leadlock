@@ -1073,6 +1073,8 @@ export interface QuoteItem {
   line_type?: QuoteItemLineType | null;
   /** When false, line is excluded from PRODUCT-scope (“building items only”) discounts */
   include_in_building_discount?: boolean | null;
+  /** Per-unit install hours for custom lines */
+  installation_hours?: number | null;
 }
 
 export interface QuoteItemCreate {
@@ -1086,6 +1088,8 @@ export interface QuoteItemCreate {
   line_type?: QuoteItemLineType | null;
   /** Default true; set false to exclude from “building items only” discounts */
   include_in_building_discount?: boolean;
+  /** Per-unit install hours for custom lines */
+  installation_hours?: number;
 }
 
 export interface OrderItem {

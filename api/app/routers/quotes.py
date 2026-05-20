@@ -214,7 +214,18 @@ def quote_item_to_response(item: QuoteItem) -> QuoteItemResponse:
         is_custom=item.is_custom,
         line_type=getattr(item, "line_type", None),
         include_in_building_discount=getattr(item, "include_in_building_discount", True),
+        installation_hours=getattr(item, "installation_hours", None),
     )
+
+
+def _installation_hours_for_quote_item_create(item_data: QuoteItemCreate) -> Optional[Decimal]:
+    """Persist per-unit install hours only on custom lines (no catalog product)."""
+    is_custom = item_data.is_custom if item_data.is_custom is not None else False
+    if item_data.product_id is not None and not is_custom:
+        return None
+    if item_data.installation_hours is None:
+        return None
+    return Decimal(str(item_data.installation_hours))
 
 
 def _item_eligible_for_product_scope_discount(item: QuoteItem) -> bool:
@@ -792,6 +803,7 @@ async def create_quote(
                 is_custom=item_data.is_custom if item_data.is_custom is not None else False,
                 line_type=getattr(item_data, "line_type", None),
                 include_in_building_discount=getattr(item_data, "include_in_building_discount", True),
+                installation_hours=_installation_hours_for_quote_item_create(item_data),
             )
             items.append(item)
     
@@ -1714,6 +1726,7 @@ def _update_draft_quote_impl(
             is_custom=item_data.is_custom if item_data.is_custom is not None else False,
             line_type=getattr(item_data, "line_type", None),
             include_in_building_discount=getattr(item_data, "include_in_building_discount", True),
+            installation_hours=_installation_hours_for_quote_item_create(item_data),
         )
         items.append(item)
     

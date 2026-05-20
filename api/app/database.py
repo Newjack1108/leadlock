@@ -2157,6 +2157,22 @@ def create_db_and_tables():
                     if "already exists" not in error_str and "duplicate" not in error_str:
                         print(f"Error adding include_in_building_discount column: {e}", file=sys.stderr, flush=True)
 
+        # Step 12d: installation_hours on QuoteItem (per-unit install time for custom lines)
+        if has_quoteitem_table:
+            quoteitem_columns = [col["name"] for col in inspector.get_columns("quoteitem")]
+            if "installation_hours" not in quoteitem_columns:
+                print("Adding installation_hours column to quoteitem table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(
+                            text("ALTER TABLE quoteitem ADD COLUMN installation_hours NUMERIC(10, 2)")
+                        )
+                    print("Added installation_hours column to quoteitem table", file=sys.stderr, flush=True)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Error adding installation_hours column: {e}", file=sys.stderr, flush=True)
+
         # Step 13: Add read_at to SmsMessage table (unread tracking for received SMS)
         has_smsmessage_table = inspector.has_table("smsmessage")
         if has_smsmessage_table:

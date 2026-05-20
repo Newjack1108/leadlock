@@ -18,6 +18,8 @@ export function quoteItemsToFormItems(items: QuoteItem[]): QuoteItemCreate[] {
       item.parent_quote_item_id != null ? idToIndex[item.parent_quote_item_id] : undefined,
     line_type: item.line_type ?? undefined,
     include_in_building_discount: item.include_in_building_discount ?? true,
+    installation_hours:
+      item.installation_hours != null ? Number(item.installation_hours) : undefined,
   }));
 }
 
@@ -51,6 +53,7 @@ export type QuoteDraftPayload = {
     parent_index?: number;
     line_type?: 'DELIVERY' | 'INSTALLATION';
     include_in_building_discount?: boolean;
+    installation_hours?: number;
   }>;
   discount_template_ids?: number[];
   temperature?: QuoteTemperature;
@@ -126,6 +129,10 @@ export function buildUpdateDraftPayload(input: BuildDraftPayloadInput): QuoteDra
         sort_order: index,
         line_type: item.line_type ?? undefined,
         include_in_building_discount: item.include_in_building_discount !== false,
+        installation_hours:
+          item.installation_hours != null && item.installation_hours > 0
+            ? Number(item.installation_hours)
+            : undefined,
       };
     }
     const parentInItems = item.parent_index;
@@ -144,6 +151,10 @@ export function buildUpdateDraftPayload(input: BuildDraftPayloadInput): QuoteDra
       parent_index: parentIndexInPayload >= 0 ? parentIndexInPayload : undefined,
       line_type: item.line_type ?? undefined,
       include_in_building_discount: item.include_in_building_discount !== false,
+      installation_hours:
+        item.installation_hours != null && item.installation_hours > 0
+          ? Number(item.installation_hours)
+          : undefined,
     };
   });
 

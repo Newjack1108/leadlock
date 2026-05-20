@@ -1417,6 +1417,14 @@ class QuoteItemCreate(BaseModel):
     parent_index: Optional[int] = None  # Index of parent item (0-based) when this is an optional extra; backend sets parent_quote_item_id
     line_type: Optional[QuoteItemLineType] = None  # DELIVERY or INSTALLATION; excluded from PRODUCT-scope discount
     include_in_building_discount: bool = True  # False = exclude from PRODUCT-scope ("building items only") discounts
+    installation_hours: Optional[Decimal] = None  # Per-unit install hours for custom lines only
+
+    @field_validator("installation_hours")
+    @classmethod
+    def installation_hours_non_negative(cls, v: Optional[Decimal]) -> Optional[Decimal]:
+        if v is not None and v < 0:
+            raise ValueError("installation_hours must be >= 0")
+        return v
 
 
 class QuoteItemResponse(BaseModel):
@@ -1434,6 +1442,7 @@ class QuoteItemResponse(BaseModel):
     is_custom: bool
     line_type: Optional[QuoteItemLineType] = None
     include_in_building_discount: bool = True
+    installation_hours: Optional[Decimal] = None
 
 
 class QuoteCreate(BaseModel):

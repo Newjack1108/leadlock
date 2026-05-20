@@ -48,6 +48,11 @@ import {
   rootBuildingProductNumberAtIndex,
 } from '@/lib/quoteFormOptionalExtra';
 import { prefetchProductDetailsForQuoteItems } from '@/lib/prefetchQuoteProductDetails';
+import {
+  calculateTotalQuoteInstallationHours,
+  isCustomQuoteLine,
+  lineInstallationHoursPerUnit,
+} from '@/lib/quoteInstallHours';
 import { useDraftAutosave } from '@/hooks/useDraftAutosave';
 import { formatHoursMinutes } from '@/lib/utils';
 import { Plus, Trash2, ArrowLeft, X, ChevronDown, ChevronUp, Send, FileSearch } from 'lucide-react';
@@ -341,6 +346,7 @@ function EditQuoteContent() {
           description: product.name,
           unit_price: Math.round(Number(product.base_price) * 100) / 100,
           is_custom: false,
+          installation_hours: undefined,
         };
         setItems(newItems);
         try {
@@ -394,14 +400,14 @@ function EditQuoteContent() {
     return productDetails[item.product_id] ?? products.find((p) => p.id === item.product_id) ?? null;
   };
 
-  const calculateTotalInstallationHours = (): number => {
-    return items.reduce((total, item) => {
-      if (isRootQuoteLevelOptionalExtraLine(item, optionalExtraIds, productDetails)) return total;
-      const product = getSelectedProduct(item);
-      if (!product?.installation_hours) return total;
-      const qty = Number(item.quantity) || 0;
-      return total + qty * product.installation_hours;
-    }, 0);
+  const calculateTotalInstallationHours = (): number =>
+    calculateTotalQuoteInstallationHours(items, optionalExtraIds, getSelectedProduct);
+
+  const calculateInstallCostForLine = (item: QuoteItemCreate) => {
+    const product = getSelectedProduct(item);
+    const perUnit = lineInstallationHoursPerUnit(item, product);
+    if (perUnit <= 0 || !companySettings?.hourly_install_rate) return null;
+    return perUnit * companySettings.hourly_install_rate;
   };
 
   useEffect(() => {
@@ -463,11 +469,6 @@ function EditQuoteContent() {
       .map((it, i) => ({ ...it, sort_order: i }));
     setItems(newItems);
     toast.success('Delivery line removed from quote');
-  };
-
-  const calculateInstallCost = (product: Product) => {
-    if (!product.installation_hours || !companySettings?.hourly_install_rate) return null;
-    return product.installation_hours * companySettings.hourly_install_rate;
   };
 
   const calculateSubtotal = () => {
@@ -859,6 +860,26 @@ function EditQuoteContent() {
                           required
                         />
                       </div>
+                      {isCustomQuoteLine(item) && !isDeliveryOrInstallItem(item) && (
+                        <div className="space-y-2 md:col-span-2">
+                          <Label>Installation hours (per unit)</Label>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={item.installation_hours ?? ''}
+                            onChange={(e) => {
+                              const raw = e.target.value;
+                              updateItem(
+                                index,
+                                'installation_hours',
+                                raw === '' ? undefined : parseFloat(raw) || 0
+                              );
+                            }}
+                            placeholder="Optional — for delivery & installation estimate"
+                          />
+                        </div>
+                      )}
                     </div>
                     <div className="text-sm text-muted-foreground">
                       Line Total: £
@@ -867,6 +888,32 @@ function EditQuoteContent() {
                         (Math.max(0, Number(item.unit_price)) || 0)
                       ).toFixed(2)}
                     </div>
+                    {isCustomQuoteLine(item) &&
+                      !isDeliveryOrInstallItem(item) &&
+                      lineInstallationHoursPerUnit(item, null) > 0 && (
+                      <div className="text-sm space-y-1">
+                        <div>
+                          <span className="text-muted-foreground">Installation Hours: </span>
+                          <span className="font-medium">
+                            {lineInstallationHoursPerUnit(item, null)} hours
+                            {(Number(item.quantity) || 0) > 1
+                              ? ` × ${item.quantity} = ${(
+                                  lineInstallationHoursPerUnit(item, null) *
+                                  (Number(item.quantity) || 0)
+                                ).toFixed(2)} total`
+                              : ''}
+                          </span>
+                        </div>
+                        {calculateInstallCostForLine(item) != null && (
+                          <div>
+                            <span className="text-muted-foreground">Installation Cost (per unit): </span>
+                            <span className="font-medium">
+                              £{calculateInstallCostForLine(item)!.toFixed(2)}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
                     {item.parent_index == null &&
                       !isRootQuoteLevelOptionalExtraLine(item, optionalExtraIds, productDetails) && (
                       <div className="flex items-center gap-2 pt-1">
@@ -891,17 +938,19 @@ function EditQuoteContent() {
                       const selectedProduct = getSelectedProduct(item);
                       if (!selectedProduct) return null;
                       if (selectedProduct.is_extra && item.parent_index == null) return null;
-                      const installCost = calculateInstallCost(selectedProduct);
+                      const installCost = calculateInstallCostForLine(item);
                       const hasExtras =
                         selectedProduct.optional_extras &&
                         selectedProduct.optional_extras.length > 0;
                       const extrasLoaded = productDetails[item.product_id!] != null;
                       return (
                         <div className="mt-4 pt-4 border-t space-y-2">
-                          {selectedProduct.installation_hours && (
+                          {lineInstallationHoursPerUnit(item, selectedProduct) > 0 && (
                             <div className="text-sm">
                               <span className="text-muted-foreground">Installation Hours: </span>
-                              <span className="font-medium">{selectedProduct.installation_hours} hours</span>
+                              <span className="font-medium">
+                                {lineInstallationHoursPerUnit(item, selectedProduct)} hours
+                              </span>
                             </div>
                           )}
                           {installCost !== null && (
