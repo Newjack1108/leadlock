@@ -1245,6 +1245,72 @@ export function findPlacementCandidate(params: {
   } satisfies CandidatePlacement;
 }
 
+/** Left-hand corner products that extend along the row (standard face bottom/right), not west of the run. */
+export function shouldInsertCornerLeftAtLayoutStart(product: Product): boolean {
+  if (getConnectionProfile(product) !== 'corner_left') {
+    return false;
+  }
+  const definition = getCornerBaseDefinition(product);
+  if (!definition) {
+    return false;
+  }
+  return definition.standardFace === 'bottom' || definition.standardFace === 'right';
+}
+
+export function shiftBoxesX(
+  boxes: ConfiguratorBoxPlacement[],
+  deltaX: number
+): ConfiguratorBoxPlacement[] {
+  if (deltaX === 0) {
+    return boxes;
+  }
+  return boxes.map((box) => ({
+    ...box,
+    x: roundPosition(Number(box.x) + deltaX),
+  }));
+}
+
+export function buildConfigurationBoxesAfterAddingProduct(
+  boxes: ConfiguratorBoxPlacement[],
+  product: Product,
+  productMap: Record<number, Product>,
+  newBoxId: string,
+  anchorBoxId?: string | null
+): ConfiguratorBoxPlacement[] {
+  const rotation = getDefaultBoxRotation(product);
+
+  if (shouldInsertCornerLeftAtLayoutStart(product) && boxes.length > 0) {
+    const { width } = getFootprint(product, rotation);
+    const shiftedBoxes = shiftBoxesX(boxes, width);
+    const shiftedEntries = buildLayoutRectEntries(shiftedBoxes, productMap);
+    if (shiftedEntries.length === 0) {
+      return shiftedBoxes;
+    }
+    const layoutMinX = Math.min(...shiftedEntries.map((entry) => entry.rect.x1));
+    const layoutMinY = Math.min(...shiftedEntries.map((entry) => entry.rect.y1));
+    const newBox: ConfiguratorBoxPlacement = {
+      id: newBoxId,
+      product_id: product.id,
+      x: roundPosition(layoutMinX),
+      y: roundPosition(layoutMinY),
+      rotation,
+    };
+    return [...shiftedBoxes, newBox];
+  }
+
+  const placement = getSuggestedPlacement(boxes, product, productMap, anchorBoxId);
+  return [
+    ...boxes,
+    {
+      id: newBoxId,
+      product_id: product.id,
+      x: placement.x,
+      y: placement.y,
+      rotation: placement.rotation,
+    },
+  ];
+}
+
 function getLayoutExtremeEntry(entries: LayoutRectEntry[], side: 'left' | 'right'): LayoutRectEntry {
   return entries.reduce((best, entry) => {
     if (side === 'left') {
@@ -1275,7 +1341,8 @@ function resolveSuggestedAnchorEntry(
 function buildOrderedCandidates(
   entry: LayoutRectEntry,
   insets: AnchorInsets,
-  profile: ConfiguratorConnectionProfile | null
+  profile: ConfiguratorConnectionProfile | null,
+  product: Product
 ): Array<{ x: number; y: number }> {
   const right = {
     x: roundPosition(entry.rect.x2 - insets.left),
@@ -1302,6 +1369,9 @@ function buildOrderedCandidates(
     return [right, below, above, left];
   }
   if (profile === 'corner_left') {
+    if (shouldInsertCornerLeftAtLayoutStart(product)) {
+      return [right, below, above, left];
+    }
     return [left, below, above, right];
   }
   return [right, below, left, above];
@@ -1319,6 +1389,13 @@ function getSuggestedFallbackPlacement(
   const layoutMinY = Math.min(...entries.map((entry) => entry.rect.y1));
 
   if (profile === 'corner_left') {
+    if (shouldInsertCornerLeftAtLayoutStart(product)) {
+      return {
+        x: roundPosition(layoutMinX),
+        y: roundPosition(layoutMinY),
+        rotation,
+      };
+    }
     return {
       x: roundPosition(layoutMinX - referenceRect.boxWidth),
       y: roundPosition(layoutMinY),
@@ -1342,7 +1419,7 @@ function trySuggestedCandidatePlacements(
   orderedEntries: LayoutRectEntry[]
 ): { x: number; y: number; rotation: ConfiguratorBoxPlacement['rotation'] } | null {
   for (const entry of orderedEntries) {
-    const candidates = buildOrderedCandidates(entry, movingInsets, profile);
+    const candidates = buildOrderedCandidates(entry, movingInsets, profile, product);
 
     for (const candidate of candidates) {
       const nextRect = getPlacementRect(

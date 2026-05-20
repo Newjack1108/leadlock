@@ -1,4 +1,4 @@
-import { getSuggestedPlacement } from '@/lib/configurator/geometry';
+import { buildConfigurationBoxesAfterAddingProduct } from '@/lib/configurator/geometry';
 import type { ConfiguratorBoxPlacement, Product, QuoteConfigurationPayload } from '@/lib/types';
 
 export function getStarterProducts(items: Product[]): Product[] {
@@ -75,18 +75,15 @@ export function addProductToConfiguration(
   anchorBoxId?: string | null
 ): QuoteConfigurationPayload {
   const nextIndex = config.boxes.length + 1;
-  const { x, y, rotation } = getSuggestedPlacement(config.boxes, product, productMap, anchorBoxId);
+  const newBoxId = createPlacementId(product.id, nextIndex);
   return {
     ...config,
-    boxes: [
-      ...config.boxes,
-      {
-        id: createPlacementId(product.id, nextIndex),
-        product_id: product.id,
-        x,
-        y,
-        rotation,
-      },
-    ],
+    boxes: buildConfigurationBoxesAfterAddingProduct(
+      config.boxes,
+      product,
+      productMap,
+      newBoxId,
+      anchorBoxId
+    ),
   };
 }

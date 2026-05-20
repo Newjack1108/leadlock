@@ -153,7 +153,7 @@ export default function ConfiguratorCanvas({
       fitToViewport(false);
     });
     return () => window.cancelAnimationFrame(frameId);
-  }, [fitToViewport, hasManualView, isInteracting]);
+  }, [fitToViewport, hasManualView, isInteracting, layoutContentWidth, layoutContentHeight, boxes.length]);
 
   useEffect(() => {
     const viewport = viewportRef.current;
@@ -167,7 +167,7 @@ export default function ConfiguratorCanvas({
 
     observer.observe(viewport);
     return () => observer.disconnect();
-  }, [fitToViewport, hasManualView, isInteracting]);
+  }, [fitToViewport, hasManualView, isInteracting, layoutContentWidth, layoutContentHeight, boxes.length]);
 
   const zoomAroundPoint = (nextZoomRaw: number, clientX?: number, clientY?: number) => {
     if (isInteracting) return;
