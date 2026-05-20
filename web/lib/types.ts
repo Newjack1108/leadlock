@@ -710,6 +710,10 @@ export interface DeliveryInstallEstimateResponse {
   delivery_only?: boolean;
   delivery_trips?: number;
   number_of_boxes?: number;
+  factory_postcode?: string;
+  customer_postcode?: string;
+  round_trips?: number;
+  cost_per_mile?: number;
 }
 
 export enum EmailDirection {

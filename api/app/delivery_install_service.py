@@ -79,14 +79,15 @@ def compute_delivery_install_estimate(
     def _dec(v: Optional[Decimal]) -> Decimal:
         return v if v is not None else Decimal("0")
 
+    if delivery_only:
+        round_trips = 1
+    else:
+        # When no overnight: drive there and back each day = fitting_days round trips
+        # When overnight: one round trip total
+        round_trips = fitting_days if not requires_overnight else 1
+
     cost_mileage: Optional[Decimal] = None
     if cost_per_mile is not None and cost_per_mile > 0:
-        if delivery_only:
-            round_trips = 1
-        else:
-            # When no overnight: drive there and back each day = fitting_days round trips
-            # When overnight: one round trip total
-            round_trips = fitting_days if not requires_overnight else 1
         cost_mileage = cost_per_mile * Decimal(str(distance_miles)) * 2 * round_trips
 
     cost_labour: Optional[Decimal] = None
@@ -141,4 +142,8 @@ def compute_delivery_install_estimate(
         delivery_only=delivery_only,
         delivery_trips=delivery_trips,
         number_of_boxes=number_of_boxes,
+        factory_postcode=(factory_postcode or "").strip(),
+        customer_postcode=(customer_postcode or "").strip(),
+        round_trips=round_trips,
+        cost_per_mile=cost_per_mile if cost_per_mile is not None and cost_per_mile > 0 else None,
     )

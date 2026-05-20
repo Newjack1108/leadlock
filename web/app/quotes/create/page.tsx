@@ -64,7 +64,7 @@ import {
 } from '@/lib/types';
 import Link from 'next/link';
 import { toast } from 'sonner';
-import { formatHoursMinutes } from '@/lib/utils';
+import DeliveryInstallEstimatePanel from '@/components/quotes/DeliveryInstallEstimatePanel';
 import { Plus, Trash2, ArrowLeft, X, ChevronDown, ChevronUp, FileSearch } from 'lucide-react';
 
 const DELIVERY_LINE_DESCRIPTION = 'Delivery';
@@ -1219,108 +1219,20 @@ function CreateQuoteContent() {
               </DialogContent>
             </Dialog>
 
-            {/* Delivery & installation estimate */}
             {customer?.postcode?.trim() && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Delivery & installation estimate</CardTitle>
-                  <p className="text-sm text-muted-foreground font-normal">
-                    From factory to customer postcode. Choose delivery only (1 driver, 1 hr unload) or full delivery
-                    & installation (8hr fitting days, 2-man team). Add below to include in quote total.
-                  </p>
-                  <div className="flex flex-wrap gap-2 pt-2">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant={deliveryEstimateMode === 'full' ? 'default' : 'outline'}
-                      onClick={() => setDeliveryEstimateMode('full')}
-                    >
-                      Delivery & installation
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant={deliveryEstimateMode === 'delivery_only' ? 'default' : 'outline'}
-                      onClick={() => setDeliveryEstimateMode('delivery_only')}
-                    >
-                      Delivery only
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {deliveryEstimateMode === 'full' && calculateTotalInstallationHours() <= 0 && (
-                    <p className="text-sm text-muted-foreground">
-                      Add building lines with installation hours to estimate delivery and installation, or switch to
-                      Delivery only.
-                    </p>
-                  )}
-                  {deliveryEstimateLoading && (
-                    <p className="text-sm text-muted-foreground">Loading estimate…</p>
-                  )}
-                  {deliveryEstimateError && (
-                    <div className="rounded-md border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 p-3 text-sm">
-                      <p className="font-medium text-amber-800 dark:text-amber-200">Cannot calculate estimate</p>
-                      <p className="text-amber-700 dark:text-amber-300 mt-1">{deliveryEstimateError}</p>
-                      <Link href="/settings/company" className="text-amber-700 dark:text-amber-300 underline mt-2 inline-block">Configure factory postcode and installation & travel in Company settings</Link>
-                    </div>
-                  )}
-                  {!deliveryEstimateLoading && !deliveryEstimateError && deliveryEstimate && (
-                    <div className="space-y-3">
-                      <div className="grid grid-cols-2 gap-3 text-sm">
-                        <div><span className="text-muted-foreground">Distance (one way):</span> <span className="font-medium">{deliveryEstimate.distance_miles} miles</span></div>
-                        <div><span className="text-muted-foreground">Travel time (one way):</span> <span className="font-medium">{formatHoursMinutes(deliveryEstimate.travel_time_hours_one_way)}</span></div>
-                        <div><span className="text-muted-foreground">Fitting days (8hr):</span> <span className="font-medium">{deliveryEstimate.fitting_days}</span></div>
-                        <div><span className="text-muted-foreground">Overnight stay:</span> <span className="font-medium">{deliveryEstimate.requires_overnight ? 'Yes' : 'No'}</span></div>
-                        {deliveryEstimate.requires_overnight && (
-                          <div><span className="text-muted-foreground">Nights away:</span> <span className="font-medium">{deliveryEstimate.nights_away}</span></div>
-                        )}
-                        {deliveryEstimateMode === 'delivery_only' &&
-                          (deliveryEstimate.delivery_trips ?? 1) > 1 && (
-                          <div>
-                            <span className="text-muted-foreground">Deliveries:</span>{' '}
-                            <span className="font-medium">
-                              {deliveryEstimate.delivery_trips} (max 3 boxes per trailer)
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                      <div className="border-t pt-3 space-y-1 text-sm">
-                        {deliveryEstimate.cost_mileage != null && <div className="flex justify-between"><span className="text-muted-foreground">Mileage:</span><span>£{Number(deliveryEstimate.cost_mileage).toFixed(2)}</span></div>}
-                        {deliveryEstimate.cost_labour != null && (
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">
-                              {deliveryEstimateMode === 'delivery_only' ? 'Labour (unload):' : 'Labour (install):'}
-                            </span>
-                            <span>£{Number(deliveryEstimate.cost_labour).toFixed(2)}</span>
-                          </div>
-                        )}
-                        {deliveryEstimate.cost_hotel != null && <div className="flex justify-between"><span className="text-muted-foreground">Hotel:</span><span>£{Number(deliveryEstimate.cost_hotel).toFixed(2)}</span></div>}
-                        {deliveryEstimate.cost_meals != null && <div className="flex justify-between"><span className="text-muted-foreground">Meals:</span><span>£{Number(deliveryEstimate.cost_meals).toFixed(2)}</span></div>}
-                        <div className="flex justify-between font-semibold pt-1 border-t"><span>Total (Mileage + Labour + Hotel + Meals, Ex VAT):</span><span>£{Number(deliveryEstimate.cost_total).toFixed(2)}</span></div>
-                      </div>
-                      {deliveryEstimate.settings_incomplete && (
-                        <p className="text-xs text-muted-foreground">Some costs could not be calculated. Complete Installation & travel in Company settings.</p>
-                      )}
-                      <div className="flex flex-wrap gap-2 pt-2 border-t">
-                        {hasDeliveryInstallLine(items) ? (
-                          <>
-                            <Button type="button" variant="secondary" size="sm" disabled>
-                              Added to quote
-                            </Button>
-                            <Button type="button" variant="outline" size="sm" onClick={removeDeliveryInstallFromQuote}>
-                              Remove
-                            </Button>
-                          </>
-                        ) : (
-                          <Button type="button" variant="default" size="sm" onClick={addDeliveryInstallToQuote}>
-                            Add to quote
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+              <DeliveryInstallEstimatePanel
+                estimate={deliveryEstimate}
+                mode={deliveryEstimateMode}
+                loading={deliveryEstimateLoading}
+                error={deliveryEstimateError}
+                customerPostcode={customer.postcode}
+                companySettings={companySettings}
+                installHours={calculateTotalInstallationHours()}
+                hasDeliveryLine={hasDeliveryInstallLine(items)}
+                onModeChange={setDeliveryEstimateMode}
+                onAdd={addDeliveryInstallToQuote}
+                onRemove={removeDeliveryInstallFromQuote}
+              />
             )}
 
             {/* Discounts Selection */}

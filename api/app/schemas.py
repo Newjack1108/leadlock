@@ -1482,6 +1482,10 @@ class DeliveryInstallEstimateResponse(BaseModel):
     delivery_only: bool = False
     delivery_trips: int = 1
     number_of_boxes: Optional[int] = None
+    factory_postcode: str = ""
+    customer_postcode: str = ""
+    round_trips: int = 1
+    cost_per_mile: Optional[Decimal] = None
 
 
 class QuoteItemCreate(BaseModel):

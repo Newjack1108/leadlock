@@ -1,16 +1,7 @@
-import type { Metadata } from 'next';
+import { externalPageMetadata } from '@/lib/externalPageMetadata';
 import AccessSheetClient from './AccessSheetClient';
 
-export const metadata: Metadata = {
-  title: 'Cheshire Stables',
-  applicationName: 'Cheshire Stables',
-  openGraph: {
-    title: 'Cheshire Stables',
-  },
-  twitter: {
-    title: 'Cheshire Stables',
-  },
-};
+export const metadata = externalPageMetadata;
 
 export default function AccessSheetPage() {
   return <AccessSheetClient />;

@@ -39,6 +39,10 @@ def test_delivery_only_single_trip_for_three_boxes(_coords, _road):
         number_of_boxes=3,
     )
     assert est.delivery_trips == 1
+    assert est.round_trips == 1
+    assert est.factory_postcode == "SW1A 1AA"
+    assert est.customer_postcode == "M1 1AA"
+    assert est.cost_per_mile == Decimal("1.00")
     assert est.cost_total == Decimal("195.00")  # (100 mileage + 50 labour) * 1.3 margin
 
 
@@ -81,3 +85,37 @@ def test_full_install_ignores_box_count(_coords, _road):
     )
     assert est.delivery_trips == 1
     assert est.delivery_only is False
+    assert est.round_trips == 1
+
+
+@patch("app.delivery_install_service.get_road_distance_and_duration", return_value=(50.0, 1.0))
+@patch("app.delivery_install_service.get_postcode_coordinates", return_value=(0.0, 0.0))
+def test_full_install_multi_day_no_overnight_uses_fitting_day_round_trips(_coords, _road):
+    est = compute_delivery_install_estimate(
+        factory_postcode="SW1A 1AA",
+        customer_postcode="M1 1AA",
+        installation_hours=16.0,
+        cost_per_mile=Decimal("1.00"),
+        hourly_install_rate=Decimal("50.00"),
+        distance_before_overnight_miles=Decimal("200"),
+        delivery_only=False,
+    )
+    assert est.fitting_days == 2
+    assert est.requires_overnight is False
+    assert est.round_trips == 2
+
+
+@patch("app.delivery_install_service.get_road_distance_and_duration", return_value=(50.0, 1.0))
+@patch("app.delivery_install_service.get_postcode_coordinates", return_value=(0.0, 0.0))
+def test_full_install_overnight_single_round_trip(_coords, _road):
+    est = compute_delivery_install_estimate(
+        factory_postcode="SW1A 1AA",
+        customer_postcode="M1 1AA",
+        installation_hours=16.0,
+        cost_per_mile=Decimal("1.00"),
+        hourly_install_rate=Decimal("50.00"),
+        distance_before_overnight_miles=Decimal("40"),
+        delivery_only=False,
+    )
+    assert est.requires_overnight is True
+    assert est.round_trips == 1
