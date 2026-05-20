@@ -146,6 +146,14 @@ export default function PublicConfigureTokenPage() {
 
   return (
     <div className="min-h-screen bg-muted/30">
+      <header className="hidden border-b bg-background px-4 py-4 lg:block">
+        <div className="container mx-auto flex items-center gap-3">
+          <ConfiguratorLogo className="h-9" />
+          <span className="text-sm font-medium">
+            {context.customer_name ? `Hi ${context.customer_name}` : 'Design your layout'}
+          </span>
+        </div>
+      </header>
       <main className="container mx-auto px-4 py-4 sm:py-6">
         <PublicConfiguratorShell
           token={token}

@@ -130,6 +130,7 @@ export default function PublicConfiguratorShell({
     const load = async () => {
       try {
         setLoading(true);
+        setLayoutLoaded(false);
         const catalogResponse = await getPublicConfiguratorCatalog();
         if (cancelled) return;
         const catalogFiltered = filterConfiguratorCatalogExtras(catalogResponse);
@@ -154,7 +155,9 @@ export default function PublicConfiguratorShell({
     return () => {
       cancelled = true;
     };
-  }, [token, initialContext.configuration]);
+    // Load catalogue once per token; avoid re-entering loading when parent context object updates.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- initialContext read on mount for this token
+  }, [token]);
 
   useEffect(() => {
     if (!layoutLoaded || loading || saving || submitting) return;
@@ -340,7 +343,27 @@ export default function PublicConfiguratorShell({
 
   if (loading) {
     return (
-      <div className="py-16 text-center text-muted-foreground">Loading layout builder…</div>
+      <div className="py-16 text-center text-muted-foreground">
+        <p>Loading layout builder…</p>
+        <p className="mt-2 text-xs">If this takes more than a few seconds, check your connection and refresh.</p>
+      </div>
+    );
+  }
+
+  if (!layoutLoaded) {
+    return (
+      <div className="py-16 text-center text-muted-foreground">
+        <p>Could not load the layout builder.</p>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="mt-4"
+          onClick={() => window.location.reload()}
+        >
+          Retry
+        </Button>
+      </div>
     );
   }
 
