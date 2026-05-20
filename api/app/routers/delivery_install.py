@@ -48,6 +48,7 @@ async def estimate_delivery_install(
             average_speed_mph=settings.average_speed_mph,
             install_quote_margin_pct=settings.install_quote_margin_pct,
             delivery_only=body.delivery_only,
+            number_of_boxes=body.number_of_boxes,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

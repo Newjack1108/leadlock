@@ -127,6 +127,15 @@ export default function NewDealerQuotePage() {
     }, 0);
   }, [rows, products]);
 
+  const deliveryBoxCount = useMemo(() => {
+    return rows.reduce((total, row) => {
+      const product = products.find((p) => p.id === row.product_id);
+      const bpp = product?.boxes_per_product;
+      const boxesPer = bpp == null || bpp < 1 ? 1 : bpp;
+      return total + row.quantity * boxesPer;
+    }, 0);
+  }, [rows, products]);
+
   useEffect(() => {
     if (inclusion === 'delivery_and_install' && installHours <= 0) {
       setInclusion('none');
@@ -151,7 +160,10 @@ export default function NewDealerQuotePage() {
 
     const run = async () => {
       const settled = await Promise.allSettled([
-        estimateDeliveryInstall(pcTrim, 0, { deliveryOnly: true }),
+        estimateDeliveryInstall(pcTrim, 0, {
+          deliveryOnly: true,
+          numberOfBoxes: deliveryBoxCount,
+        }),
         ...(installHours > 0
           ? [estimateDeliveryInstall(pcTrim, installHours, { deliveryOnly: false })]
           : []),
@@ -184,7 +196,7 @@ export default function NewDealerQuotePage() {
     return () => {
       cancelled = true;
     };
-  }, [pcTrim, rows, installHours]);
+  }, [pcTrim, rows, installHours, deliveryBoxCount]);
 
   const total = useMemo(() => {
     return rows.reduce((sum, row) => {
@@ -362,6 +374,9 @@ export default function NewDealerQuotePage() {
                           </p>
                           <p className="text-muted-foreground text-xs">
                             {estDeliveryOnly.distance_miles} mi one way · unload labour included in model
+                            {(estDeliveryOnly.delivery_trips ?? 1) > 1 && (
+                              <> · {estDeliveryOnly.delivery_trips} deliveries (max 3 boxes per trailer)</>
+                            )}
                           </p>
                         </>
                       )}

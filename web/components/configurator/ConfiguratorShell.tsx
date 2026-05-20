@@ -516,6 +516,9 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
           deliveryLineUnitPrice={
             deliveryPreviewLine != null ? Number(deliveryPreviewLine.unit_price) : null
           }
+          deliveryLineQuantity={
+            deliveryPreviewLine != null ? Number(deliveryPreviewLine.quantity) : 1
+          }
           deliveryDisabledReason={deliveryDisabledReason}
         />
 

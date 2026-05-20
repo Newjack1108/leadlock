@@ -16,7 +16,15 @@ from app.distance_service import (
     get_road_distance_and_duration,
     haversine_miles,
 )
+from app.constants import DELIVERY_ONLY_BOXES_PER_TRIP
 from app.schemas import DeliveryInstallEstimateResponse
+
+
+def delivery_only_trip_count(number_of_boxes: Optional[int]) -> int:
+    """Trailer loads for delivery-only (max DELIVERY_ONLY_BOXES_PER_TRIP boxes per trip)."""
+    if not number_of_boxes or number_of_boxes < 1:
+        return 1
+    return math.ceil(number_of_boxes / DELIVERY_ONLY_BOXES_PER_TRIP)
 
 
 def compute_delivery_install_estimate(
@@ -31,6 +39,7 @@ def compute_delivery_install_estimate(
     average_speed_mph: Optional[Decimal] = None,
     install_quote_margin_pct: Optional[Decimal] = None,
     delivery_only: bool = False,
+    number_of_boxes: Optional[int] = None,
 ) -> DeliveryInstallEstimateResponse:
     """
     Compute distance, travel time, fitting days, overnight stay, and cost breakdown.
@@ -92,6 +101,20 @@ def compute_delivery_install_estimate(
     if meal_allowance_per_day is not None and meal_allowance_per_day > 0 and requires_overnight:
         cost_meals = meal_allowance_per_day * subsistence_people * max(fitting_days, 1)
 
+    delivery_trips = 1
+    if delivery_only and number_of_boxes is not None:
+        delivery_trips = delivery_only_trip_count(number_of_boxes)
+        if delivery_trips > 1:
+            trip_multiplier = Decimal(str(delivery_trips))
+            if cost_mileage is not None:
+                cost_mileage = cost_mileage * trip_multiplier
+            if cost_labour is not None:
+                cost_labour = cost_labour * trip_multiplier
+            if cost_hotel is not None:
+                cost_hotel = cost_hotel * trip_multiplier
+            if cost_meals is not None:
+                cost_meals = cost_meals * trip_multiplier
+
     cost_total_raw = _dec(cost_mileage) + _dec(cost_labour) + _dec(cost_hotel) + _dec(cost_meals)
     margin_pct = install_quote_margin_pct if install_quote_margin_pct is not None else Decimal("30")
     total_raw = cost_total_raw * (Decimal("1") + margin_pct / Decimal("100")) if cost_total_raw > 0 else Decimal("0")
@@ -116,4 +139,6 @@ def compute_delivery_install_estimate(
         cost_total=total,
         settings_incomplete=settings_incomplete,
         delivery_only=delivery_only,
+        delivery_trips=delivery_trips,
+        number_of_boxes=number_of_boxes,
     )

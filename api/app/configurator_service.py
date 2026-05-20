@@ -430,6 +430,7 @@ def _append_configurator_delivery_line(
         )
         return lines, issues, sort_order
 
+    box_count = len(payload.boxes)
     try:
         estimate = compute_delivery_install_estimate(
             factory_postcode=factory_postcode,
@@ -443,6 +444,7 @@ def _append_configurator_delivery_line(
             average_speed_mph=settings.average_speed_mph,
             install_quote_margin_pct=settings.install_quote_margin_pct,
             delivery_only=delivery_only,
+            number_of_boxes=box_count if delivery_only else None,
         )
     except ValueError as exc:
         issues.append(
@@ -475,11 +477,17 @@ def _append_configurator_delivery_line(
         )
 
     description = "Delivery only" if delivery_only else "Delivery & Installation"
-    unit_price = _to_decimal(cost_total).quantize(Decimal("0.01"))
+    delivery_trips = estimate.delivery_trips if delivery_only else 1
+    if delivery_only and delivery_trips > 1:
+        unit_price = (_to_decimal(cost_total) / Decimal(str(delivery_trips))).quantize(Decimal("0.01"))
+        quantity = Decimal(str(delivery_trips))
+    else:
+        unit_price = _to_decimal(cost_total).quantize(Decimal("0.01"))
+        quantity = Decimal("1")
     lines.append(
         ConfiguratorGeneratedLine(
             description=description,
-            quantity=Decimal("1"),
+            quantity=quantity,
             unit_price=unit_price,
             is_custom=True,
             sort_order=sort_order,

@@ -252,6 +252,13 @@ export interface Customer {
   source_system?: string | null;
 }
 
+export interface CustomerListPayload {
+  items: Customer[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
 export interface ChannelDirectionCounts {
   sent: number;
   received: number;
@@ -662,6 +669,8 @@ export interface DeliveryInstallEstimateResponse {
   cost_total: number;
   settings_incomplete: boolean;
   delivery_only?: boolean;
+  delivery_trips?: number;
+  number_of_boxes?: number;
 }
 
 export enum EmailDirection {

@@ -40,3 +40,6 @@ DELIVERY_INSTALLATION_CONTACT_NOTE = (
 QUOTE_BALANCE_BEFORE_DELIVERY_NOTE = (
     "Please Note: All balances must be paid in full before delivery"
 )
+
+# Delivery-only: max physical boxes per trailer run
+DELIVERY_ONLY_BOXES_PER_TRIP = 3

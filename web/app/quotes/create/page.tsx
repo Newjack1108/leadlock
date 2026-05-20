@@ -49,6 +49,7 @@ import {
   isCustomQuoteLine,
   lineInstallationHoursPerUnit,
 } from '@/lib/quoteInstallHours';
+import { calculateTotalQuoteDeliveryBoxes } from '@/lib/quoteDeliveryBoxes';
 import { useDraftAutosave } from '@/hooks/useDraftAutosave';
 import {
   Customer,
@@ -380,6 +381,9 @@ function CreateQuoteContent() {
   const calculateTotalInstallationHours = (): number =>
     calculateTotalQuoteInstallationHours(items, optionalExtraIds, getSelectedProduct);
 
+  const calculateTotalDeliveryBoxes = (): number =>
+    calculateTotalQuoteDeliveryBoxes(items, optionalExtraIds, getSelectedProduct);
+
   const calculateInstallCostForLine = (item: QuoteItemCreate) => {
     const product = getSelectedProduct(item);
     const perUnit = lineInstallationHoursPerUnit(item, product);
@@ -391,6 +395,7 @@ function CreateQuoteContent() {
     const postcode = customer?.postcode?.trim();
     const installHours = calculateTotalInstallationHours();
     const deliveryOnly = deliveryEstimateMode === 'delivery_only';
+    const boxCount = deliveryOnly ? calculateTotalDeliveryBoxes() : undefined;
     if (!postcode || (!deliveryOnly && installHours <= 0)) {
       setDeliveryEstimate(null);
       setDeliveryEstimateError(null);
@@ -399,7 +404,10 @@ function CreateQuoteContent() {
     let cancelled = false;
     setDeliveryEstimateLoading(true);
     setDeliveryEstimateError(null);
-    estimateDeliveryInstall(postcode, deliveryOnly ? 0 : installHours, { deliveryOnly })
+    estimateDeliveryInstall(postcode, deliveryOnly ? 0 : installHours, {
+      deliveryOnly,
+      numberOfBoxes: boxCount,
+    })
       .then((data) => {
         if (!cancelled) {
           setDeliveryEstimate(data);
@@ -427,11 +435,16 @@ function CreateQuoteContent() {
       return;
     }
     const deliveryOnly = deliveryEstimateMode === 'delivery_only';
+    const trips = deliveryOnly ? (deliveryEstimate.delivery_trips ?? 1) : 1;
+    const unitPrice =
+      trips > 1
+        ? Math.round((totalCost / trips) * 100) / 100
+        : Math.round(totalCost * 100) / 100;
     const newItems: QuoteItemCreate[] = [...items];
     newItems.push({
       description: deliveryOnly ? DELIVERY_ONLY_DESCRIPTION : DELIVERY_INSTALL_LEGACY_DESCRIPTION,
-      quantity: 1,
-      unit_price: Math.round(totalCost * 100) / 100,
+      quantity: trips,
+      unit_price: unitPrice,
       is_custom: true,
       sort_order: items.length,
       line_type: 'DELIVERY',
@@ -1260,6 +1273,15 @@ function CreateQuoteContent() {
                         <div><span className="text-muted-foreground">Overnight stay:</span> <span className="font-medium">{deliveryEstimate.requires_overnight ? 'Yes' : 'No'}</span></div>
                         {deliveryEstimate.requires_overnight && (
                           <div><span className="text-muted-foreground">Nights away:</span> <span className="font-medium">{deliveryEstimate.nights_away}</span></div>
+                        )}
+                        {deliveryEstimateMode === 'delivery_only' &&
+                          (deliveryEstimate.delivery_trips ?? 1) > 1 && (
+                          <div>
+                            <span className="text-muted-foreground">Deliveries:</span>{' '}
+                            <span className="font-medium">
+                              {deliveryEstimate.delivery_trips} (max 3 boxes per trailer)
+                            </span>
+                          </div>
                         )}
                       </div>
                       <div className="border-t pt-3 space-y-1 text-sm">

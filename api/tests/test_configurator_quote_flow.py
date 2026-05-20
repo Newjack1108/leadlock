@@ -1485,6 +1485,8 @@ def _mock_delivery_estimate(**overrides):
         "cost_total": Decimal("300.00"),
         "settings_incomplete": False,
         "delivery_only": False,
+        "delivery_trips": 1,
+        "number_of_boxes": None,
     }
     payload.update(overrides)
     return DeliveryInstallEstimateResponse(**payload)
@@ -1558,7 +1560,106 @@ def test_configurator_preview_delivery_only_adds_delivery_line():
     )
     assert delivery_line["line_type"] == QuoteItemLineType.DELIVERY.value
     assert Decimal(delivery_line["unit_price"]) == Decimal("300.00")
+    assert Decimal(delivery_line["quantity"]) == Decimal("1")
     assert Decimal(preview["subtotal"]) == Decimal("2800.00")
+
+
+def test_configurator_preview_delivery_only_four_boxes_two_trips():
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SQLModel.metadata.create_all(engine)
+    user = _seed_user(engine)
+
+    with Session(engine) as session:
+        session.add(
+            CompanySettings(
+                company_name="Test Co",
+                postcode="SW1A 1AA",
+                updated_by_id=user.id,
+                cost_per_mile=Decimal("1.50"),
+                hourly_install_rate=Decimal("45.00"),
+            )
+        )
+        starter = Product(
+            name="3m Front Box",
+            category=ProductCategory.CONFIGURATOR,
+            configurator_is_starter_box=True,
+            base_price=Decimal("2500.00"),
+            configurator_width=Decimal("3.00"),
+            configurator_length=Decimal("3.00"),
+        )
+        extension = Product(
+            name="3m Extension",
+            category=ProductCategory.CONFIGURATOR,
+            configurator_is_starter_box=False,
+            base_price=Decimal("2500.00"),
+            configurator_width=Decimal("3.00"),
+            configurator_length=Decimal("3.00"),
+        )
+        session.add(starter)
+        session.add(extension)
+        session.commit()
+        session.refresh(starter)
+        session.refresh(extension)
+        starter_id = starter.id
+        extension_id = extension.id
+
+    client = TestClient(_make_app(engine, user))
+    boxes = [
+        {
+            "id": "box-1",
+            "product_id": starter_id,
+            "x": "0",
+            "y": "0",
+            "rotation": 0,
+        },
+        *[
+            {
+                "id": f"box-{i}",
+                "product_id": extension_id,
+                "x": str((i - 1) * 3),
+                "y": "0",
+                "rotation": 0,
+            }
+            for i in range(2, 5)
+        ],
+    ]
+    payload = {
+        "schema_version": 1,
+        "boxes": boxes,
+        "extras": [],
+        "delivery_estimate_inclusion": "delivery_only",
+    }
+
+    with patch(
+        "app.configurator_service.compute_delivery_install_estimate",
+        return_value=_mock_delivery_estimate(
+            delivery_only=True,
+            delivery_trips=2,
+            number_of_boxes=4,
+            cost_total=Decimal("600.00"),
+        ),
+    ):
+        preview_response = client.post(
+            "/api/configurator/preview",
+            json={
+                "configuration": payload,
+                "customer_postcode": "M1 1AA",
+            },
+        )
+
+    assert preview_response.status_code == 200
+    preview = preview_response.json()
+    assert preview["valid"] is True
+    delivery_line = next(
+        row for row in preview["items"] if row["description"] == "Delivery only"
+    )
+    assert Decimal(delivery_line["quantity"]) == Decimal("2")
+    assert Decimal(delivery_line["unit_price"]) == Decimal("300.00")
+    assert Decimal(preview["subtotal"]) == Decimal("10600.00")  # 4 × 2500 + 600 delivery
 
 
 def test_configurator_preview_delivery_and_install_requires_install_hours():

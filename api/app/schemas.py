@@ -309,6 +309,13 @@ def customer_to_response(customer: Customer) -> CustomerResponse:
     )
 
 
+class CustomerListResponse(BaseModel):
+    items: List[CustomerResponse]
+    total: int
+    page: int
+    page_size: int
+
+
 class WebsiteVisitResponse(BaseModel):
     site: str
     visited_at: datetime
@@ -1388,8 +1395,8 @@ class CompanySettingsResponse(BaseModel):
 class DeliveryInstallEstimateRequest(BaseModel):
     customer_postcode: str
     installation_hours: float
-    number_of_boxes: Optional[int] = None  # For future use
-    delivery_only: bool = False  # True: 1 driver, 1hr unload, single round-trip mileage
+    number_of_boxes: Optional[int] = None  # Delivery-only: ceil(boxes / 3) trailer trips
+    delivery_only: bool = False  # True: 1 driver, 1hr unload, single round-trip mileage per trip
 
 
 class DeliveryInstallEstimateResponse(BaseModel):
@@ -1405,6 +1412,8 @@ class DeliveryInstallEstimateResponse(BaseModel):
     cost_total: Decimal
     settings_incomplete: bool = False  # True if some costs could not be calculated
     delivery_only: bool = False
+    delivery_trips: int = 1
+    number_of_boxes: Optional[int] = None
 
 
 class QuoteItemCreate(BaseModel):

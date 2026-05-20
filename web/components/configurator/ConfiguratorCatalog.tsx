@@ -33,6 +33,7 @@ interface ConfiguratorCatalogProps {
   deliveryInclusion: ConfiguratorDeliveryEstimateInclusion;
   onSetDeliveryInclusion: (mode: ConfiguratorDeliveryEstimateInclusion) => void;
   deliveryLineUnitPrice?: number | null;
+  deliveryLineQuantity?: number;
   deliveryDisabledReason?: string | null;
   className?: string;
 }
@@ -101,6 +102,7 @@ export default function ConfiguratorCatalog({
   deliveryInclusion,
   onSetDeliveryInclusion,
   deliveryLineUnitPrice,
+  deliveryLineQuantity = 1,
   deliveryDisabledReason,
   className,
 }: ConfiguratorCatalogProps) {
@@ -218,8 +220,10 @@ export default function ConfiguratorCatalog({
                 <p className="text-sm font-medium leading-snug">Delivery only</p>
                 <p className="text-xs text-muted-foreground">
                   {deliveryInclusion === 'delivery_only' && deliveryLineUnitPrice != null
-                    ? `£${deliveryLineUnitPrice.toFixed(2)} · estimated`
-                    : '1 driver, unload at site'}
+                    ? deliveryLineQuantity > 1
+                      ? `£${(deliveryLineUnitPrice * deliveryLineQuantity).toFixed(2)} · ${deliveryLineQuantity} deliveries (max 3 boxes per trailer)`
+                      : `£${deliveryLineUnitPrice.toFixed(2)} · estimated`
+                    : '1 driver, unload at site (max 3 boxes per trailer)'}
                 </p>
               </div>
               <ConfiguratorIconToggleButton

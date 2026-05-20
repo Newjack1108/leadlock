@@ -11,6 +11,7 @@ from app.auth import require_dealer_user
 from app.constants import VAT_RATE_DECIMAL
 from app.database import get_session
 from app.image_upload_service import upload_product_image
+from app.delivery_box_count import dealer_quote_delivery_box_count
 from app.delivery_install_service import compute_delivery_install_estimate
 from app.models import (
     CompanySettings,
@@ -431,6 +432,14 @@ async def create_dealer_quote(
                 status_code=400,
                 detail="Configure factory postcode and installation & travel settings in Company settings.",
             )
+        products_by_id: dict[int, Product] = {}
+        for item in quote_items:
+            if item.product_id and item.product_id not in products_by_id:
+                product = session.get(Product, item.product_id)
+                if product:
+                    products_by_id[item.product_id] = product
+        box_count = dealer_quote_delivery_box_count(quote_items, products_by_id) if delivery_only else None
+
         try:
             est = compute_delivery_install_estimate(
                 factory_postcode=factory_postcode,
@@ -444,6 +453,7 @@ async def create_dealer_quote(
                 average_speed_mph=settings.average_speed_mph,
                 install_quote_margin_pct=settings.install_quote_margin_pct,
                 delivery_only=delivery_only,
+                number_of_boxes=box_count if delivery_only else None,
             )
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
@@ -456,12 +466,19 @@ async def create_dealer_quote(
         max_sort = max((i.sort_order for i in quote_items), default=-1)
         desc = "Delivery only" if delivery_only else "Delivery & Installation"
         cost = est.cost_total.quantize(Decimal("0.01"))
+        delivery_trips = est.delivery_trips if delivery_only else 1
+        if delivery_only and delivery_trips > 1:
+            quantity = Decimal(str(delivery_trips))
+            unit_price = (cost / quantity).quantize(Decimal("0.01"))
+        else:
+            quantity = Decimal("1")
+            unit_price = cost
         delivery_item = QuoteItem(
             quote_id=quote.id,
             product_id=None,
             description=desc,
-            quantity=Decimal("1"),
-            unit_price=cost,
+            quantity=quantity,
+            unit_price=unit_price,
             line_total=cost,
             discount_amount=Decimal("0"),
             final_line_total=cost,
