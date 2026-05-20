@@ -1245,51 +1245,104 @@ export function findPlacementCandidate(params: {
   } satisfies CandidatePlacement;
 }
 
-export function getSuggestedPlacement(
-  boxes: ConfiguratorBoxPlacement[],
-  product: Product,
-  productMap: Record<number, Product>,
+function getLayoutExtremeEntry(entries: LayoutRectEntry[], side: 'left' | 'right'): LayoutRectEntry {
+  return entries.reduce((best, entry) => {
+    if (side === 'left') {
+      if (entry.rect.x1 < best.rect.x1 - EDGE_EPSILON) return entry;
+      if (Math.abs(entry.rect.x1 - best.rect.x1) <= EDGE_EPSILON && entry.rect.y1 < best.rect.y1) return entry;
+      return best;
+    }
+    if (entry.rect.x2 > best.rect.x2 + EDGE_EPSILON) return entry;
+    if (Math.abs(entry.rect.x2 - best.rect.x2) <= EDGE_EPSILON && entry.rect.y1 < best.rect.y1) return entry;
+    return best;
+  }, entries[0]);
+}
+
+function resolveSuggestedAnchorEntry(
+  entries: LayoutRectEntry[],
+  profile: ConfiguratorConnectionProfile | null,
   anchorBoxId?: string | null
+): LayoutRectEntry {
+  if (profile === 'corner_left') {
+    return getLayoutExtremeEntry(entries, 'left');
+  }
+  if (profile === 'corner_right') {
+    return getLayoutExtremeEntry(entries, 'right');
+  }
+  return entries.find((entry) => entry.box.id === anchorBoxId) ?? entries[entries.length - 1];
+}
+
+function buildOrderedCandidates(
+  entry: LayoutRectEntry,
+  insets: AnchorInsets,
+  profile: ConfiguratorConnectionProfile | null
+): Array<{ x: number; y: number }> {
+  const right = {
+    x: roundPosition(entry.rect.x2 - insets.left),
+    y: roundPosition(entry.rect.y1 - insets.top),
+  };
+  const below = {
+    x: roundPosition(entry.rect.x1 - insets.left),
+    y: roundPosition(entry.rect.y2 - insets.top),
+  };
+  const left = {
+    x: roundPosition(
+      profile === 'corner_left' ? entry.rect.x1 - insets.right : Math.max(0, entry.rect.x1 - insets.right)
+    ),
+    y: roundPosition(entry.rect.y1 - insets.top),
+  };
+  const above = {
+    x: roundPosition(entry.rect.x1 - insets.left),
+    y: roundPosition(
+      profile === 'corner_left' ? entry.rect.y1 - insets.bottom : Math.max(0, entry.rect.y1 - insets.bottom)
+    ),
+  };
+
+  if (profile === 'corner_right') {
+    return [right, below, above, left];
+  }
+  if (profile === 'corner_left') {
+    return [left, below, above, right];
+  }
+  return [right, below, left, above];
+}
+
+function getSuggestedFallbackPlacement(
+  entries: LayoutRectEntry[],
+  product: Product,
+  rotation: ConfiguratorBoxPlacement['rotation'],
+  profile: ConfiguratorConnectionProfile | null,
+  referenceRect: PlacementRect
 ) {
-  const rotation = getDefaultBoxRotation(product);
-  if (boxes.length === 0) {
-    return { x: 0, y: 0, rotation };
+  const layoutMinX = Math.min(...entries.map((entry) => entry.rect.x1));
+  const layoutMaxX = Math.max(...entries.map((entry) => entry.rect.x2));
+  const layoutMinY = Math.min(...entries.map((entry) => entry.rect.y1));
+
+  if (profile === 'corner_left') {
+    return {
+      x: roundPosition(layoutMinX - referenceRect.boxWidth),
+      y: roundPosition(layoutMinY),
+      rotation,
+    };
   }
 
-  const entries = buildLayoutRectEntries(boxes, productMap);
-  const referenceBox = {
-    id: 'candidate',
-    product_id: product.id,
-    x: 0,
-    y: 0,
+  return {
+    x: roundPosition(layoutMaxX),
+    y: roundPosition(profile === 'corner_right' ? layoutMinY : 0),
     rotation,
-  } satisfies ConfiguratorBoxPlacement;
-  const referenceRect = getPlacementRect(referenceBox, product);
-  const movingInsets = getAnchorInsets(referenceBox, referenceRect);
-  const anchorEntry =
-    entries.find((entry) => entry.box.id === anchorBoxId) ??
-    entries[entries.length - 1];
-  const orderedEntries = [anchorEntry, ...entries.filter((entry) => entry.box.id !== anchorEntry.box.id)];
+  };
+}
 
+function trySuggestedCandidatePlacements(
+  entries: LayoutRectEntry[],
+  product: Product,
+  rotation: ConfiguratorBoxPlacement['rotation'],
+  movingInsets: AnchorInsets,
+  profile: ConfiguratorConnectionProfile | null,
+  orderedEntries: LayoutRectEntry[]
+): { x: number; y: number; rotation: ConfiguratorBoxPlacement['rotation'] } | null {
   for (const entry of orderedEntries) {
-    const candidates = [
-      {
-        x: roundPosition(entry.rect.x2 - movingInsets.left),
-        y: roundPosition(entry.rect.y1 - movingInsets.top),
-      },
-      {
-        x: roundPosition(entry.rect.x1 - movingInsets.left),
-        y: roundPosition(entry.rect.y2 - movingInsets.top),
-      },
-      {
-        x: roundPosition(Math.max(0, entry.rect.x1 - movingInsets.right)),
-        y: roundPosition(entry.rect.y1 - movingInsets.top),
-      },
-      {
-        x: roundPosition(entry.rect.x1 - movingInsets.left),
-        y: roundPosition(Math.max(0, entry.rect.y1 - movingInsets.bottom)),
-      },
-    ];
+    const candidates = buildOrderedCandidates(entry, movingInsets, profile);
 
     for (const candidate of candidates) {
       const nextRect = getPlacementRect(
@@ -1313,19 +1366,58 @@ export function getSuggestedPlacement(
         } satisfies ConfiguratorBoxPlacement;
         const nextEntries = [...entries, { box: nextBox, product, rect: nextRect }];
         const analysis = analyzeLayoutConnections(nextEntries);
-        const connected = getConnectedIdsFromGraph(analysis.graph, nextEntries[0]?.box.id).size === nextEntries.length;
-        if (!analysis.connectionBlocked.has(nextBox.id) && !analysis.frontBlocked.has(nextBox.id) && connected) {
+        const connected =
+          getConnectedIdsFromGraph(analysis.graph, nextEntries[0]?.box.id).size === nextEntries.length;
+        if (
+          !analysis.connectionBlocked.has(nextBox.id) &&
+          !analysis.frontBlocked.has(nextBox.id) &&
+          connected
+        ) {
           return { ...candidate, rotation };
         }
       }
     }
   }
 
-  const maxX = Math.max(...entries.map((entry) => entry.rect.x2));
+  return null;
+}
 
-  return {
-    x: roundPosition(maxX),
+export function getSuggestedPlacement(
+  boxes: ConfiguratorBoxPlacement[],
+  product: Product,
+  productMap: Record<number, Product>,
+  anchorBoxId?: string | null
+) {
+  const rotation = getDefaultBoxRotation(product);
+  if (boxes.length === 0) {
+    return { x: 0, y: 0, rotation };
+  }
+
+  const entries = buildLayoutRectEntries(boxes, productMap);
+  const profile = getConnectionProfile(product);
+  const referenceBox = {
+    id: 'candidate',
+    product_id: product.id,
+    x: 0,
     y: 0,
     rotation,
-  };
+  } satisfies ConfiguratorBoxPlacement;
+  const referenceRect = getPlacementRect(referenceBox, product);
+  const movingInsets = getAnchorInsets(referenceBox, referenceRect);
+  const anchorEntry = resolveSuggestedAnchorEntry(entries, profile, anchorBoxId);
+  const orderedEntries = [anchorEntry, ...entries.filter((entry) => entry.box.id !== anchorEntry.box.id)];
+
+  const placed = trySuggestedCandidatePlacements(
+    entries,
+    product,
+    rotation,
+    movingInsets,
+    profile,
+    orderedEntries
+  );
+  if (placed) {
+    return placed;
+  }
+
+  return getSuggestedFallbackPlacement(entries, product, rotation, profile, referenceRect);
 }
