@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import ConfiguratorLogo from '@/components/configurator/ConfiguratorLogo';
+import PublicConfigureHeader from '@/components/configurator/PublicConfigureHeader';
 import ConfiguratorRegisterForm, {
   type ConfiguratorRegisterFormValues,
 } from '@/components/configurator/ConfiguratorRegisterForm';
@@ -94,11 +94,7 @@ export default function PublicConfigureTokenPage() {
   if (context.status === 'SUBMITTED') {
     return (
       <div className="min-h-screen bg-muted/30">
-        <header className="border-b bg-background px-4 py-4">
-          <div className="container mx-auto flex items-center gap-3">
-            <ConfiguratorLogo className="h-9" />
-          </div>
-        </header>
+        <PublicConfigureHeader />
         <main className="container mx-auto px-4 py-16">
           <Card className="mx-auto max-w-lg text-center">
             <CardHeader>
@@ -121,12 +117,7 @@ export default function PublicConfigureTokenPage() {
   if (context.status === 'PENDING_DETAILS') {
     return (
       <div className="min-h-screen bg-muted/30">
-        <header className="border-b bg-background px-4 py-4">
-          <div className="container mx-auto flex items-center gap-3">
-            <ConfiguratorLogo className="h-9" />
-            <span className="text-sm font-medium">Design your layout</span>
-          </div>
-        </header>
+        <PublicConfigureHeader subtitle="Design your layout" />
         <main className="container mx-auto px-4 py-10">
           <Card className="mx-auto max-w-lg">
             <CardHeader>
@@ -146,14 +137,9 @@ export default function PublicConfigureTokenPage() {
 
   return (
     <div className="min-h-screen bg-muted/30">
-      <header className="hidden border-b bg-background px-4 py-4 lg:block">
-        <div className="container mx-auto flex items-center gap-3">
-          <ConfiguratorLogo className="h-9" />
-          <span className="text-sm font-medium">
-            {context.customer_name ? `Hi ${context.customer_name}` : 'Design your layout'}
-          </span>
-        </div>
-      </header>
+      <PublicConfigureHeader
+        subtitle={context.customer_name ? `Hi ${context.customer_name}` : 'Design your layout'}
+      />
       <main className="container mx-auto px-4 py-4 sm:py-6">
         <PublicConfiguratorShell
           token={token}

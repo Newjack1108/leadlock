@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import ConfiguratorLogo from '@/components/configurator/ConfiguratorLogo';
+import PublicConfigureHeader from '@/components/configurator/PublicConfigureHeader';
 import ConfiguratorRegisterForm, {
   type ConfiguratorRegisterFormValues,
 } from '@/components/configurator/ConfiguratorRegisterForm';
@@ -42,12 +42,7 @@ export default function PublicConfigureLandingPage() {
 
   return (
     <div className="min-h-screen bg-muted/30">
-      <header className="border-b bg-background px-4 py-4">
-        <div className="container mx-auto flex items-center gap-3">
-          <ConfiguratorLogo className="h-9" />
-          <span className="text-sm font-medium">Design your building layout</span>
-        </div>
-      </header>
+      <PublicConfigureHeader subtitle="Design your building layout" />
       <main className="container mx-auto px-4 py-10">
         <Card className="mx-auto max-w-lg">
           <CardHeader>

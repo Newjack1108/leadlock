@@ -8,7 +8,7 @@ const STATIC_FALLBACKS = ['/logo.png', '/logo1.jpg', '/logo1.png'];
 
 const logoWrapperClass = 'flex items-center py-2';
 
-type LogoSize = 'default' | 'sm' | 'header';
+type LogoSize = 'default' | 'sm' | 'header' | 'public';
 
 const sizeConfig: Record<
   LogoSize,
@@ -31,6 +31,12 @@ const sizeConfig: Record<
     img: 'h-12 w-auto object-contain lg:h-20',
     skeletonMinW: '56px',
     maxWidth: '280px',
+  },
+  public: {
+    wrapper: 'relative h-10 w-auto shrink-0 sm:h-11',
+    img: 'h-10 w-auto max-h-10 object-contain sm:h-11 sm:max-h-11',
+    skeletonMinW: '48px',
+    maxWidth: '140px',
   },
 };
 
@@ -108,7 +114,9 @@ export default function Logo({
       ? 'flex items-center'
       : size === 'header'
         ? 'flex items-center py-0 lg:py-2'
-        : logoWrapperClass;
+        : size === 'public'
+          ? 'flex items-center'
+          : logoWrapperClass;
 
   if (disableLink) {
     return <div className={outerClass}>{content}</div>;

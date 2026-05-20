@@ -18,6 +18,7 @@ from app.models import (
     ConfiguratorInviteStatus,
     Customer,
     Lead,
+    LeadType,
     Product,
     ProductCategory,
     Quote,
@@ -118,6 +119,9 @@ def test_public_configurator_start_and_register():
         assert invite is not None
         assert invite.lead_id is not None
         assert invite.customer_id is not None
+        lead = session.get(Lead, invite.lead_id)
+        assert lead is not None
+        assert lead.lead_type == LeadType.STABLES
         quote = session.get(Quote, invite.quote_id)
         assert quote is not None
         assert quote.status.value == "DRAFT"
@@ -172,6 +176,10 @@ def test_public_configurator_save_and_submit():
             select(ConfiguratorInvite).where(ConfiguratorInvite.access_token == token)
         ).first()
         assert invite.status == ConfiguratorInviteStatus.SUBMITTED
+        if invite.lead_id:
+            lead = session.get(Lead, invite.lead_id)
+            assert lead is not None
+            assert lead.lead_type == LeadType.STABLES
 
 
 def test_staff_mint_invite_for_existing_customer_skips_details():

@@ -20,6 +20,7 @@ from app.models import (
     Lead,
     LeadSource,
     LeadStatus,
+    LeadType,
     Quote,
     QuoteConfiguration,
     QuoteItem,
@@ -255,6 +256,7 @@ def _ensure_lead_for_customer(
         phone=customer.phone,
         postcode=customer.postcode,
         status=LeadStatus.QUALIFIED,
+        lead_type=LeadType.STABLES,
         lead_source=LeadSource.CONFIGURATOR,
         customer_id=customer.id,
         assigned_to_id=assigned_to_id,
@@ -357,6 +359,7 @@ def register_invite_customer(
         phone=(body.phone or "").strip() or None,
         postcode=(body.postcode or "").strip() or None,
         status=LeadStatus.QUALIFIED,
+        lead_type=LeadType.STABLES,
         lead_source=LeadSource.CONFIGURATOR,
         assigned_to_id=assigned_to_id,
         description="Customer self-service configurator",
@@ -523,6 +526,10 @@ def submit_invite_layout(session: Session, invite: ConfiguratorInvite) -> Config
 
     owner_user_id = resolve_owner_user_id(session, invite)
     if invite.lead_id:
+        lead = session.get(Lead, invite.lead_id)
+        if lead:
+            lead.lead_type = LeadType.STABLES
+            session.add(lead)
         activity = Activity(
             customer_id=invite.customer_id,
             lead_id=invite.lead_id,

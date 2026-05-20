@@ -374,13 +374,13 @@ export default function PublicConfiguratorShell({
     <div className="space-y-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-wrap items-center gap-4">
-          <p className="text-sm text-muted-foreground">
-            {initialContext.customer_name ? `Hi ${initialContext.customer_name}` : 'Design your layout'}
-            {autosaveStatus === 'saving' && (
-              <span className="ml-2 text-xs">Saving…</span>
-            )}
+          <p className="text-sm text-muted-foreground min-h-[1.25rem]">
+            {autosaveStatus === 'saving' && <span className="text-xs">Saving…</span>}
             {autosaveStatus === 'saved' && (
-              <span className="ml-2 text-xs text-emerald-600">Saved</span>
+              <span className="text-xs text-emerald-600">Saved</span>
+            )}
+            {autosaveStatus === 'error' && (
+              <span className="text-xs text-destructive">Could not save — use Save progress</span>
             )}
           </p>
           <div className="flex flex-wrap items-stretch gap-2 text-sm">
