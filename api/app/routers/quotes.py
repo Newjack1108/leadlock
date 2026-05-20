@@ -44,7 +44,7 @@ from app.models import (
     MessengerDirection,
 )
 from app.auth import get_current_user, require_configurator_access
-from app.configurator_service import build_configurator_preview
+from app.configurator_service import build_configurator_preview, resolve_quote_customer_postcode
 from app.schemas import (
     ConfiguratorGeneratedLine,
     QuoteConfigurationPayload,
@@ -1394,6 +1394,7 @@ def _generated_line_to_quote_item(line: ConfiguratorGeneratedLine) -> QuoteItemC
         sort_order=line.sort_order,
         parent_index=line.parent_index,
         include_in_building_discount=line.include_in_building_discount,
+        line_type=line.line_type,
     )
 
 
@@ -1467,7 +1468,11 @@ async def apply_quote_configuration(
 
     record = _get_quote_configuration_record(session, quote_id)
     payload = QuoteConfigurationPayload.model_validate(record.configuration_json or {})
-    preview = build_configurator_preview(payload, session)
+    preview = build_configurator_preview(
+        payload,
+        session,
+        customer_postcode=resolve_quote_customer_postcode(quote, session),
+    )
     if not preview.valid:
         raise HTTPException(
             status_code=422,

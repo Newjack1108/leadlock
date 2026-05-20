@@ -1390,8 +1390,14 @@ export const getConfiguratorCatalog = async () => {
   return response.data as ConfiguratorCatalogResponse;
 };
 
-export const previewConfiguratorConfiguration = async (payload: QuoteConfigurationPayload) => {
-  const response = await api.post('/api/configurator/preview', payload);
+export const previewConfiguratorConfiguration = async (
+  configuration: QuoteConfigurationPayload,
+  options?: { customerPostcode?: string }
+) => {
+  const response = await api.post('/api/configurator/preview', {
+    configuration,
+    customer_postcode: options?.customerPostcode?.trim() || undefined,
+  });
   return response.data as ConfiguratorPreviewResponse;
 };
 

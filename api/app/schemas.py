@@ -131,11 +131,32 @@ class ConfiguratorExtraSelection(BaseModel):
     quantity: Optional[Decimal] = None
 
 
+class ConfiguratorDeliveryEstimateInclusion(str, Enum):
+    NONE = "none"
+    DELIVERY_ONLY = "delivery_only"
+    DELIVERY_AND_INSTALL = "delivery_and_install"
+
+
 class QuoteConfigurationPayload(BaseModel):
     schema_version: int = 1
     name: Optional[str] = None
     boxes: List[ConfiguratorBoxPlacement] = Field(default_factory=list)
     extras: List[ConfiguratorExtraSelection] = Field(default_factory=list)
+    delivery_estimate_inclusion: ConfiguratorDeliveryEstimateInclusion = (
+        ConfiguratorDeliveryEstimateInclusion.NONE
+    )
+
+
+class ConfiguratorPreviewRequest(BaseModel):
+    configuration: QuoteConfigurationPayload
+    customer_postcode: Optional[str] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def accept_legacy_configuration_payload(cls, data):
+        if isinstance(data, dict) and "configuration" not in data and "boxes" in data:
+            return {"configuration": data}
+        return data
 
 
 class ConfiguratorValidationIssue(BaseModel):
@@ -154,6 +175,7 @@ class ConfiguratorGeneratedLine(BaseModel):
     sort_order: int = 0
     parent_index: Optional[int] = None
     include_in_building_discount: bool = True
+    line_type: Optional[QuoteItemLineType] = None
 
 
 class ConfiguratorPreviewResponse(BaseModel):

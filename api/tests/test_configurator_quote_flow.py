@@ -1,8 +1,8 @@
 import os
+from decimal import Decimal
+from unittest.mock import patch
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
-
-from decimal import Decimal
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -12,16 +12,20 @@ from sqlmodel import Session, SQLModel, create_engine
 from app.auth import get_current_user, require_configurator_access
 from app.database import get_session
 from app.models import (
+    CompanySettings,
     ConfiguratorConnectionProfile,
     ConfiguratorFrontFace,
+    Customer,
     Product,
     ProductCategory,
     Quote,
+    QuoteItemLineType,
     QuoteStatus,
     User,
     UserRole,
 )
 from app.routers import configurator, products, quotes
+from app.schemas import DeliveryInstallEstimateResponse
 
 
 def _make_app(engine, user: User) -> FastAPI:
@@ -1465,3 +1469,240 @@ def test_get_quote_configuration_returns_saved_layout():
     assert loaded["configuration"]["boxes"][0]["id"] == "box-1"
     assert loaded["configuration"]["boxes"][0]["x"] == "0"
     assert loaded["configuration"]["boxes"][0]["y"] == "0"
+
+
+def _mock_delivery_estimate(**overrides):
+    payload = {
+        "distance_miles": 50.0,
+        "travel_time_hours_one_way": 1.0,
+        "fitting_days": 1,
+        "requires_overnight": False,
+        "nights_away": 0,
+        "cost_mileage": Decimal("120.00"),
+        "cost_labour": Decimal("180.00"),
+        "cost_hotel": None,
+        "cost_meals": None,
+        "cost_total": Decimal("300.00"),
+        "settings_incomplete": False,
+        "delivery_only": False,
+    }
+    payload.update(overrides)
+    return DeliveryInstallEstimateResponse(**payload)
+
+
+def test_configurator_preview_delivery_only_adds_delivery_line():
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SQLModel.metadata.create_all(engine)
+    user = _seed_user(engine)
+
+    with Session(engine) as session:
+        session.add(
+            CompanySettings(
+                company_name="Test Co",
+                postcode="SW1A 1AA",
+                updated_by_id=user.id,
+                cost_per_mile=Decimal("1.50"),
+                hourly_install_rate=Decimal("45.00"),
+            )
+        )
+        item = Product(
+            name="3m Front Box",
+            category=ProductCategory.CONFIGURATOR,
+            configurator_is_starter_box=True,
+            base_price=Decimal("2500.00"),
+            configurator_width=Decimal("3.00"),
+            configurator_length=Decimal("3.00"),
+        )
+        session.add(item)
+        session.commit()
+        session.refresh(item)
+        item_id = item.id
+
+    client = TestClient(_make_app(engine, user))
+    payload = {
+        "schema_version": 1,
+        "boxes": [
+            {
+                "id": "box-1",
+                "product_id": item_id,
+                "x": "0",
+                "y": "0",
+                "rotation": 0,
+            }
+        ],
+        "extras": [],
+        "delivery_estimate_inclusion": "delivery_only",
+    }
+
+    with patch(
+        "app.configurator_service.compute_delivery_install_estimate",
+        return_value=_mock_delivery_estimate(delivery_only=True),
+    ):
+        preview_response = client.post(
+            "/api/configurator/preview",
+            json={
+                "configuration": payload,
+                "customer_postcode": "M1 1AA",
+            },
+        )
+
+    assert preview_response.status_code == 200
+    preview = preview_response.json()
+    assert preview["valid"] is True
+    delivery_line = next(
+        row for row in preview["items"] if row["description"] == "Delivery only"
+    )
+    assert delivery_line["line_type"] == QuoteItemLineType.DELIVERY.value
+    assert Decimal(delivery_line["unit_price"]) == Decimal("300.00")
+    assert Decimal(preview["subtotal"]) == Decimal("2800.00")
+
+
+def test_configurator_preview_delivery_and_install_requires_install_hours():
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SQLModel.metadata.create_all(engine)
+    user = _seed_user(engine)
+
+    with Session(engine) as session:
+        session.add(
+            CompanySettings(
+                company_name="Test Co",
+                postcode="SW1A 1AA",
+                updated_by_id=user.id,
+            )
+        )
+        item = Product(
+            name="3m Front Box",
+            category=ProductCategory.CONFIGURATOR,
+            configurator_is_starter_box=True,
+            base_price=Decimal("2500.00"),
+            configurator_width=Decimal("3.00"),
+            configurator_length=Decimal("3.00"),
+        )
+        session.add(item)
+        session.commit()
+        session.refresh(item)
+        item_id = item.id
+
+    client = TestClient(_make_app(engine, user))
+    payload = {
+        "schema_version": 1,
+        "boxes": [
+            {
+                "id": "box-1",
+                "product_id": item_id,
+                "x": "0",
+                "y": "0",
+                "rotation": 0,
+            }
+        ],
+        "extras": [],
+        "delivery_estimate_inclusion": "delivery_and_install",
+    }
+
+    preview_response = client.post(
+        "/api/configurator/preview",
+        json={
+            "configuration": payload,
+            "customer_postcode": "M1 1AA",
+        },
+    )
+    assert preview_response.status_code == 200
+    preview = preview_response.json()
+    assert preview["valid"] is False
+    assert any(issue["code"] == "DELIVERY_INSTALL_HOURS_REQUIRED" for issue in preview["issues"])
+
+
+def test_configurator_apply_includes_delivery_line_from_saved_configuration():
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SQLModel.metadata.create_all(engine)
+    user = _seed_user(engine)
+
+    with Session(engine) as session:
+        session.add(
+            CompanySettings(
+                company_name="Test Co",
+                postcode="SW1A 1AA",
+                updated_by_id=user.id,
+                cost_per_mile=Decimal("1.50"),
+                hourly_install_rate=Decimal("45.00"),
+            )
+        )
+        customer = Customer(customer_number="C-DEL-001", name="Delivery Customer", postcode="M1 1AA")
+        item = Product(
+            name="3m Front Box",
+            category=ProductCategory.CONFIGURATOR,
+            configurator_is_starter_box=True,
+            base_price=Decimal("2500.00"),
+            configurator_width=Decimal("3.00"),
+            configurator_length=Decimal("3.00"),
+            installation_hours=Decimal("8.00"),
+        )
+        quote = Quote(
+            quote_number="QT-DEL-001",
+            status=QuoteStatus.DRAFT,
+            customer_id=None,
+            subtotal=Decimal("0.00"),
+            discount_total=Decimal("0.00"),
+            total_amount=Decimal("0.00"),
+            deposit_amount=Decimal("0.00"),
+            balance_amount=Decimal("0.00"),
+            created_by_id=user.id,
+        )
+        session.add(customer)
+        session.add(item)
+        session.add(quote)
+        session.commit()
+        session.refresh(customer)
+        session.refresh(item)
+        session.refresh(quote)
+        quote.customer_id = customer.id
+        session.add(quote)
+        session.commit()
+        session.refresh(quote)
+        quote_id = quote.id
+        item_id = item.id
+
+    client = TestClient(_make_app(engine, user))
+    payload = {
+        "schema_version": 1,
+        "boxes": [
+            {
+                "id": "box-1",
+                "product_id": item_id,
+                "x": "0",
+                "y": "0",
+                "rotation": 0,
+            }
+        ],
+        "extras": [],
+        "delivery_estimate_inclusion": "delivery_and_install",
+    }
+
+    save_response = client.put(f"/api/quotes/{quote_id}/configuration", json=payload)
+    assert save_response.status_code == 200
+
+    with patch(
+        "app.configurator_service.compute_delivery_install_estimate",
+        return_value=_mock_delivery_estimate(),
+    ):
+        apply_response = client.post(f"/api/quotes/{quote_id}/configuration/apply")
+
+    assert apply_response.status_code == 200
+    applied = apply_response.json()
+    delivery_line = next(
+        row for row in applied["items"] if row["description"] == "Delivery & Installation"
+    )
+    assert delivery_line["line_type"] == QuoteItemLineType.DELIVERY.value
+    assert Decimal(delivery_line["unit_price"]) == Decimal("300.00")

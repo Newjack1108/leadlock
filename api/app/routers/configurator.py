@@ -8,9 +8,9 @@ from app.models import ConfiguratorConnectionProfile, ConfiguratorFrontFace, Pro
 from app.schemas import (
     ConfiguratorAccessResponse,
     ConfiguratorCatalogResponse,
+    ConfiguratorPreviewRequest,
     ConfiguratorPreviewResponse,
     ProductResponse,
-    QuoteConfigurationPayload,
 )
 
 router = APIRouter(prefix="/api/configurator", tags=["configurator"])
@@ -78,9 +78,13 @@ async def get_configurator_catalog(
 
 @router.post("/preview", response_model=ConfiguratorPreviewResponse)
 async def preview_configurator_configuration(
-    payload: QuoteConfigurationPayload,
+    body: ConfiguratorPreviewRequest,
     session: Session = Depends(get_session),
     current_user: User = Depends(require_configurator_access),
 ):
     del current_user
-    return build_configurator_preview(payload, session)
+    return build_configurator_preview(
+        body.configuration,
+        session,
+        customer_postcode=body.customer_postcode,
+    )

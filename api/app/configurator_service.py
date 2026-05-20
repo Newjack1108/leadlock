@@ -2,12 +2,23 @@ from __future__ import annotations
 
 from decimal import Decimal
 from math import cos, pi, sin
-from typing import Dict, List, Literal, Set, Tuple
+from typing import Dict, List, Literal, Optional, Set, Tuple
 
 from sqlmodel import Session, select
 
-from app.models import ConfiguratorConnectionProfile, ConfiguratorFrontFace, Product, ProductCategory
+from app.delivery_install_service import compute_delivery_install_estimate
+from app.models import (
+    CompanySettings,
+    ConfiguratorConnectionProfile,
+    ConfiguratorFrontFace,
+    Customer,
+    Product,
+    ProductCategory,
+    Quote,
+    QuoteItemLineType,
+)
 from app.schemas import (
+    ConfiguratorDeliveryEstimateInclusion,
     ConfiguratorGeneratedLine,
     ConfiguratorPreviewResponse,
     ConfiguratorValidationIssue,
@@ -347,9 +358,142 @@ def _load_products(session: Session, product_ids: List[int]) -> Dict[int, Produc
     return {row.id: row for row in rows if row.id is not None}
 
 
+def resolve_quote_customer_postcode(quote: Quote, session: Session) -> Optional[str]:
+    dealer_postcode = (getattr(quote, "dealer_customer_postcode", None) or "").strip()
+    if dealer_postcode:
+        return dealer_postcode
+    if quote.customer_id:
+        customer = session.get(Customer, quote.customer_id)
+        if customer and customer.postcode:
+            return customer.postcode.strip()
+    return None
+
+
+def _configurator_box_install_hours(
+    payload: QuoteConfigurationPayload,
+    box_products: Dict[int, Product],
+) -> float:
+    total = 0.0
+    for box in payload.boxes:
+        product = box_products.get(box.product_id)
+        if not product or not product.installation_hours:
+            continue
+        total += float(product.installation_hours)
+    return total
+
+
+def _append_configurator_delivery_line(
+    payload: QuoteConfigurationPayload,
+    session: Session,
+    customer_postcode: Optional[str],
+    box_products: Dict[int, Product],
+    lines: List[ConfiguratorGeneratedLine],
+    issues: List[ConfiguratorValidationIssue],
+    sort_order: int,
+) -> Tuple[List[ConfiguratorGeneratedLine], List[ConfiguratorValidationIssue], int]:
+    inclusion = payload.delivery_estimate_inclusion
+    if inclusion == ConfiguratorDeliveryEstimateInclusion.NONE:
+        return lines, issues, sort_order
+
+    postcode = (customer_postcode or "").strip()
+    if not postcode:
+        issues.append(
+            ConfiguratorValidationIssue(
+                code="DELIVERY_POSTCODE_REQUIRED",
+                severity="error",
+                message="Customer postcode is required to estimate delivery and installation.",
+            )
+        )
+        return lines, issues, sort_order
+
+    delivery_only = inclusion == ConfiguratorDeliveryEstimateInclusion.DELIVERY_ONLY
+    install_hours = _configurator_box_install_hours(payload, box_products)
+    if not delivery_only and install_hours <= 0:
+        issues.append(
+            ConfiguratorValidationIssue(
+                code="DELIVERY_INSTALL_HOURS_REQUIRED",
+                severity="error",
+                message="Add configurator boxes with installation hours, or choose delivery only.",
+            )
+        )
+        return lines, issues, sort_order
+
+    settings = session.exec(select(CompanySettings).limit(1)).first()
+    factory_postcode = (settings.postcode or "").strip() if settings else ""
+    if not settings or not factory_postcode:
+        issues.append(
+            ConfiguratorValidationIssue(
+                code="DELIVERY_ESTIMATE_FAILED",
+                severity="error",
+                message="Configure factory postcode and installation & travel in Company settings.",
+            )
+        )
+        return lines, issues, sort_order
+
+    try:
+        estimate = compute_delivery_install_estimate(
+            factory_postcode=factory_postcode,
+            customer_postcode=postcode,
+            installation_hours=0.0 if delivery_only else install_hours,
+            distance_before_overnight_miles=settings.distance_before_overnight_miles,
+            cost_per_mile=settings.cost_per_mile,
+            hourly_install_rate=settings.hourly_install_rate,
+            hotel_allowance_per_night=settings.hotel_allowance_per_night,
+            meal_allowance_per_day=settings.meal_allowance_per_day,
+            average_speed_mph=settings.average_speed_mph,
+            install_quote_margin_pct=settings.install_quote_margin_pct,
+            delivery_only=delivery_only,
+        )
+    except ValueError as exc:
+        issues.append(
+            ConfiguratorValidationIssue(
+                code="DELIVERY_ESTIMATE_FAILED",
+                severity="error",
+                message=str(exc),
+            )
+        )
+        return lines, issues, sort_order
+
+    cost_total = estimate.cost_total
+    if cost_total is None or _to_decimal(cost_total) <= ZERO:
+        issues.append(
+            ConfiguratorValidationIssue(
+                code="DELIVERY_ESTIMATE_FAILED",
+                severity="error",
+                message="Could not compute a delivery cost for this postcode.",
+            )
+        )
+        return lines, issues, sort_order
+
+    if estimate.settings_incomplete:
+        issues.append(
+            ConfiguratorValidationIssue(
+                code="DELIVERY_ESTIMATE_INCOMPLETE",
+                severity="warning",
+                message="Some delivery costs could not be calculated. Complete Installation & travel in Company settings.",
+            )
+        )
+
+    description = "Delivery only" if delivery_only else "Delivery & Installation"
+    unit_price = _to_decimal(cost_total).quantize(Decimal("0.01"))
+    lines.append(
+        ConfiguratorGeneratedLine(
+            description=description,
+            quantity=Decimal("1"),
+            unit_price=unit_price,
+            is_custom=True,
+            sort_order=sort_order,
+            include_in_building_discount=False,
+            line_type=QuoteItemLineType.DELIVERY,
+        )
+    )
+    return lines, issues, sort_order + 1
+
+
 def build_configurator_preview(
     payload: QuoteConfigurationPayload,
     session: Session,
+    customer_postcode: Optional[str] = None,
 ) -> ConfiguratorPreviewResponse:
     issues: List[ConfiguratorValidationIssue] = []
     if not payload.boxes:
@@ -641,6 +785,16 @@ def build_configurator_preview(
             )
         )
         sort_order += 1
+
+    lines, issues, _sort_order = _append_configurator_delivery_line(
+        payload,
+        session,
+        customer_postcode,
+        box_products,
+        lines,
+        issues,
+        sort_order,
+    )
 
     subtotal = sum((_to_decimal(line.quantity) * _to_decimal(line.unit_price) for line in lines), ZERO)
     has_errors = any(issue.severity == "error" for issue in issues)

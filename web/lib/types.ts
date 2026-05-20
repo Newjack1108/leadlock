@@ -129,11 +129,22 @@ export interface ConfiguratorExtraSelection {
   quantity?: number;
 }
 
+export type ConfiguratorDeliveryEstimateInclusion =
+  | 'none'
+  | 'delivery_only'
+  | 'delivery_and_install';
+
 export interface QuoteConfigurationPayload {
   schema_version: number;
   name?: string;
   boxes: ConfiguratorBoxPlacement[];
   extras: ConfiguratorExtraSelection[];
+  delivery_estimate_inclusion?: ConfiguratorDeliveryEstimateInclusion;
+}
+
+export interface ConfiguratorPreviewRequest {
+  configuration: QuoteConfigurationPayload;
+  customer_postcode?: string;
 }
 
 export interface ConfiguratorValidationIssue {
@@ -152,6 +163,7 @@ export interface ConfiguratorGeneratedLine {
   sort_order: number;
   parent_index?: number;
   include_in_building_discount: boolean;
+  line_type?: 'DELIVERY' | 'INSTALLATION' | null;
 }
 
 export interface ConfiguratorPreviewResponse {

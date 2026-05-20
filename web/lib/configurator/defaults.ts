@@ -61,6 +61,7 @@ export function createEmptyConfiguration(name?: string): QuoteConfigurationPaylo
     name,
     boxes: [],
     extras: [],
+    delivery_estimate_inclusion: 'none',
   };
 }
 

@@ -6,12 +6,16 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { HardHat, Truck } from 'lucide-react';
+
 import type {
+  ConfiguratorDeliveryEstimateInclusion,
   ConfiguratorExtraSelection,
   Product,
   QuoteConfigurationPayload,
 } from '@/lib/types';
 import ConfiguratorExtraIconButton from '@/components/configurator/ConfiguratorExtraIconButton';
+import ConfiguratorIconToggleButton from '@/components/configurator/ConfiguratorIconToggleButton';
 import { cn } from '@/lib/utils';
 
 interface ConfiguratorCatalogProps {
@@ -26,6 +30,10 @@ interface ConfiguratorCatalogProps {
   onAddItem: (product: Product) => void;
   onToggleExtra: (product: Product, checked: boolean) => void;
   onUpdateExtra: (productId: number, updater: (current: ConfiguratorExtraSelection) => ConfiguratorExtraSelection) => void;
+  deliveryInclusion: ConfiguratorDeliveryEstimateInclusion;
+  onSetDeliveryInclusion: (mode: ConfiguratorDeliveryEstimateInclusion) => void;
+  deliveryLineUnitPrice?: number | null;
+  deliveryDisabledReason?: string | null;
   className?: string;
 }
 
@@ -90,9 +98,14 @@ export default function ConfiguratorCatalog({
   onAddItem,
   onToggleExtra,
   onUpdateExtra,
+  deliveryInclusion,
+  onSetDeliveryInclusion,
+  deliveryLineUnitPrice,
+  deliveryDisabledReason,
   className,
 }: ConfiguratorCatalogProps) {
   const selectedExtras = new Map(configuration.extras.map((extra) => [extra.product_id, extra]));
+  const deliveryToggleDisabled = Boolean(deliveryDisabledReason);
 
   return (
     <Card className={cn('flex max-h-[inherit] flex-col', className)}>
@@ -193,6 +206,63 @@ export default function ConfiguratorCatalog({
               );
             })
           )}
+        </CatalogSection>
+
+        <CatalogSection title="Delivery & installation" className="border-t pt-3">
+          {deliveryDisabledReason ? (
+            <p className="text-xs text-muted-foreground">{deliveryDisabledReason}</p>
+          ) : null}
+          <div className="rounded-md border px-2 py-1.5">
+            <div className="flex items-center gap-2">
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium leading-snug">Delivery only</p>
+                <p className="text-xs text-muted-foreground">
+                  {deliveryInclusion === 'delivery_only' && deliveryLineUnitPrice != null
+                    ? `£${deliveryLineUnitPrice.toFixed(2)} · estimated`
+                    : '1 driver, unload at site'}
+                </p>
+              </div>
+              <ConfiguratorIconToggleButton
+                selected={deliveryInclusion === 'delivery_only'}
+                disabled={deliveryToggleDisabled}
+                label={
+                  deliveryInclusion === 'delivery_only'
+                    ? 'Remove delivery only'
+                    : 'Include delivery only'
+                }
+                onToggle={() => onSetDeliveryInclusion('delivery_only')}
+              >
+                <Truck className="h-5 w-5 text-muted-foreground" aria-hidden />
+              </ConfiguratorIconToggleButton>
+            </div>
+          </div>
+          <div className="rounded-md border px-2 py-1.5">
+            <div className="flex items-center gap-2">
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium leading-snug">Delivery & installation</p>
+                <p className="text-xs text-muted-foreground">
+                  {deliveryInclusion === 'delivery_and_install' && deliveryLineUnitPrice != null
+                    ? `£${deliveryLineUnitPrice.toFixed(2)} · estimated`
+                    : 'From factory to site, 2-man team'}
+                </p>
+              </div>
+              <ConfiguratorIconToggleButton
+                selected={deliveryInclusion === 'delivery_and_install'}
+                disabled={deliveryToggleDisabled}
+                label={
+                  deliveryInclusion === 'delivery_and_install'
+                    ? 'Remove delivery & installation'
+                    : 'Include delivery & installation'
+                }
+                onToggle={() => onSetDeliveryInclusion('delivery_and_install')}
+              >
+                <span className="flex items-center justify-center gap-0.5" aria-hidden>
+                  <Truck className="h-4 w-4 text-muted-foreground" />
+                  <HardHat className="h-4 w-4 text-muted-foreground" />
+                </span>
+              </ConfiguratorIconToggleButton>
+            </div>
+          </div>
         </CatalogSection>
       </CardContent>
     </Card>

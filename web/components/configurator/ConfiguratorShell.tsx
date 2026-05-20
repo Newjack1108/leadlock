@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import ConfiguratorCanvas from '@/components/configurator/ConfiguratorCanvas';
 import ConfiguratorCatalog from '@/components/configurator/ConfiguratorCatalog';
 import ConfiguratorLogo from '@/components/configurator/ConfiguratorLogo';
-import {
+import api, {
   applyQuoteConfiguration,
   getApiErrorDetail,
   getConfiguratorCatalog,
@@ -37,12 +37,15 @@ import { formatCurrency, getPreviewIssueCount } from '@/lib/configurator/summary
 import type {
   ConfiguratorBoxPlacement,
   ConfiguratorCatalogResponse,
+  ConfiguratorDeliveryEstimateInclusion,
   ConfiguratorExtraSelection,
   ConfiguratorPreviewResponse,
   Product,
   Quote,
   QuoteConfigurationPayload,
 } from '@/lib/types';
+
+const DELIVERY_LINE_DESCRIPTIONS = new Set(['Delivery only', 'Delivery & Installation']);
 
 interface ConfiguratorShellProps {
   quote: Quote;
@@ -90,6 +93,7 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
     isPlaceholderOnlyDraftItems(quote.items)
   );
   const [selectedBoxId, setSelectedBoxId] = useState<string | null>(null);
+  const [customerPostcode, setCustomerPostcode] = useState<string | null>(null);
 
   const productMap = useMemo(() => {
     const rows = [...catalog.items, ...catalog.extras];
@@ -109,6 +113,27 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
 
   const errorCount = getPreviewIssueCount(preview, 'error');
   const warningCount = getPreviewIssueCount(preview, 'warning');
+
+  const deliveryInclusion: ConfiguratorDeliveryEstimateInclusion =
+    configuration.delivery_estimate_inclusion ?? 'none';
+
+  const deliveryPreviewLine = useMemo(() => {
+    if (!preview?.items?.length || deliveryInclusion === 'none') return null;
+    return (
+      preview.items.find(
+        (item) =>
+          item.line_type === 'DELIVERY' ||
+          DELIVERY_LINE_DESCRIPTIONS.has(item.description)
+      ) ?? null
+    );
+  }, [preview?.items, deliveryInclusion]);
+
+  const deliveryDisabledReason =
+    customerPostcode === null
+      ? null
+      : !customerPostcode.trim()
+        ? 'Add a customer postcode on the quote to estimate delivery.'
+        : null;
 
   const isDesignBlank =
     configuration.boxes.length === 0 &&
@@ -162,6 +187,35 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
   }, [quote.id, quote.quote_number]);
 
   useEffect(() => {
+    const dealerPostcode = quote.dealer_customer_postcode?.trim();
+    if (dealerPostcode) {
+      setCustomerPostcode(dealerPostcode);
+      return;
+    }
+    if (!quote.customer_id) {
+      setCustomerPostcode('');
+      return;
+    }
+    let cancelled = false;
+    const loadPostcode = async () => {
+      try {
+        const response = await api.get<{ postcode?: string | null }>(
+          `/api/customers/${quote.customer_id}`
+        );
+        if (!cancelled) {
+          setCustomerPostcode(response.data.postcode?.trim() ?? '');
+        }
+      } catch {
+        if (!cancelled) setCustomerPostcode('');
+      }
+    };
+    void loadPostcode();
+    return () => {
+      cancelled = true;
+    };
+  }, [quote.customer_id, quote.dealer_customer_postcode]);
+
+  useEffect(() => {
     if (!layoutLoaded || loading || resetting || applying || saving) return;
     const key = stableConfigurationKey(configuration);
     if (key === persistedConfigurationKeyRef.current) return;
@@ -183,14 +237,16 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
     if (loading) return;
     const timeoutId = window.setTimeout(async () => {
       try {
-        const response = await previewConfiguratorConfiguration(configuration);
+        const response = await previewConfiguratorConfiguration(configuration, {
+          customerPostcode: customerPostcode ?? undefined,
+        });
         setPreview(response);
       } catch {
         setPreview(null);
       }
     }, 250);
     return () => window.clearTimeout(timeoutId);
-  }, [configuration, loading]);
+  }, [configuration, loading, customerPostcode]);
 
   const updateConfiguration = (next: QuoteConfigurationPayload) => {
     setConfiguration(next);
@@ -211,6 +267,14 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
     const next = addProductToConfiguration(configuration, product, productMap, selectedBoxId);
     updateConfiguration(next);
     setSelectedBoxId(next.boxes[next.boxes.length - 1]?.id ?? null);
+  };
+
+  const handleSetDeliveryInclusion = (mode: ConfiguratorDeliveryEstimateInclusion) => {
+    const current = configuration.delivery_estimate_inclusion ?? 'none';
+    updateConfiguration({
+      ...configuration,
+      delivery_estimate_inclusion: current === mode ? 'none' : mode,
+    });
   };
 
   const handleToggleExtra = (product: Product, checked: boolean) => {
@@ -447,6 +511,12 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
           onAddItem={handleAddItem}
           onToggleExtra={handleToggleExtra}
           onUpdateExtra={handleUpdateExtra}
+          deliveryInclusion={deliveryInclusion}
+          onSetDeliveryInclusion={handleSetDeliveryInclusion}
+          deliveryLineUnitPrice={
+            deliveryPreviewLine != null ? Number(deliveryPreviewLine.unit_price) : null
+          }
+          deliveryDisabledReason={deliveryDisabledReason}
         />
 
         <Card className="min-w-0">
