@@ -81,7 +81,41 @@ export enum LeadSource {
   PHONE = "PHONE",
   PAST_CUSTOMER = "Past Customer",
   REFERRAL = "REFERRAL",
+  CONFIGURATOR = "CONFIGURATOR",
   OTHER = "OTHER",
+}
+
+export type ConfiguratorInviteStatus =
+  | "PENDING_DETAILS"
+  | "ACTIVE"
+  | "SUBMITTED"
+  | "EXPIRED";
+
+export interface PublicConfiguratorContext {
+  status: ConfiguratorInviteStatus;
+  customer_name?: string | null;
+  quote_id?: number | null;
+  lead_id?: number | null;
+  submitted_at?: string | null;
+  configuration?: QuoteConfigurationPayload | null;
+  customer_postcode?: string | null;
+}
+
+export interface ConfiguratorInvite {
+  id: number;
+  access_token: string;
+  configure_url: string;
+  status: ConfiguratorInviteStatus;
+  quote_id?: number | null;
+  lead_id?: number | null;
+  customer_id?: number | null;
+  customer_name?: string | null;
+  created_by_id?: number | null;
+  assigned_to_id?: number | null;
+  campaign_slug?: string | null;
+  submitted_at?: string | null;
+  expires_at?: string | null;
+  created_at: string;
 }
 
 export interface User {

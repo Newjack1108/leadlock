@@ -54,6 +54,7 @@ import api, {
 import { formatDateTime, formatActivityTypeLabel } from '@/lib/utils';
 import { Customer, Activity, ActivityType, Lead, CustomerHistoryEvent, CustomerHistoryEventType, WebsiteVisit, Order, CustomerCommunicationStats } from '@/lib/types';
 import SendQuoteEmailDialog from '@/components/SendQuoteEmailDialog';
+import SendConfiguratorLinkDialog from '@/components/configurator/SendConfiguratorLinkDialog';
 import ComposeEmailDialog from '@/components/ComposeEmailDialog';
 import CallNotesDialog from '@/components/CallNotesDialog';
 import AddManualActivityDialog from '@/components/AddManualActivityDialog';
@@ -169,6 +170,7 @@ export default function CustomerDetailPage() {
   const [quoteLocked, setQuoteLocked] = useState(false);
   const [quoteLockReason, setQuoteLockReason] = useState<any>(null);
   const [sendEmailDialogOpen, setSendEmailDialogOpen] = useState(false);
+  const [configureLinkOpen, setConfigureLinkOpen] = useState(false);
   const [selectedQuoteId, setSelectedQuoteId] = useState<number | null>(null);
   const [composeEmailDialogOpen, setComposeEmailDialogOpen] = useState(false);
   const [callNotesDialogOpen, setCallNotesDialogOpen] = useState(false);
@@ -762,6 +764,12 @@ export default function CustomerDetailPage() {
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle>Quotes</CardTitle>
+                  <div className="flex flex-wrap items-center gap-2">
+                  {!quoteLocked && (
+                    <Button variant="outline" size="sm" onClick={() => setConfigureLinkOpen(true)}>
+                      Layout link
+                    </Button>
+                  )}
                   {!quoteLocked && (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -801,6 +809,7 @@ export default function CustomerDetailPage() {
                       </DropdownMenuContent>
                     </DropdownMenu>
                   )}
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
@@ -1234,6 +1243,16 @@ export default function CustomerDetailPage() {
             </Card>
           </div>
       </main>
+
+      {customer && (
+        <SendConfiguratorLinkDialog
+          open={configureLinkOpen}
+          onOpenChange={setConfigureLinkOpen}
+          customerId={customerId}
+          leadId={leads[0]?.id}
+          customerName={customer.name}
+        />
+      )}
 
       {customer && selectedQuoteId && (
         <SendQuoteEmailDialog

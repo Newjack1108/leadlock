@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import ReminderList from '@/components/ReminderList';
+import SubmittedConfiguratorInvitesCard from '@/components/configurator/SubmittedConfiguratorInvitesCard';
 import api, {
   getDashboardStats,
   getStaleSummary,
@@ -1071,6 +1072,10 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         )}
+
+        <div className="mb-8">
+          <SubmittedConfiguratorInvitesCard />
+        </div>
 
         {/* Reminders List */}
         <div className="mb-8">

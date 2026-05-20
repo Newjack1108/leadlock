@@ -45,6 +45,7 @@ import { formatDateTime, formatActivityTypeLabel } from '@/lib/utils';
 import { Lead, Activity, ActivityType, LeadStatus, Timeframe, LeadType, LeadSource, FacebookAdvertProfile } from '@/lib/types';
 import { toast } from 'sonner';
 import NinoxBadge from '@/components/NinoxBadge';
+import SendConfiguratorLinkDialog from '@/components/configurator/SendConfiguratorLinkDialog';
 
 const activityIcons: Record<ActivityType, any> = {
   SMS_SENT: MessageSquare,
@@ -94,6 +95,7 @@ export default function LeadDetailPage() {
   const [ensureCustomerLoading, setEnsureCustomerLoading] = useState(false);
   const [quotesFromLead, setQuotesFromLead] = useState<any[]>([]);
   const [quotesLoading, setQuotesLoading] = useState(false);
+  const [configureLinkOpen, setConfigureLinkOpen] = useState(false);
   const [advertProfiles, setAdvertProfiles] = useState<FacebookAdvertProfile[]>([]);
   const [advertPreviewOpen, setAdvertPreviewOpen] = useState(false);
   const [userRole, setUserRole] = useState<string | null>(null);
@@ -756,6 +758,13 @@ export default function LeadDetailPage() {
                     >
                       View Customer Profile →
                     </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => setConfigureLinkOpen(true)}
+                      className="w-full"
+                    >
+                      Send layout link
+                    </Button>
                     {lead.status === LeadStatus.QUALIFIED && !lead.quote_locked && (
                       <Button
                         onClick={() => router.push(`/quotes/create?customer_id=${lead.customer!.id}&lead_id=${lead.id}`)}
@@ -953,6 +962,16 @@ export default function LeadDetailPage() {
               fetchLead();
               fetchActivities();
             }}
+          />
+        )}
+
+        {lead.customer && (
+          <SendConfiguratorLinkDialog
+            open={configureLinkOpen}
+            onOpenChange={setConfigureLinkOpen}
+            customerId={lead.customer.id}
+            leadId={lead.id}
+            customerName={lead.customer.name ?? lead.name}
           />
         )}
       </main>

@@ -200,6 +200,69 @@ class QuoteConfigurationResponse(BaseModel):
     updated_at: datetime
 
 
+class PublicConfiguratorStartRequest(BaseModel):
+    campaign_slug: Optional[str] = "configure"
+
+
+class PublicConfiguratorStartResponse(BaseModel):
+    access_token: str
+    configure_url: str
+    status: str
+
+
+class PublicConfiguratorRegisterRequest(BaseModel):
+    name: str
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    postcode: Optional[str] = None
+
+    @model_validator(mode="after")
+    def require_contact(self):
+        if not (self.email or "").strip() and not (self.phone or "").strip():
+            raise ValueError("Email or phone is required")
+        if not (self.name or "").strip():
+            raise ValueError("Name is required")
+        return self
+
+
+class PublicConfiguratorContextResponse(BaseModel):
+    status: str
+    customer_name: Optional[str] = None
+    quote_id: Optional[int] = None
+    lead_id: Optional[int] = None
+    submitted_at: Optional[datetime] = None
+    configuration: Optional[QuoteConfigurationPayload] = None
+    customer_postcode: Optional[str] = None
+
+
+class ConfiguratorInviteCreateRequest(BaseModel):
+    customer_id: Optional[int] = None
+    lead_id: Optional[int] = None
+    campaign_slug: Optional[str] = None
+
+
+class ConfiguratorInviteResponse(BaseModel):
+    id: int
+    access_token: str
+    configure_url: str
+    status: str
+    quote_id: Optional[int] = None
+    lead_id: Optional[int] = None
+    customer_id: Optional[int] = None
+    customer_name: Optional[str] = None
+    created_by_id: Optional[int] = None
+    assigned_to_id: Optional[int] = None
+    campaign_slug: Optional[str] = None
+    submitted_at: Optional[datetime] = None
+    expires_at: Optional[datetime] = None
+    created_at: datetime
+
+
+class ConfiguratorInviteListResponse(BaseModel):
+    items: List[ConfiguratorInviteResponse] = Field(default_factory=list)
+    total: int
+
+
 class UserEmailSettingsUpdate(BaseModel):
     smtp_host: Optional[str] = None
     smtp_port: Optional[int] = None

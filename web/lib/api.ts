@@ -13,6 +13,8 @@ import {
   type ConfiguratorCatalogResponse,
   type ConfiguratorAccessStatus,
   type ConfiguratorPreviewResponse,
+  type ConfiguratorInvite,
+  type PublicConfiguratorContext,
   type QuoteConfigurationPayload,
   type QuoteConfigurationResponse,
   type DealerDiscountPolicyAdminPayload,
@@ -539,6 +541,84 @@ export const sendQuoteEmail = async (
 export const getPublicQuoteView = async (viewToken: string) => {
   const response = await api.get(`/api/public/quotes/view/${viewToken}`);
   return response.data;
+};
+
+/** Public configurator (no auth). */
+export const publicConfiguratorStart = async (campaignSlug?: string) => {
+  const response = await api.post(
+    '/api/public/configurator/start',
+    { campaign_slug: campaignSlug ?? 'configure' },
+    { skipAuthRedirect: true }
+  );
+  return response.data as { access_token: string; configure_url: string; status: string };
+};
+
+export const getPublicConfiguratorContext = async (token: string) => {
+  const response = await api.get(`/api/public/configurator/${token}`, { skipAuthRedirect: true });
+  return response.data as PublicConfiguratorContext;
+};
+
+export const publicConfiguratorRegister = async (
+  token: string,
+  body: { name: string; email?: string; phone?: string; postcode?: string }
+) => {
+  const response = await api.post(`/api/public/configurator/${token}/register`, body, {
+    skipAuthRedirect: true,
+  });
+  return response.data as PublicConfiguratorContext;
+};
+
+export const getPublicConfiguratorCatalog = async () => {
+  const response = await api.get('/api/public/configurator/catalog', { skipAuthRedirect: true });
+  return response.data as ConfiguratorCatalogResponse;
+};
+
+export const previewPublicConfiguratorConfiguration = async (
+  token: string,
+  configuration: QuoteConfigurationPayload,
+  customerPostcode?: string
+) => {
+  const response = await api.post(
+    `/api/public/configurator/${token}/preview`,
+    { configuration, customer_postcode: customerPostcode?.trim() || undefined },
+    { skipAuthRedirect: true }
+  );
+  return response.data as ConfiguratorPreviewResponse;
+};
+
+export const savePublicConfiguratorConfiguration = async (
+  token: string,
+  configuration: QuoteConfigurationPayload
+) => {
+  const response = await api.put(`/api/public/configurator/${token}/configuration`, configuration, {
+    skipAuthRedirect: true,
+  });
+  return response.data as PublicConfiguratorContext;
+};
+
+export const submitPublicConfiguratorLayout = async (token: string) => {
+  const response = await api.post(`/api/public/configurator/${token}/submit`, null, {
+    skipAuthRedirect: true,
+  });
+  return response.data as PublicConfiguratorContext;
+};
+
+export const createConfiguratorInvite = async (body: {
+  customer_id?: number;
+  lead_id?: number;
+  campaign_slug?: string;
+}) => {
+  const response = await api.post('/api/configurator-invites', body);
+  return response.data as ConfiguratorInvite;
+};
+
+export const listConfiguratorInvites = async (params?: {
+  status?: string;
+  assigned_to_me?: boolean;
+  limit?: number;
+}) => {
+  const response = await api.get('/api/configurator-invites', { params });
+  return response.data as { items: ConfiguratorInvite[]; total: number };
 };
 
 /** Company logo URL for header and login page (no auth required). */

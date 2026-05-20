@@ -91,6 +91,7 @@ class LeadSource(str, Enum):
     PHONE = "PHONE"
     PAST_CUSTOMER = "Past Customer"
     REFERRAL = "REFERRAL"
+    CONFIGURATOR = "CONFIGURATOR"
     OTHER = "OTHER"
 
 
@@ -652,6 +653,37 @@ class QuoteConfiguration(SQLModel, table=True):
 
     quote: Quote = Relationship(sa_relationship_kwargs={"uselist": False})
     created_by: User = Relationship()
+
+
+class ConfiguratorInviteStatus(str, Enum):
+    PENDING_DETAILS = "PENDING_DETAILS"
+    ACTIVE = "ACTIVE"
+    SUBMITTED = "SUBMITTED"
+    EXPIRED = "EXPIRED"
+
+
+class ConfiguratorInvite(SQLModel, table=True):
+    """Token-based public configurator session; links to draft quote after registration."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    access_token: str = Field(unique=True, index=True)
+    status: ConfiguratorInviteStatus = Field(default=ConfiguratorInviteStatus.PENDING_DETAILS)
+    quote_id: Optional[int] = Field(default=None, foreign_key="quote.id", index=True)
+    lead_id: Optional[int] = Field(default=None, foreign_key="lead.id", index=True)
+    customer_id: Optional[int] = Field(default=None, foreign_key="customer.id", index=True)
+    created_by_id: Optional[int] = Field(default=None, foreign_key="user.id")
+    assigned_to_id: Optional[int] = Field(default=None, foreign_key="user.id")
+    campaign_slug: Optional[str] = Field(default=None, index=True)
+    submitted_at: Optional[datetime] = None
+    expires_at: Optional[datetime] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+    quote: Optional[Quote] = Relationship()
+    lead: Optional["Lead"] = Relationship()
+    customer: Optional[Customer] = Relationship()
+    created_by: Optional[User] = Relationship(
+        sa_relationship_kwargs={"foreign_keys": "[ConfiguratorInvite.created_by_id]"}
+    )
 
 
 class QuoteEmail(SQLModel, table=True):

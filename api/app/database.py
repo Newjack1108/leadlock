@@ -650,6 +650,42 @@ def create_db_and_tables():
                 print(f"Error creating accesssheetrequest table: {e}", file=sys.stderr, flush=True)
                 import traceback
                 print(traceback.format_exc(), file=sys.stderr, flush=True)
+
+        has_configurator_invite_table = inspector.has_table("configuratorinvite")
+        if not has_configurator_invite_table:
+            print("Creating configuratorinvite table...", file=sys.stderr, flush=True)
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text("""
+                        CREATE TABLE IF NOT EXISTS configuratorinvite (
+                            id SERIAL PRIMARY KEY,
+                            access_token VARCHAR(255) NOT NULL UNIQUE,
+                            status VARCHAR(32) NOT NULL DEFAULT 'PENDING_DETAILS',
+                            quote_id INTEGER REFERENCES quote(id),
+                            lead_id INTEGER REFERENCES lead(id),
+                            customer_id INTEGER REFERENCES customer(id),
+                            created_by_id INTEGER REFERENCES "user"(id),
+                            assigned_to_id INTEGER REFERENCES "user"(id),
+                            campaign_slug VARCHAR(64),
+                            submitted_at TIMESTAMP,
+                            expires_at TIMESTAMP,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+                        )
+                    """))
+                    conn.execute(text(
+                        "CREATE INDEX IF NOT EXISTS ix_configuratorinvite_access_token "
+                        "ON configuratorinvite (access_token)"
+                    ))
+                    conn.execute(text(
+                        "CREATE INDEX IF NOT EXISTS ix_configuratorinvite_status "
+                        "ON configuratorinvite (status)"
+                    ))
+                    print("Created configuratorinvite table", file=sys.stderr, flush=True)
+            except Exception as e:
+                print(f"Error creating configuratorinvite table: {e}", file=sys.stderr, flush=True)
+                import traceback
+                print(traceback.format_exc(), file=sys.stderr, flush=True)
         
         # Step 0: Facebook Messenger - messenger_psid on Customer/Lead (run first so it's never skipped)
         if has_customer_table:
