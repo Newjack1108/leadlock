@@ -1399,3 +1399,69 @@ def test_save_empty_configuration_and_placeholder_draft_reset():
     assert len(draft["items"]) == 1
     assert draft["items"][0]["description"] == "Draft — in progress"
     assert Decimal(draft["subtotal"]) == Decimal("0")
+
+
+def test_get_quote_configuration_returns_saved_layout():
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SQLModel.metadata.create_all(engine)
+    user = _seed_user(engine)
+
+    with Session(engine) as session:
+        item = Product(
+            name="3m Front Box",
+            category=ProductCategory.CONFIGURATOR,
+            configurator_is_starter_box=True,
+            base_price=Decimal("2500.00"),
+            configurator_width=Decimal("3.00"),
+            configurator_length=Decimal("3.00"),
+        )
+        quote = Quote(
+            quote_number="QT-GET-CONFIG-001",
+            status=QuoteStatus.DRAFT,
+            subtotal=Decimal("0.00"),
+            discount_total=Decimal("0.00"),
+            total_amount=Decimal("0.00"),
+            deposit_amount=Decimal("0.00"),
+            balance_amount=Decimal("0.00"),
+            created_by_id=user.id,
+        )
+        session.add(item)
+        session.add(quote)
+        session.commit()
+        session.refresh(item)
+        session.refresh(quote)
+        quote_id = quote.id
+        item_id = item.id
+
+    client = TestClient(_make_app(engine, user))
+
+    payload = {
+        "schema_version": 1,
+        "name": "Saved layout",
+        "boxes": [
+            {
+                "id": "box-1",
+                "product_id": item_id,
+                "x": "0",
+                "y": "0",
+                "rotation": 0,
+            }
+        ],
+        "extras": [],
+    }
+
+    save_response = client.put(f"/api/quotes/{quote_id}/configuration", json=payload)
+    assert save_response.status_code == 200
+
+    get_response = client.get(f"/api/quotes/{quote_id}/configuration")
+    assert get_response.status_code == 200
+    loaded = get_response.json()
+    assert loaded["configuration"]["name"] == "Saved layout"
+    assert len(loaded["configuration"]["boxes"]) == 1
+    assert loaded["configuration"]["boxes"][0]["id"] == "box-1"
+    assert loaded["configuration"]["boxes"][0]["x"] == "0"
+    assert loaded["configuration"]["boxes"][0]["y"] == "0"

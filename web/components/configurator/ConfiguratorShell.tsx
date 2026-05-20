@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -70,6 +70,10 @@ function pruneConfigurationExtras(
   };
 }
 
+function stableConfigurationKey(configuration: QuoteConfigurationPayload): string {
+  return JSON.stringify(configuration);
+}
+
 export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
   const router = useRouter();
   const [catalog, setCatalog] = useState<ConfiguratorCatalogResponse>({ items: [], extras: [] });
@@ -79,6 +83,9 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
   const [saving, setSaving] = useState(false);
   const [applying, setApplying] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [layoutLoaded, setLayoutLoaded] = useState(false);
+  const [autosaveStatus, setAutosaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const persistedConfigurationKeyRef = useRef('');
   const [draftIsPlaceholderOnly, setDraftIsPlaceholderOnly] = useState(() =>
     isPlaceholderOnlyDraftItems(quote.items)
   );
@@ -113,6 +120,8 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
   }, [quote.items]);
 
   useEffect(() => {
+    setLayoutLoaded(false);
+    persistedConfigurationKeyRef.current = '';
     let cancelled = false;
     const load = async () => {
       try {
@@ -135,6 +144,9 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
         setCatalog(catalog);
         setConfiguration(nextConfiguration);
         setSelectedBoxId(nextConfiguration.boxes[0]?.id ?? null);
+        persistedConfigurationKeyRef.current = stableConfigurationKey(nextConfiguration);
+        setLayoutLoaded(true);
+        setAutosaveStatus('idle');
       } catch (error) {
         if (!cancelled) {
           toast.error(getApiErrorDetail(error) || 'Failed to load configurator data');
@@ -148,6 +160,24 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
       cancelled = true;
     };
   }, [quote.id, quote.quote_number]);
+
+  useEffect(() => {
+    if (!layoutLoaded || loading || resetting || applying || saving) return;
+    const key = stableConfigurationKey(configuration);
+    if (key === persistedConfigurationKeyRef.current) return;
+
+    const timeoutId = window.setTimeout(async () => {
+      try {
+        setAutosaveStatus('saving');
+        const saved = await saveQuoteConfiguration(quote.id, configuration);
+        persistedConfigurationKeyRef.current = stableConfigurationKey(saved.configuration);
+        setAutosaveStatus('saved');
+      } catch {
+        setAutosaveStatus('error');
+      }
+    }, 400);
+    return () => window.clearTimeout(timeoutId);
+  }, [configuration, layoutLoaded, loading, resetting, applying, saving, quote.id]);
 
   useEffect(() => {
     if (loading) return;
@@ -269,7 +299,9 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
     try {
       setSaving(true);
       const saved = await saveQuoteConfiguration(quote.id, configuration);
+      persistedConfigurationKeyRef.current = stableConfigurationKey(saved.configuration);
       setConfiguration(saved.configuration);
+      setAutosaveStatus('saved');
       toast.success('Configurator layout saved');
     } catch (error) {
       toast.error(getApiErrorDetail(error) || 'Failed to save configurator layout');
@@ -281,7 +313,8 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
   const handleApply = async () => {
     try {
       setApplying(true);
-      await saveQuoteConfiguration(quote.id, configuration);
+      const saved = await saveQuoteConfiguration(quote.id, configuration);
+      persistedConfigurationKeyRef.current = stableConfigurationKey(saved.configuration);
       await applyQuoteConfiguration(quote.id);
       toast.success('Configurator layout applied to draft quote');
       router.push(`/quotes/${quote.id}/edit`);
@@ -305,11 +338,13 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
     try {
       setResetting(true);
       await saveQuoteConfiguration(quote.id, blank);
+      persistedConfigurationKeyRef.current = stableConfigurationKey(blank);
       try {
         await updateDraftQuote(quote.id, buildPlaceholderOnlyDraftPayloadFromQuote(quote));
       } catch (draftError) {
         setConfiguration(blank);
         setSelectedBoxId(null);
+        persistedConfigurationKeyRef.current = stableConfigurationKey(blank);
         toast.error(
           getApiErrorDetail(draftError) ||
             'Layout was cleared but quote lines could not be reset. Open quote edit to fix lines.'
@@ -318,7 +353,9 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
       }
       setConfiguration(blank);
       setSelectedBoxId(null);
+      persistedConfigurationKeyRef.current = stableConfigurationKey(blank);
       setDraftIsPlaceholderOnly(true);
+      setAutosaveStatus('saved');
       toast.success('Design reset.');
     } catch (error) {
       toast.error(getApiErrorDetail(error) || 'Failed to reset design');
@@ -337,6 +374,15 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
           <ConfiguratorLogo className="h-10" />
           <p className="text-sm text-muted-foreground">
             {quote.quote_number} · {quote.customer_name || 'Draft quote'}
+            {autosaveStatus === 'saving' && (
+              <span className="ml-2 text-xs">Saving layout…</span>
+            )}
+            {autosaveStatus === 'saved' && (
+              <span className="ml-2 text-xs text-emerald-600">Layout saved</span>
+            )}
+            {autosaveStatus === 'error' && (
+              <span className="ml-2 text-xs text-destructive">Could not save layout</span>
+            )}
           </p>
           <div className="flex flex-wrap items-stretch gap-2 text-sm">
             <div className="min-w-[4.5rem] shrink-0 rounded-md border px-3 py-2">

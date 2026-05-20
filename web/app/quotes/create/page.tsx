@@ -36,6 +36,7 @@ import {
   isPlaceholderOnlyDraftItems,
 } from '@/lib/quoteDraftPayload';
 import DraftConfiguratorCallout from '@/components/configurator/DraftConfiguratorCallout';
+import DraftConfiguratorLink from '@/components/configurator/DraftConfiguratorLink';
 import {
   optionalExtraIdSetFromList,
   isRootQuoteLevelOptionalExtraLine,
@@ -831,15 +832,17 @@ function CreateQuoteContent() {
       <Header />
       <main className="container mx-auto px-4 sm:px-6 py-8">
         <div className="mb-6">
-          <Button
-            variant="ghost"
-            type="button"
-            onClick={() => navigateAway(`/customers/${customer.id}`)}
-            className="mb-4"
-          >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Customer
-          </Button>
+          <div className="flex flex-wrap items-center gap-2 mb-4">
+            <Button
+              variant="ghost"
+              type="button"
+              onClick={() => navigateAway(`/customers/${customer.id}`)}
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Customer
+            </Button>
+            {draftQuoteId ? <DraftConfiguratorLink quoteId={draftQuoteId} variant="outline" size="sm" /> : null}
+          </div>
           <div>
             <h1 className="text-3xl font-semibold">Create New Quote</h1>
             <p className="text-muted-foreground mt-1 flex items-center gap-2 flex-wrap">

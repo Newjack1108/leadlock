@@ -47,7 +47,7 @@ export default function QuoteConfiguratorDetailPage() {
     if (Number.isFinite(quoteId)) {
       void load();
     } else {
-      router.replace('/quotes/configure');
+      router.replace('/quotes');
     }
     return () => {
       cancelled = true;
@@ -70,7 +70,13 @@ export default function QuoteConfiguratorDetailPage() {
           <Card>
             <CardContent className="space-y-4 py-12 text-center">
               <p className="text-muted-foreground">Quote not available for configurator use.</p>
-              <Button onClick={() => router.push('/quotes/configure')}>Back to Configurator</Button>
+              <Button
+                onClick={() =>
+                  router.push(Number.isFinite(quoteId) ? `/quotes/${quoteId}` : '/quotes')
+                }
+              >
+                Back to quote
+              </Button>
             </CardContent>
           </Card>
         )}
