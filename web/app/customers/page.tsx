@@ -75,6 +75,11 @@ function CustomersPageContent() {
     return '—';
   }
 
+  function goToPage(updater: (p: number) => number) {
+    setPage(updater);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
   const totalPages = Math.max(1, Math.ceil(total / CUSTOMERS_PAGE_SIZE));
 
   if (loading) {
@@ -280,7 +285,7 @@ function CustomersPageContent() {
                 variant="outline"
                 size="sm"
                 disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                onClick={() => goToPage((p) => Math.max(1, p - 1))}
               >
                 Previous
               </Button>
@@ -288,7 +293,7 @@ function CustomersPageContent() {
                 variant="outline"
                 size="sm"
                 disabled={page >= totalPages}
-                onClick={() => setPage((p) => p + 1)}
+                onClick={() => goToPage((p) => p + 1)}
               >
                 Next
               </Button>
