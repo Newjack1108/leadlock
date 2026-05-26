@@ -160,7 +160,7 @@ def test_delete_spam_lead_403_for_closer(api_client, sqlite_engine):
         assert session.get(Lead, lid) is not None
 
 
-def test_delete_spam_lead_400_when_customer_linked(api_client, sqlite_engine):
+def test_delete_spam_lead_400_when_qualified(api_client, sqlite_engine):
     with Session(sqlite_engine) as session:
         director = _add_director(session)
         customer = Customer(
@@ -181,6 +181,7 @@ def test_delete_spam_lead_400_when_customer_linked(api_client, sqlite_engine):
         session.commit()
         session.refresh(lead)
         lid = lead.id
+        cid = customer.id
         token = create_access_token(data={"sub": director.email})
 
     r = api_client.delete(
@@ -188,16 +189,127 @@ def test_delete_spam_lead_400_when_customer_linked(api_client, sqlite_engine):
         headers={"Authorization": f"Bearer {token}"},
     )
     assert r.status_code == 400
-    assert "customer" in r.json()["detail"].lower()
+    assert "engaged" in r.json()["detail"].lower() or "qualified" in r.json()["detail"].lower()
 
     with Session(sqlite_engine) as session:
         assert session.get(Lead, lid) is not None
+        assert session.get(Customer, cid) is not None
+
+
+def test_delete_spam_lead_204_new_lead_with_outreach_customer(api_client, sqlite_engine):
+    with Session(sqlite_engine) as session:
+        director = _add_director(session)
+        customer = Customer(
+            customer_number="CUST-SPAM-ORPHAN",
+            name="Spam Inbound",
+            email="spam@example.com",
+        )
+        session.add(customer)
+        session.commit()
+        session.refresh(customer)
+
+        lead = Lead(
+            name="Spam Inbound",
+            status=LeadStatus.NEW,
+            assigned_to_id=director.id,
+            customer_id=customer.id,
+            email="spam@example.com",
+        )
+        session.add(lead)
+        session.commit()
+        session.refresh(lead)
+        lid = lead.id
+        cid = customer.id
+        token = create_access_token(data={"sub": director.email})
+
+    r = api_client.delete(
+        f"/api/leads/{lid}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 204
+
+    with Session(sqlite_engine) as session:
+        assert session.get(Lead, lid) is None
+        assert session.get(Customer, cid) is None
+
+
+def test_delete_spam_lead_204_engaged_with_customer(api_client, sqlite_engine):
+    with Session(sqlite_engine) as session:
+        director = _add_director(session)
+        customer = Customer(customer_number="CUST-SPAM-ENG", name="Engaged Spam")
+        session.add(customer)
+        session.commit()
+        session.refresh(customer)
+
+        lead = Lead(
+            name="Engaged Spam",
+            status=LeadStatus.ENGAGED,
+            assigned_to_id=director.id,
+            customer_id=customer.id,
+        )
+        session.add(lead)
+        session.commit()
+        session.refresh(lead)
+        lid = lead.id
+        token = create_access_token(data={"sub": director.email})
+
+    r = api_client.delete(
+        f"/api/leads/{lid}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 204
+
+    with Session(sqlite_engine) as session:
+        assert session.get(Lead, lid) is None
+
+
+def test_delete_spam_lead_keeps_customer_when_other_leads_remain(api_client, sqlite_engine):
+    with Session(sqlite_engine) as session:
+        director = _add_director(session)
+        customer = Customer(customer_number="CUST-SPAM-SHARED", name="Shared")
+        session.add(customer)
+        session.commit()
+        session.refresh(customer)
+
+        lead_a = Lead(
+            name="Spam A",
+            status=LeadStatus.NEW,
+            assigned_to_id=director.id,
+            customer_id=customer.id,
+        )
+        lead_b = Lead(
+            name="Real B",
+            status=LeadStatus.ENGAGED,
+            assigned_to_id=director.id,
+            customer_id=customer.id,
+        )
+        session.add(lead_a)
+        session.add(lead_b)
+        session.commit()
+        session.refresh(lead_a)
+        session.refresh(lead_b)
+        lid_a = lead_a.id
+        cid = customer.id
+        token = create_access_token(data={"sub": director.email})
+
+    r = api_client.delete(
+        f"/api/leads/{lid_a}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 204
+
+    with Session(sqlite_engine) as session:
+        assert session.get(Lead, lid_a) is None
+        assert session.get(Customer, cid) is not None
+        remaining = session.exec(select(Lead).where(Lead.customer_id == cid)).all()
+        assert len(remaining) == 1
+        assert remaining[0].name == "Real B"
 
 
 def test_delete_spam_lead_400_when_non_draft_quote(api_client, sqlite_engine):
     with Session(sqlite_engine) as session:
         director = _add_director(session)
-        lead = Lead(name="X", status=LeadStatus.QUOTED, assigned_to_id=director.id)
+        lead = Lead(name="X", status=LeadStatus.ENGAGED, assigned_to_id=director.id)
         session.add(lead)
         session.commit()
         session.refresh(lead)

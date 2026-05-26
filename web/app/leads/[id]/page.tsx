@@ -46,6 +46,7 @@ import { Lead, Activity, ActivityType, LeadStatus, Timeframe, LeadType, LeadSour
 import { toast } from 'sonner';
 import NinoxBadge from '@/components/NinoxBadge';
 import SendConfiguratorLinkDialog from '@/components/configurator/SendConfiguratorLinkDialog';
+import { canRemoveSpamLead } from '@/lib/leadSpam';
 
 const activityIcons: Record<ActivityType, any> = {
   SMS_SENT: MessageSquare,
@@ -257,13 +258,10 @@ export default function LeadDetailPage() {
     }
   };
 
-  const canRemoveSpamLead =
-    (userRole === 'DIRECTOR' || userRole === 'SALES_MANAGER') &&
-    lead != null &&
-    !lead.customer_id;
+  const showRemoveSpam = lead != null && canRemoveSpamLead(userRole, lead);
 
   const handleRemoveSpamLead = async () => {
-    if (!canRemoveSpamLead) return;
+    if (!showRemoveSpam) return;
     if (
       !window.confirm(
         'Permanently remove this lead as spam or junk? It will be deleted (not marked as lost), so reports and dashboards will not count it. This cannot be undone.'
@@ -434,7 +432,7 @@ export default function LeadDetailPage() {
                         {rejectLoading ? 'Rejecting...' : 'Reject'}
                       </Button>
                     )}
-                    {canRemoveSpamLead && (
+                    {showRemoveSpam && (
                       <Button
                         size="sm"
                         variant="outline"

@@ -46,7 +46,11 @@ from app.workflow import (
 
 _LEAD_CUSTOMER_SYNC_FIELDS = frozenset({"name", "email", "wrong_email_address", "phone", "postcode"})
 from app.quote_delete import delete_quote_cascade
-from app.lead_delete import delete_lead_cascade
+from app.lead_delete import (
+    delete_lead_cascade,
+    is_pre_qualify_spam_status,
+    maybe_delete_orphan_customer_after_spam_lead,
+)
 from app.constants import QUOTE_LIST_EXCLUDED_STATUSES, LIST_PAGE_SIZE_DEFAULT, LIST_PAGE_SIZE_MAX
 from app.handover_pdf_service import generate_lead_handover_pdf
 from datetime import datetime
@@ -533,18 +537,20 @@ async def delete_spam_lead(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_role([UserRole.DIRECTOR, UserRole.SALES_MANAGER])),
 ):
-    """Permanently remove a junk/spam lead (no customer, draft quotes only). Does not count as LOST."""
+    """Permanently remove a junk/spam lead before qualify (draft quotes only). Does not count as LOST."""
     statement = select(Lead).where(Lead.id == lead_id)
     lead = session.exec(statement).first()
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
 
-    if lead.customer_id is not None:
+    if not is_pre_qualify_spam_status(lead.status):
         raise HTTPException(
             status_code=400,
-            detail="Cannot delete: lead is linked to a customer. Use the normal workflow or delete the customer record.",
+            detail="Cannot delete: only NEW, CONTACT_ATTEMPTED, or ENGAGED leads can be removed as spam. "
+            "Use the normal workflow for qualified leads.",
         )
 
+    customer_id = lead.customer_id
     quotes = list(session.exec(select(Quote).where(Quote.lead_id == lead_id)).all())
     for q in quotes:
         if q.status != QuoteStatus.DRAFT:
@@ -561,6 +567,7 @@ async def delete_spam_lead(
                 )
 
     delete_lead_cascade(session, lead_id)
+    maybe_delete_orphan_customer_after_spam_lead(session, customer_id)
     session.commit()
     return Response(status_code=204)
 

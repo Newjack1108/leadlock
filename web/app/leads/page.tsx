@@ -31,6 +31,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import NinoxBadge from '@/components/NinoxBadge';
+import { canRemoveSpamLead } from '@/lib/leadSpam';
 
 const temperatureColors: Record<QuoteTemperature, string> = {
   HOT: 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300',
@@ -126,8 +127,7 @@ function LeadsPageContent() {
   const isNinoxLead = (lead: Lead) =>
     lead.lead_source === LeadSource.NINOX || lead.customer?.source_system === 'Ninox';
 
-  const canRemoveSpamLead = (lead: Lead) =>
-    (userRole === 'DIRECTOR' || userRole === 'SALES_MANAGER') && !lead.customer_id;
+  const canRemoveSpam = (lead: Lead) => canRemoveSpamLead(userRole, lead);
 
   // Auth + role-based URL defaults, then sync filters — must complete before first /api/leads fetch.
   useEffect(() => {
@@ -593,7 +593,7 @@ function LeadsPageContent() {
                           </span>
                         </div>
                       </div>
-                      {statusFilter === LeadStatus.NEW && canRemoveSpamLead(lead) && (
+                      {canRemoveSpam(lead) && (
                         <Button
                           size="sm"
                           variant="outline"

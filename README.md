@@ -321,6 +321,7 @@ Colors are defined in `web/app/globals.css`.
 - `POST /api/leads/{id}/activities` - Log activity
 - `GET /api/leads/{id}/activities` - Get activity timeline
 - `GET /api/leads/{id}/status-history` - Get status change history
+- `DELETE /api/leads/{id}` - Permanently remove junk/spam (NEW, CONTACT_ATTEMPTED, or ENGAGED only; Director/Sales Manager; does not count as LOST)
 
 ### Webhooks
 - `POST /api/webhooks/leads` - Create lead via webhook (API key authentication)
