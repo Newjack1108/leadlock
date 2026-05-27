@@ -594,6 +594,14 @@ class Quote(SQLModel, table=True):
     include_available_optional_extras: bool = Field(default=False)  # Show extras not on quote in customer view/PDF
     include_delivery_installation_contact_note: bool = Field(default=False)  # Footer note re delivery/install contact
     fulfillment_method: QuoteFulfillmentMethod = Field(default=QuoteFulfillmentMethod.DELIVERY)
+    use_alternate_delivery_address: bool = Field(default=False)
+    delivery_address_line1: Optional[str] = None
+    delivery_address_line2: Optional[str] = None
+    delivery_city: Optional[str] = None
+    delivery_county: Optional[str] = None
+    delivery_postcode: Optional[str] = None
+    delivery_country: Optional[str] = Field(default="United Kingdom")
+    delivery_location_notes: Optional[str] = None
 
     # Opportunity management fields
     opportunity_stage: Optional["OpportunityStage"] = Field(default=None)
@@ -908,6 +916,14 @@ class Order(SQLModel, table=True):
     # One-way drive time (hours); round-trip sent to production webhook is 2× this when set
     travel_time_hours_one_way: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(10, 4)))
     fulfillment_method: QuoteFulfillmentMethod = Field(default=QuoteFulfillmentMethod.DELIVERY)
+    use_alternate_delivery_address: bool = Field(default=False)
+    delivery_address_line1: Optional[str] = None
+    delivery_address_line2: Optional[str] = None
+    delivery_city: Optional[str] = None
+    delivery_county: Optional[str] = None
+    delivery_postcode: Optional[str] = None
+    delivery_country: Optional[str] = Field(default="United Kingdom")
+    delivery_location_notes: Optional[str] = None
 
     # Relationships
     quote: "Quote" = Relationship(back_populates="order")

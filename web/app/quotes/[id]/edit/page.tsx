@@ -58,6 +58,7 @@ import {
 import { calculateTotalQuoteDeliveryBoxes } from '@/lib/quoteDeliveryBoxes';
 import { useDraftAutosave } from '@/hooks/useDraftAutosave';
 import DeliveryInstallEstimatePanel from '@/components/quotes/DeliveryInstallEstimatePanel';
+import DeliveryLocationFields from '@/components/quotes/DeliveryLocationFields';
 import { Plus, Trash2, ArrowLeft, X, ChevronDown, ChevronUp, Send, FileSearch } from 'lucide-react';
 import DraftConfiguratorLink from '@/components/configurator/DraftConfiguratorLink';
 import RequestDiscountDialog from '@/components/RequestDiscountDialog';
@@ -145,6 +146,14 @@ function EditQuoteContent() {
   const [includeDeliveryInstallationContactNote, setIncludeDeliveryInstallationContactNote] =
     useState(false);
   const [fulfillmentMethod, setFulfillmentMethod] = useState<QuoteFulfillmentMethod>('DELIVERY');
+  const [useAlternateDeliveryAddress, setUseAlternateDeliveryAddress] = useState(false);
+  const [deliveryAddressLine1, setDeliveryAddressLine1] = useState('');
+  const [deliveryAddressLine2, setDeliveryAddressLine2] = useState('');
+  const [deliveryCity, setDeliveryCity] = useState('');
+  const [deliveryCounty, setDeliveryCounty] = useState('');
+  const [deliveryPostcode, setDeliveryPostcode] = useState('');
+  const [deliveryCountry, setDeliveryCountry] = useState('United Kingdom');
+  const [deliveryLocationNotes, setDeliveryLocationNotes] = useState('');
   const [depositAmount, setDepositAmount] = useState<number | ''>('');
   const [companySettings, setCompanySettings] = useState<any>(null);
   const [availableDiscounts, setAvailableDiscounts] = useState<DiscountTemplate[]>([]);
@@ -245,6 +254,14 @@ function EditQuoteContent() {
         quoteData.include_delivery_installation_contact_note ?? false
       );
       setFulfillmentMethod(quoteData.fulfillment_method ?? 'DELIVERY');
+      setUseAlternateDeliveryAddress(quoteData.use_alternate_delivery_address ?? false);
+      setDeliveryAddressLine1(quoteData.delivery_address_line1 ?? '');
+      setDeliveryAddressLine2(quoteData.delivery_address_line2 ?? '');
+      setDeliveryCity(quoteData.delivery_city ?? '');
+      setDeliveryCounty(quoteData.delivery_county ?? '');
+      setDeliveryPostcode(quoteData.delivery_postcode ?? '');
+      setDeliveryCountry(quoteData.delivery_country ?? 'United Kingdom');
+      setDeliveryLocationNotes(quoteData.delivery_location_notes ?? '');
       setDepositAmount(quoteData.deposit_amount ?? '');
       setSelectedDiscountIds(
         (quoteData.discounts ?? [])
@@ -419,7 +436,9 @@ function EditQuoteContent() {
   };
 
   useEffect(() => {
-    const postcode = customer?.postcode?.trim();
+    const postcode = useAlternateDeliveryAddress
+      ? deliveryPostcode.trim()
+      : (customer?.postcode?.trim() ?? '');
     const installHours = calculateTotalInstallationHours();
     const deliveryOnly = deliveryEstimateMode === 'delivery_only';
     const boxCount = deliveryOnly ? calculateTotalDeliveryBoxes() : undefined;
@@ -452,7 +471,7 @@ function EditQuoteContent() {
         if (!cancelled) setDeliveryEstimateLoading(false);
       });
     return () => { cancelled = true; };
-  }, [customer?.postcode, items, productDetails, products, deliveryEstimateMode]);
+  }, [customer?.postcode, useAlternateDeliveryAddress, deliveryPostcode, items, productDetails, products, deliveryEstimateMode]);
 
   const addDeliveryInstallToQuote = () => {
     if (!deliveryEstimate) return;
@@ -514,6 +533,14 @@ function EditQuoteContent() {
         includeAvailableOptionalExtras,
         includeDeliveryInstallationContactNote,
         fulfillmentMethod,
+        useAlternateDeliveryAddress,
+        deliveryAddressLine1,
+        deliveryAddressLine2,
+        deliveryCity,
+        deliveryCounty,
+        deliveryPostcode,
+        deliveryCountry,
+        deliveryLocationNotes,
         depositAmount,
         selectedDiscountIds,
       }),
@@ -527,6 +554,14 @@ function EditQuoteContent() {
       includeAvailableOptionalExtras,
       includeDeliveryInstallationContactNote,
       fulfillmentMethod,
+      useAlternateDeliveryAddress,
+      deliveryAddressLine1,
+      deliveryAddressLine2,
+      deliveryCity,
+      deliveryCounty,
+      deliveryPostcode,
+      deliveryCountry,
+      deliveryLocationNotes,
       depositAmount,
       selectedDiscountIds,
     ]
@@ -544,6 +579,14 @@ function EditQuoteContent() {
         includeAvailableOptionalExtras,
         includeDeliveryInstallationContactNote,
         fulfillmentMethod,
+        useAlternateDeliveryAddress,
+        deliveryAddressLine1,
+        deliveryAddressLine2,
+        deliveryCity,
+        deliveryCounty,
+        deliveryPostcode,
+        deliveryCountry,
+        deliveryLocationNotes,
         depositAmount,
         selectedDiscountIds,
       }),
@@ -557,6 +600,14 @@ function EditQuoteContent() {
       includeAvailableOptionalExtras,
       includeDeliveryInstallationContactNote,
       fulfillmentMethod,
+      useAlternateDeliveryAddress,
+      deliveryAddressLine1,
+      deliveryAddressLine2,
+      deliveryCity,
+      deliveryCounty,
+      deliveryPostcode,
+      deliveryCountry,
+      deliveryLocationNotes,
       depositAmount,
       selectedDiscountIds,
     ]
@@ -1107,16 +1158,41 @@ function EditQuoteContent() {
                     )
                   }
                 />
+                <div className="mt-4 border-t pt-4">
+                  <DeliveryLocationFields
+                    fulfillmentMethod={fulfillmentMethod}
+                    useAlternateDeliveryAddress={useAlternateDeliveryAddress}
+                    onUseAlternateDeliveryAddressChange={setUseAlternateDeliveryAddress}
+                    deliveryAddressLine1={deliveryAddressLine1}
+                    onDeliveryAddressLine1Change={setDeliveryAddressLine1}
+                    deliveryAddressLine2={deliveryAddressLine2}
+                    onDeliveryAddressLine2Change={setDeliveryAddressLine2}
+                    deliveryCity={deliveryCity}
+                    onDeliveryCityChange={setDeliveryCity}
+                    deliveryCounty={deliveryCounty}
+                    onDeliveryCountyChange={setDeliveryCounty}
+                    deliveryPostcode={deliveryPostcode}
+                    onDeliveryPostcodeChange={setDeliveryPostcode}
+                    deliveryCountry={deliveryCountry}
+                    onDeliveryCountryChange={setDeliveryCountry}
+                    deliveryLocationNotes={deliveryLocationNotes}
+                    onDeliveryLocationNotesChange={setDeliveryLocationNotes}
+                  />
+                </div>
               </CardContent>
             </Card>
 
-            {fulfillmentMethod !== 'COLLECTION' && customer?.postcode?.trim() && (
+            {fulfillmentMethod !== 'COLLECTION' &&
+              ((useAlternateDeliveryAddress && deliveryPostcode.trim()) ||
+                (!useAlternateDeliveryAddress && customer?.postcode?.trim())) && (
               <DeliveryInstallEstimatePanel
                 estimate={deliveryEstimate}
                 mode={deliveryEstimateMode}
                 loading={deliveryEstimateLoading}
                 error={deliveryEstimateError}
-                customerPostcode={customer.postcode}
+                customerPostcode={
+                  useAlternateDeliveryAddress ? deliveryPostcode : customer?.postcode ?? ''
+                }
                 companySettings={companySettings}
                 installHours={calculateTotalInstallationHours()}
                 hasDeliveryLine={hasDeliveryInstallLine(items)}

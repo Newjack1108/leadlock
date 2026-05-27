@@ -1544,6 +1544,14 @@ class QuoteCreate(BaseModel):
     include_available_optional_extras: bool = False  # Show extras not on quote in customer view/PDF
     include_delivery_installation_contact_note: bool = False  # Footer re delivery/install contact
     fulfillment_method: QuoteFulfillmentMethod = QuoteFulfillmentMethod.DELIVERY
+    use_alternate_delivery_address: bool = False
+    delivery_address_line1: Optional[str] = None
+    delivery_address_line2: Optional[str] = None
+    delivery_city: Optional[str] = None
+    delivery_county: Optional[str] = None
+    delivery_postcode: Optional[str] = None
+    delivery_country: Optional[str] = "United Kingdom"
+    delivery_location_notes: Optional[str] = None
     # When True, skip QUALIFIED→QUOTED until POST /quotes/{id}/apply-qualified-to-quoted (e.g. placeholder bootstrap draft)
     defer_qualified_to_quoted_transition: bool = False
 
@@ -1561,6 +1569,14 @@ class QuoteDraftUpdate(BaseModel):
     include_available_optional_extras: Optional[bool] = None  # Show extras not on quote in customer view/PDF
     include_delivery_installation_contact_note: Optional[bool] = None  # Footer re delivery/install contact
     fulfillment_method: Optional[QuoteFulfillmentMethod] = None
+    use_alternate_delivery_address: Optional[bool] = None
+    delivery_address_line1: Optional[str] = None
+    delivery_address_line2: Optional[str] = None
+    delivery_city: Optional[str] = None
+    delivery_county: Optional[str] = None
+    delivery_postcode: Optional[str] = None
+    delivery_country: Optional[str] = None
+    delivery_location_notes: Optional[str] = None
 
 
 class QuoteUpdate(BaseModel):
@@ -1629,6 +1645,14 @@ class QuoteResponse(BaseModel):
     include_available_optional_extras: bool = False  # Show extras not on quote in customer view/PDF
     include_delivery_installation_contact_note: bool = False  # Footer re delivery/install contact
     fulfillment_method: QuoteFulfillmentMethod = QuoteFulfillmentMethod.DELIVERY
+    use_alternate_delivery_address: bool = False
+    delivery_address_line1: Optional[str] = None
+    delivery_address_line2: Optional[str] = None
+    delivery_city: Optional[str] = None
+    delivery_county: Optional[str] = None
+    delivery_postcode: Optional[str] = None
+    delivery_country: Optional[str] = None
+    delivery_location_notes: Optional[str] = None
     total_open_count: int = 0  # Total times quote view link was opened (across all sends)
     order_id: Optional[int] = None  # Order ID when quote is accepted (for View order link)
     customer_last_interacted_at: Optional[datetime] = None  # Last Activity date for this customer
@@ -1723,6 +1747,13 @@ class PublicQuoteLayoutResponse(BaseModel):
     boxes: List[PublicLayoutBoxResponse] = Field(default_factory=list)
 
 
+class PublicQuoteDeliveryLocationResponse(BaseModel):
+    """Delivery location shown on public quote view when alternate address is set."""
+    address: str
+    postcode: str
+    notes: Optional[str] = None
+
+
 class PublicQuoteViewResponse(BaseModel):
     """Quote payload for public view page (no auth)."""
     quote_number: str
@@ -1744,6 +1775,7 @@ class PublicQuoteViewResponse(BaseModel):
     available_optional_extras: Optional[List[AvailableExtraResponse]] = None
     delivery_installation_contact_note: Optional[str] = None  # Full text when quote opts in
     fulfillment_method: QuoteFulfillmentMethod = QuoteFulfillmentMethod.DELIVERY
+    delivery_location: Optional[PublicQuoteDeliveryLocationResponse] = None
     layout: Optional[PublicQuoteLayoutResponse] = None
 
 
@@ -1839,6 +1871,14 @@ class OrderUpdate(BaseModel):
     installation_completed: Optional[bool] = None
     notes: Optional[str] = None
     travel_time_hours_one_way: Optional[Decimal] = None
+    use_alternate_delivery_address: Optional[bool] = None
+    delivery_address_line1: Optional[str] = None
+    delivery_address_line2: Optional[str] = None
+    delivery_city: Optional[str] = None
+    delivery_county: Optional[str] = None
+    delivery_postcode: Optional[str] = None
+    delivery_country: Optional[str] = None
+    delivery_location_notes: Optional[str] = None
 
 
 class AccessSheetResponse(BaseModel):
@@ -1875,6 +1915,14 @@ class OrderResponse(BaseModel):
     xero_invoice_id: Optional[str] = None
     travel_time_hours_one_way: Optional[Decimal] = None
     fulfillment_method: QuoteFulfillmentMethod = QuoteFulfillmentMethod.DELIVERY
+    use_alternate_delivery_address: bool = False
+    delivery_address_line1: Optional[str] = None
+    delivery_address_line2: Optional[str] = None
+    delivery_city: Optional[str] = None
+    delivery_county: Optional[str] = None
+    delivery_postcode: Optional[str] = None
+    delivery_country: Optional[str] = None
+    delivery_location_notes: Optional[str] = None
     is_ninox_origin: bool = False
     items: List[OrderItemResponse] = []
     access_sheet: Optional[AccessSheetResponse] = None

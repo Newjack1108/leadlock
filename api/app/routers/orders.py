@@ -21,6 +21,13 @@ from app.models import (
     QuoteFulfillmentMethod,
 )
 from app.auth import get_current_user
+from app.delivery_location import (
+    assert_alternate_delivery_valid,
+    build_delivery_address,
+    delivery_location_response_fields,
+    has_full_delivery_address,
+    sync_delivery_location_from_payload,
+)
 from app.schemas import (
     OrderResponse,
     OrderItemResponse,
@@ -167,6 +174,7 @@ def build_order_response(order: Order, order_items: List[OrderItem], session: Se
         xero_invoice_id=order.xero_invoice_id,
         travel_time_hours_one_way=order.travel_time_hours_one_way,
         fulfillment_method=getattr(order, "fulfillment_method", QuoteFulfillmentMethod.DELIVERY),
+        **delivery_location_response_fields(order),
         is_ninox_origin=is_ninox_origin,
         items=[
             OrderItemResponse(
@@ -262,8 +270,29 @@ async def update_order(
         for field in (*_PAYMENT_FIELDS, *_INSTALLATION_FIELDS)
     }
     update_dict = order_data.dict(exclude_unset=True)
+    delivery_field_names = {
+        "use_alternate_delivery_address",
+        "delivery_address_line1",
+        "delivery_address_line2",
+        "delivery_city",
+        "delivery_county",
+        "delivery_postcode",
+        "delivery_country",
+        "delivery_location_notes",
+    }
+    has_delivery_update = bool(delivery_field_names.intersection(update_dict))
     for field, value in update_dict.items():
-        setattr(order, field, value)
+        if field not in delivery_field_names:
+            setattr(order, field, value)
+    if has_delivery_update:
+        sync_delivery_location_from_payload(order, order_data, partial=True)
+        assert_alternate_delivery_valid(
+            order.use_alternate_delivery_address,
+            getattr(order, "fulfillment_method", QuoteFulfillmentMethod.DELIVERY),
+            order.delivery_address_line1,
+            order.delivery_city,
+            order.delivery_postcode,
+        )
     # Assign invoice_number when first payment is recorded
     if order.invoice_number is None and (order.deposit_paid or order.paid_in_full):
         order.invoice_number = generate_invoice_number(session)
@@ -528,6 +557,19 @@ def _customer_has_full_address(customer: Customer) -> bool:
     return bool(line1 and city and postcode)
 
 
+def _order_has_address_for_production(order: Order, customer: Customer) -> bool:
+    """True when order has a valid address for production (CRM or alternate delivery)."""
+    is_collection = (
+        getattr(order, "fulfillment_method", QuoteFulfillmentMethod.DELIVERY)
+        == QuoteFulfillmentMethod.COLLECTION
+    )
+    if is_collection:
+        return True
+    if getattr(order, "use_alternate_delivery_address", False):
+        return has_full_delivery_address(order)
+    return _customer_has_full_address(customer)
+
+
 @router.post("/{order_id}/send-to-production")
 async def send_to_production(
     order_id: int,
@@ -561,10 +603,13 @@ async def send_to_production(
         getattr(order, "fulfillment_method", QuoteFulfillmentMethod.DELIVERY)
         == QuoteFulfillmentMethod.COLLECTION
     )
-    if not is_collection and not _customer_has_full_address(customer):
+    if not is_collection and not _order_has_address_for_production(order, customer):
         raise HTTPException(
             status_code=400,
-            detail="Customer must have address line 1, city, and postcode before sending to production.",
+            detail=(
+                "Customer must have address line 1, city, and postcode, or set a complete "
+                "delivery location on the order before sending to production."
+            ),
         )
 
     order_items = list(
@@ -589,6 +634,24 @@ async def send_to_production(
             "number_of_boxes": int(number_of_boxes),
         })
 
+    use_alternate = getattr(order, "use_alternate_delivery_address", False) and not is_collection
+    if use_alternate:
+        routing_address = build_delivery_address(order)
+        routing_postcode = order.delivery_postcode or ""
+    else:
+        routing_address = _build_customer_address(customer)
+        routing_postcode = customer.postcode or ""
+
+    production_notes = order.notes or ""
+    delivery_notes = (getattr(order, "delivery_location_notes", None) or "").strip()
+    if delivery_notes:
+        notes_prefix = f"Delivery location notes: {delivery_notes}"
+        production_notes = (
+            f"{production_notes}\n\n{notes_prefix}".strip()
+            if production_notes.strip()
+            else notes_prefix
+        )
+
     payload = {
         "order_number": order.order_number,
         "order_id": order.id,
@@ -596,8 +659,8 @@ async def send_to_production(
             order, "fulfillment_method", QuoteFulfillmentMethod.DELIVERY
         ).value.lower(),
         "customer_name": customer.name,
-        "customer_postcode": customer.postcode or "",
-        "customer_address": _build_customer_address(customer),
+        "customer_postcode": routing_postcode,
+        "customer_address": routing_address,
         "customer_email": customer.email or "",
         "customer_phone": customer.phone or "",
         "items": items_payload,
@@ -605,8 +668,12 @@ async def send_to_production(
         "currency": order.currency,
         "installation_booked": order.installation_booked,
         "created_at": order.created_at.isoformat() if order.created_at else None,
-        "notes": order.notes or "",
+        "notes": production_notes,
     }
+    if use_alternate:
+        payload["address_is_delivery_location"] = True
+        payload["delivery_location_notes"] = delivery_notes
+        payload["crm_customer_address"] = _build_customer_address(customer)
     if (
         not is_collection
         and order.travel_time_hours_one_way is not None

@@ -67,6 +67,14 @@ export type QuoteDraftPayload = {
   include_available_optional_extras?: boolean;
   include_delivery_installation_contact_note?: boolean;
   fulfillment_method?: QuoteFulfillmentMethod;
+  use_alternate_delivery_address?: boolean;
+  delivery_address_line1?: string;
+  delivery_address_line2?: string;
+  delivery_city?: string;
+  delivery_county?: string;
+  delivery_postcode?: string;
+  delivery_country?: string;
+  delivery_location_notes?: string;
 };
 
 function isValidLine(item: QuoteItemCreate): boolean {
@@ -87,6 +95,14 @@ export interface BuildDraftPayloadInput {
   includeAvailableOptionalExtras: boolean;
   includeDeliveryInstallationContactNote: boolean;
   fulfillmentMethod: QuoteFulfillmentMethod;
+  useAlternateDeliveryAddress: boolean;
+  deliveryAddressLine1: string;
+  deliveryAddressLine2: string;
+  deliveryCity: string;
+  deliveryCounty: string;
+  deliveryPostcode: string;
+  deliveryCountry: string;
+  deliveryLocationNotes: string;
   depositAmount: number | '';
   selectedDiscountIds: number[];
 }
@@ -102,6 +118,14 @@ export function buildUpdateDraftPayload(input: BuildDraftPayloadInput): QuoteDra
     includeAvailableOptionalExtras,
     includeDeliveryInstallationContactNote,
     fulfillmentMethod,
+    useAlternateDeliveryAddress,
+    deliveryAddressLine1,
+    deliveryAddressLine2,
+    deliveryCity,
+    deliveryCounty,
+    deliveryPostcode,
+    deliveryCountry,
+    deliveryLocationNotes,
     depositAmount,
     selectedDiscountIds,
   } = input;
@@ -174,6 +198,14 @@ export function buildUpdateDraftPayload(input: BuildDraftPayloadInput): QuoteDra
     include_available_optional_extras: includeAvailableOptionalExtras,
     include_delivery_installation_contact_note: includeDeliveryInstallationContactNote,
     fulfillment_method: fulfillmentMethod,
+    use_alternate_delivery_address: useAlternateDeliveryAddress,
+    delivery_address_line1: useAlternateDeliveryAddress ? deliveryAddressLine1.trim() || undefined : undefined,
+    delivery_address_line2: useAlternateDeliveryAddress ? deliveryAddressLine2.trim() || undefined : undefined,
+    delivery_city: useAlternateDeliveryAddress ? deliveryCity.trim() || undefined : undefined,
+    delivery_county: useAlternateDeliveryAddress ? deliveryCounty.trim() || undefined : undefined,
+    delivery_postcode: useAlternateDeliveryAddress ? deliveryPostcode.trim() || undefined : undefined,
+    delivery_country: useAlternateDeliveryAddress ? deliveryCountry.trim() || 'United Kingdom' : undefined,
+    delivery_location_notes: useAlternateDeliveryAddress ? deliveryLocationNotes.trim() || undefined : undefined,
   };
 
   if (validUntil) {
@@ -215,6 +247,14 @@ export function buildPlaceholderOnlyDraftPayloadFromQuote(quote: Quote): QuoteDr
     include_available_optional_extras: quote.include_available_optional_extras,
     include_delivery_installation_contact_note: quote.include_delivery_installation_contact_note,
     fulfillment_method: quote.fulfillment_method ?? 'DELIVERY',
+    use_alternate_delivery_address: quote.use_alternate_delivery_address ?? false,
+    delivery_address_line1: quote.delivery_address_line1 ?? undefined,
+    delivery_address_line2: quote.delivery_address_line2 ?? undefined,
+    delivery_city: quote.delivery_city ?? undefined,
+    delivery_county: quote.delivery_county ?? undefined,
+    delivery_postcode: quote.delivery_postcode ?? undefined,
+    delivery_country: quote.delivery_country ?? 'United Kingdom',
+    delivery_location_notes: quote.delivery_location_notes ?? undefined,
   };
 
   if (quote.valid_until) {

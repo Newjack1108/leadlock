@@ -58,6 +58,12 @@ from app.schemas import (
     QuoteDiscountResponse, CustomerHistoryEventType
 )
 from app.order_audit import record_order_audit_event
+from app.delivery_location import (
+    assert_alternate_delivery_valid,
+    copy_delivery_location_fields,
+    delivery_location_response_fields,
+    sync_delivery_location_from_payload,
+)
 from app.quote_email_service import send_quote_email
 from app.routers.emails import (
     MAX_ATTACHMENT_SIZE,
@@ -515,6 +521,7 @@ def build_quote_response(
         include_available_optional_extras=getattr(quote, "include_available_optional_extras", False),
         include_delivery_installation_contact_note=getattr(quote, "include_delivery_installation_contact_note", False),
         fulfillment_method=getattr(quote, "fulfillment_method", QuoteFulfillmentMethod.DELIVERY),
+        **delivery_location_response_fields(quote),
         total_open_count=total_open_count,
         order_id=order_id,
         customer_last_interacted_at=customer_last_interacted_at,
@@ -760,6 +767,7 @@ def create_order_from_quote(quote: Quote, session: Session, created_by_id: int) 
         created_by_id=created_by_id,
         fulfillment_method=getattr(quote, "fulfillment_method", QuoteFulfillmentMethod.DELIVERY),
     )
+    copy_delivery_location_fields(quote, order)
     session.add(order)
     session.flush()
     quote_items = session.exec(
@@ -834,6 +842,13 @@ async def create_quote(
             quote_data, "fulfillment_method", QuoteFulfillmentMethod.DELIVERY
         )
         _assert_collection_fulfillment_items_valid(fulfillment_method, quote_data.items)
+        assert_alternate_delivery_valid(
+            quote_data.use_alternate_delivery_address,
+            fulfillment_method,
+            quote_data.delivery_address_line1,
+            quote_data.delivery_city,
+            quote_data.delivery_postcode,
+        )
         
         # Calculate totals
         subtotal = Decimal(0)
@@ -898,6 +913,14 @@ async def create_quote(
             include_available_optional_extras=getattr(quote_data, "include_available_optional_extras", False),
             include_delivery_installation_contact_note=getattr(quote_data, "include_delivery_installation_contact_note", False),
             fulfillment_method=fulfillment_method,
+            use_alternate_delivery_address=quote_data.use_alternate_delivery_address,
+            delivery_address_line1=quote_data.delivery_address_line1 if quote_data.use_alternate_delivery_address else None,
+            delivery_address_line2=quote_data.delivery_address_line2 if quote_data.use_alternate_delivery_address else None,
+            delivery_city=quote_data.delivery_city if quote_data.use_alternate_delivery_address else None,
+            delivery_county=quote_data.delivery_county if quote_data.use_alternate_delivery_address else None,
+            delivery_postcode=quote_data.delivery_postcode if quote_data.use_alternate_delivery_address else None,
+            delivery_country=quote_data.delivery_country if quote_data.use_alternate_delivery_address else "United Kingdom",
+            delivery_location_notes=quote_data.delivery_location_notes if quote_data.use_alternate_delivery_address else None,
         )
         session.add(quote)
         session.commit()
@@ -1442,6 +1465,14 @@ def _build_duplicate_draft_payload_from_source(source: Quote, session: Session) 
         include_available_optional_extras=source.include_available_optional_extras,
         include_delivery_installation_contact_note=source.include_delivery_installation_contact_note,
         fulfillment_method=getattr(source, "fulfillment_method", QuoteFulfillmentMethod.DELIVERY),
+        use_alternate_delivery_address=getattr(source, "use_alternate_delivery_address", False),
+        delivery_address_line1=getattr(source, "delivery_address_line1", None),
+        delivery_address_line2=getattr(source, "delivery_address_line2", None),
+        delivery_city=getattr(source, "delivery_city", None),
+        delivery_county=getattr(source, "delivery_county", None),
+        delivery_postcode=getattr(source, "delivery_postcode", None),
+        delivery_country=getattr(source, "delivery_country", None),
+        delivery_location_notes=getattr(source, "delivery_location_notes", None),
     )
 
 
@@ -1761,6 +1792,14 @@ def _update_draft_quote_impl(
         quote.fulfillment_method = quote_data.fulfillment_method
     effective_fulfillment = getattr(quote, "fulfillment_method", QuoteFulfillmentMethod.DELIVERY)
     _assert_collection_fulfillment_items_valid(effective_fulfillment, quote_data.items)
+    sync_delivery_location_from_payload(quote, quote_data, partial=True)
+    assert_alternate_delivery_valid(
+        quote.use_alternate_delivery_address,
+        effective_fulfillment,
+        quote.delivery_address_line1,
+        quote.delivery_city,
+        quote.delivery_postcode,
+    )
     
     # Delete existing items and discounts for this quote (single transaction; flush for FK order).
     # 1. Delete discounts first (QuoteDiscount.quote_item_id references QuoteItem)

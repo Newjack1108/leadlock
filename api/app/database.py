@@ -638,6 +638,29 @@ def create_db_and_tables():
                 except Exception as e:
                     if "already exists" not in str(e).lower():
                         print(f"Warning adding fulfillment_method to customer_order: {e}", file=sys.stderr, flush=True)
+            order_columns = [col["name"] for col in inspector.get_columns("customer_order")]
+            _order_delivery_cols = [
+                ("use_alternate_delivery_address", "BOOLEAN DEFAULT FALSE"),
+                ("delivery_address_line1", "TEXT"),
+                ("delivery_address_line2", "TEXT"),
+                ("delivery_city", "TEXT"),
+                ("delivery_county", "TEXT"),
+                ("delivery_postcode", "TEXT"),
+                ("delivery_country", "TEXT DEFAULT 'United Kingdom'"),
+                ("delivery_location_notes", "TEXT"),
+            ]
+            for col_name, col_type in _order_delivery_cols:
+                if col_name not in order_columns:
+                    try:
+                        with engine.begin() as conn:
+                            conn.execute(
+                                text(f"ALTER TABLE customer_order ADD COLUMN {col_name} {col_type}")
+                            )
+                        print(f"Added {col_name} to customer_order", file=sys.stderr, flush=True)
+                    except Exception as e:
+                        if "already exists" not in str(e).lower():
+                            print(f"Warning adding {col_name} to customer_order: {e}", file=sys.stderr, flush=True)
+                    order_columns = [col["name"] for col in inspector.get_columns("customer_order")]
 
         # Step 0a3: Create access_sheet_request table if missing
         has_access_sheet_table = inspector.has_table("accesssheetrequest")
@@ -1259,6 +1282,29 @@ def create_db_and_tables():
                     error_str = str(col_error).lower()
                     if "already exists" not in error_str and "duplicate" not in error_str:
                         print(f"Warning: Could not add fulfillment_method column: {col_error}", file=sys.stderr, flush=True)
+
+            quote_columns = [col["name"] for col in inspector.get_columns("quote")]
+            _quote_delivery_cols = [
+                ("use_alternate_delivery_address", "BOOLEAN DEFAULT FALSE"),
+                ("delivery_address_line1", "TEXT"),
+                ("delivery_address_line2", "TEXT"),
+                ("delivery_city", "TEXT"),
+                ("delivery_county", "TEXT"),
+                ("delivery_postcode", "TEXT"),
+                ("delivery_country", "TEXT DEFAULT 'United Kingdom'"),
+                ("delivery_location_notes", "TEXT"),
+            ]
+            for col_name, col_type in _quote_delivery_cols:
+                if col_name not in quote_columns:
+                    try:
+                        with engine.begin() as conn:
+                            conn.execute(text(f"ALTER TABLE quote ADD COLUMN {col_name} {col_type}"))
+                        print(f"Added {col_name} to quote table", file=sys.stderr, flush=True)
+                    except Exception as col_error:
+                        error_str = str(col_error).lower()
+                        if "already exists" not in error_str and "duplicate" not in error_str:
+                            print(f"Warning: Could not add {col_name} to quote: {col_error}", file=sys.stderr, flush=True)
+                    quote_columns = [col["name"] for col in inspector.get_columns("quote")]
 
             # Add lead_id to quote table (quote generated from lead)
             quote_columns = [col['name'] for col in inspector.get_columns("quote")]

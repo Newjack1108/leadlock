@@ -34,11 +34,13 @@ from app.schemas import (
     PublicQuoteViewItemResponse,
     PublicQuoteCompanyDisplay,
     PublicQuoteDiscountLineResponse,
+    PublicQuoteDeliveryLocationResponse,
     AccessSheetContextResponse,
     AccessSheetSubmitRequest,
     CustomerHistoryEventType,
 )
 from app.constants import VAT_RATE_DECIMAL, DELIVERY_INSTALLATION_CONTACT_NOTE
+from app.delivery_location import build_delivery_address
 from app.order_audit import record_order_audit_event
 from app.quote_pdf_service import aggregate_quote_discount_lines, generate_quote_pdf
 from app.temperature_service import recompute_quote_temperature
@@ -246,6 +248,19 @@ def get_public_quote_view(
             else None
         ),
         fulfillment_method=getattr(quote, "fulfillment_method", QuoteFulfillmentMethod.DELIVERY),
+        delivery_location=(
+            PublicQuoteDeliveryLocationResponse(
+                address=build_delivery_address(quote),
+                postcode=(quote.delivery_postcode or "").strip(),
+                notes=(quote.delivery_location_notes or "").strip() or None,
+            )
+            if (
+                getattr(quote, "use_alternate_delivery_address", False)
+                and getattr(quote, "fulfillment_method", QuoteFulfillmentMethod.DELIVERY)
+                != QuoteFulfillmentMethod.COLLECTION
+            )
+            else None
+        ),
         layout=build_layout_for_public_view(session, quote.id),
     )
 

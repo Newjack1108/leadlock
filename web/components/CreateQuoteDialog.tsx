@@ -25,6 +25,7 @@ import { Customer, Product, QuoteFulfillmentMethod, QuoteItemCreate } from '@/li
 import { toast } from 'sonner';
 import { Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
 import FulfillmentMethodField from '@/components/quotes/FulfillmentMethodField';
+import DeliveryLocationFields from '@/components/quotes/DeliveryLocationFields';
 
 interface CreateQuoteDialogProps {
   open: boolean;
@@ -59,6 +60,14 @@ export default function CreateQuoteDialog({
   const [includeDeliveryInstallationContactNote, setIncludeDeliveryInstallationContactNote] =
     useState(false);
   const [fulfillmentMethod, setFulfillmentMethod] = useState<QuoteFulfillmentMethod>('DELIVERY');
+  const [useAlternateDeliveryAddress, setUseAlternateDeliveryAddress] = useState(false);
+  const [deliveryAddressLine1, setDeliveryAddressLine1] = useState('');
+  const [deliveryAddressLine2, setDeliveryAddressLine2] = useState('');
+  const [deliveryCity, setDeliveryCity] = useState('');
+  const [deliveryCounty, setDeliveryCounty] = useState('');
+  const [deliveryPostcode, setDeliveryPostcode] = useState('');
+  const [deliveryCountry, setDeliveryCountry] = useState('United Kingdom');
+  const [deliveryLocationNotes, setDeliveryLocationNotes] = useState('');
   const [productDetails, setProductDetails] = useState<Record<number, Product>>({});
   const [allOptionalExtras, setAllOptionalExtras] = useState<Product[]>([]);
   const [extraPickerOpen, setExtraPickerOpen] = useState(false);
@@ -301,6 +310,14 @@ export default function CreateQuoteDialog({
       quoteData.include_available_optional_extras = includeAvailableOptionalExtras;
       quoteData.include_delivery_installation_contact_note = includeDeliveryInstallationContactNote;
       quoteData.fulfillment_method = fulfillmentMethod;
+      quoteData.use_alternate_delivery_address = useAlternateDeliveryAddress;
+      quoteData.delivery_address_line1 = useAlternateDeliveryAddress ? deliveryAddressLine1.trim() || undefined : undefined;
+      quoteData.delivery_address_line2 = useAlternateDeliveryAddress ? deliveryAddressLine2.trim() || undefined : undefined;
+      quoteData.delivery_city = useAlternateDeliveryAddress ? deliveryCity.trim() || undefined : undefined;
+      quoteData.delivery_county = useAlternateDeliveryAddress ? deliveryCounty.trim() || undefined : undefined;
+      quoteData.delivery_postcode = useAlternateDeliveryAddress ? deliveryPostcode.trim() || undefined : undefined;
+      quoteData.delivery_country = useAlternateDeliveryAddress ? deliveryCountry.trim() || 'United Kingdom' : undefined;
+      quoteData.delivery_location_notes = useAlternateDeliveryAddress ? deliveryLocationNotes.trim() || undefined : undefined;
 
       await createQuote(quoteData);
       toast.success('Quote created successfully');
@@ -645,6 +662,25 @@ export default function CreateQuoteDialog({
               <FulfillmentMethodField
                 value={fulfillmentMethod}
                 onChange={setFulfillmentMethod}
+              />
+              <DeliveryLocationFields
+                fulfillmentMethod={fulfillmentMethod}
+                useAlternateDeliveryAddress={useAlternateDeliveryAddress}
+                onUseAlternateDeliveryAddressChange={setUseAlternateDeliveryAddress}
+                deliveryAddressLine1={deliveryAddressLine1}
+                onDeliveryAddressLine1Change={setDeliveryAddressLine1}
+                deliveryAddressLine2={deliveryAddressLine2}
+                onDeliveryAddressLine2Change={setDeliveryAddressLine2}
+                deliveryCity={deliveryCity}
+                onDeliveryCityChange={setDeliveryCity}
+                deliveryCounty={deliveryCounty}
+                onDeliveryCountyChange={setDeliveryCounty}
+                deliveryPostcode={deliveryPostcode}
+                onDeliveryPostcodeChange={setDeliveryPostcode}
+                deliveryCountry={deliveryCountry}
+                onDeliveryCountryChange={setDeliveryCountry}
+                deliveryLocationNotes={deliveryLocationNotes}
+                onDeliveryLocationNotesChange={setDeliveryLocationNotes}
               />
               {fulfillmentMethod !== 'COLLECTION' && (
                 <div className="flex items-center gap-2">

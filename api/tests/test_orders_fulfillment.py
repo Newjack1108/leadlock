@@ -152,6 +152,12 @@ def test_create_order_from_quote_copies_fulfillment(engine, seeded_session):
         currency="GBP",
         created_by_id=user.id,
         fulfillment_method=QuoteFulfillmentMethod.COLLECTION,
+        use_alternate_delivery_address=True,
+        delivery_address_line1="Delivery Lane 1",
+        delivery_city="Delivery City",
+        delivery_postcode="DL1 1AA",
+        delivery_country="United Kingdom",
+        delivery_location_notes="Use side gate",
     )
     session.add(quote2)
     session.commit()
@@ -161,6 +167,11 @@ def test_create_order_from_quote_copies_fulfillment(engine, seeded_session):
     session.commit()
     session.refresh(created)
     assert created.fulfillment_method == QuoteFulfillmentMethod.COLLECTION
+    assert created.use_alternate_delivery_address is True
+    assert created.delivery_address_line1 == "Delivery Lane 1"
+    assert created.delivery_city == "Delivery City"
+    assert created.delivery_postcode == "DL1 1AA"
+    assert created.delivery_location_notes == "Use side gate"
 
 
 def test_collection_quote_rejects_delivery_line(client, seeded_session):
@@ -235,3 +246,74 @@ def test_send_to_production_collection_skips_address_and_includes_fulfillment(cl
     assert res.status_code == 200
     assert captured["payload"]["fulfillment_method"] == "collection"
     assert "travel_time_hours_round_trip" not in captured["payload"]
+
+
+@patch.dict(os.environ, {"PRODUCTION_APP_API_URL": "https://prod.example", "PRODUCTION_APP_API_KEY": "key"})
+def test_send_to_production_uses_alternate_delivery_address_and_flags_location(client, seeded_session):
+    session, user, order, customer, quote = seeded_session
+
+    order.fulfillment_method = QuoteFulfillmentMethod.DELIVERY
+    order.use_alternate_delivery_address = True
+    order.delivery_address_line1 = "Delivery line 1"
+    order.delivery_city = "Delivery City"
+    order.delivery_postcode = "DL2 2BB"
+    order.delivery_country = "United Kingdom"
+    order.delivery_location_notes = "Deliver to rear gate"
+    session.add(order)
+    session.commit()
+
+    captured = {}
+
+    class FakeResponse:
+        status_code = 200
+        content = b'{"ok": true}'
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"ok": True}
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def post(self, url, json=None, headers=None):
+            captured["payload"] = json
+            return FakeResponse()
+
+    with patch("app.routers.orders.httpx.AsyncClient", FakeClient):
+        res = client.post(f"/api/orders/{order.id}/send-to-production")
+
+    assert res.status_code == 200
+    payload = captured["payload"]
+    assert payload["customer_postcode"] == "DL2 2BB"
+    assert "Delivery line 1" in payload["customer_address"]
+    assert payload["address_is_delivery_location"] is True
+    assert payload["delivery_location_notes"] == "Deliver to rear gate"
+    assert payload["crm_customer_address"] == "United Kingdom"
+    assert "Delivery location notes: Deliver to rear gate" in payload["notes"]
+
+
+def test_send_to_production_rejects_incomplete_alternate_delivery_address(client, seeded_session):
+    session, user, order, customer, quote = seeded_session
+
+    order.fulfillment_method = QuoteFulfillmentMethod.DELIVERY
+    order.use_alternate_delivery_address = True
+    order.delivery_address_line1 = "Delivery line 1"
+    order.delivery_city = ""
+    order.delivery_postcode = "DL2 2BB"
+    session.add(order)
+    session.commit()
+
+    with patch.dict(os.environ, {"PRODUCTION_APP_API_URL": "https://prod.example", "PRODUCTION_APP_API_KEY": "key"}):
+        res = client.post(f"/api/orders/{order.id}/send-to-production")
+
+    assert res.status_code == 400
+    assert "delivery location" in res.json()["detail"].lower()

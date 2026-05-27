@@ -766,6 +766,28 @@ def generate_quote_pdf(
         if info:
             elements.append(Paragraph(info, normal_style))
     elements.append(Spacer(1, 8))
+
+    if (
+        getattr(quote, "use_alternate_delivery_address", False)
+        and getattr(quote, "fulfillment_method", QuoteFulfillmentMethod.DELIVERY)
+        != QuoteFulfillmentMethod.COLLECTION
+    ):
+        elements.append(Paragraph("Delivery location:", heading_style))
+        delivery_parts = [
+            getattr(quote, "delivery_address_line1", None),
+            getattr(quote, "delivery_address_line2", None),
+            getattr(quote, "delivery_city", None),
+            getattr(quote, "delivery_county", None),
+            getattr(quote, "delivery_postcode", None),
+            getattr(quote, "delivery_country", None),
+        ]
+        delivery_line = ", ".join([p for p in delivery_parts if p])
+        if delivery_line:
+            elements.append(Paragraph(delivery_line, normal_style))
+        delivery_notes = (getattr(quote, "delivery_location_notes", None) or "").strip()
+        if delivery_notes:
+            elements.append(Paragraph(f"Notes: {delivery_notes}", normal_style))
+        elements.append(Spacer(1, 8))
     
     # Quote Items Table (grouped: main items first, then optional extras indented under parent)
     elements.append(Paragraph("Items:", heading_style))

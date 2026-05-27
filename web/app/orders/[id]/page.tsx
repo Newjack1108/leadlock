@@ -6,6 +6,7 @@ import Header from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import api, {
@@ -54,6 +55,14 @@ function customerHasFullAddressForProduction(customer: Customer | null): boolean
   return !!(line1 && city && postcode);
 }
 
+function orderHasFullDeliveryAddress(order: Order | null): boolean {
+  if (!order) return false;
+  const line1 = (order.delivery_address_line1 ?? '').trim();
+  const city = (order.delivery_city ?? '').trim();
+  const postcode = (order.delivery_postcode ?? '').trim();
+  return !!(line1 && city && postcode);
+}
+
 type StatusKey = 'deposit_paid' | 'balance_paid' | 'paid_in_full' | 'installation_booked' | 'installation_completed';
 
 export default function OrderDetailPage() {
@@ -69,6 +78,14 @@ export default function OrderDetailPage() {
   const [sendingAccessSheet, setSendingAccessSheet] = useState(false);
   const [sendingToProduction, setSendingToProduction] = useState(false);
   const [notesDraft, setNotesDraft] = useState('');
+  const [useAlternateDeliveryAddressDraft, setUseAlternateDeliveryAddressDraft] = useState(false);
+  const [deliveryAddressLine1Draft, setDeliveryAddressLine1Draft] = useState('');
+  const [deliveryAddressLine2Draft, setDeliveryAddressLine2Draft] = useState('');
+  const [deliveryCityDraft, setDeliveryCityDraft] = useState('');
+  const [deliveryCountyDraft, setDeliveryCountyDraft] = useState('');
+  const [deliveryPostcodeDraft, setDeliveryPostcodeDraft] = useState('');
+  const [deliveryCountryDraft, setDeliveryCountryDraft] = useState('United Kingdom');
+  const [deliveryLocationNotesDraft, setDeliveryLocationNotesDraft] = useState('');
   const [savingNotes, setSavingNotes] = useState(false);
   const [composeEmailOpen, setComposeEmailOpen] = useState(false);
   const [composeEmailInitialAttachments, setComposeEmailInitialAttachments] = useState<File[]>([]);
@@ -81,8 +98,17 @@ export default function OrderDetailPage() {
   }, [orderId]);
 
   useEffect(() => {
-    if (order) setNotesDraft(order.notes ?? '');
-  }, [order?.id, order?.notes]);
+    if (!order) return;
+    setNotesDraft(order.notes ?? '');
+    setUseAlternateDeliveryAddressDraft(order.use_alternate_delivery_address ?? false);
+    setDeliveryAddressLine1Draft(order.delivery_address_line1 ?? '');
+    setDeliveryAddressLine2Draft(order.delivery_address_line2 ?? '');
+    setDeliveryCityDraft(order.delivery_city ?? '');
+    setDeliveryCountyDraft(order.delivery_county ?? '');
+    setDeliveryPostcodeDraft(order.delivery_postcode ?? '');
+    setDeliveryCountryDraft(order.delivery_country ?? 'United Kingdom');
+    setDeliveryLocationNotesDraft(order.delivery_location_notes ?? '');
+  }, [order]);
 
   const fetchOrder = async () => {
     try {
@@ -229,9 +255,19 @@ export default function OrderDetailPage() {
   const handleSaveOrderNotes = async () => {
     try {
       setSavingNotes(true);
-      const updated = await updateOrder(orderId, { notes: notesDraft });
+      const updated = await updateOrder(orderId, {
+        notes: notesDraft,
+        use_alternate_delivery_address: useAlternateDeliveryAddressDraft,
+        delivery_address_line1: useAlternateDeliveryAddressDraft ? deliveryAddressLine1Draft : null,
+        delivery_address_line2: useAlternateDeliveryAddressDraft ? deliveryAddressLine2Draft : null,
+        delivery_city: useAlternateDeliveryAddressDraft ? deliveryCityDraft : null,
+        delivery_county: useAlternateDeliveryAddressDraft ? deliveryCountyDraft : null,
+        delivery_postcode: useAlternateDeliveryAddressDraft ? deliveryPostcodeDraft : null,
+        delivery_country: useAlternateDeliveryAddressDraft ? deliveryCountryDraft : null,
+        delivery_location_notes: useAlternateDeliveryAddressDraft ? deliveryLocationNotesDraft : null,
+      });
       setOrder(updated);
-      toast.success('Notes saved');
+      toast.success('Production details saved');
     } catch (error: any) {
       toast.error(error.response?.data?.detail || 'Failed to save notes');
     } finally {
@@ -327,7 +363,12 @@ export default function OrderDetailPage() {
   }
 
   const depositSatisfied = !!(order.deposit_paid || order.paid_in_full);
-  const addressComplete = customerHasFullAddressForProduction(customer);
+  const addressComplete =
+    order.fulfillment_method === 'COLLECTION'
+      ? true
+      : order.use_alternate_delivery_address
+        ? orderHasFullDeliveryAddress(order)
+        : customerHasFullAddressForProduction(customer);
   const canSendToProduction = depositSatisfied && addressComplete;
 
   return (
@@ -527,6 +568,32 @@ export default function OrderDetailPage() {
                   ))}
                 </div>
                 <div className="mt-4 pt-4 border-t space-y-2">
+                  <Label className="block">Delivery location for works order</Label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="order-use-alt-delivery"
+                      checked={useAlternateDeliveryAddressDraft}
+                      onChange={(e) => setUseAlternateDeliveryAddressDraft(e.target.checked)}
+                      className="h-4 w-4 rounded border-gray-300"
+                    />
+                    <Label htmlFor="order-use-alt-delivery" className="font-normal cursor-pointer">
+                      Use a different delivery location (sent to production)
+                    </Label>
+                  </div>
+                  {useAlternateDeliveryAddressDraft && (
+                    <div className="grid gap-2 sm:grid-cols-2 rounded-md border p-3">
+                      <Input value={deliveryAddressLine1Draft} onChange={(e) => setDeliveryAddressLine1Draft(e.target.value)} placeholder="Delivery address line 1" className="sm:col-span-2" />
+                      <Input value={deliveryAddressLine2Draft} onChange={(e) => setDeliveryAddressLine2Draft(e.target.value)} placeholder="Delivery address line 2" className="sm:col-span-2" />
+                      <Input value={deliveryCityDraft} onChange={(e) => setDeliveryCityDraft(e.target.value)} placeholder="City" />
+                      <Input value={deliveryCountyDraft} onChange={(e) => setDeliveryCountyDraft(e.target.value)} placeholder="County" />
+                      <Input value={deliveryPostcodeDraft} onChange={(e) => setDeliveryPostcodeDraft(e.target.value)} placeholder="Postcode" />
+                      <Input value={deliveryCountryDraft} onChange={(e) => setDeliveryCountryDraft(e.target.value)} placeholder="Country" />
+                      <Textarea value={deliveryLocationNotesDraft} onChange={(e) => setDeliveryLocationNotesDraft(e.target.value)} placeholder="Delivery location notes" className="sm:col-span-2" rows={3} />
+                    </div>
+                  )}
+                </div>
+                <div className="mt-4 pt-4 border-t space-y-2">
                   <Label htmlFor="order-production-notes">Notes for production</Label>
                   <p className="text-sm text-muted-foreground">
                     Copied from the quote when the order was created. Edit here before sending to production; these
@@ -545,9 +612,22 @@ export default function OrderDetailPage() {
                     variant="secondary"
                     size="sm"
                     onClick={handleSaveOrderNotes}
-                    disabled={savingNotes || notesDraft === (order.notes ?? '')}
+                    disabled={
+                      savingNotes ||
+                      (
+                        notesDraft === (order.notes ?? '') &&
+                        useAlternateDeliveryAddressDraft === (order.use_alternate_delivery_address ?? false) &&
+                        deliveryAddressLine1Draft === (order.delivery_address_line1 ?? '') &&
+                        deliveryAddressLine2Draft === (order.delivery_address_line2 ?? '') &&
+                        deliveryCityDraft === (order.delivery_city ?? '') &&
+                        deliveryCountyDraft === (order.delivery_county ?? '') &&
+                        deliveryPostcodeDraft === (order.delivery_postcode ?? '') &&
+                        deliveryCountryDraft === (order.delivery_country ?? 'United Kingdom') &&
+                        deliveryLocationNotesDraft === (order.delivery_location_notes ?? '')
+                      )
+                    }
                   >
-                    {savingNotes ? 'Saving...' : 'Save notes'}
+                    {savingNotes ? 'Saving...' : 'Save production details'}
                   </Button>
                 </div>
                 <div className="mt-4 pt-4 border-t space-y-2">
@@ -558,7 +638,9 @@ export default function OrderDetailPage() {
                       )}
                       {!addressComplete && (
                         <span>
-                          Customer must have address line 1, city, and postcode.
+                          {order.use_alternate_delivery_address
+                            ? 'Delivery location must have address line 1, city, and postcode.'
+                            : 'Customer must have address line 1, city, and postcode.'}
                           {order.customer_id ? (
                             <>
                               {' '}

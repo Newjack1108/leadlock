@@ -857,6 +857,30 @@ export default function QuoteDetailPage() {
                     {formatDateTime(quote.created_at)}
                   </div>
                 </div>
+                {quote.use_alternate_delivery_address && quote.fulfillment_method !== 'COLLECTION' && (
+                  <div className="pt-3 border-t">
+                    <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
+                      Delivery Location
+                    </div>
+                    <div className="text-sm whitespace-pre-wrap">
+                      {[
+                        quote.delivery_address_line1,
+                        quote.delivery_address_line2,
+                        quote.delivery_city,
+                        quote.delivery_county,
+                        quote.delivery_postcode,
+                        quote.delivery_country,
+                      ]
+                        .filter(Boolean)
+                        .join(', ')}
+                    </div>
+                    {quote.delivery_location_notes && (
+                      <div className="text-xs text-muted-foreground mt-1">
+                        Notes: {quote.delivery_location_notes}
+                      </div>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
 

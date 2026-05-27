@@ -1195,6 +1195,14 @@ export interface Order {
   /** Stored one-way drive time (hours); production webhook sends 2× as round-trip when set */
   travel_time_hours_one_way?: number | null;
   fulfillment_method?: QuoteFulfillmentMethod;
+  use_alternate_delivery_address?: boolean;
+  delivery_address_line1?: string | null;
+  delivery_address_line2?: string | null;
+  delivery_city?: string | null;
+  delivery_county?: string | null;
+  delivery_postcode?: string | null;
+  delivery_country?: string | null;
+  delivery_location_notes?: string | null;
   is_ninox_origin?: boolean;
   items: OrderItem[];
   access_sheet?: AccessSheet | null;
@@ -1275,6 +1283,14 @@ export interface Quote {
   /** Footer note: delivery/installation contact (SMS, email, phone) below totals */
   include_delivery_installation_contact_note?: boolean;
   fulfillment_method?: QuoteFulfillmentMethod;
+  use_alternate_delivery_address?: boolean;
+  delivery_address_line1?: string | null;
+  delivery_address_line2?: string | null;
+  delivery_city?: string | null;
+  delivery_county?: string | null;
+  delivery_postcode?: string | null;
+  delivery_country?: string | null;
+  delivery_location_notes?: string | null;
   total_open_count?: number;
   order_id?: number | null;
   customer_last_interacted_at?: string | null;
@@ -1378,6 +1394,11 @@ export interface PublicQuoteView {
   /** Full message when quote opts in; omitted when disabled */
   delivery_installation_contact_note?: string | null;
   fulfillment_method?: QuoteFulfillmentMethod;
+  delivery_location?: {
+    address: string;
+    postcode: string;
+    notes?: string | null;
+  } | null;
   layout?: PublicQuoteLayout | null;
 }
 
@@ -1393,6 +1414,14 @@ export interface QuoteCreate {
   discount_template_ids?: number[];
   temperature?: QuoteTemperature;
   fulfillment_method?: QuoteFulfillmentMethod;
+  use_alternate_delivery_address?: boolean;
+  delivery_address_line1?: string;
+  delivery_address_line2?: string;
+  delivery_city?: string;
+  delivery_county?: string;
+  delivery_postcode?: string;
+  delivery_country?: string;
+  delivery_location_notes?: string;
 }
 
 export interface DiscountTemplate {

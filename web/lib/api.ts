@@ -1087,6 +1087,14 @@ export const updateOrder = async (
     notes?: string | null;
     /** One-way drive time in hours; production send uses 2× for round-trip */
     travel_time_hours_one_way?: number | null;
+    use_alternate_delivery_address?: boolean;
+    delivery_address_line1?: string | null;
+    delivery_address_line2?: string | null;
+    delivery_city?: string | null;
+    delivery_county?: string | null;
+    delivery_postcode?: string | null;
+    delivery_country?: string | null;
+    delivery_location_notes?: string | null;
   }
 ) => {
   const response = await api.patch(`/api/orders/${orderId}`, data);

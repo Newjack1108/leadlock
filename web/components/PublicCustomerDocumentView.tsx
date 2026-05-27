@@ -156,6 +156,18 @@ export default function PublicCustomerDocumentView() {
               </table>
             </div>
 
+            {data.delivery_location && (
+              <div className="border-t pt-4">
+                <h3 className="font-medium mb-2">Delivery location</h3>
+                <p className="text-sm whitespace-pre-wrap">{data.delivery_location.address}</p>
+                {data.delivery_location.notes && (
+                  <p className="text-sm text-muted-foreground mt-2">
+                    {data.delivery_location.notes}
+                  </p>
+                )}
+              </div>
+            )}
+
             {data.layout && data.layout.boxes.length > 0 && (
               <div className="border-t pt-6 print:break-before-page">
                 <h3 className="font-medium mb-1">Stable layout</h3>
