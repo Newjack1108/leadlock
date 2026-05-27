@@ -24,12 +24,14 @@ from app.models import (
     LeadType,
     ProductCategory,
     InstallationLeadTime,
+    QuoteFulfillmentMethod,
 )
 from app.constants import (
     VAT_RATE_DECIMAL,
     TRACKING_WEBSITE_BASE_URLS,
     DELIVERY_INSTALLATION_CONTACT_NOTE,
     QUOTE_BALANCE_BEFORE_DELIVERY_NOTE,
+    QUOTE_BALANCE_BEFORE_COLLECTION_NOTE,
 )
 from sqlmodel import Session, select
 import os
@@ -692,6 +694,8 @@ def generate_quote_pdf(
     ]
     if quote.valid_until:
         quote_details.append(["Valid Until:", quote.valid_until.strftime("%d %B %Y")])
+    if getattr(quote, "fulfillment_method", QuoteFulfillmentMethod.DELIVERY) == QuoteFulfillmentMethod.COLLECTION:
+        quote_details.append(["Fulfillment:", "Collection"])
     brand_lead_type = _resolve_quote_brand_lead_type(quote, quote_items, session)
     resolved_lead_time = _installation_lead_time_for_settings(company_settings, brand_lead_type)
     if resolved_lead_time:
@@ -881,13 +885,22 @@ def generate_quote_pdf(
         spaceBefore=8,
         leading=12,
     )
+    is_collection = (
+        getattr(quote, "fulfillment_method", QuoteFulfillmentMethod.DELIVERY)
+        == QuoteFulfillmentMethod.COLLECTION
+    )
+    balance_note = (
+        QUOTE_BALANCE_BEFORE_COLLECTION_NOTE
+        if is_collection
+        else QUOTE_BALANCE_BEFORE_DELIVERY_NOTE
+    )
     elements.append(
         Paragraph(
-            QUOTE_BALANCE_BEFORE_DELIVERY_NOTE.replace("&", "&amp;"),
+            balance_note.replace("&", "&amp;"),
             balance_before_delivery_style,
         )
     )
-    if getattr(quote, "include_delivery_installation_contact_note", False):
+    if getattr(quote, "include_delivery_installation_contact_note", False) and not is_collection:
         delivery_note_style = ParagraphStyle(
             "DeliveryInstallNote",
             parent=normal_style,

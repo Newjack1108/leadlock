@@ -19,7 +19,10 @@ import {
   OpportunityStage,
   QuoteStatus,
 } from '@/lib/types';
-import { QUOTE_BALANCE_BEFORE_DELIVERY_NOTE } from '@/lib/quoteCopy';
+import {
+  QUOTE_BALANCE_BEFORE_COLLECTION_NOTE,
+  QUOTE_BALANCE_BEFORE_DELIVERY_NOTE,
+} from '@/lib/quoteCopy';
 import SendQuoteEmailDialog from '@/components/SendQuoteEmailDialog';
 import CallNotesDialog from '@/components/CallNotesDialog';
 import FilesCard from '@/components/FilesCard';
@@ -262,6 +265,11 @@ export default function QuoteDetailPage() {
             </div>
             <div className="flex items-center gap-3">
               <Badge className="text-sm">{quote.status}</Badge>
+              {quote.fulfillment_method === 'COLLECTION' && (
+                <Badge variant="secondary" className="text-sm">
+                  Collection
+                </Badge>
+              )}
               {quote.temperature && (
                 <Badge className={`text-sm ${temperatureColors[quote.temperature]}`}>
                   {quote.temperature}
@@ -596,7 +604,9 @@ export default function QuoteDetailPage() {
                       </>
                     )}
                     <p className="text-sm pt-3 mt-2 border-t border-border">
-                      {QUOTE_BALANCE_BEFORE_DELIVERY_NOTE}
+                      {quote.fulfillment_method === 'COLLECTION'
+                        ? QUOTE_BALANCE_BEFORE_COLLECTION_NOTE
+                        : QUOTE_BALANCE_BEFORE_DELIVERY_NOTE}
                     </p>
                   </div>
                 </div>

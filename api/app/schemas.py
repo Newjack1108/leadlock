@@ -11,7 +11,8 @@ from app.models import (
     QuoteStatus, QuoteTemperature, DiscountType, DiscountScope, DiscountRequestStatus,
     LeadType, LeadSource, EmailDirection, ReminderPriority, ReminderType,
     SuggestedAction, OpportunityStage, LossCategory, InstallationLeadTime,
-    SmsDirection, ScheduledSmsStatus, MessengerDirection, QuoteItemLineType, SmsBotMode, DealerDiscountMode,
+    SmsDirection, ScheduledSmsStatus, MessengerDirection, QuoteItemLineType, QuoteFulfillmentMethod,
+    SmsBotMode, DealerDiscountMode,
     CustomerFileKind, WeeklyPlanItemStatus, WeeklyPlanScope,
 )
 
@@ -135,6 +136,7 @@ class ConfiguratorDeliveryEstimateInclusion(str, Enum):
     NONE = "none"
     DELIVERY_ONLY = "delivery_only"
     DELIVERY_AND_INSTALL = "delivery_and_install"
+    COLLECTION = "collection"
 
 
 class QuoteConfigurationPayload(BaseModel):
@@ -1541,6 +1543,7 @@ class QuoteCreate(BaseModel):
     include_spec_sheets: bool = True  # Include product spec sheets when generating quote PDF
     include_available_optional_extras: bool = False  # Show extras not on quote in customer view/PDF
     include_delivery_installation_contact_note: bool = False  # Footer re delivery/install contact
+    fulfillment_method: QuoteFulfillmentMethod = QuoteFulfillmentMethod.DELIVERY
     # When True, skip QUALIFIED→QUOTED until POST /quotes/{id}/apply-qualified-to-quoted (e.g. placeholder bootstrap draft)
     defer_qualified_to_quoted_transition: bool = False
 
@@ -1557,6 +1560,7 @@ class QuoteDraftUpdate(BaseModel):
     include_spec_sheets: Optional[bool] = None  # Include product spec sheets when generating quote PDF
     include_available_optional_extras: Optional[bool] = None  # Show extras not on quote in customer view/PDF
     include_delivery_installation_contact_note: Optional[bool] = None  # Footer re delivery/install contact
+    fulfillment_method: Optional[QuoteFulfillmentMethod] = None
 
 
 class QuoteUpdate(BaseModel):
@@ -1624,6 +1628,7 @@ class QuoteResponse(BaseModel):
     include_spec_sheets: bool = True  # Include product spec sheets when generating quote PDF
     include_available_optional_extras: bool = False  # Show extras not on quote in customer view/PDF
     include_delivery_installation_contact_note: bool = False  # Footer re delivery/install contact
+    fulfillment_method: QuoteFulfillmentMethod = QuoteFulfillmentMethod.DELIVERY
     total_open_count: int = 0  # Total times quote view link was opened (across all sends)
     order_id: Optional[int] = None  # Order ID when quote is accepted (for View order link)
     customer_last_interacted_at: Optional[datetime] = None  # Last Activity date for this customer
@@ -1738,6 +1743,7 @@ class PublicQuoteViewResponse(BaseModel):
     company_display: Optional[PublicQuoteCompanyDisplay] = None
     available_optional_extras: Optional[List[AvailableExtraResponse]] = None
     delivery_installation_contact_note: Optional[str] = None  # Full text when quote opts in
+    fulfillment_method: QuoteFulfillmentMethod = QuoteFulfillmentMethod.DELIVERY
     layout: Optional[PublicQuoteLayoutResponse] = None
 
 
@@ -1868,6 +1874,7 @@ class OrderResponse(BaseModel):
     invoice_number: Optional[str] = None
     xero_invoice_id: Optional[str] = None
     travel_time_hours_one_way: Optional[Decimal] = None
+    fulfillment_method: QuoteFulfillmentMethod = QuoteFulfillmentMethod.DELIVERY
     is_ninox_origin: bool = False
     items: List[OrderItemResponse] = []
     access_sheet: Optional[AccessSheetResponse] = None
@@ -2277,6 +2284,7 @@ class DealerDeliveryEstimateInclusion(str, Enum):
     NONE = "none"
     DELIVERY_ONLY = "delivery_only"
     DELIVERY_AND_INSTALL = "delivery_and_install"
+    COLLECTION = "collection"
 
 
 class DealerQuoteCreate(BaseModel):
@@ -2286,6 +2294,7 @@ class DealerQuoteCreate(BaseModel):
     customer_address: Optional[str] = None
     customer_postcode: Optional[str] = None
     delivery_estimate_inclusion: DealerDeliveryEstimateInclusion = DealerDeliveryEstimateInclusion.NONE
+    fulfillment_method: QuoteFulfillmentMethod = QuoteFulfillmentMethod.DELIVERY
     notes: Optional[str] = None
     valid_until: Optional[datetime] = None
     product_items: List[DealerQuoteProductItem]

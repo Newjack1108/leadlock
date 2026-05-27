@@ -111,7 +111,8 @@ export default function PublicConfiguratorShell({
     configuration.delivery_estimate_inclusion ?? 'none';
 
   const deliveryPreviewLine = useMemo(() => {
-    if (!preview?.items?.length || deliveryInclusion === 'none') return null;
+    if (!preview?.items?.length || deliveryInclusion === 'none' || deliveryInclusion === 'collection')
+      return null;
     return (
       preview.items.find(
         (item) =>

@@ -171,7 +171,8 @@ export interface ConfiguratorExtraSelection {
 export type ConfiguratorDeliveryEstimateInclusion =
   | 'none'
   | 'delivery_only'
-  | 'delivery_and_install';
+  | 'delivery_and_install'
+  | 'collection';
 
 export interface QuoteConfigurationPayload {
   schema_version: number;
@@ -1193,6 +1194,7 @@ export interface Order {
   xero_invoice_id?: string | null;
   /** Stored one-way drive time (hours); production webhook sends 2× as round-trip when set */
   travel_time_hours_one_way?: number | null;
+  fulfillment_method?: QuoteFulfillmentMethod;
   is_ninox_origin?: boolean;
   items: OrderItem[];
   access_sheet?: AccessSheet | null;
@@ -1218,6 +1220,8 @@ export interface CustomerFile {
   uploaded_by_name?: string | null;
   created_at: string;
 }
+
+export type QuoteFulfillmentMethod = 'DELIVERY' | 'COLLECTION';
 
 export interface Quote {
   id: number;
@@ -1270,6 +1274,7 @@ export interface Quote {
   include_available_optional_extras?: boolean;
   /** Footer note: delivery/installation contact (SMS, email, phone) below totals */
   include_delivery_installation_contact_note?: boolean;
+  fulfillment_method?: QuoteFulfillmentMethod;
   total_open_count?: number;
   order_id?: number | null;
   customer_last_interacted_at?: string | null;
@@ -1372,6 +1377,7 @@ export interface PublicQuoteView {
   available_optional_extras?: AvailableExtraResponse[];
   /** Full message when quote opts in; omitted when disabled */
   delivery_installation_contact_note?: string | null;
+  fulfillment_method?: QuoteFulfillmentMethod;
   layout?: PublicQuoteLayout | null;
 }
 
@@ -1386,6 +1392,7 @@ export interface QuoteCreate {
   items: QuoteItemCreate[];
   discount_template_ids?: number[];
   temperature?: QuoteTemperature;
+  fulfillment_method?: QuoteFulfillmentMethod;
 }
 
 export interface DiscountTemplate {
@@ -1748,7 +1755,8 @@ export interface DealerQuoteProductItem {
 export type DealerDeliveryEstimateInclusion =
   | 'none'
   | 'delivery_only'
-  | 'delivery_and_install';
+  | 'delivery_and_install'
+  | 'collection';
 
 export interface DealerQuoteCreatePayload {
   customer_name: string;

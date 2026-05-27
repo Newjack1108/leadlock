@@ -1,4 +1,10 @@
-import type { Quote, QuoteItem, QuoteItemCreate, QuoteTemperature } from '@/lib/types';
+import type {
+  Quote,
+  QuoteFulfillmentMethod,
+  QuoteItem,
+  QuoteItemCreate,
+  QuoteTemperature,
+} from '@/lib/types';
 
 /** Map API quote lines to create/edit form lines (same as edit page). */
 export function quoteItemsToFormItems(items: QuoteItem[]): QuoteItemCreate[] {
@@ -60,6 +66,7 @@ export type QuoteDraftPayload = {
   include_spec_sheets?: boolean;
   include_available_optional_extras?: boolean;
   include_delivery_installation_contact_note?: boolean;
+  fulfillment_method?: QuoteFulfillmentMethod;
 };
 
 function isValidLine(item: QuoteItemCreate): boolean {
@@ -79,6 +86,7 @@ export interface BuildDraftPayloadInput {
   includeSpecSheets: boolean;
   includeAvailableOptionalExtras: boolean;
   includeDeliveryInstallationContactNote: boolean;
+  fulfillmentMethod: QuoteFulfillmentMethod;
   depositAmount: number | '';
   selectedDiscountIds: number[];
 }
@@ -93,6 +101,7 @@ export function buildUpdateDraftPayload(input: BuildDraftPayloadInput): QuoteDra
     includeSpecSheets,
     includeAvailableOptionalExtras,
     includeDeliveryInstallationContactNote,
+    fulfillmentMethod,
     depositAmount,
     selectedDiscountIds,
   } = input;
@@ -164,6 +173,7 @@ export function buildUpdateDraftPayload(input: BuildDraftPayloadInput): QuoteDra
     include_spec_sheets: includeSpecSheets,
     include_available_optional_extras: includeAvailableOptionalExtras,
     include_delivery_installation_contact_note: includeDeliveryInstallationContactNote,
+    fulfillment_method: fulfillmentMethod,
   };
 
   if (validUntil) {
@@ -204,6 +214,7 @@ export function buildPlaceholderOnlyDraftPayloadFromQuote(quote: Quote): QuoteDr
     include_spec_sheets: quote.include_spec_sheets,
     include_available_optional_extras: quote.include_available_optional_extras,
     include_delivery_installation_contact_note: quote.include_delivery_installation_contact_note,
+    fulfillment_method: quote.fulfillment_method ?? 'DELIVERY',
   };
 
   if (quote.valid_until) {

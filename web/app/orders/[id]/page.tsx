@@ -360,6 +360,11 @@ export default function OrderDetailPage() {
               >
                 Balance paid
               </Badge>
+              {order.fulfillment_method === 'COLLECTION' && (
+                <Badge variant="secondary" className="text-sm">
+                  Collection
+                </Badge>
+              )}
               <Button variant="outline" onClick={handleDownloadPdf}>
                 <Eye className="h-4 w-4 mr-2" />
                 Download PDF

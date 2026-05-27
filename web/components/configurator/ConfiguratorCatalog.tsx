@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { HardHat, Truck } from 'lucide-react';
+import { HardHat, Package, Truck } from 'lucide-react';
 
 import type {
   ConfiguratorDeliveryEstimateInclusion,
@@ -235,7 +235,25 @@ export default function ConfiguratorCatalog({
           )}
         </CatalogSection>
 
-        <CatalogSection title="Delivery & installation" className="border-t pt-3">
+        <CatalogSection title="Fulfillment" className="border-t pt-3">
+          <div className="rounded-md border px-2 py-1.5 mb-2">
+            <div className="flex items-center gap-2">
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium leading-snug">Collection</p>
+                <p className="text-xs text-muted-foreground">Customer collects from factory (no delivery charge)</p>
+              </div>
+              <ConfiguratorIconToggleButton
+                selected={deliveryInclusion === 'collection'}
+                disabled={deliveryToggleDisabled}
+                label={
+                  deliveryInclusion === 'collection' ? 'Remove collection' : 'Customer collection'
+                }
+                onToggle={() => onSetDeliveryInclusion('collection')}
+              >
+                <Package className="h-5 w-5 text-muted-foreground" aria-hidden />
+              </ConfiguratorIconToggleButton>
+            </div>
+          </div>
           {deliveryDisabledReason ? (
             <p className="text-xs text-muted-foreground">{deliveryDisabledReason}</p>
           ) : null}
@@ -253,7 +271,7 @@ export default function ConfiguratorCatalog({
               </div>
               <ConfiguratorIconToggleButton
                 selected={deliveryInclusion === 'delivery_only'}
-                disabled={deliveryToggleDisabled}
+                disabled={deliveryToggleDisabled || deliveryInclusion === 'collection'}
                 label={
                   deliveryInclusion === 'delivery_only'
                     ? 'Remove delivery only'
@@ -277,7 +295,7 @@ export default function ConfiguratorCatalog({
               </div>
               <ConfiguratorIconToggleButton
                 selected={deliveryInclusion === 'delivery_and_install'}
-                disabled={deliveryToggleDisabled}
+                disabled={deliveryToggleDisabled || deliveryInclusion === 'collection'}
                 label={
                   deliveryInclusion === 'delivery_and_install'
                     ? 'Remove delivery & installation'

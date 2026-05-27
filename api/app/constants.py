@@ -36,9 +36,14 @@ DELIVERY_INSTALLATION_CONTACT_NOTE = (
     "Email cheshirestables@csgbsales.co.uk or Call on 01606 272788"
 )
 
-# Shown on every quote PDF and public quote view
+# Shown on every quote PDF and public quote view (delivery fulfillment)
 QUOTE_BALANCE_BEFORE_DELIVERY_NOTE = (
     "Please Note: All balances must be paid in full before delivery"
+)
+
+# Shown on quote PDF and public quote view when fulfillment is collection
+QUOTE_BALANCE_BEFORE_COLLECTION_NOTE = (
+    "Please Note: All balances must be paid in full before collection"
 )
 
 # Delivery-only: max physical boxes per trailer run

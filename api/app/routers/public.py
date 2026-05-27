@@ -25,6 +25,7 @@ from app.models import (
     CompanySettings,
     AccessSheetRequest,
     Order,
+    QuoteFulfillmentMethod,
 )
 from app.available_optional_extras import get_available_optional_extras_for_quote
 from app.configurator_layout_public import build_layout_for_public_view
@@ -237,9 +238,14 @@ def get_public_quote_view(
         ),
         delivery_installation_contact_note=(
             DELIVERY_INSTALLATION_CONTACT_NOTE
-            if getattr(quote, "include_delivery_installation_contact_note", False)
+            if (
+                getattr(quote, "include_delivery_installation_contact_note", False)
+                and getattr(quote, "fulfillment_method", QuoteFulfillmentMethod.DELIVERY)
+                != QuoteFulfillmentMethod.COLLECTION
+            )
             else None
         ),
+        fulfillment_method=getattr(quote, "fulfillment_method", QuoteFulfillmentMethod.DELIVERY),
         layout=build_layout_for_public_view(session, quote.id),
     )
 

@@ -3,7 +3,10 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { getPublicQuoteView, downloadPublicQuotePdf } from '@/lib/api';
-import { QUOTE_BALANCE_BEFORE_DELIVERY_NOTE } from '@/lib/quoteCopy';
+import {
+  QUOTE_BALANCE_BEFORE_COLLECTION_NOTE,
+  QUOTE_BALANCE_BEFORE_DELIVERY_NOTE,
+} from '@/lib/quoteCopy';
 import type { PublicQuoteView } from '@/lib/types';
 import LayoutDiagram from '@/components/configurator/LayoutDiagram';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -102,6 +105,9 @@ export default function PublicCustomerDocumentView() {
                   <p className="text-muted-foreground text-sm mt-1">Quote {data.quote_number}</p>
                 )}
                 <p className="text-muted-foreground text-sm">Prepared for {data.customer_name}</p>
+                {data.fulfillment_method === 'COLLECTION' && (
+                  <p className="text-sm font-medium text-foreground mt-1">Fulfillment: Collection</p>
+                )}
                 {(cd?.trading_name ||
                   address ||
                   cd?.phone ||
@@ -217,7 +223,9 @@ export default function PublicCustomerDocumentView() {
               )}
               {!hasOrder && (
                 <p className="text-sm text-foreground pt-3 mt-2 border-t border-border">
-                  {QUOTE_BALANCE_BEFORE_DELIVERY_NOTE}
+                  {data.fulfillment_method === 'COLLECTION'
+                    ? QUOTE_BALANCE_BEFORE_COLLECTION_NOTE
+                    : QUOTE_BALANCE_BEFORE_DELIVERY_NOTE}
                 </p>
               )}
               {data.delivery_installation_contact_note && (

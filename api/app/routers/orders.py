@@ -18,6 +18,7 @@ from app.models import (
     Quote,
     Lead,
     LeadSource,
+    QuoteFulfillmentMethod,
 )
 from app.auth import get_current_user
 from app.schemas import (
@@ -165,6 +166,7 @@ def build_order_response(order: Order, order_items: List[OrderItem], session: Se
         invoice_number=order.invoice_number,
         xero_invoice_id=order.xero_invoice_id,
         travel_time_hours_one_way=order.travel_time_hours_one_way,
+        fulfillment_method=getattr(order, "fulfillment_method", QuoteFulfillmentMethod.DELIVERY),
         is_ninox_origin=is_ninox_origin,
         items=[
             OrderItemResponse(
@@ -555,7 +557,11 @@ async def send_to_production(
             status_code=400,
             detail="Mark deposit paid or paid in full on the order before sending to production.",
         )
-    if not _customer_has_full_address(customer):
+    is_collection = (
+        getattr(order, "fulfillment_method", QuoteFulfillmentMethod.DELIVERY)
+        == QuoteFulfillmentMethod.COLLECTION
+    )
+    if not is_collection and not _customer_has_full_address(customer):
         raise HTTPException(
             status_code=400,
             detail="Customer must have address line 1, city, and postcode before sending to production.",
@@ -586,6 +592,9 @@ async def send_to_production(
     payload = {
         "order_number": order.order_number,
         "order_id": order.id,
+        "fulfillment_method": getattr(
+            order, "fulfillment_method", QuoteFulfillmentMethod.DELIVERY
+        ).value.lower(),
         "customer_name": customer.name,
         "customer_postcode": customer.postcode or "",
         "customer_address": _build_customer_address(customer),
@@ -598,7 +607,10 @@ async def send_to_production(
         "created_at": order.created_at.isoformat() if order.created_at else None,
         "notes": order.notes or "",
     }
-    if order.travel_time_hours_one_way is not None:
+    if (
+        not is_collection
+        and order.travel_time_hours_one_way is not None
+    ):
         payload["travel_time_hours_round_trip"] = float(order.travel_time_hours_one_way) * 2.0
 
     url = f"{base_url}/api/webhooks/work-orders"

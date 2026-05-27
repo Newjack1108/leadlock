@@ -58,6 +58,7 @@ import {
   QuoteItemCreate,
   DiscountTemplate,
   QuoteTemperature,
+  QuoteFulfillmentMethod,
   DeliveryInstallEstimateResponse,
   isDiscountTemplateExpired,
   QuoteDiscount,
@@ -65,6 +66,7 @@ import {
 import Link from 'next/link';
 import { toast } from 'sonner';
 import DeliveryInstallEstimatePanel from '@/components/quotes/DeliveryInstallEstimatePanel';
+import FulfillmentMethodField from '@/components/quotes/FulfillmentMethodField';
 import { Plus, Trash2, ArrowLeft, X, ChevronDown, ChevronUp, FileSearch } from 'lucide-react';
 
 const DELIVERY_LINE_DESCRIPTION = 'Delivery';
@@ -155,6 +157,7 @@ function CreateQuoteContent() {
   const [includeAvailableOptionalExtras, setIncludeAvailableOptionalExtras] = useState(false);
   const [includeDeliveryInstallationContactNote, setIncludeDeliveryInstallationContactNote] =
     useState(false);
+  const [fulfillmentMethod, setFulfillmentMethod] = useState<QuoteFulfillmentMethod>('DELIVERY');
   const [depositAmount, setDepositAmount] = useState<number | ''>('');
   const [companySettings, setCompanySettings] = useState<any>(null);
   const [availableDiscounts, setAvailableDiscounts] = useState<DiscountTemplate[]>([]);
@@ -505,6 +508,7 @@ function CreateQuoteContent() {
         includeSpecSheets,
         includeAvailableOptionalExtras,
         includeDeliveryInstallationContactNote,
+        fulfillmentMethod,
         depositAmount,
         selectedDiscountIds,
       }),
@@ -517,6 +521,7 @@ function CreateQuoteContent() {
       includeSpecSheets,
       includeAvailableOptionalExtras,
       includeDeliveryInstallationContactNote,
+      fulfillmentMethod,
       depositAmount,
       selectedDiscountIds,
     ]
@@ -533,6 +538,7 @@ function CreateQuoteContent() {
         includeSpecSheets,
         includeAvailableOptionalExtras,
         includeDeliveryInstallationContactNote,
+        fulfillmentMethod,
         depositAmount,
         selectedDiscountIds,
       }),
@@ -545,6 +551,7 @@ function CreateQuoteContent() {
       includeSpecSheets,
       includeAvailableOptionalExtras,
       includeDeliveryInstallationContactNote,
+      fulfillmentMethod,
       depositAmount,
       selectedDiscountIds,
     ]
@@ -631,6 +638,7 @@ function CreateQuoteContent() {
           setIncludeDeliveryInstallationContactNote(
             q.include_delivery_installation_contact_note ?? false
           );
+          setFulfillmentMethod(q.fulfillment_method ?? 'DELIVERY');
           setDepositAmount(q.deposit_amount != null ? Number(q.deposit_amount) : '');
           setSelectedDiscountIds(
             (q.discounts ?? [])
@@ -786,6 +794,10 @@ function CreateQuoteContent() {
 
     if (isPlaceholderOnlyDraftItems(validItems)) {
       toast.error('Please add real quote lines before finishing');
+      return;
+    }
+    if (fulfillmentMethod === 'COLLECTION' && hasDeliveryInstallLine(items)) {
+      toast.error('Remove delivery or installation lines before saving a collection quote.');
       return;
     }
 
@@ -1219,7 +1231,25 @@ function CreateQuoteContent() {
               </DialogContent>
             </Dialog>
 
-            {customer?.postcode?.trim() && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Fulfillment</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <FulfillmentMethodField
+                  value={fulfillmentMethod}
+                  onChange={setFulfillmentMethod}
+                  hasDeliveryInstallLines={hasDeliveryInstallLine(items)}
+                  onCollectionBlocked={() =>
+                    toast.error(
+                      'Remove delivery or installation lines before switching to collection.'
+                    )
+                  }
+                />
+              </CardContent>
+            </Card>
+
+            {fulfillmentMethod !== 'COLLECTION' && customer?.postcode?.trim() && (
               <DeliveryInstallEstimatePanel
                 estimate={deliveryEstimate}
                 mode={deliveryEstimateMode}
@@ -1413,18 +1443,23 @@ function CreateQuoteContent() {
                     Show available optional extras on customer quote (online view and PDF)
                   </Label>
                 </div>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="include_delivery_installation_contact_note"
-                    checked={includeDeliveryInstallationContactNote}
-                    onChange={(e) => setIncludeDeliveryInstallationContactNote(e.target.checked)}
-                    className="h-4 w-4 rounded border-gray-300"
-                  />
-                  <Label htmlFor="include_delivery_installation_contact_note" className="font-normal cursor-pointer">
-                    Show delivery and installation contact message below quote totals (SMS, email, phone)
-                  </Label>
-                </div>
+                {fulfillmentMethod !== 'COLLECTION' && (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="include_delivery_installation_contact_note"
+                      checked={includeDeliveryInstallationContactNote}
+                      onChange={(e) => setIncludeDeliveryInstallationContactNote(e.target.checked)}
+                      className="h-4 w-4 rounded border-gray-300"
+                    />
+                    <Label
+                      htmlFor="include_delivery_installation_contact_note"
+                      className="font-normal cursor-pointer"
+                    >
+                      Show delivery and installation contact message below quote totals (SMS, email, phone)
+                    </Label>
+                  </div>
+                )}
                 <div className="space-y-2">
                   <Label>Notes</Label>
                   <Textarea

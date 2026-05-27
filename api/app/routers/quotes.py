@@ -36,6 +36,7 @@ from app.models import (
     Order,
     OrderItem,
     QuoteItemLineType,
+    QuoteFulfillmentMethod,
     DiscountRequest,
     DiscountRequestStatus,
     SmsMessage,
@@ -48,6 +49,7 @@ from app.configurator_service import build_configurator_preview, resolve_quote_c
 from app.schemas import (
     ConfiguratorGeneratedLine,
     QuoteConfigurationPayload,
+    ConfiguratorDeliveryEstimateInclusion,
     QuoteConfigurationResponse,
     QuoteCreate, QuoteUpdate, QuoteDraftUpdate, QuoteResponse, QuoteListResponse, QuoteItemCreate, QuoteItemResponse,
     QuoteEmailSendRequest, QuoteEmailSendResponse, QuoteViewLinkResponse,
@@ -112,6 +114,22 @@ def apply_qualified_to_quoted_transition_for_customer(
                 current_user_id,
                 reason,
             )
+
+
+def _transition_customer_leads_to_quoted_after_send(
+    customer_id: Optional[int],
+    session: Session,
+    current_user_id: int,
+) -> None:
+    """Move all QUALIFIED leads on the customer to QUOTED after a quote is sent or shared."""
+    if not customer_id:
+        return
+    apply_qualified_to_quoted_transition_for_customer(
+        customer_id,
+        session,
+        current_user_id,
+        reason="Automatic transition: Quote sent",
+    )
 
 
 def _frontend_base_url() -> Optional[str]:
@@ -193,6 +211,10 @@ def ensure_quote_share_link(
     session.add(activity)
     session.commit()
 
+    _transition_customer_leads_to_quoted_after_send(
+        quote.customer_id, session, current_user.id
+    )
+
     view_url = f"{base_url.rstrip('/')}/{customer_view_path_segment(session, quote.id, view_token)}"
     return quote_email, view_url, True
 
@@ -226,6 +248,33 @@ def _installation_hours_for_quote_item_create(item_data: QuoteItemCreate) -> Opt
     if item_data.installation_hours is None:
         return None
     return Decimal(str(item_data.installation_hours))
+
+
+_DELIVERY_LINE_DESCRIPTIONS = frozenset(
+    ("Delivery & Installation", "Delivery only", "Delivery", "Installation")
+)
+
+
+def _assert_collection_fulfillment_items_valid(
+    fulfillment_method: QuoteFulfillmentMethod,
+    items: List[QuoteItemCreate],
+) -> None:
+    """Collection quotes must not include delivery or installation lines."""
+    if fulfillment_method != QuoteFulfillmentMethod.COLLECTION:
+        return
+    for item_data in items:
+        line_type = getattr(item_data, "line_type", None)
+        if line_type in (QuoteItemLineType.DELIVERY, QuoteItemLineType.INSTALLATION):
+            raise HTTPException(
+                status_code=400,
+                detail="Collection quotes cannot include delivery or installation line items.",
+            )
+        desc = (item_data.description or "").strip()
+        if desc in _DELIVERY_LINE_DESCRIPTIONS:
+            raise HTTPException(
+                status_code=400,
+                detail="Collection quotes cannot include delivery or installation line items.",
+            )
 
 
 def _item_eligible_for_product_scope_discount(item: QuoteItem) -> bool:
@@ -465,6 +514,7 @@ def build_quote_response(
         include_spec_sheets=getattr(quote, "include_spec_sheets", True),
         include_available_optional_extras=getattr(quote, "include_available_optional_extras", False),
         include_delivery_installation_contact_note=getattr(quote, "include_delivery_installation_contact_note", False),
+        fulfillment_method=getattr(quote, "fulfillment_method", QuoteFulfillmentMethod.DELIVERY),
         total_open_count=total_open_count,
         order_id=order_id,
         customer_last_interacted_at=customer_last_interacted_at,
@@ -708,6 +758,7 @@ def create_order_from_quote(quote: Quote, session: Session, created_by_id: int) 
         terms_and_conditions=quote.terms_and_conditions,
         notes=quote.notes,
         created_by_id=created_by_id,
+        fulfillment_method=getattr(quote, "fulfillment_method", QuoteFulfillmentMethod.DELIVERY),
     )
     session.add(order)
     session.flush()
@@ -778,6 +829,11 @@ async def create_quote(
 
         # Generate quote number if not provided
         quote_number = quote_data.quote_number or generate_quote_number(session)
+
+        fulfillment_method = getattr(
+            quote_data, "fulfillment_method", QuoteFulfillmentMethod.DELIVERY
+        )
+        _assert_collection_fulfillment_items_valid(fulfillment_method, quote_data.items)
         
         # Calculate totals
         subtotal = Decimal(0)
@@ -841,6 +897,7 @@ async def create_quote(
             include_spec_sheets=getattr(quote_data, "include_spec_sheets", True),
             include_available_optional_extras=getattr(quote_data, "include_available_optional_extras", False),
             include_delivery_installation_contact_note=getattr(quote_data, "include_delivery_installation_contact_note", False),
+            fulfillment_method=fulfillment_method,
         )
         session.add(quote)
         session.commit()
@@ -976,6 +1033,8 @@ async def create_quote(
         quote_items = session.exec(statement).all()
         
         return build_quote_response(quote, quote_items, session)
+    except HTTPException:
+        raise
     except Exception as e:
         import traceback
         error_detail = str(e)
@@ -1382,6 +1441,7 @@ def _build_duplicate_draft_payload_from_source(source: Quote, session: Session) 
         include_spec_sheets=source.include_spec_sheets,
         include_available_optional_extras=source.include_available_optional_extras,
         include_delivery_installation_contact_note=source.include_delivery_installation_contact_note,
+        fulfillment_method=getattr(source, "fulfillment_method", QuoteFulfillmentMethod.DELIVERY),
     )
 
 
@@ -1511,10 +1571,15 @@ async def apply_quote_configuration(
             include_spec_sheets=quote.include_spec_sheets,
             include_available_optional_extras=quote.include_available_optional_extras,
             include_delivery_installation_contact_note=quote.include_delivery_installation_contact_note,
+            fulfillment_method=getattr(quote, "fulfillment_method", QuoteFulfillmentMethod.DELIVERY),
         )
     draft_payload.items = [_generated_line_to_quote_item(line) for line in preview.items]
     draft_payload.include_spec_sheets = False
     draft_payload.include_available_optional_extras = False
+    if payload.delivery_estimate_inclusion == ConfiguratorDeliveryEstimateInclusion.COLLECTION:
+        draft_payload.fulfillment_method = QuoteFulfillmentMethod.COLLECTION
+    else:
+        draft_payload.fulfillment_method = QuoteFulfillmentMethod.DELIVERY
     return _update_draft_quote_impl(quote_id, draft_payload, session, current_user)
 
 
@@ -1569,6 +1634,7 @@ async def duplicate_quote_to_draft(
         include_spec_sheets=source.include_spec_sheets,
         include_available_optional_extras=source.include_available_optional_extras,
         include_delivery_installation_contact_note=source.include_delivery_installation_contact_note,
+        fulfillment_method=getattr(source, "fulfillment_method", QuoteFulfillmentMethod.DELIVERY),
     )
     session.add(new_quote)
     session.commit()
@@ -1690,6 +1756,11 @@ def _update_draft_quote_impl(
             status_code=400,
             detail=f"Only draft quotes can be edited. This quote has status: {quote.status}"
         )
+
+    if quote_data.fulfillment_method is not None:
+        quote.fulfillment_method = quote_data.fulfillment_method
+    effective_fulfillment = getattr(quote, "fulfillment_method", QuoteFulfillmentMethod.DELIVERY)
+    _assert_collection_fulfillment_items_valid(effective_fulfillment, quote_data.items)
     
     # Delete existing items and discounts for this quote (single transaction; flush for FK order).
     # 1. Delete discounts first (QuoteDiscount.quote_item_id references QuoteItem)
@@ -1767,6 +1838,8 @@ def _update_draft_quote_impl(
         quote.include_available_optional_extras = quote_data.include_available_optional_extras
     if quote_data.include_delivery_installation_contact_note is not None:
         quote.include_delivery_installation_contact_note = quote_data.include_delivery_installation_contact_note
+    if quote_data.fulfillment_method is not None:
+        quote.fulfillment_method = quote_data.fulfillment_method
 
     # Apply template discounts selected in the editor.
     if quote_data.discount_template_ids:
@@ -1957,6 +2030,9 @@ async def post_quote_share_link(
         current_user,
         include_available_extras=bool(req.include_available_extras),
     )
+    _transition_customer_leads_to_quoted_after_send(
+        quote.customer_id, session, current_user.id
+    )
     return QuoteShareLinkResponse(view_url=view_url, quote_email_id=quote_email.id)
 
 
@@ -2045,6 +2121,10 @@ async def post_quote_send_sms(
     )
     session.add(activity)
     session.commit()
+
+    _transition_customer_leads_to_quoted_after_send(
+        quote.customer_id, session, current_user.id
+    )
 
     return QuoteSendSmsResponse(
         view_url=view_url,
@@ -2271,6 +2351,10 @@ async def send_quote_email_endpoint(
         )
         session.add(activity)
         session.commit()
+
+        _transition_customer_leads_to_quoted_after_send(
+            quote.customer_id, session, current_user.id
+        )
         
         view_url = None
         if view_token and frontend_base_url:

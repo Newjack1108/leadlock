@@ -625,6 +625,19 @@ def create_db_and_tables():
                 except Exception as e:
                     if "already exists" not in str(e).lower():
                         print(f"Warning adding travel_time_hours_one_way: {e}", file=sys.stderr, flush=True)
+            order_columns = [col["name"] for col in inspector.get_columns("customer_order")]
+            if "fulfillment_method" not in order_columns:
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(
+                            text(
+                                "ALTER TABLE customer_order ADD COLUMN fulfillment_method VARCHAR(32) DEFAULT 'DELIVERY'"
+                            )
+                        )
+                    print("Added fulfillment_method to customer_order", file=sys.stderr, flush=True)
+                except Exception as e:
+                    if "already exists" not in str(e).lower():
+                        print(f"Warning adding fulfillment_method to customer_order: {e}", file=sys.stderr, flush=True)
 
         # Step 0a3: Create access_sheet_request table if missing
         has_access_sheet_table = inspector.has_table("accesssheetrequest")
@@ -1230,6 +1243,22 @@ def create_db_and_tables():
                     error_str = str(col_error).lower()
                     if "already exists" not in error_str and "duplicate" not in error_str:
                         print(f"Warning: Could not add include_delivery_installation_contact_note column: {col_error}", file=sys.stderr, flush=True)
+
+            quote_columns = [col['name'] for col in inspector.get_columns("quote")]
+            if "fulfillment_method" not in quote_columns:
+                print("Adding fulfillment_method column to quote table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(
+                            text(
+                                "ALTER TABLE quote ADD COLUMN fulfillment_method VARCHAR(32) DEFAULT 'DELIVERY'"
+                            )
+                        )
+                    print("Added fulfillment_method column to quote table", file=sys.stderr, flush=True)
+                except Exception as col_error:
+                    error_str = str(col_error).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Warning: Could not add fulfillment_method column: {col_error}", file=sys.stderr, flush=True)
 
             # Add lead_id to quote table (quote generated from lead)
             quote_columns = [col['name'] for col in inspector.get_columns("quote")]

@@ -21,9 +21,10 @@ import {
   buildQuoteLevelOptionalExtraLine,
   rootBuildingProductNumberAtIndex,
 } from '@/lib/quoteFormOptionalExtra';
-import { Customer, Product, QuoteItemCreate } from '@/lib/types';
+import { Customer, Product, QuoteFulfillmentMethod, QuoteItemCreate } from '@/lib/types';
 import { toast } from 'sonner';
 import { Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
+import FulfillmentMethodField from '@/components/quotes/FulfillmentMethodField';
 
 interface CreateQuoteDialogProps {
   open: boolean;
@@ -57,6 +58,7 @@ export default function CreateQuoteDialog({
   const [includeAvailableOptionalExtras, setIncludeAvailableOptionalExtras] = useState(false);
   const [includeDeliveryInstallationContactNote, setIncludeDeliveryInstallationContactNote] =
     useState(false);
+  const [fulfillmentMethod, setFulfillmentMethod] = useState<QuoteFulfillmentMethod>('DELIVERY');
   const [productDetails, setProductDetails] = useState<Record<number, Product>>({});
   const [allOptionalExtras, setAllOptionalExtras] = useState<Product[]>([]);
   const [extraPickerOpen, setExtraPickerOpen] = useState(false);
@@ -298,6 +300,7 @@ export default function CreateQuoteDialog({
       quoteData.include_spec_sheets = includeSpecSheets;
       quoteData.include_available_optional_extras = includeAvailableOptionalExtras;
       quoteData.include_delivery_installation_contact_note = includeDeliveryInstallationContactNote;
+      quoteData.fulfillment_method = fulfillmentMethod;
 
       await createQuote(quoteData);
       toast.success('Quote created successfully');
@@ -639,18 +642,27 @@ export default function CreateQuoteDialog({
                   Show available optional extras on customer quote (online view and PDF)
                 </Label>
               </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="include_delivery_installation_contact_note_dialog"
-                  checked={includeDeliveryInstallationContactNote}
-                  onChange={(e) => setIncludeDeliveryInstallationContactNote(e.target.checked)}
-                  className="h-4 w-4 rounded border-gray-300"
-                />
-                <Label htmlFor="include_delivery_installation_contact_note_dialog" className="font-normal cursor-pointer">
-                  Show delivery and installation contact message below quote totals (SMS, email, phone)
-                </Label>
-              </div>
+              <FulfillmentMethodField
+                value={fulfillmentMethod}
+                onChange={setFulfillmentMethod}
+              />
+              {fulfillmentMethod !== 'COLLECTION' && (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="include_delivery_installation_contact_note_dialog"
+                    checked={includeDeliveryInstallationContactNote}
+                    onChange={(e) => setIncludeDeliveryInstallationContactNote(e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300"
+                  />
+                  <Label
+                    htmlFor="include_delivery_installation_contact_note_dialog"
+                    className="font-normal cursor-pointer"
+                  >
+                    Show delivery and installation contact message below quote totals (SMS, email, phone)
+                  </Label>
+                </div>
+              )}
               <div className="space-y-2">
                 <Label>Notes</Label>
                 <Textarea

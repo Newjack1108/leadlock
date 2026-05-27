@@ -27,6 +27,7 @@ from app.models import (
     QuoteDiscount,
     QuoteItem,
     QuoteItemLineType,
+    QuoteFulfillmentMethod,
     QuoteStatus,
     User,
 )
@@ -306,11 +307,22 @@ async def create_dealer_quote(
             raise HTTPException(status_code=403, detail="One or more discounts are not permitted")
 
     postcode = (payload.customer_postcode or "").strip() or None
-    if payload.delivery_estimate_inclusion != DealerDeliveryEstimateInclusion.NONE and not postcode:
+    is_collection = payload.delivery_estimate_inclusion == DealerDeliveryEstimateInclusion.COLLECTION
+    if (
+        payload.delivery_estimate_inclusion
+        not in (DealerDeliveryEstimateInclusion.NONE, DealerDeliveryEstimateInclusion.COLLECTION)
+        and not postcode
+    ):
         raise HTTPException(
             status_code=400,
             detail="Customer postcode is required when including a delivery or delivery & installation line",
         )
+
+    fulfillment_method = (
+        QuoteFulfillmentMethod.COLLECTION
+        if is_collection
+        else payload.fulfillment_method
+    )
 
     quote = Quote(
         customer_id=None,
@@ -332,6 +344,7 @@ async def create_dealer_quote(
         dealer_customer_phone=payload.customer_phone,
         dealer_customer_address=payload.customer_address,
         dealer_customer_postcode=postcode,
+        fulfillment_method=fulfillment_method,
     )
     session.add(quote)
     session.commit()
@@ -409,7 +422,10 @@ async def create_dealer_quote(
         session.exec(select(QuoteItem).where(QuoteItem.quote_id == quote.id).order_by(QuoteItem.sort_order)).all()
     )
 
-    if payload.delivery_estimate_inclusion != DealerDeliveryEstimateInclusion.NONE:
+    if (
+        payload.delivery_estimate_inclusion != DealerDeliveryEstimateInclusion.NONE
+        and not is_collection
+    ):
         install_hours = _dealer_quote_main_product_install_hours(session, quote.id)
         if payload.delivery_estimate_inclusion == DealerDeliveryEstimateInclusion.DELIVERY_AND_INSTALL:
             if install_hours <= 0:

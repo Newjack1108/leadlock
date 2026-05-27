@@ -267,7 +267,7 @@ export default function NewDealerQuotePage() {
       toast.error('Add products with installation hours to include delivery & installation');
       return;
     }
-    if (inclusion !== 'none' && !pcTrim) {
+    if (inclusion !== 'none' && inclusion !== 'collection' && !pcTrim) {
       toast.error('Enter customer postcode to include a delivery line');
       return;
     }
@@ -290,6 +290,7 @@ export default function NewDealerQuotePage() {
     saving ||
     !rows.length ||
     (inclusion !== 'none' &&
+      inclusion !== 'collection' &&
       (estLoading ||
         (inclusion === 'delivery_only' && !canPickDeliveryOnly) ||
         (inclusion === 'delivery_and_install' && !canPickFull)));
@@ -350,7 +351,26 @@ export default function NewDealerQuotePage() {
               </div>
             </div>
 
-            {pcTrim && rows.length > 0 && (
+            {rows.length > 0 && (
+              <fieldset className="space-y-2 rounded-lg border p-4">
+                <legend className="text-sm font-medium px-1">Fulfillment</legend>
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input
+                    type="radio"
+                    name="fulfillment-dealer"
+                    checked={inclusion === 'collection'}
+                    onChange={() => setInclusion('collection')}
+                  />
+                  Collection (customer collects from factory)
+                </label>
+                <p className="text-xs text-muted-foreground">
+                  For delivery or delivery & installation lines, enter a postcode below and use the delivery
+                  estimates section.
+                </p>
+              </fieldset>
+            )}
+
+            {pcTrim && rows.length > 0 && inclusion !== 'collection' && (
               <Card className="border-muted">
                 <CardHeader className="py-3">
                   <CardTitle className="text-base">Delivery estimates (Ex VAT)</CardTitle>

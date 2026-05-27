@@ -9,7 +9,7 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from typing import Optional, List, Any
 from io import BytesIO
 from decimal import Decimal
-from app.models import Order, Customer, OrderItem, CompanySettings
+from app.models import Order, Customer, OrderItem, CompanySettings, QuoteFulfillmentMethod
 from app.constants import VAT_RATE_DECIMAL
 from app.quote_pdf_service import (
     format_currency,
@@ -133,6 +133,8 @@ def _build_invoice_elements(
         ["Order Number:", order.order_number],
         ["Date:", order.created_at.strftime("%d %B %Y")],
     ]
+    if getattr(order, "fulfillment_method", QuoteFulfillmentMethod.DELIVERY) == QuoteFulfillmentMethod.COLLECTION:
+        invoice_details.append(["Fulfillment:", "Collection"])
     invoice_header_table = Table(invoice_header_data, colWidths=[100 * mm, 80 * mm])
     invoice_header_table.setStyle(
         TableStyle([
@@ -309,7 +311,12 @@ def generate_deposit_paid_invoice_pdf(
         deposit_paid_label="Deposit paid (inc VAT):",
         balance_label="Outstanding balance due (inc VAT):",
         balance_bold=True,
-        note_text="Balance will be required when contacted to book in Installation or delivery.",
+        note_text=(
+            "Balance will be required before collection."
+            if getattr(order, "fulfillment_method", QuoteFulfillmentMethod.DELIVERY)
+            == QuoteFulfillmentMethod.COLLECTION
+            else "Balance will be required when contacted to book in Installation or delivery."
+        ),
         invoice_display_number=invoice_display_number or (f"{order.invoice_number}-1" if order.invoice_number else None),
     )
 

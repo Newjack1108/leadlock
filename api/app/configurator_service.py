@@ -392,7 +392,10 @@ def _append_configurator_delivery_line(
     sort_order: int,
 ) -> Tuple[List[ConfiguratorGeneratedLine], List[ConfiguratorValidationIssue], int]:
     inclusion = payload.delivery_estimate_inclusion
-    if inclusion == ConfiguratorDeliveryEstimateInclusion.NONE:
+    if inclusion in (
+        ConfiguratorDeliveryEstimateInclusion.NONE,
+        ConfiguratorDeliveryEstimateInclusion.COLLECTION,
+    ):
         return lines, issues, sort_order
 
     postcode = (customer_postcode or "").strip()

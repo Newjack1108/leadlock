@@ -35,9 +35,11 @@ import {
   DiscountRequest,
   DiscountRequestStatus,
   QuoteTemperature,
+  QuoteFulfillmentMethod,
   DeliveryInstallEstimateResponse,
   isDiscountTemplateExpired,
 } from '@/lib/types';
+import FulfillmentMethodField from '@/components/quotes/FulfillmentMethodField';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { quoteItemsToFormItems, buildUpdateDraftPayload } from '@/lib/quoteDraftPayload';
@@ -142,6 +144,7 @@ function EditQuoteContent() {
   const [includeAvailableOptionalExtras, setIncludeAvailableOptionalExtras] = useState(false);
   const [includeDeliveryInstallationContactNote, setIncludeDeliveryInstallationContactNote] =
     useState(false);
+  const [fulfillmentMethod, setFulfillmentMethod] = useState<QuoteFulfillmentMethod>('DELIVERY');
   const [depositAmount, setDepositAmount] = useState<number | ''>('');
   const [companySettings, setCompanySettings] = useState<any>(null);
   const [availableDiscounts, setAvailableDiscounts] = useState<DiscountTemplate[]>([]);
@@ -241,6 +244,7 @@ function EditQuoteContent() {
       setIncludeDeliveryInstallationContactNote(
         quoteData.include_delivery_installation_contact_note ?? false
       );
+      setFulfillmentMethod(quoteData.fulfillment_method ?? 'DELIVERY');
       setDepositAmount(quoteData.deposit_amount ?? '');
       setSelectedDiscountIds(
         (quoteData.discounts ?? [])
@@ -509,6 +513,7 @@ function EditQuoteContent() {
         includeSpecSheets,
         includeAvailableOptionalExtras,
         includeDeliveryInstallationContactNote,
+        fulfillmentMethod,
         depositAmount,
         selectedDiscountIds,
       }),
@@ -521,6 +526,7 @@ function EditQuoteContent() {
       includeSpecSheets,
       includeAvailableOptionalExtras,
       includeDeliveryInstallationContactNote,
+      fulfillmentMethod,
       depositAmount,
       selectedDiscountIds,
     ]
@@ -537,6 +543,7 @@ function EditQuoteContent() {
         includeSpecSheets,
         includeAvailableOptionalExtras,
         includeDeliveryInstallationContactNote,
+        fulfillmentMethod,
         depositAmount,
         selectedDiscountIds,
       }),
@@ -549,6 +556,7 @@ function EditQuoteContent() {
       includeSpecSheets,
       includeAvailableOptionalExtras,
       includeDeliveryInstallationContactNote,
+      fulfillmentMethod,
       depositAmount,
       selectedDiscountIds,
     ]
@@ -619,6 +627,10 @@ function EditQuoteContent() {
     );
     if (validItems.length === 0) {
       toast.error('Please add at least one valid quote item');
+      return;
+    }
+    if (fulfillmentMethod === 'COLLECTION' && hasDeliveryInstallLine(items)) {
+      toast.error('Remove delivery or installation lines before saving a collection quote.');
       return;
     }
 
@@ -1080,7 +1092,25 @@ function EditQuoteContent() {
               </DialogContent>
             </Dialog>
 
-            {customer?.postcode?.trim() && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Fulfillment</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <FulfillmentMethodField
+                  value={fulfillmentMethod}
+                  onChange={setFulfillmentMethod}
+                  hasDeliveryInstallLines={hasDeliveryInstallLine(items)}
+                  onCollectionBlocked={() =>
+                    toast.error(
+                      'Remove delivery or installation lines before switching to collection.'
+                    )
+                  }
+                />
+              </CardContent>
+            </Card>
+
+            {fulfillmentMethod !== 'COLLECTION' && customer?.postcode?.trim() && (
               <DeliveryInstallEstimatePanel
                 estimate={deliveryEstimate}
                 mode={deliveryEstimateMode}
@@ -1341,18 +1371,23 @@ function EditQuoteContent() {
                     Show available optional extras on customer quote (online view and PDF)
                   </Label>
                 </div>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="include_delivery_installation_contact_note_edit"
-                    checked={includeDeliveryInstallationContactNote}
-                    onChange={(e) => setIncludeDeliveryInstallationContactNote(e.target.checked)}
-                    className="h-4 w-4 rounded border-gray-300"
-                  />
-                  <Label htmlFor="include_delivery_installation_contact_note_edit" className="font-normal cursor-pointer">
-                    Show delivery and installation contact message below quote totals (SMS, email, phone)
-                  </Label>
-                </div>
+                {fulfillmentMethod !== 'COLLECTION' && (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="include_delivery_installation_contact_note_edit"
+                      checked={includeDeliveryInstallationContactNote}
+                      onChange={(e) => setIncludeDeliveryInstallationContactNote(e.target.checked)}
+                      className="h-4 w-4 rounded border-gray-300"
+                    />
+                    <Label
+                      htmlFor="include_delivery_installation_contact_note_edit"
+                      className="font-normal cursor-pointer"
+                    >
+                      Show delivery and installation contact message below quote totals (SMS, email, phone)
+                    </Label>
+                  </div>
+                )}
                 <div className="space-y-2">
                   <Label>Notes</Label>
                   <Textarea

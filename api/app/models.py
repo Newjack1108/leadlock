@@ -546,6 +546,12 @@ class DealerDiscountMode(str, Enum):
     CUSTOM = "CUSTOM"
 
 
+class QuoteFulfillmentMethod(str, Enum):
+    """How the customer receives the order."""
+    DELIVERY = "DELIVERY"
+    COLLECTION = "COLLECTION"
+
+
 class QuoteItemLineType(str, Enum):
     """Line types excluded from PRODUCT-scope discounts. None = building product."""
     DELIVERY = "DELIVERY"
@@ -587,6 +593,7 @@ class Quote(SQLModel, table=True):
     include_spec_sheets: bool = Field(default=True)  # Include product spec sheets when generating quote PDF
     include_available_optional_extras: bool = Field(default=False)  # Show extras not on quote in customer view/PDF
     include_delivery_installation_contact_note: bool = Field(default=False)  # Footer note re delivery/install contact
+    fulfillment_method: QuoteFulfillmentMethod = Field(default=QuoteFulfillmentMethod.DELIVERY)
 
     # Opportunity management fields
     opportunity_stage: Optional["OpportunityStage"] = Field(default=None)
@@ -900,6 +907,7 @@ class Order(SQLModel, table=True):
     xero_invoice_id: Optional[str] = Field(default=None)  # XERO invoice ID after push
     # One-way drive time (hours); round-trip sent to production webhook is 2× this when set
     travel_time_hours_one_way: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(10, 4)))
+    fulfillment_method: QuoteFulfillmentMethod = Field(default=QuoteFulfillmentMethod.DELIVERY)
 
     # Relationships
     quote: "Quote" = Relationship(back_populates="order")
