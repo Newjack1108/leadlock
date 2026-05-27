@@ -714,7 +714,13 @@ def execute_auto_eligible_items(session: Session, run_id: int) -> int:
     return sent_count
 
 
-def _dispatch_weekly_plan_item(session: Session, run: WeeklyPlanRun, item: WeeklyPlanItem) -> bool:
+def _dispatch_weekly_plan_item(
+    session: Session,
+    run: WeeklyPlanRun,
+    item: WeeklyPlanItem,
+    *,
+    sender_user_id: Optional[int] = None,
+) -> bool:
     if not item.customer_id:
         item.status = WeeklyPlanItemStatus.AUTO_FAILED
         item.execution_error = "Missing customer on weekly plan item"
@@ -735,10 +741,11 @@ def _dispatch_weekly_plan_item(session: Session, run: WeeklyPlanRun, item: Weekl
         session.add(item)
         return False
     assignee = session.get(User, item.assigned_to_id) if item.assigned_to_id else None
-    actor_id = item.assigned_to_id or run.generated_by_id or get_system_user_id(session)
+    actor_id = sender_user_id or item.assigned_to_id or run.generated_by_id or get_system_user_id(session)
+    channel = (item.channel or "").upper()
     now = datetime.utcnow()
     try:
-        if item.channel == "SMS":
+        if channel == "SMS":
             phone = (customer.phone or "").strip()
             if not phone:
                 raise ValueError("Customer has no phone number")
@@ -766,7 +773,7 @@ def _dispatch_weekly_plan_item(session: Session, run: WeeklyPlanRun, item: Weekl
                     created_by_id=actor_id,
                 )
             )
-        elif item.channel == "EMAIL":
+        elif channel == "EMAIL":
             to_email = (customer.email or "").strip()
             if not to_email:
                 raise ValueError("Customer has no email")
@@ -812,8 +819,21 @@ def _dispatch_weekly_plan_item(session: Session, run: WeeklyPlanRun, item: Weekl
                     created_by_id=actor_id,
                 )
             )
+        elif channel == "CALL":
+            phone = (customer.phone or "").strip()
+            call_notes = item.suggested_message or "Follow-up call from weekly plan"
+            if phone:
+                call_notes = f"{call_notes}\nCustomer phone: {phone}"
+            session.add(
+                Activity(
+                    customer_id=customer.id,
+                    activity_type=ActivityType.CALL_ATTEMPTED,
+                    notes=f"Weekly planner call task\n{call_notes}",
+                    created_by_id=actor_id,
+                )
+            )
         else:
-            raise ValueError("Only EMAIL and SMS channels can be sent")
+            raise ValueError(f"Unsupported channel: {item.channel or 'unknown'}")
 
         item.status = WeeklyPlanItemStatus.AUTO_SENT
         item.executed_at = now
@@ -829,19 +849,17 @@ def _dispatch_weekly_plan_item(session: Session, run: WeeklyPlanRun, item: Weekl
         return False
 
 
-def send_weekly_plan_item(session: Session, item_id: int) -> Optional[WeeklyPlanItem]:
+def send_weekly_plan_item(
+    session: Session,
+    item_id: int,
+    *,
+    sender_user_id: Optional[int] = None,
+) -> Optional[WeeklyPlanItem]:
     item = session.get(WeeklyPlanItem, item_id)
     if not item:
         return None
     if item.status != WeeklyPlanItemStatus.PENDING_REVIEW:
         item.execution_error = f"Item is {item.status.value} and cannot be sent"
-        item.updated_at = datetime.utcnow()
-        session.add(item)
-        session.commit()
-        session.refresh(item)
-        return item
-    if (item.channel or "").upper() not in {"EMAIL", "SMS"}:
-        item.execution_error = "Only EMAIL and SMS items can be sent manually"
         item.updated_at = datetime.utcnow()
         session.add(item)
         session.commit()
@@ -865,7 +883,7 @@ def send_weekly_plan_item(session: Session, item_id: int) -> Optional[WeeklyPlan
         session.commit()
         session.refresh(item)
         return item
-    _dispatch_weekly_plan_item(session, run, item)
+    _dispatch_weekly_plan_item(session, run, item, sender_user_id=sender_user_id)
     if item.status == WeeklyPlanItemStatus.AUTO_SENT:
         run.auto_sent_items = int(run.auto_sent_items or 0) + 1
         session.add(run)
@@ -874,14 +892,19 @@ def send_weekly_plan_item(session: Session, item_id: int) -> Optional[WeeklyPlan
     return item
 
 
-def send_weekly_plan_items_bulk(session: Session, item_ids: List[int]) -> dict:
+def send_weekly_plan_items_bulk(
+    session: Session,
+    item_ids: List[int],
+    *,
+    sender_user_id: Optional[int] = None,
+) -> dict:
     if not item_ids:
         return {"requested": 0, "sent": 0, "failed": 0}
     sent = 0
     failed = 0
     deduped_ids = list(dict.fromkeys(item_ids))
     for item_id in deduped_ids:
-        item = send_weekly_plan_item(session, item_id)
+        item = send_weekly_plan_item(session, item_id, sender_user_id=sender_user_id)
         if not item:
             failed += 1
             continue

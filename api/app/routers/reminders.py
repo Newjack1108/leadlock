@@ -1093,9 +1093,9 @@ def send_weekly_plan_single_item(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != UserRole.DIRECTOR:
-        raise HTTPException(status_code=403, detail="Only directors can send weekly plan actions")
-    item = send_weekly_plan_item(session, item_id)
+    if current_user.role not in (UserRole.DIRECTOR, UserRole.CLOSER):
+        raise HTTPException(status_code=403, detail="Only directors and closers can send weekly plan actions")
+    item = send_weekly_plan_item(session, item_id, sender_user_id=current_user.id)
     if not item:
         raise HTTPException(status_code=404, detail="Weekly plan item not found")
     uid_map: Dict[int, User] = {}
@@ -1127,9 +1127,9 @@ def send_weekly_plan_items_in_bulk(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != UserRole.DIRECTOR:
-        raise HTTPException(status_code=403, detail="Only directors can send weekly plan actions")
-    result = send_weekly_plan_items_bulk(session, payload.item_ids or [])
+    if current_user.role not in (UserRole.DIRECTOR, UserRole.CLOSER):
+        raise HTTPException(status_code=403, detail="Only directors and closers can send weekly plan actions")
+    result = send_weekly_plan_items_bulk(session, payload.item_ids or [], sender_user_id=current_user.id)
     return {
         "message": f"Sent {result['sent']} of {result['requested']} selected item(s)",
         **result,

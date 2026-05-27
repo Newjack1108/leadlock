@@ -103,8 +103,7 @@ export default function WeeklyPlanPage() {
     });
   }, [plan, ownerFilter, channelFilter, statusFilter, likelihoodFilter]);
 
-  const isItemSendable = (item: WeeklyPlanItem) =>
-    item.status === WeeklyPlanItemStatus.PENDING_REVIEW && ['EMAIL', 'SMS'].includes((item.channel || '').toUpperCase());
+  const isItemSendable = (item: WeeklyPlanItem) => item.status === WeeklyPlanItemStatus.PENDING_REVIEW;
 
   const sendableFilteredItems = useMemo(() => filteredItems.filter(isItemSendable), [filteredItems]);
 
@@ -146,7 +145,8 @@ export default function WeeklyPlanPage() {
       setBusyItemId(item.id);
       const updated = await sendWeeklyPlanItem(item.id);
       if (updated.status === WeeklyPlanItemStatus.AUTO_SENT) {
-        toast.success('Message sent');
+        const channel = (item.channel || '').toUpperCase();
+        toast.success(channel === 'CALL' ? 'Call task logged' : 'Message sent');
       } else {
         toast.error(updated.execution_error || 'Failed to send item');
       }
@@ -428,8 +428,8 @@ export default function WeeklyPlanPage() {
                       onClick={() => handleSendItem(item)}
                       title={
                         isItemSendable(item)
-                          ? 'Send this item now'
-                          : 'Only pending EMAIL/SMS items can be sent'
+                          ? 'Send or log this action now'
+                          : 'Only pending review items can be sent'
                       }
                     >
                       Send now
