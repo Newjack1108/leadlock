@@ -60,6 +60,8 @@ def _start_railway_health_server() -> None:
 
 def main() -> None:
     print("LeadLock Worker starting...", file=sys.stderr, flush=True)
+    # Respond to Railway health checks immediately; migrations may take several minutes.
+    _start_railway_health_server()
     print("=" * 50, file=sys.stderr, flush=True)
 
     try:
@@ -94,8 +96,6 @@ def main() -> None:
         print(f"SMS STOP backfill failed (non-fatal): {exc}", file=sys.stderr, flush=True)
 
     print("=" * 50, file=sys.stderr, flush=True)
-
-    _start_railway_health_server()
 
     try:
         start_background_workers()
