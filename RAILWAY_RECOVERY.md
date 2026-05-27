@@ -3,8 +3,9 @@
 ## Symptom: frontend loads but no data / login fails
 
 1. Check API health: `https://leadlock-production.up.railway.app/health`
-   - `"status": "ok"` and `"database": "ok"` → API and Postgres are connected.
-   - `"database": "initializing"` → wait 1–2 minutes (migrations on startup).
+   - `"status": "ok"` and `"database": "ok"` and `"migrations": "complete"` → fully ready.
+   - `"database": "ok"` and `"migrations": "running"` → **you can use the app**; startup migrations still running (normal for 1–10 min on large DBs).
+   - `"database": "initializing"` → API cannot reach Postgres yet; check `DATABASE_URL` (use `postgres.railway.internal` from the Postgres service reference).
    - `"database": "error"` → read `database_error` and fix `DATABASE_URL` (below).
 
 2. **Railway → leadlock (API) → Variables**

@@ -175,16 +175,31 @@ app.include_router(public_configurator.router)
 app.include_router(configurator_invites.router)
 
 # Set during background DB init (see _run_database_initialization).
-_db_ready = False
+_db_ready = False  # True once Postgres accepts connections (app can serve traffic).
+_migrations_complete = False  # True after create_db_and_tables() finishes.
 _db_init_error = None  # str when database init failed
 
 
 def _run_database_initialization() -> None:
     """Run migrations/seed steps without blocking the HTTP server from accepting traffic."""
-    global _db_ready, _db_init_error
+    global _db_ready, _migrations_complete, _db_init_error
     import sys
 
     print("LeadLock API database init (background)...", file=sys.stderr, flush=True)
+    try:
+        from sqlalchemy import text
+
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        _db_ready = True
+        _db_init_error = None
+        print("Database connection OK; serving API while migrations run.", file=sys.stderr, flush=True)
+    except Exception as e:
+        _db_init_error = str(e)
+        print("Database connection failed:", str(e), file=sys.stderr, flush=True)
+        print(traceback.format_exc(), file=sys.stderr, flush=True)
+        return
+
     try:
         from sqlalchemy import text
 
@@ -194,10 +209,11 @@ def _run_database_initialization() -> None:
         print(f"Legacy orderfile drop skipped: {e}", file=sys.stderr, flush=True)
     try:
         create_db_and_tables()
+        _migrations_complete = True
         print("Database initialization complete", file=sys.stderr, flush=True)
     except Exception as e:
         _db_init_error = str(e)
-        print("Database startup failed:", str(e), file=sys.stderr, flush=True)
+        print("Database migration failed:", str(e), file=sys.stderr, flush=True)
         print(traceback.format_exc(), file=sys.stderr, flush=True)
         return
 
@@ -223,7 +239,6 @@ def _run_database_initialization() -> None:
     except Exception as e:
         print(f"SMS STOP backfill failed: {e}", file=sys.stderr, flush=True)
 
-    _db_ready = True
     _db_init_error = None
 
     _wm = os.getenv("WORKER_MODE", "").strip().lower()
@@ -282,7 +297,7 @@ async def root():
 
 @app.get("/health")
 async def health():
-    """Health check for Railway/load balancers. Reports DB readiness when init has finished."""
+    """Health check for Railway/load balancers. Reports connection and migration status."""
     db_status = "initializing"
     db_detail = None
     if _db_ready:
@@ -299,11 +314,24 @@ async def health():
         db_status = "error"
         db_detail = _db_init_error
 
-    overall = "ok" if db_status == "ok" else ("degraded" if db_status == "initializing" else "error")
+    if db_status == "ok" and not _migrations_complete:
+        overall = "degraded"
+        migrations = "running"
+    elif db_status == "ok":
+        overall = "ok"
+        migrations = "complete"
+    elif db_status == "initializing":
+        overall = "degraded"
+        migrations = "pending"
+    else:
+        overall = "error"
+        migrations = "failed" if _db_init_error else "unknown"
+
     return {
         "status": overall,
         "version": "1.0.1",
         "database": db_status,
+        "migrations": migrations,
         "database_error": db_detail,
         "features": ["engagement_proof_toggle"],
     }
