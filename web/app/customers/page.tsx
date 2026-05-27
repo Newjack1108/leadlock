@@ -200,6 +200,8 @@ function CustomersPageContent() {
                         ? 'No customers currently flagged as SMS opted out'
                         : searchApplied.trim()
                         ? 'No customers match your search'
+                        : total === 0
+                        ? 'No customers in this database (API total: 0). If you expect data, compare with Postgres Query or open /api/auth/data-summary in Network.'
                         : 'No customers found'}
                     </td>
                   </tr>

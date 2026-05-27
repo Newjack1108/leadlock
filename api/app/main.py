@@ -305,6 +305,16 @@ async def root():
     return {"message": "LeadLock API"}
 
 
+@app.get("/health/live")
+async def health_live():
+    """
+    Liveness probe for Railway — returns immediately without touching Postgres.
+    Set the service health check path to /health/live so deploys succeed while
+    migrations run in the background.
+    """
+    return {"status": "live"}
+
+
 def _probe_database_connection():
     """Return (ok: bool, error_message: str | None)."""
     from sqlalchemy import text
@@ -351,7 +361,7 @@ async def health():
         overall = "error"
         migrations = "failed" if _db_init_error else "unknown"
 
-    return {
+    payload = {
         "status": overall,
         "version": "1.0.1",
         "database": db_status,
@@ -359,6 +369,25 @@ async def health():
         "database_error": db_detail,
         "features": ["engagement_proof_toggle"],
     }
+    if db_status == "ok":
+        try:
+            from sqlmodel import Session, select, func
+            from app.models import Customer, Lead, User
+            from app.db_utils import scalar_int
+
+            with Session(engine) as session:
+                def _count_table(model):
+                    row = session.exec(select(func.count()).select_from(model)).one()
+                    return scalar_int(row)
+
+                payload["row_counts"] = {
+                    "customers": _count_table(Customer),
+                    "leads": _count_table(Lead),
+                    "users": _count_table(User),
+                }
+        except Exception as exc:
+            payload["row_counts_error"] = str(exc)
+    return payload
 
 
 @app.post("/api/seed")

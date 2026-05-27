@@ -151,8 +151,9 @@ export default function DashboardPage() {
   const [facebookLeadReport, setFacebookLeadReport] = useState<FacebookLeadConversionReport | null>(null);
   const [activeDiscounts, setActiveDiscounts] = useState<DiscountTemplate[]>([]);
   const [loading, setLoading] = useState(true);
-  const [dateFilter, setDateFilter] = useState<DashboardDateFilter>({ mode: 'preset', period: 'week' });
-  const [lastPresetPeriod, setLastPresetPeriod] = useState<DashboardPresetPeriod>('week');
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [dateFilter, setDateFilter] = useState<DashboardDateFilter>({ mode: 'preset', period: 'all' });
+  const [lastPresetPeriod, setLastPresetPeriod] = useState<DashboardPresetPeriod>('all');
   const [showCustomEditor, setShowCustomEditor] = useState(false);
   const [customStartDate, setCustomStartDate] = useState(getDaysAgoDateInputValue(6));
   const [customEndDate, setCustomEndDate] = useState(getTodayDateInputValue());
@@ -161,6 +162,7 @@ export default function DashboardPage() {
   const activeRangeLabel = useMemo(() => getActiveRangeLabel(dateFilter), [dateFilter]);
 
   const fetchDashboard = useCallback(async () => {
+    setLoadError(null);
     try {
       const me = await api.get('/api/auth/me');
       const role = me.data?.role as string | undefined;
@@ -170,8 +172,22 @@ export default function DashboardPage() {
         return;
       }
 
-      const [statsRes, staleRes, companyRes, unreadSmsRes, unreadMessengerRes, locationsRes, discountsRes, communicationRes, facebookReportRes] = await Promise.all([
-        getDashboardStats(activeDateParams),
+      const [
+        statsRes,
+        staleRes,
+        companyRes,
+        unreadSmsRes,
+        unreadMessengerRes,
+        locationsRes,
+        discountsRes,
+        communicationRes,
+        facebookReportRes,
+      ] = await Promise.all([
+        getDashboardStats(activeDateParams).catch((err: unknown) => {
+          setLoadError('Dashboard stats could not be loaded. Try All Time or check API logs.');
+          console.error('getDashboardStats failed', err);
+          return null;
+        }),
         getStaleSummary().catch(() => null), // Don't fail if reminders not available
         getCompanySettings().catch(() => null), // Don't fail if settings not set up yet
         getUnreadSms().catch(() => ({ count: 0, messages: [] })),
@@ -181,7 +197,11 @@ export default function DashboardPage() {
         getDashboardCommunicationTotals(activeDateParams).catch(() => null),
         getFacebookLeadConversionReport(activeDateParams).catch(() => null),
       ]);
-      setStats(statsRes);
+      if (!statsRes) {
+        setStats(null);
+      } else {
+        setStats(statsRes);
+      }
       setStaleSummary(staleRes);
       setCompanySettings(companyRes ?? null);
       setUnreadSms(unreadSmsRes ?? { count: 0, messages: [] });
@@ -261,7 +281,27 @@ export default function DashboardPage() {
   }
 
   if (!stats) {
-    return null;
+    return (
+      <div className="min-h-screen">
+        <Header />
+        <div className="container mx-auto px-4 sm:px-6 py-8">
+          <Card className="max-w-lg mx-auto p-6 text-center space-y-4">
+            <p className="text-muted-foreground">
+              {loadError ?? 'Dashboard stats could not be loaded.'}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Customers and leads may still be available from the menu. If every page is empty, open{' '}
+              <code className="text-xs">/health</code> on the API and check{' '}
+              <code className="text-xs">row_counts</code>, or use DevTools → Network on{' '}
+              <code className="text-xs">/api/customers</code>.
+            </p>
+            <Button type="button" onClick={() => { setLoading(true); void fetchDashboard(); }}>
+              Retry
+            </Button>
+          </Card>
+        </div>
+      </div>
+    );
   }
 
   const liveGiveaways = activeDiscounts.filter((discount) => discount.is_giveaway).length;

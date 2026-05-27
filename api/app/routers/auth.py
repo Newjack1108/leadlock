@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func
 from sqlmodel import Session, select
-from app.database import get_session
-from app.models import User, UserRole
+from app.database import DATABASE_URL, get_session
+from app.db_utils import scalar_int
+from app.models import Customer, Lead, User, UserRole
 from app.auth import (
     verify_password,
     create_access_token,
@@ -13,6 +15,7 @@ from app.system_user_service import system_user_email
 from app.schemas import Token, UserLogin, UserResponse, BootstrapCreate, LoginQuoteResponse
 from app.login_quote_service import generate_login_quote
 from datetime import timedelta
+import os
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -56,7 +59,8 @@ async def login(credentials: UserLogin, session: Session = Depends(get_session))
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    statement = select(User).where(User.email == credentials.email)
+    email = credentials.email.strip()
+    statement = select(User).where(func.lower(User.email) == email.lower())
     user = session.exec(statement).first()
     
     if not user or not verify_password(credentials.password, user.hashed_password):
@@ -82,6 +86,36 @@ async def login(credentials: UserLogin, session: Session = Depends(get_session))
 @router.get("/me", response_model=UserResponse)
 async def get_current_user_info(current_user: User = Depends(get_current_user)):
     return _build_user_response(current_user)
+
+
+@router.get("/data-summary")
+async def get_data_summary(
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Row counts from the database this API instance uses (for diagnosing empty UI).
+    """
+    from urllib.parse import urlparse
+
+    def _count(model, *conditions):
+        stmt = select(func.count()).select_from(model)
+        for cond in conditions:
+            stmt = stmt.where(cond)
+        return scalar_int(session.exec(stmt).one())
+
+    db_host = urlparse(DATABASE_URL.replace("postgres://", "postgresql://", 1)).hostname
+    return {
+        "customers": _count(Customer),
+        "leads": _count(Lead),
+        "leads_not_archived": _count(Lead, Lead.archived_at.is_(None)),
+        "users": _count(User),
+        "database_host": db_host,
+        "use_public_database_url": os.getenv("DATABASE_USE_PUBLIC", "")
+            .strip()
+            .lower()
+            in ("1", "true", "yes"),
+    }
 
 
 @router.get("/login-quote", response_model=LoginQuoteResponse)

@@ -4,6 +4,7 @@
 
 1. Check API health: `https://leadlock-production.up.railway.app/health`
    - `"status": "ok"` and `"database": "ok"` and `"migrations": "complete"` → fully ready.
+   - `"row_counts": { "customers": N, "leads": N, "users": N }` → API sees that many rows (compare with Postgres Query tab). If Query shows thousands but `row_counts` is 0, API is on the wrong database URL.
    - `"database": "ok"` and `"migrations": "running"` → **you can use the app**; startup migrations still running (normal for 1–10 min on large DBs).
    - `"database": "initializing"` → API cannot reach Postgres yet; check `DATABASE_URL` (use `postgres.railway.internal` from the Postgres service reference).
    - `"database": "error"` → read `database_error` and fix `DATABASE_URL` (below).
@@ -23,6 +24,29 @@
    - Counts **0** → wrong database or data loss → restore from **Backup** service volume or S3 (`BACKUP_SETUP.md`).
 
 4. **Redeploy** the `leadlock` API service after fixing variables.
+
+## Symptom: Railway “Application failed to respond” (502)
+
+Railway’s edge could not get a timely response from your container.
+
+1. **Which URL fails?**
+   - `https://leadlock-production.up.railway.app` → **API** service.
+   - `https://www.csgbsales.co.uk` → usually **frontend** service (custom domain). Fix the service that is red in Railway.
+
+2. **API → Deployments → View logs** (latest deploy). Look for:
+   - `HTTP server ready` / `Uvicorn running` → process started; if you still get 502, health check or Postgres may be timing out.
+   - `ModuleNotFoundError` / `ImportError` → broken deploy; redeploy from a good commit.
+   - `Database connection failed` / `Connection timed out` → Postgres or `DATABASE_PUBLIC_URL` (see below).
+   - Crash loop right after start → check **Settings → Health Check Path** is `/health/live` (not a slow DB-only path).
+
+3. **Postgres** service must be **Online**. On **leadlock (API)** variables:
+   - `DATABASE_USE_PUBLIC` = `true`
+   - `DATABASE_PUBLIC_URL` = reference to Postgres → `DATABASE_PUBLIC_URL`
+   - Redeploy API.
+
+4. **Restart**: Postgres → Restart, then API → Redeploy. Wait 2–5 minutes; open `/health/live` (should be instant), then `/health`.
+
+5. **Health check** (Railway → API service → Settings): Path **`/health/live`**, timeout **120s**. Do not use `/health` alone if the DB is slow — it runs `SELECT 1` and can fail deploy health checks.
 
 ## Symptom: `/health` returns 502
 

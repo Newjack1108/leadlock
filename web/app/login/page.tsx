@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import Logo from '@/components/Logo';
-import api from '@/lib/api';
+import api, { getApiErrorDetail } from '@/lib/api';
 import { LEADLOCK_LOGIN_GREETING_SESSION_KEY } from '@/lib/loginGreeting';
 import { toast } from 'sonner';
 
@@ -33,17 +33,12 @@ export default function LoginPage() {
       sessionStorage.setItem(LEADLOCK_LOGIN_GREETING_SESSION_KEY, '1');
       router.push('/');
     } catch (error: unknown) {
-      const detail = (error as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
-      let message = 'Login failed';
-      if (typeof detail === 'string') {
-        message = detail;
-      } else if (Array.isArray(detail) && detail.length > 0) {
-        const first = detail[0] as { msg?: string };
-        message = typeof first?.msg === 'string' ? first.msg : JSON.stringify(detail);
-      } else if (detail != null && typeof detail === 'object') {
-        message = JSON.stringify(detail);
-      }
-      toast.error(message);
+      const message = getApiErrorDetail(error);
+      toast.error(
+        message.includes('Network Error') || message.includes('CORS')
+          ? `${message} — check API is online and CORS_ORIGINS includes this site.`
+          : message || 'Login failed'
+      );
     } finally {
       setLoading(false);
     }
