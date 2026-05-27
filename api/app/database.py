@@ -1,6 +1,7 @@
 from sqlmodel import SQLModel, create_engine, Session, text as sql_text
 from sqlalchemy import inspect, text
 from typing import Generator
+import logging
 import os
 from dotenv import load_dotenv
 
@@ -16,6 +17,13 @@ if "localhost" not in DATABASE_URL and "127.0.0.1" not in DATABASE_URL:
         DATABASE_URL = DATABASE_URL + "?sslmode=require"
     elif "sslmode=" not in DATABASE_URL and "?" in DATABASE_URL:
         DATABASE_URL = DATABASE_URL + "&sslmode=require"
+
+# SQLAlchemy query logging — set SQLALCHEMY_LOG_QUERIES=true to log every SQL
+# statement to stderr with timing. Useful for diagnosing slow queries in production
+# without enabling the full DEBUG echo (which also logs connection pool noise).
+if os.getenv("SQLALCHEMY_LOG_QUERIES", "false").lower() == "true":
+    logging.basicConfig()
+    logging.getLogger("sqlalchemy.engine").setLevel(logging.INFO)
 
 # Only echo SQL in development (noisy in production)
 _echo_sql = os.getenv("DEBUG", "false").lower() == "true" and not os.getenv("RAILWAY_ENVIRONMENT")
