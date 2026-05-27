@@ -5,7 +5,7 @@ from datetime import date, datetime
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from sqlmodel import Session, select
-from typing import List
+from typing import List, Optional
 import httpx
 from app.database import get_session
 from app.models import (
@@ -83,24 +83,21 @@ def _describe_order_flag_changes(changes: list[dict]) -> str:
 
 def generate_invoice_number(session: Session) -> str:
     """Generate a unique invoice number like INV-2025-001."""
+    from sqlalchemy import func
     year = date.today().year
-    statement = select(Order).where(Order.invoice_number.like(f"INV-{year}-%"))
-    orders = session.exec(statement).all()
-    if not orders:
-        return f"INV-{year}-001"
-    numbers = []
-    for order in orders:
-        if not order.invoice_number:
-            continue
+    prefix = f"INV-{year}-"
+    row = session.exec(
+        select(func.max(Order.invoice_number)).where(Order.invoice_number.like(f"{prefix}%"))
+    ).first()
+    if row and row[0] if isinstance(row, (tuple, list)) else row:
+        max_val = row[0] if isinstance(row, (tuple, list)) else row
         try:
-            num = int(order.invoice_number.split("-")[-1])
-            numbers.append(num)
-        except (ValueError, IndexError):
-            continue
-    if not numbers:
-        return f"INV-{year}-001"
-    next_num = max(numbers) + 1
-    return f"INV-{year}-{next_num:03d}"
+            next_num = int(max_val.split("-")[-1]) + 1
+        except (ValueError, IndexError, AttributeError):
+            next_num = 1
+    else:
+        next_num = 1
+    return f"{prefix}{next_num:03d}"
 
 
 def _build_access_sheet_response(order_id: int, session: Session) -> AccessSheetResponse | None:
@@ -146,27 +143,49 @@ def _get_latest_production_send(order_id: int, session: Session) -> tuple[dateti
     return audit_event.created_at, audit_event.created_by_id, (user.full_name if user else None)
 
 
-def build_order_response(order: Order, order_items: List[OrderItem], session: Session) -> OrderResponse:
-    """Build OrderResponse with items and optional customer_name."""
-    customer_name = None
-    customer_source_system = None
-    lead_type = None
-    if order.customer_id:
+def build_order_response(
+    order: Order,
+    order_items: List[OrderItem],
+    session: Session,
+    *,
+    _customer_name: Optional[str] = None,
+    _customer_source_system: Optional[str] = None,
+    _lead_source=None,
+    _lead_type=None,
+    _access_sheet=None,
+    _sent_at=None,
+    _sent_by_id=None,
+    _sent_by_name=None,
+) -> OrderResponse:
+    """Build OrderResponse with items and optional customer_name.
+
+    Pass pre-fetched _* kwargs to avoid per-order DB queries when building responses for a list.
+    """
+    customer_name = _customer_name
+    customer_source_system = _customer_source_system
+    lead_source = _lead_source
+    lead_type = _lead_type
+
+    if customer_name is None and order.customer_id:
         customer = session.exec(select(Customer).where(Customer.id == order.customer_id)).first()
         if customer:
             customer_name = customer.name
             customer_source_system = customer.source_system
 
-    quote = session.exec(select(Quote).where(Quote.id == order.quote_id)).first()
-    lead_source = None
-    if quote and quote.lead_id:
-        lead = session.exec(select(Lead).where(Lead.id == quote.lead_id)).first()
-        lead_source = lead.lead_source if lead else None
-        lead_type = lead.lead_type if lead else None
+    if lead_source is None:
+        quote = session.exec(select(Quote).where(Quote.id == order.quote_id)).first()
+        if quote and quote.lead_id:
+            lead = session.exec(select(Lead).where(Lead.id == quote.lead_id)).first()
+            lead_source = lead.lead_source if lead else None
+            lead_type = lead.lead_type if lead else None
+
     is_ninox_origin = lead_source == LeadSource.NINOX or customer_source_system == "Ninox"
 
-    access_sheet = _build_access_sheet_response(order.id, session)
-    sent_at, sent_by_id, sent_by_name = _get_latest_production_send(order.id, session)
+    access_sheet = _access_sheet if _access_sheet is not None else _build_access_sheet_response(order.id, session)
+    if _sent_at is not None or _sent_by_id is not None or _sent_by_name is not None:
+        sent_at, sent_by_id, sent_by_name = _sent_at, _sent_by_id, _sent_by_name
+    else:
+        sent_at, sent_by_id, sent_by_name = _get_latest_production_send(order.id, session)
 
     return OrderResponse(
         id=order.id,
@@ -227,13 +246,113 @@ async def list_orders(
 ):
     """List all orders (newest first)."""
     statement = select(Order).order_by(Order.created_at.desc())
-    orders = session.exec(statement).all()
+    orders = list(session.exec(statement).all())
+    if not orders:
+        return []
+
+    order_ids = [o.id for o in orders if o.id]
+    customer_ids = list({o.customer_id for o in orders if o.customer_id})
+    quote_ids = list({o.quote_id for o in orders if o.quote_id})
+
+    # Batch load order items
+    item_map: dict = {oid: [] for oid in order_ids}
+    for item in session.exec(
+        select(OrderItem)
+        .where(OrderItem.order_id.in_(order_ids))
+        .order_by(OrderItem.sort_order)
+    ).all():
+        if item.order_id in item_map:
+            item_map[item.order_id].append(item)
+
+    # Batch load customers
+    customer_map: dict = {}
+    if customer_ids:
+        for c in session.exec(select(Customer).where(Customer.id.in_(customer_ids))).all():
+            customer_map[c.id] = c
+
+    # Batch load quotes and their leads
+    quote_map: dict = {}
+    lead_ids: list = []
+    if quote_ids:
+        for q in session.exec(select(Quote).where(Quote.id.in_(quote_ids))).all():
+            quote_map[q.id] = q
+            if q.lead_id:
+                lead_ids.append(q.lead_id)
+
+    lead_map: dict = {}
+    if lead_ids:
+        for lead in session.exec(select(Lead).where(Lead.id.in_(lead_ids))).all():
+            lead_map[lead.id] = lead
+
+    # Batch load access sheet requests (latest per order)
+    frontend = (os.getenv("FRONTEND_URL") or os.getenv("PUBLIC_FRONTEND_URL") or "").strip()
+    if not frontend or not (frontend.startswith("http://") or frontend.startswith("https://")):
+        frontend = "https://leadlock-frontend-production.up.railway.app"
+    base_url = frontend.rstrip("/")
+
+    access_sheet_map: dict = {}
+    for req in session.exec(
+        select(AccessSheetRequest).where(AccessSheetRequest.order_id.in_(order_ids))
+    ).all():
+        existing = access_sheet_map.get(req.order_id)
+        if existing is None or req.created_at > existing.created_at:
+            access_sheet_map[req.order_id] = req
+
+    # Batch load latest production send audit events
+    prod_send_map: dict = {}  # order_id -> (created_at, created_by_id, user_name)
+    for audit_event, user in session.exec(
+        select(OrderAuditEvent, User)
+        .outerjoin(User, OrderAuditEvent.created_by_id == User.id)
+        .where(
+            OrderAuditEvent.order_id.in_(order_ids),
+            OrderAuditEvent.event_type == CustomerHistoryEventType.ORDER_SENT_TO_PRODUCTION.value,
+        )
+        .order_by(OrderAuditEvent.created_at.desc())
+    ).all():
+        if audit_event.order_id not in prod_send_map:
+            prod_send_map[audit_event.order_id] = (
+                audit_event.created_at,
+                audit_event.created_by_id,
+                user.full_name if user else None,
+            )
+
     result = []
     for order in orders:
-        items = session.exec(
-            select(OrderItem).where(OrderItem.order_id == order.id).order_by(OrderItem.sort_order)
-        ).all()
-        result.append(build_order_response(order, list(items), session))
+        items = item_map.get(order.id, [])
+        customer = customer_map.get(order.customer_id) if order.customer_id else None
+        customer_name = customer.name if customer else None
+        customer_source_system = customer.source_system if customer else None
+        quote = quote_map.get(order.quote_id) if order.quote_id else None
+        lead = lead_map.get(quote.lead_id) if (quote and quote.lead_id) else None
+        lead_source = lead.lead_source if lead else None
+        lead_type = lead.lead_type if lead else None
+
+        req = access_sheet_map.get(order.id)
+        if req:
+            access_sheet = AccessSheetResponse(
+                access_sheet_url=f"{base_url}/access-sheet/{req.access_token}",
+                completed=req.completed_at is not None,
+                completed_at=req.completed_at,
+                answers=req.answers,
+            )
+        else:
+            access_sheet = None
+
+        sent_at, sent_by_id, sent_by_name = prod_send_map.get(order.id, (None, None, None))
+
+        result.append(build_order_response(
+            order,
+            items,
+            session,
+            _customer_name=customer_name,
+            _customer_source_system=customer_source_system,
+            _lead_source=lead_source,
+            _lead_type=lead_type,
+            _access_sheet=access_sheet,
+            _sent_at=sent_at,
+            _sent_by_id=sent_by_id,
+            _sent_by_name=sent_by_name,
+        ))
     return result
 
 

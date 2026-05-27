@@ -204,52 +204,76 @@ async def get_dashboard_communication_totals(
         )
     ).one()
 
-    # Reply rate = distinct contacted customers who replied / distinct contacted customers.
-    email_contacted_customers = set(
-        session.exec(
-            select(Email.customer_id).where(
-                Email.direction == EmailDirection.SENT,
-                Email.created_at >= date_clause[0],
-                Email.created_at <= date_clause[1],
-            )
-        ).all()
+    # Reply rate = distinct contacted customers who also replied, computed in SQL (no Python set loads)
+    email_sent_subq = (
+        select(Email.customer_id)
+        .where(
+            Email.direction == EmailDirection.SENT,
+            Email.created_at >= date_clause[0],
+            Email.created_at <= date_clause[1],
+            Email.customer_id.isnot(None),
+        )
+        .distinct()
+        .subquery()
     )
-    email_replied_customers = set(
-        session.exec(
-            select(Email.customer_id).where(
-                Email.direction == EmailDirection.RECEIVED,
-                Email.created_at >= date_clause[0],
-                Email.created_at <= date_clause[1],
-            )
-        ).all()
+    email_replied_subq = (
+        select(Email.customer_id)
+        .where(
+            Email.direction == EmailDirection.RECEIVED,
+            Email.created_at >= date_clause[0],
+            Email.created_at <= date_clause[1],
+            Email.customer_id.isnot(None),
+        )
+        .distinct()
+        .subquery()
     )
+    email_contacted_count = session.exec(
+        select(func.count()).select_from(email_sent_subq)
+    ).one()
+    email_replied_count = session.exec(
+        select(func.count())
+        .select_from(email_sent_subq)
+        .where(email_sent_subq.c.customer_id.in_(select(email_replied_subq.c.customer_id)))
+    ).one()
     email_reply_rate_pct = (
-        round((len(email_contacted_customers & email_replied_customers) / len(email_contacted_customers)) * 100, 1)
-        if len(email_contacted_customers) > 0
+        round((email_replied_count / email_contacted_count) * 100, 1)
+        if email_contacted_count > 0
         else 0.0
     )
 
-    sms_contacted_customers = set(
-        session.exec(
-            select(SmsMessage.customer_id).where(
-                SmsMessage.direction == SmsDirection.SENT,
-                SmsMessage.created_at >= date_clause[0],
-                SmsMessage.created_at <= date_clause[1],
-            )
-        ).all()
+    sms_sent_subq = (
+        select(SmsMessage.customer_id)
+        .where(
+            SmsMessage.direction == SmsDirection.SENT,
+            SmsMessage.created_at >= date_clause[0],
+            SmsMessage.created_at <= date_clause[1],
+            SmsMessage.customer_id.isnot(None),
+        )
+        .distinct()
+        .subquery()
     )
-    sms_replied_customers = set(
-        session.exec(
-            select(SmsMessage.customer_id).where(
-                SmsMessage.direction == SmsDirection.RECEIVED,
-                SmsMessage.created_at >= date_clause[0],
-                SmsMessage.created_at <= date_clause[1],
-            )
-        ).all()
+    sms_replied_subq = (
+        select(SmsMessage.customer_id)
+        .where(
+            SmsMessage.direction == SmsDirection.RECEIVED,
+            SmsMessage.created_at >= date_clause[0],
+            SmsMessage.created_at <= date_clause[1],
+            SmsMessage.customer_id.isnot(None),
+        )
+        .distinct()
+        .subquery()
     )
+    sms_contacted_count = session.exec(
+        select(func.count()).select_from(sms_sent_subq)
+    ).one()
+    sms_replied_count = session.exec(
+        select(func.count())
+        .select_from(sms_sent_subq)
+        .where(sms_sent_subq.c.customer_id.in_(select(sms_replied_subq.c.customer_id)))
+    ).one()
     sms_reply_rate_pct = (
-        round((len(sms_contacted_customers & sms_replied_customers) / len(sms_contacted_customers)) * 100, 1)
-        if len(sms_contacted_customers) > 0
+        round((sms_replied_count / sms_contacted_count) * 100, 1)
+        if sms_contacted_count > 0
         else 0.0
     )
 
@@ -359,9 +383,18 @@ async def get_unread_sms(
     )
     count = session.exec(count_statement).one()
 
+    # Bulk-load customers to avoid N+1 queries
+    customer_ids = list({msg.customer_id for msg in messages if msg.customer_id})
+    customers_by_id: dict = {}
+    if customer_ids:
+        customer_rows = session.exec(
+            select(Customer).where(Customer.id.in_(customer_ids))
+        ).all()
+        customers_by_id = {c.id: c for c in customer_rows}
+
     items = []
     for msg in messages:
-        customer = session.get(Customer, msg.customer_id)
+        customer = customers_by_id.get(msg.customer_id)
         customer_name = customer.name if customer else ""
         received_at = msg.received_at or msg.created_at
         body_snippet = (msg.body[:80] + "...") if len(msg.body) > 80 else msg.body
@@ -396,9 +429,19 @@ async def get_unread_messenger(
         MessengerMessage.direction == MessengerDirection.RECEIVED, MessengerMessage.read_at.is_(None)
     )
     count = session.exec(count_statement).one()
+
+    # Bulk-load customers to avoid N+1 queries
+    customer_ids = list({msg.customer_id for msg in messages if msg.customer_id})
+    customers_by_id: dict = {}
+    if customer_ids:
+        customer_rows = session.exec(
+            select(Customer).where(Customer.id.in_(customer_ids))
+        ).all()
+        customers_by_id = {c.id: c for c in customer_rows}
+
     items = []
     for msg in messages:
-        customer = session.get(Customer, msg.customer_id)
+        customer = customers_by_id.get(msg.customer_id)
         customer_name = customer.name if customer else ""
         received_at = msg.received_at or msg.created_at
         body_snippet = (msg.body[:80] + "...") if len(msg.body) > 80 else msg.body
@@ -469,12 +512,20 @@ async def get_qualified_for_quoting(
     if assigned_to == "me":
         statement = statement.where(Lead.assigned_to_id == current_user.id)
     leads = list(session.exec(statement).all())
+
+    # Bulk-load customers to avoid N+1 queries
+    customer_ids = list({lead.customer_id for lead in leads if lead.customer_id})
+    customers_by_id: dict = {}
+    if customer_ids:
+        customer_rows = session.exec(
+            select(Customer).where(Customer.id.in_(customer_ids))
+        ).all()
+        customers_by_id = {c.id: c for c in customer_rows}
+
     items = []
     for lead in leads:
-        customer_name = None
-        if lead.customer_id:
-            customer = session.get(Customer, lead.customer_id)
-            customer_name = customer.name if customer else None
+        customer = customers_by_id.get(lead.customer_id) if lead.customer_id else None
+        customer_name = customer.name if customer else None
         items.append(
             QualifiedForQuotingItem(
                 id=lead.id,

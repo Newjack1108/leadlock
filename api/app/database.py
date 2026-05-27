@@ -20,6 +20,13 @@ if "localhost" not in DATABASE_URL and "127.0.0.1" not in DATABASE_URL:
 # Only echo SQL in development (noisy in production)
 _echo_sql = os.getenv("DEBUG", "false").lower() == "true" and not os.getenv("RAILWAY_ENVIRONMENT")
 
+# Optional: enable SQLAlchemy query logging to identify slow queries.
+# Set SQLALCHEMY_LOG_QUERIES=true to activate (outputs every SQL statement to stderr).
+if os.getenv("SQLALCHEMY_LOG_QUERIES", "false").lower() == "true":
+    import logging
+    logging.basicConfig()
+    logging.getLogger("sqlalchemy.engine").setLevel(logging.INFO)
+
 _engine_kwargs = {"echo": _echo_sql, "pool_pre_ping": True}
 if not DATABASE_URL.startswith("sqlite"):
     _engine_kwargs.update(

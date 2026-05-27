@@ -422,6 +422,107 @@ def batch_reply_metrics_since_sent(session: Session, quotes: List[Quote]) -> Dic
     return out
 
 
+def batch_load_quote_related(
+    session: Session,
+    quotes: List[Quote],
+) -> Tuple[
+    Dict[int, str],          # customer_id -> customer_name
+    Dict[int, Optional[datetime]],  # customer_id -> last_activity_date
+    Dict[int, str],          # lead_id -> lead_name
+    Dict[int, any],          # lead_id -> lead_type
+    Dict[int, int],          # quote_id -> total_open_count
+    Dict[int, int],          # quote_id -> order_id (for ACCEPTED quotes)
+    Dict[int, List[QuoteDiscount]],  # quote_id -> discounts
+    Dict[int, List[QuoteItem]],      # quote_id -> items
+]:
+    """Batch-load all related data for a list of quotes to avoid N+1 queries."""
+    if not quotes:
+        return {}, {}, {}, {}, {}, {}, {}, {}
+
+    quote_ids = [q.id for q in quotes if q.id]
+    customer_ids = list({q.customer_id for q in quotes if q.customer_id})
+    lead_ids = list({q.lead_id for q in quotes if q.lead_id})
+
+    # Batch load customers
+    customer_name_map: Dict[int, Optional[str]] = {}
+    if customer_ids:
+        for c in session.exec(select(Customer).where(Customer.id.in_(customer_ids))).all():
+            customer_name_map[c.id] = c.name or None
+
+    # Batch load last activity dates per customer
+    last_activity_map: Dict[int, Optional[datetime]] = {}
+    if customer_ids:
+        rows = session.exec(
+            select(Activity.customer_id, func.max(Activity.created_at))
+            .where(Activity.customer_id.in_(customer_ids))
+            .group_by(Activity.customer_id)
+        ).all()
+        for cid, ts in rows:
+            if cid is not None:
+                last_activity_map[int(cid)] = ts
+
+    # Batch load leads
+    lead_name_map: Dict[int, str] = {}
+    lead_type_map: Dict[int, any] = {}
+    if lead_ids:
+        for lead in session.exec(select(Lead).where(Lead.id.in_(lead_ids))).all():
+            lead_name_map[lead.id] = lead.name or ""
+            lead_type_map[lead.id] = lead.lead_type
+
+    # Batch load open counts per quote
+    open_count_map: Dict[int, int] = {}
+    if quote_ids:
+        rows = session.exec(
+            select(QuoteEmail.quote_id, func.coalesce(func.sum(QuoteEmail.open_count), 0))
+            .where(QuoteEmail.quote_id.in_(quote_ids))
+            .group_by(QuoteEmail.quote_id)
+        ).all()
+        for qid, cnt in rows:
+            if qid is not None:
+                open_count_map[int(qid)] = int(cnt)
+
+    # Batch load order_ids for ACCEPTED quotes
+    order_id_map: Dict[int, int] = {}
+    accepted_quote_ids = [q.id for q in quotes if q.status == QuoteStatus.ACCEPTED and q.id]
+    if accepted_quote_ids:
+        for order in session.exec(
+            select(Order).where(Order.quote_id.in_(accepted_quote_ids))
+        ).all():
+            if order.quote_id is not None:
+                order_id_map[int(order.quote_id)] = order.id
+
+    # Batch load discounts per quote
+    discount_map: Dict[int, List[QuoteDiscount]] = {qid: [] for qid in quote_ids}
+    if quote_ids:
+        for disc in session.exec(
+            select(QuoteDiscount).where(QuoteDiscount.quote_id.in_(quote_ids))
+        ).all():
+            if disc.quote_id in discount_map:
+                discount_map[disc.quote_id].append(disc)
+
+    # Batch load items per quote
+    item_map: Dict[int, List[QuoteItem]] = {qid: [] for qid in quote_ids}
+    if quote_ids:
+        for item in session.exec(
+            select(QuoteItem)
+            .where(QuoteItem.quote_id.in_(quote_ids))
+            .order_by(QuoteItem.sort_order)
+        ).all():
+            if item.quote_id in item_map:
+                item_map[item.quote_id].append(item)
+
+    return (
+        customer_name_map,
+        last_activity_map,
+        lead_name_map,
+        lead_type_map,
+        open_count_map,
+        order_id_map,
+        discount_map,
+        item_map,
+    )
+
+
 def build_quote_response(
     quote: Quote,
     quote_items: List[QuoteItem],
@@ -431,29 +532,56 @@ def build_quote_response(
     customer_replied_since_quote_sent: bool = False,
     inbound_count_since_quote_sent: int = 0,
     draft_save_response: bool = False,
+    # Pre-fetched data (avoids N+1 when building responses for a list of quotes).
+    # Pass _prefetched=True together with the _* kwargs to use batch-loaded values.
+    _prefetched: bool = False,
+    _customer_name: Optional[str] = None,
+    _customer_last_interacted_at: Optional[datetime] = None,
+    _lead_name: Optional[str] = None,
+    _lead_type=None,
+    _total_open_count: Optional[int] = None,
+    _order_id: Optional[int] = None,
+    _discounts: Optional[List[QuoteDiscount]] = None,
 ) -> QuoteResponse:
     """Build a QuoteResponse with items and discounts.
 
     When draft_save_response is True (PUT draft autosave), skip expensive aggregates that
     the editor does not need to refresh on every keystroke (activity scan, email open sum).
+
+    Pass _prefetched=True with the _* kwargs (from batch_load_quote_related) to avoid
+    per-quote DB queries when building responses for a list of quotes.
     """
-    discount_statement = select(QuoteDiscount).where(QuoteDiscount.quote_id == quote.id)
-    quote_discounts = session.exec(discount_statement).all()
+    # Use pre-fetched discounts or fall back to a single query (single-quote path)
+    if _prefetched and _discounts is not None:
+        quote_discounts = _discounts
+    else:
+        discount_statement = select(QuoteDiscount).where(QuoteDiscount.quote_id == quote.id)
+        quote_discounts = session.exec(discount_statement).all()
+
     customer_name = None
     customer_last_interacted_at = None
     lead_name = None
     lead_type = None
-    if quote.customer_id:
-        customer = session.exec(select(Customer).where(Customer.id == quote.customer_id)).first()
-        customer_name = customer.name if customer else None
-        if not draft_save_response:
-            customer_last_interacted_at = get_last_activity_date(quote.customer_id, session)
-    elif quote.dealer_customer_name:
+
+    if _prefetched:
+        customer_name = _customer_name
+        customer_last_interacted_at = _customer_last_interacted_at
+        lead_name = _lead_name
+        lead_type = _lead_type
+    else:
+        if quote.customer_id:
+            customer = session.exec(select(Customer).where(Customer.id == quote.customer_id)).first()
+            customer_name = customer.name if customer else None
+            if not draft_save_response:
+                customer_last_interacted_at = get_last_activity_date(quote.customer_id, session)
+        if quote.lead_id:
+            lead = session.exec(select(Lead).where(Lead.id == quote.lead_id)).first()
+            lead_name = lead.name if lead else None
+            lead_type = lead.lead_type if lead else None
+
+    # Dealer quotes have no customer_id; fall back to dealer_customer_name
+    if not customer_name and quote.dealer_customer_name:
         customer_name = quote.dealer_customer_name
-    if quote.lead_id:
-        lead = session.exec(select(Lead).where(Lead.id == quote.lead_id)).first()
-        lead_name = lead.name if lead else None
-        lead_type = lead.lead_type if lead else None
 
     # Computed VAT (total_amount is Ex VAT @ 20%; deposit/balance stored as inc VAT)
     vat_amount = quote.total_amount * VAT_RATE_DECIMAL
@@ -463,6 +591,8 @@ def build_quote_response(
 
     if draft_save_response:
         total_open_count = 0
+    elif _total_open_count is not None:
+        total_open_count = _total_open_count
     else:
         total_open_count = session.exec(
             select(func.coalesce(func.sum(QuoteEmail.open_count), 0)).where(QuoteEmail.quote_id == quote.id)
@@ -470,11 +600,14 @@ def build_quote_response(
         if hasattr(total_open_count, "__int__"):
             total_open_count = int(total_open_count)
 
-    order_id = None
-    if quote.status == QuoteStatus.ACCEPTED:
-        order = session.exec(select(Order).where(Order.quote_id == quote.id)).first()
-        if order:
-            order_id = order.id
+    if _order_id is not None:
+        order_id = _order_id if _order_id != 0 else None
+    else:
+        order_id = None
+        if quote.status == QuoteStatus.ACCEPTED:
+            order = session.exec(select(Order).where(Order.quote_id == quote.id)).first()
+            if order:
+                order_id = order.id
 
     return QuoteResponse(
         id=quote.id,
@@ -701,49 +834,39 @@ def generate_quote_number(session: Session) -> str:
     """Generate a unique quote number like QT-2024-001."""
     from datetime import date
     year = date.today().year
-    
-    # Find the highest quote number for this year
-    statement = select(Quote).where(Quote.quote_number.like(f"QT-{year}-%"))
-    quotes = session.exec(statement).all()
-    
-    if not quotes:
-        return f"QT-{year}-001"
-    
-    # Extract numbers and find max
-    numbers = []
-    for quote in quotes:
+    prefix = f"QT-{year}-"
+    # Use MAX() to find the highest existing number in a single query
+    row = session.exec(
+        select(func.max(Quote.quote_number)).where(Quote.quote_number.like(f"{prefix}%"))
+    ).first()
+    if row and row[0] if isinstance(row, (tuple, list)) else row:
+        max_val = row[0] if isinstance(row, (tuple, list)) else row
         try:
-            num = int(quote.quote_number.split('-')[-1])
-            numbers.append(num)
-        except (ValueError, IndexError):
-            continue
-    
-    if not numbers:
-        return f"QT-{year}-001"
-    
-    next_num = max(numbers) + 1
-    return f"QT-{year}-{next_num:03d}"
+            next_num = int(max_val.split("-")[-1]) + 1
+        except (ValueError, IndexError, AttributeError):
+            next_num = 1
+    else:
+        next_num = 1
+    return f"{prefix}{next_num:03d}"
 
 
 def generate_order_number(session: Session) -> str:
     """Generate a unique order number like ORD-2025-001."""
     from datetime import date
     year = date.today().year
-    statement = select(Order).where(Order.order_number.like(f"ORD-{year}-%"))
-    orders = session.exec(statement).all()
-    if not orders:
-        return f"ORD-{year}-001"
-    numbers = []
-    for order in orders:
+    prefix = f"ORD-{year}-"
+    row = session.exec(
+        select(func.max(Order.order_number)).where(Order.order_number.like(f"{prefix}%"))
+    ).first()
+    if row and row[0] if isinstance(row, (tuple, list)) else row:
+        max_val = row[0] if isinstance(row, (tuple, list)) else row
         try:
-            num = int(order.order_number.split("-")[-1])
-            numbers.append(num)
-        except (ValueError, IndexError):
-            continue
-    if not numbers:
-        return f"ORD-{year}-001"
-    next_num = max(numbers) + 1
-    return f"ORD-{year}-{next_num:03d}"
+            next_num = int(max_val.split("-")[-1]) + 1
+        except (ValueError, IndexError, AttributeError):
+            next_num = 1
+    else:
+        next_num = 1
+    return f"{prefix}{next_num:03d}"
 
 
 def create_order_from_quote(quote: Quote, session: Session, created_by_id: int) -> Order:
@@ -1144,18 +1267,30 @@ async def get_all_quotes(
             .offset((page - 1) * page_size)
             .limit(page_size)
         )
-        quotes = session.exec(statement).all()
+        quotes = list(session.exec(statement).all())
 
         lead_ids_page = list({q.lead_id for q in quotes if q.lead_id})
         lead_sent_map = batch_lead_quotes_sent_counts(session, lead_ids_page)
-        reply_map = batch_reply_metrics_since_sent(session, list(quotes))
+        reply_map = batch_reply_metrics_since_sent(session, quotes)
+
+        # Batch-load all related data in a fixed number of queries (no N+1)
+        (
+            customer_name_map,
+            last_activity_map,
+            lead_name_map,
+            lead_type_map,
+            open_count_map,
+            order_id_map,
+            discount_map,
+            item_map,
+        ) = batch_load_quote_related(session, quotes)
 
         result = []
         for quote in quotes:
-            item_statement = select(QuoteItem).where(QuoteItem.quote_id == quote.id).order_by(QuoteItem.sort_order)
-            quote_items = session.exec(item_statement).all()
+            quote_items = item_map.get(quote.id, [])
             replied, inbound_n = reply_map.get(quote.id, (False, 0))
             lead_n = lead_sent_map.get(int(quote.lead_id), 0) if quote.lead_id else None
+            cid = quote.customer_id
             result.append(
                 build_quote_response(
                     quote,
@@ -1164,6 +1299,14 @@ async def get_all_quotes(
                     lead_quotes_sent_count=lead_n,
                     customer_replied_since_quote_sent=replied,
                     inbound_count_since_quote_sent=inbound_n,
+                    _prefetched=True,
+                    _customer_name=customer_name_map.get(cid) if cid else quote.dealer_customer_name,
+                    _customer_last_interacted_at=last_activity_map.get(cid) if cid else None,
+                    _lead_name=lead_name_map.get(quote.lead_id) if quote.lead_id else None,
+                    _lead_type=lead_type_map.get(quote.lead_id) if quote.lead_id else None,
+                    _total_open_count=open_count_map.get(quote.id, 0),
+                    _order_id=order_id_map.get(quote.id, 0),
+                    _discounts=discount_map.get(quote.id, []),
                 )
             )
 
