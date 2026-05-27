@@ -174,18 +174,20 @@ app.include_router(configurator.router)
 app.include_router(public_configurator.router)
 app.include_router(configurator_invites.router)
 
+# Set during background DB init (see _run_database_initialization).
+_db_ready = False
+_db_init_error = None  # str when database init failed
 
-@app.on_event("startup")
-def on_startup():
+
+def _run_database_initialization() -> None:
+    """Run migrations/seed steps without blocking the HTTP server from accepting traffic."""
+    global _db_ready, _db_init_error
     import sys
-    print("LeadLock API startup...", file=sys.stderr, flush=True)
-    print("=" * 50, file=sys.stderr, flush=True)
-    print("Starting database initialization...", file=sys.stderr, flush=True)
-    print("=" * 50, file=sys.stderr, flush=True)
-    # One-time cleanup: drop the legacy ``orderfile`` table that briefly shipped
-    # in commit 75ebac1 before being unified into ``customerfile``. Idempotent.
+
+    print("LeadLock API database init (background)...", file=sys.stderr, flush=True)
     try:
         from sqlalchemy import text
+
         with engine.begin() as conn:
             conn.execute(text("DROP TABLE IF EXISTS orderfile"))
     except Exception as e:
@@ -194,10 +196,10 @@ def on_startup():
         create_db_and_tables()
         print("Database initialization complete", file=sys.stderr, flush=True)
     except Exception as e:
+        _db_init_error = str(e)
         print("Database startup failed:", str(e), file=sys.stderr, flush=True)
         print(traceback.format_exc(), file=sys.stderr, flush=True)
-        raise
-    print("=" * 50, file=sys.stderr, flush=True)
+        return
 
     try:
         from app.email_service import log_inbound_poll_configuration
@@ -221,8 +223,9 @@ def on_startup():
     except Exception as e:
         print(f"SMS STOP backfill failed: {e}", file=sys.stderr, flush=True)
 
-    # Background workers: off by default so the API process only serves HTTP. Run ``python worker.py``
-    # on the worker service, or set WORKER_MODE=true to embed workers (e.g. local monolith).
+    _db_ready = True
+    _db_init_error = None
+
     _wm = os.getenv("WORKER_MODE", "").strip().lower()
     _embed_workers = _wm in ("true", "1", "yes", "on")
     if not _embed_workers:
@@ -242,6 +245,36 @@ def on_startup():
         print(f"Background workers not started: {e}", file=sys.stderr, flush=True)
 
 
+@app.on_event("startup")
+def on_startup():
+    import sys
+    import threading
+
+    print("LeadLock API startup...", file=sys.stderr, flush=True)
+    db_url = os.getenv("DATABASE_URL", "")
+    if not db_url.strip():
+        print(
+            "WARNING: DATABASE_URL is not set — API will start but all DB routes will fail. "
+            "In Railway, link the Postgres plugin to this service.",
+            file=sys.stderr,
+            flush=True,
+        )
+    elif db_url.startswith("sqlite"):
+        print(f"DATABASE_URL uses sqlite ({db_url[:40]}...)", file=sys.stderr, flush=True)
+    else:
+        # Log host only (no credentials)
+        try:
+            from urllib.parse import urlparse
+
+            host = urlparse(db_url.replace("postgres://", "postgresql://", 1)).hostname
+            print(f"DATABASE_URL host: {host or '(unknown)'}", file=sys.stderr, flush=True)
+        except Exception:
+            print("DATABASE_URL is set (host not parsed)", file=sys.stderr, flush=True)
+
+    threading.Thread(target=_run_database_initialization, daemon=True).start()
+    print("HTTP server ready; database init running in background.", file=sys.stderr, flush=True)
+
+
 @app.get("/")
 async def root():
     return {"message": "LeadLock API"}
@@ -249,8 +282,31 @@ async def root():
 
 @app.get("/health")
 async def health():
-    """Lightweight health check (no DB). Use this to verify the container is serving."""
-    return {"status": "ok", "version": "1.0.1", "features": ["engagement_proof_toggle"]}
+    """Health check for Railway/load balancers. Reports DB readiness when init has finished."""
+    db_status = "initializing"
+    db_detail = None
+    if _db_ready:
+        try:
+            from sqlalchemy import text
+
+            with engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+            db_status = "ok"
+        except Exception as exc:
+            db_status = "error"
+            db_detail = str(exc)
+    elif _db_init_error:
+        db_status = "error"
+        db_detail = _db_init_error
+
+    overall = "ok" if db_status == "ok" else ("degraded" if db_status == "initializing" else "error")
+    return {
+        "status": overall,
+        "version": "1.0.1",
+        "database": db_status,
+        "database_error": db_detail,
+        "features": ["engagement_proof_toggle"],
+    }
 
 
 @app.post("/api/seed")
