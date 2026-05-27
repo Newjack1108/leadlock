@@ -6,7 +6,22 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://user:password@localhost:5432/leadlock")
+
+def _resolve_database_url() -> str:
+    """
+    Railway private URL (postgres.railway.internal) only works when API and Postgres
+    are in the same project with private networking. If that times out, set on the API service:
+      DATABASE_USE_PUBLIC=true
+      DATABASE_PUBLIC_URL=<reference Postgres DATABASE_PUBLIC_URL>
+    """
+    use_public = os.getenv("DATABASE_USE_PUBLIC", "").strip().lower() in ("1", "true", "yes")
+    public_url = os.getenv("DATABASE_PUBLIC_URL", "").strip()
+    if use_public and public_url:
+        return public_url
+    return os.getenv("DATABASE_URL", "postgresql://user:password@localhost:5432/leadlock").strip()
+
+
+DATABASE_URL = _resolve_database_url()
 # Railway and some providers use postgres://; SQLAlchemy/psycopg2 expect postgresql://
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = "postgresql://" + DATABASE_URL[9:]

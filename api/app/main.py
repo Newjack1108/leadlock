@@ -283,6 +283,16 @@ def on_startup():
 
             host = urlparse(db_url.replace("postgres://", "postgresql://", 1)).hostname
             print(f"DATABASE_URL host: {host or '(unknown)'}", file=sys.stderr, flush=True)
+            if os.getenv("DATABASE_USE_PUBLIC", "").strip().lower() in ("1", "true", "yes"):
+                print("DATABASE_USE_PUBLIC is enabled (TCP proxy URL).", file=sys.stderr, flush=True)
+            elif host and host.endswith(".railway.internal"):
+                print(
+                    "Using Railway private Postgres host. If connection times out, "
+                    "link API+Postgres in the same project or set DATABASE_USE_PUBLIC=true "
+                    "and reference DATABASE_PUBLIC_URL from the Postgres service.",
+                    file=sys.stderr,
+                    flush=True,
+                )
         except Exception:
             print("DATABASE_URL is set (host not parsed)", file=sys.stderr, flush=True)
 

@@ -27,3 +27,29 @@
 ## Symptom: `/health` returns 502
 
 The container is not listening. Check **Deploy logs** for `Database startup failed` or missing `DATABASE_URL`.
+
+## Symptom: `connection to postgres.railway.internal ... Connection timed out`
+
+The API **cannot reach Postgres on Railway’s private network**. The URL format is fine; the **network path** is broken.
+
+**Fix (try in order):**
+
+1. **Same Railway project** — `leadlock` (API), `LeadLock Frontend`, `Postgres`, and `Worker` must all be in **one** project (not a copy of the repo in a second project).
+
+2. **Link services in the UI** (best fix):
+   - Open the **Postgres** service → **Connect** (or **Variables** / service connections).
+   - Connect it to the **leadlock** API service (and Worker if used).
+   - On **leadlock** → **Variables**, use **Add reference** → Postgres → `DATABASE_URL` (do not paste a URL copied from another project).
+
+3. **Confirm Postgres is running** — Postgres service status **Online**, not crashed or deploying.
+
+4. **Workaround: public TCP URL** (if private network still times out):
+   - On **Postgres** → **Variables**, find **`DATABASE_PUBLIC_URL`** (host looks like `*.proxy.rlwy.net` or similar).
+   - On **leadlock** → **Variables**, add:
+     - `DATABASE_USE_PUBLIC` = `true`
+     - `DATABASE_PUBLIC_URL` = **reference** to Postgres → `DATABASE_PUBLIC_URL`
+   - Redeploy **leadlock**. The app will use the public proxy (still works from Railway; slightly different routing).
+
+5. **Do not** point `DATABASE_URL` at a Postgres instance from a **different** Railway project or a deleted service — DNS may resolve but nothing listens → timeout.
+
+After a successful connection, deploy logs should show `Database connection OK`. Then check row counts in Postgres Query tab.
