@@ -112,11 +112,17 @@ export function getApiErrorDetail(err: unknown): string {
       if (typeof detail === 'string' && detail.trim()) return detail;
       if (Array.isArray(detail)) {
         return detail
-          .map((item) =>
-            typeof item === 'object' && item !== null && 'msg' in item
-              ? String((item as { msg: unknown }).msg)
-              : JSON.stringify(item)
-          )
+          .map((item) => {
+            if (typeof item !== 'object' || item === null || !('msg' in item)) {
+              return JSON.stringify(item);
+            }
+            const loc =
+              'loc' in item && Array.isArray((item as { loc?: unknown }).loc)
+                ? (item as { loc: (string | number)[] }).loc.filter((p) => p !== 'body').join('.')
+                : '';
+            const msg = String((item as { msg: unknown }).msg);
+            return loc ? `${loc}: ${msg}` : msg;
+          })
           .join('; ');
       }
     }

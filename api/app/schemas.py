@@ -28,8 +28,25 @@ class LoginQuoteResponse(BaseModel):
 
 
 class UserLogin(BaseModel):
-    email: EmailStr
+    """Login body. Use plain str for email (not EmailStr) so stored addresses always validate."""
+
+    email: str
     password: str
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, v: str) -> str:
+        normalized = (v or "").strip()
+        if not normalized:
+            raise ValueError("Email is required")
+        return normalized
+
+    @field_validator("password")
+    @classmethod
+    def password_present(cls, v: str) -> str:
+        if v is None or not isinstance(v, str):
+            raise ValueError("Password is required")
+        return v
 
 
 class BootstrapCreate(BaseModel):
