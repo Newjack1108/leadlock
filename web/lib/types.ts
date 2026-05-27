@@ -286,6 +286,8 @@ export interface Customer {
   automated_reminder_outreach_opt_out?: boolean;
   /** When true, this address is known bad and automated emails should be suppressed. */
   wrong_email_address?: boolean;
+  /** Sandbox customer: excluded from dashboard/reports stats and automated outreach. */
+  exclude_from_stats?: boolean;
   created_at: string;
   updated_at: string;
   messenger_psid?: string | null;

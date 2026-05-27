@@ -22,6 +22,11 @@ from app.models import (
 from app.distance_service import bulk_geocode_postcodes
 from app.date_ranges import resolve_date_range
 from app.auth import require_non_dealer_user
+from app.stats_exclusion import (
+    customer_communication_counts_toward_stats,
+    lead_counts_toward_stats,
+    quote_counts_toward_stats,
+)
 from app.schemas import (
     DashboardStats,
     DashboardChannelDirectionCounts,
@@ -58,7 +63,7 @@ async def get_dashboard_stats(
         quote_date_filter = (Quote.sent_at >= resolved_range.start) & (Quote.sent_at <= resolved_range.end)
 
     def count_leads(extra_cond=None):
-        stmt = select(func.count(Lead.id))
+        stmt = select(func.count(Lead.id)).where(lead_counts_toward_stats())
         if extra_cond is not None:
             stmt = stmt.where(extra_cond)
         if date_filter is not None:
@@ -86,7 +91,8 @@ async def get_dashboard_stats(
 
     # Count quotes sent (Quote records with status beyond DRAFT; one lead can have multiple)
     quotes_sent_stmt = select(func.count(Quote.id)).where(
-        Quote.status.in_([QuoteStatus.SENT, QuoteStatus.VIEWED, QuoteStatus.ACCEPTED, QuoteStatus.REJECTED, QuoteStatus.EXPIRED])
+        Quote.status.in_([QuoteStatus.SENT, QuoteStatus.VIEWED, QuoteStatus.ACCEPTED, QuoteStatus.REJECTED, QuoteStatus.EXPIRED]),
+        quote_counts_toward_stats(),
     )
     if quote_date_filter is not None:
         quotes_sent_stmt = quotes_sent_stmt.where(quote_date_filter)
@@ -97,7 +103,9 @@ async def get_dashboard_stats(
         select(Lead.id)
         .join(Quote, (Lead.customer_id == Quote.customer_id) & (Lead.customer_id.isnot(None)))
         .where(
-            Quote.status.in_([QuoteStatus.SENT, QuoteStatus.VIEWED, QuoteStatus.ACCEPTED, QuoteStatus.REJECTED, QuoteStatus.EXPIRED])
+            Quote.status.in_([QuoteStatus.SENT, QuoteStatus.VIEWED, QuoteStatus.ACCEPTED, QuoteStatus.REJECTED, QuoteStatus.EXPIRED]),
+            quote_counts_toward_stats(),
+            lead_counts_toward_stats(),
         )
     )
     if quote_date_filter is not None:
@@ -109,6 +117,7 @@ async def get_dashboard_stats(
     # Leads by source (grouped count, with optional date filter)
     leads_by_source_stmt = (
         select(Lead.lead_source, func.count(Lead.id).label("count"))
+        .where(lead_counts_toward_stats())
         .group_by(Lead.lead_source)
     )
     if date_filter is not None:
@@ -159,48 +168,48 @@ async def get_dashboard_communication_totals(
     resolved_range = resolve_date_range(period=period, start_date=start_date, end_date=end_date, default_period="week")
     date_clause = (resolved_range.start, resolved_range.end)
 
+    comm_date_filter = lambda model: (
+        model.created_at >= date_clause[0],
+        model.created_at <= date_clause[1],
+        customer_communication_counts_toward_stats(model),
+    )
+
     email_sent = session.exec(
         select(func.count(Email.id)).where(
             Email.direction == EmailDirection.SENT,
-            Email.created_at >= date_clause[0],
-            Email.created_at <= date_clause[1],
+            *comm_date_filter(Email),
         )
     ).one()
     email_received = session.exec(
         select(func.count(Email.id)).where(
             Email.direction == EmailDirection.RECEIVED,
-            Email.created_at >= date_clause[0],
-            Email.created_at <= date_clause[1],
+            *comm_date_filter(Email),
         )
     ).one()
 
     sms_sent = session.exec(
         select(func.count(SmsMessage.id)).where(
             SmsMessage.direction == SmsDirection.SENT,
-            SmsMessage.created_at >= date_clause[0],
-            SmsMessage.created_at <= date_clause[1],
+            *comm_date_filter(SmsMessage),
         )
     ).one()
     sms_received = session.exec(
         select(func.count(SmsMessage.id)).where(
             SmsMessage.direction == SmsDirection.RECEIVED,
-            SmsMessage.created_at >= date_clause[0],
-            SmsMessage.created_at <= date_clause[1],
+            *comm_date_filter(SmsMessage),
         )
     ).one()
 
     phone_answered = session.exec(
         select(func.count(Activity.id)).where(
             Activity.activity_type == ActivityType.LIVE_CALL,
-            Activity.created_at >= date_clause[0],
-            Activity.created_at <= date_clause[1],
+            *comm_date_filter(Activity),
         )
     ).one()
     phone_unanswered = session.exec(
         select(func.count(Activity.id)).where(
             Activity.activity_type == ActivityType.CALL_ATTEMPTED,
-            Activity.created_at >= date_clause[0],
-            Activity.created_at <= date_clause[1],
+            *comm_date_filter(Activity),
         )
     ).one()
 
@@ -209,8 +218,7 @@ async def get_dashboard_communication_totals(
         session.exec(
             select(Email.customer_id).where(
                 Email.direction == EmailDirection.SENT,
-                Email.created_at >= date_clause[0],
-                Email.created_at <= date_clause[1],
+                *comm_date_filter(Email),
             )
         ).all()
     )
@@ -218,8 +226,7 @@ async def get_dashboard_communication_totals(
         session.exec(
             select(Email.customer_id).where(
                 Email.direction == EmailDirection.RECEIVED,
-                Email.created_at >= date_clause[0],
-                Email.created_at <= date_clause[1],
+                *comm_date_filter(Email),
             )
         ).all()
     )
@@ -233,8 +240,7 @@ async def get_dashboard_communication_totals(
         session.exec(
             select(SmsMessage.customer_id).where(
                 SmsMessage.direction == SmsDirection.SENT,
-                SmsMessage.created_at >= date_clause[0],
-                SmsMessage.created_at <= date_clause[1],
+                *comm_date_filter(SmsMessage),
             )
         ).all()
     )
@@ -242,8 +248,7 @@ async def get_dashboard_communication_totals(
         session.exec(
             select(SmsMessage.customer_id).where(
                 SmsMessage.direction == SmsDirection.RECEIVED,
-                SmsMessage.created_at >= date_clause[0],
-                SmsMessage.created_at <= date_clause[1],
+                *comm_date_filter(SmsMessage),
             )
         ).all()
     )
@@ -290,7 +295,7 @@ async def get_lead_locations(
     # 1. Leads with postcode
     stmt = (
         select(Lead.postcode, func.count(Lead.id).label("count"))
-        .where(Lead.postcode.isnot(None), Lead.postcode != "")
+        .where(Lead.postcode.isnot(None), Lead.postcode != "", lead_counts_toward_stats())
         .group_by(Lead.postcode)
     )
     if date_filter is not None:
@@ -310,6 +315,8 @@ async def get_lead_locations(
             or_(Lead.postcode.is_(None), Lead.postcode == ""),
             Customer.postcode.isnot(None),
             Customer.postcode != "",
+            Customer.exclude_from_stats.is_(False),
+            lead_counts_toward_stats(),
         )
         .group_by(Customer.postcode)
     )
@@ -458,6 +465,7 @@ async def get_qualified_for_quoting(
         select(Lead)
         .outerjoin(qualified_at_subq, qualified_at_subq.c.lead_id == Lead.id)
         .where(Lead.status == LeadStatus.QUALIFIED)
+        .where(lead_counts_toward_stats())
         .where(
             or_(
                 qualified_at_subq.c.qualified_at.is_(None),

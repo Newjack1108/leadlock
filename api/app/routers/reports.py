@@ -25,6 +25,7 @@ from app.schemas import (
     QuoteEngagementReport,
     WeeklyPipelineSummaryReport,
 )
+from app.stats_exclusion import lead_counts_toward_stats, quote_counts_toward_stats
 from app.report_pdf_service import (
     generate_pipeline_value_pdf,
     generate_source_performance_pdf,
@@ -145,7 +146,7 @@ def _build_facebook_lead_conversion_report(
     session: Session,
     resolved_range: ResolvedDateRange,
 ) -> FacebookLeadConversionReport:
-    lead_stmt = select(Lead).where(Lead.lead_source == LeadSource.FACEBOOK)
+    lead_stmt = select(Lead).where(Lead.lead_source == LeadSource.FACEBOOK, lead_counts_toward_stats())
     if resolved_range.period != "all":
         lead_stmt = lead_stmt.where(Lead.created_at >= resolved_range.start).where(Lead.created_at <= resolved_range.end)
 
@@ -319,6 +320,7 @@ async def get_pipeline_value_report(
             func.coalesce(func.sum(weighted_expr), 0).label("weighted_val"),
         )
         .where(quote_filter)
+        .where(quote_counts_toward_stats())
         .where(Quote.opportunity_stage.isnot(None))
         .group_by(Quote.opportunity_stage)
     )
@@ -413,6 +415,7 @@ async def get_source_performance_report(
 
     stmt = (
         select(Lead.lead_source, func.count(Lead.id).label("cnt"))
+        .where(lead_counts_toward_stats())
         .group_by(Lead.lead_source)
     )
     if date_filter:
@@ -426,14 +429,21 @@ async def get_source_performance_report(
         source_str = source_val.value if hasattr(source_val, "value") else (str(source_val) if source_val else "Unknown")
         cnt = row[1]
 
-        quoted_stmt = select(func.count(Lead.id)).where(Lead.lead_source == source_val).where(
+        quoted_stmt = select(func.count(Lead.id)).where(
+            Lead.lead_source == source_val,
+            lead_counts_toward_stats(),
+        ).where(
             Lead.status.in_([LeadStatus.QUOTED, LeadStatus.WON])
         )
         if date_filter:
             quoted_stmt = quoted_stmt.where(date_filter)
         quoted_count = session.exec(quoted_stmt).one()
 
-        won_stmt = select(func.count(Lead.id)).where(Lead.lead_source == source_val).where(Lead.status == LeadStatus.WON)
+        won_stmt = select(func.count(Lead.id)).where(
+            Lead.lead_source == source_val,
+            lead_counts_toward_stats(),
+            Lead.status == LeadStatus.WON,
+        )
         if date_filter:
             won_stmt = won_stmt.where(date_filter)
         won_count = session.exec(won_stmt).one()
@@ -609,19 +619,24 @@ async def get_closer_performance_report(
     closers = []
     for user in users:
         leads_assigned = session.exec(
-            select(func.count(Lead.id)).where(Lead.assigned_to_id == user.id)
+            select(func.count(Lead.id)).where(
+                Lead.assigned_to_id == user.id,
+                lead_counts_toward_stats(),
+            )
         ).one()
 
         won_count = session.exec(
             select(func.count(Lead.id)).where(
                 Lead.assigned_to_id == user.id,
                 Lead.status == LeadStatus.WON,
+                lead_counts_toward_stats(),
             )
         ).one()
 
         revenue_stmt = (
             select(func.coalesce(func.sum(Quote.total_amount), 0))
             .where(Quote.status == QuoteStatus.ACCEPTED)
+            .where(quote_counts_toward_stats())
             .where((Quote.owner_id == user.id) | ((Quote.owner_id.is_(None)) & (Quote.created_by_id == user.id)))
         )
         total_revenue = session.exec(revenue_stmt).one() or Decimal("0")
@@ -685,30 +700,32 @@ async def get_quote_engagement_report(
     if resolved_range.period != "all":
         quote_filter = quote_filter & (Quote.sent_at >= resolved_range.start) & (Quote.sent_at <= resolved_range.end)
 
-    sent_count = session.exec(select(func.count(Quote.id)).where(quote_filter)).one()
+    quote_stats_filter = quote_filter & quote_counts_toward_stats()
+
+    sent_count = session.exec(select(func.count(Quote.id)).where(quote_stats_filter)).one()
 
     viewed_count = session.exec(
-        select(func.count(Quote.id)).where(quote_filter, Quote.viewed_at.isnot(None))
+        select(func.count(Quote.id)).where(quote_stats_filter, Quote.viewed_at.isnot(None))
     ).one()
 
     not_opened_count = session.exec(
-        select(func.count(Quote.id)).where(quote_filter, Quote.viewed_at.is_(None))
+        select(func.count(Quote.id)).where(quote_stats_filter, Quote.viewed_at.is_(None))
     ).one()
 
     viewed_no_reply_count = session.exec(
         select(func.count(Quote.id)).where(
-            quote_filter,
+            quote_stats_filter,
             Quote.viewed_at.isnot(None),
             Quote.status.notin_([QuoteStatus.ACCEPTED, QuoteStatus.REJECTED]),
         )
     ).one()
 
     accepted_count = session.exec(
-        select(func.count(Quote.id)).where(quote_filter, Quote.status == QuoteStatus.ACCEPTED)
+        select(func.count(Quote.id)).where(quote_stats_filter, Quote.status == QuoteStatus.ACCEPTED)
     ).one()
 
     rejected_count = session.exec(
-        select(func.count(Quote.id)).where(quote_filter, Quote.status == QuoteStatus.REJECTED)
+        select(func.count(Quote.id)).where(quote_stats_filter, Quote.status == QuoteStatus.REJECTED)
     ).one()
 
     return QuoteEngagementReport(
@@ -766,23 +783,23 @@ async def get_weekly_summary_report(
     date_filter = (Lead.created_at >= start) & (Lead.created_at <= end)
 
     new_count = session.exec(
-        select(func.count(Lead.id)).where(date_filter, Lead.status == LeadStatus.NEW)
+        select(func.count(Lead.id)).where(date_filter, Lead.status == LeadStatus.NEW, lead_counts_toward_stats())
     ).one()
 
     quoted_count = session.exec(
-        select(func.count(Lead.id)).where(date_filter, Lead.status == LeadStatus.QUOTED)
+        select(func.count(Lead.id)).where(date_filter, Lead.status == LeadStatus.QUOTED, lead_counts_toward_stats())
     ).one()
 
     won_count = session.exec(
-        select(func.count(Lead.id)).where(date_filter, Lead.status == LeadStatus.WON)
+        select(func.count(Lead.id)).where(date_filter, Lead.status == LeadStatus.WON, lead_counts_toward_stats())
     ).one()
 
     lost_count = session.exec(
-        select(func.count(Lead.id)).where(date_filter, Lead.status == LeadStatus.LOST)
+        select(func.count(Lead.id)).where(date_filter, Lead.status == LeadStatus.LOST, lead_counts_toward_stats())
     ).one()
 
     closed_count = session.exec(
-        select(func.count(Lead.id)).where(date_filter, Lead.status == LeadStatus.CLOSED)
+        select(func.count(Lead.id)).where(date_filter, Lead.status == LeadStatus.CLOSED, lead_counts_toward_stats())
     ).one()
 
     start_of_week = start - timedelta(days=start.weekday()) if hasattr(start, "weekday") else start
