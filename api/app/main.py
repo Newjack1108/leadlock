@@ -51,7 +51,7 @@ _REQUIRED_CORS_ORIGINS = (
 )
 _raw_cors = os.getenv("CORS_ORIGINS", "").strip()
 _cors_from_env = [origin.strip() for origin in _raw_cors.split(",") if origin.strip()]
-allowed_origins = list(dict.fromkeys(_REQUIRED_CORS_ORIGINS + _cors_from_env))
+allowed_origins = list(dict.fromkeys([*_REQUIRED_CORS_ORIGINS, *_cors_from_env]))
 
 _sys = __import__("sys")
 if os.getenv("DEBUG", "false").lower() == "true" or not os.getenv("RAILWAY_ENVIRONMENT"):
