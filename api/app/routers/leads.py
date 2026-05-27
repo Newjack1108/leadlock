@@ -62,37 +62,39 @@ router = APIRouter(prefix="/api/leads", tags=["leads"])
 def generate_customer_number(session: Session) -> str:
     """Generate a unique customer number like CUST-2024-001."""
     from datetime import date
+    from sqlalchemy import func
     year = date.today().year
-    
-    # Find all customers with customer numbers for this year
-    statement = select(Customer).where(Customer.customer_number.like(f"CUST-{year}-%"))
-    customers = session.exec(statement).all()
-    
-    if not customers:
-        return f"CUST-{year}-001"
-    
-    # Extract numbers and find max
-    numbers = []
-    for customer in customers:
-        if customer.customer_number:
-            try:
-                num = int(customer.customer_number.split('-')[-1])
-                numbers.append(num)
-            except (ValueError, IndexError):
-                continue
-    
-    if not numbers:
-        return f"CUST-{year}-001"
-    
-    next_num = max(numbers) + 1
-    return f"CUST-{year}-{next_num:03d}"
+    prefix = f"CUST-{year}-"
+    # Use MAX() to find the highest existing number in a single query
+    row = session.exec(
+        select(func.max(Customer.customer_number)).where(Customer.customer_number.like(f"{prefix}%"))
+    ).first()
+    if row and row[0] if isinstance(row, (tuple, list)) else row:
+        max_val = row[0] if isinstance(row, (tuple, list)) else row
+        try:
+            next_num = int(max_val.split("-")[-1]) + 1
+        except (ValueError, IndexError, AttributeError):
+            next_num = 1
+    else:
+        next_num = 1
+    return f"{prefix}{next_num:03d}"
 
 
 def _find_customer_by_normalized_phone(session: Session, phone: Optional[str]) -> Optional[Customer]:
     norm = normalize_phone(phone or "")
     if not norm:
         return None
-    statement = select(Customer).where(Customer.phone.isnot(None))
+    # First try an exact match on the raw phone value (fast, indexed)
+    exact = session.exec(select(Customer).where(Customer.phone == phone)).first()
+    if exact:
+        return exact
+    # Fall back to normalized comparison — only load customers whose phone starts with
+    # the same digit prefix (first 7 chars) to limit the scan
+    prefix = norm[:7] if len(norm) >= 7 else norm
+    statement = select(Customer).where(
+        Customer.phone.isnot(None),
+        Customer.phone.like(f"%{prefix}%"),
+    )
     for c in session.exec(statement).all():
         if c.phone and normalize_phone(c.phone) == norm:
             return c

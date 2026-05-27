@@ -243,12 +243,12 @@ class FacebookAdvertProfile(SQLModel, table=True):
 
 class Activity(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    customer_id: Optional[int] = Field(default=None, foreign_key="customer.id")  # Temporarily nullable for migration
-    activity_type: ActivityType
+    customer_id: Optional[int] = Field(default=None, foreign_key="customer.id", index=True)  # Temporarily nullable for migration
+    activity_type: ActivityType = Field(index=True)
     notes: Optional[str] = None
     created_by_id: int = Field(foreign_key="user.id")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    
+    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+
     # Relationships
     customer: Optional["Customer"] = Relationship(back_populates="activities")
     created_by: "User" = Relationship()

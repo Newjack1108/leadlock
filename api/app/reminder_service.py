@@ -176,6 +176,19 @@ def calculate_priority(days_stale: int, base_priority: ReminderPriority) -> Remi
     return base_priority
 
 
+def batch_last_activity_dates(session: Session, customer_ids: List[int]) -> dict:
+    """Return {customer_id: max(created_at)} for the given customer IDs in one query."""
+    if not customer_ids:
+        return {}
+    from app.models import Activity
+    rows = session.exec(
+        select(Activity.customer_id, func.max(Activity.created_at))
+        .where(Activity.customer_id.in_(customer_ids))
+        .group_by(Activity.customer_id)
+    ).all()
+    return {int(cid): ts for cid, ts in rows if cid is not None}
+
+
 def detect_stale_leads(session: Session) -> List[Tuple[Lead, ReminderRule, int]]:
     """
     Detect stale leads based on active reminder rules.
@@ -204,14 +217,18 @@ def detect_stale_leads(session: Session) -> List[Tuple[Lead, ReminderRule, int]]
                 continue
         
         leads = session.exec(lead_statement).all()
-        
+
+        # Batch-load last activity dates for all leads in this rule group (avoids N+1)
+        customer_ids = [lead.customer_id for lead in leads if lead.customer_id]
+        last_activity_map = batch_last_activity_dates(session, customer_ids)
+
         for lead in leads:
             days_stale = 0
             minutes_stale = 0
 
             if rule.check_type == "LAST_ACTIVITY":
-                # Check time since last activity
-                last_activity = get_last_activity_date(lead.customer_id, session)
+                # Check time since last activity (use pre-fetched map)
+                last_activity = last_activity_map.get(lead.customer_id) if lead.customer_id else None
                 if not last_activity:
                     # No activity at all, use created_at or updated_at
                     last_activity = lead.updated_at or lead.created_at
@@ -340,6 +357,10 @@ def detect_stale_opportunities(session: Session) -> List[Tuple[Quote, str, int]]
     )
     opportunities = session.exec(statement).all()
     
+    # Batch-load last activity dates for all opportunities (avoids N+1)
+    opp_customer_ids = [opp.customer_id for opp in opportunities if opp.customer_id]
+    last_activity_map = batch_last_activity_dates(session, opp_customer_ids)
+
     for opp in opportunities:
         # Check 1: Overdue next action
         if opp.next_action_due_date and opp.next_action_due_date < now:
@@ -363,7 +384,7 @@ def detect_stale_opportunities(session: Session) -> List[Tuple[Quote, str, int]]
         
         # Check 4: No activity in X days (configurable, default 7 days)
         if opp.customer_id:
-            last_activity = get_last_activity_date(opp.customer_id, session)
+            last_activity = last_activity_map.get(opp.customer_id)
             if last_activity:
                 days_since_activity = calculate_days_stale(last_activity)
                 if days_since_activity >= 7:  # Configurable threshold

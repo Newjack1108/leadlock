@@ -315,31 +315,14 @@ async def get_customer_quote_status(
     current_user: User = Depends(get_current_user)
 ):
     """Get quote lock status for customer."""
-    import sys
     statement = select(Customer).where(Customer.id == customer_id)
     customer = session.exec(statement).first()
-    
+
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
-    
-    # Debug: Check what activities exist
-    from app.models import Activity
-    from app.workflow import ENGAGEMENT_PROOF_TYPES
-    debug_statement = select(Activity).where(Activity.customer_id == customer.id)
-    all_activities = session.exec(debug_statement).all()
-    engagement_statement = select(Activity).where(
-        Activity.customer_id == customer.id,
-        Activity.activity_type.in_(list(ENGAGEMENT_PROOF_TYPES))
-    )
-    engagement_activities = session.exec(engagement_statement).all()
-    
-    print(f"[DEBUG] Customer {customer_id} - All activities: {len(all_activities)}", file=sys.stderr, flush=True)
-    print(f"[DEBUG] Customer {customer_id} - Engagement activities: {len(engagement_activities)}", file=sys.stderr, flush=True)
-    for act in engagement_activities:
-        print(f"[DEBUG] Engagement activity: {act.activity_type} (id={act.id})", file=sys.stderr, flush=True)
-    
+
     can_quote, error = check_quote_prerequisites(customer, session)
-    
+
     return {
         "quote_locked": not can_quote,
         "quote_lock_reason": error if not can_quote else None
@@ -482,7 +465,7 @@ async def get_customer_quotes(
     current_user: User = Depends(get_current_user)
 ):
     """Get all quotes for a customer."""
-    from app.routers.quotes import build_quote_response
+    from app.routers.quotes import build_quote_response, batch_load_quote_related
     from app.models import QuoteItem
 
     statement = (
@@ -490,13 +473,37 @@ async def get_customer_quotes(
         .where(Quote.customer_id == customer_id)
         .order_by(Quote.created_at.desc())
     )
-    quotes = session.exec(statement).all()
+    quotes = list(session.exec(statement).all())
+
+    # Batch-load all related data to avoid N+1 queries
+    (
+        customer_name_map,
+        last_activity_map,
+        lead_name_map,
+        lead_type_map,
+        open_count_map,
+        order_id_map,
+        discount_map,
+        item_map,
+    ) = batch_load_quote_related(session, quotes)
 
     result = []
     for quote in quotes:
-        item_statement = select(QuoteItem).where(QuoteItem.quote_id == quote.id).order_by(QuoteItem.sort_order)
-        quote_items = session.exec(item_statement).all()
-        result.append(build_quote_response(quote, list(quote_items), session))
+        quote_items = item_map.get(quote.id, [])
+        cid = quote.customer_id
+        result.append(build_quote_response(
+            quote,
+            quote_items,
+            session,
+            _prefetched=True,
+            _customer_name=customer_name_map.get(cid) if cid else quote.dealer_customer_name,
+            _customer_last_interacted_at=last_activity_map.get(cid) if cid else None,
+            _lead_name=lead_name_map.get(quote.lead_id) if quote.lead_id else None,
+            _lead_type=lead_type_map.get(quote.lead_id) if quote.lead_id else None,
+            _total_open_count=open_count_map.get(quote.id, 0),
+            _order_id=order_id_map.get(quote.id, 0),
+            _discounts=discount_map.get(quote.id, []),
+        ))
 
     return result
 
@@ -511,14 +518,25 @@ async def get_customer_orders(
     from app.routers.orders import build_order_response
 
     statement = select(Order).where(Order.customer_id == customer_id).order_by(Order.created_at.desc())
-    orders = session.exec(statement).all()
+    orders = list(session.exec(statement).all())
+
+    if not orders:
+        return []
+
+    order_ids = [o.id for o in orders if o.id]
+
+    # Batch load order items
+    item_map: dict = {oid: [] for oid in order_ids}
+    for item in session.exec(
+        select(OrderItem).where(OrderItem.order_id.in_(order_ids)).order_by(OrderItem.sort_order)
+    ).all():
+        if item.order_id in item_map:
+            item_map[item.order_id].append(item)
 
     result = []
     for order in orders:
-        items = session.exec(
-            select(OrderItem).where(OrderItem.order_id == order.id).order_by(OrderItem.sort_order)
-        ).all()
-        result.append(build_order_response(order, list(items), session))
+        items = item_map.get(order.id, [])
+        result.append(build_order_response(order, items, session))
 
     return result
 
@@ -526,21 +544,27 @@ async def get_customer_orders(
 @router.get("/{customer_id}/activities", response_model=List[ActivityResponse])
 async def get_customer_activities(
     customer_id: int,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(LIST_PAGE_SIZE_DEFAULT, ge=1, le=LIST_PAGE_SIZE_MAX),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
-    """Get all activities for a customer."""
+    """Get paginated activities for a customer, ordered by most recent first."""
     try:
-        statement = select(Customer).where(Customer.id == customer_id)
-        customer = session.exec(statement).first()
-        
+        customer = session.get(Customer, customer_id)
+
         if not customer:
             raise HTTPException(status_code=404, detail="Customer not found")
-        
-        statement = select(Activity, User).outerjoin(User, Activity.created_by_id == User.id).where(
-            Activity.customer_id == customer_id
-        ).order_by(Activity.created_at.desc())
-        
+
+        statement = (
+            select(Activity, User)
+            .outerjoin(User, Activity.created_by_id == User.id)
+            .where(Activity.customer_id == customer_id)
+            .order_by(Activity.created_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+
         results = session.exec(statement).all()
         activities = []
         for activity, user in results:
@@ -553,7 +577,7 @@ async def get_customer_activities(
                 created_at=activity.created_at,
                 created_by_name=user.full_name if user else "Unknown"
             ))
-        
+
         return activities
     except HTTPException:
         raise
