@@ -32,7 +32,10 @@
 
 5. **Set Environment Variables:**
    - Go to "Variables" tab
-   - **Required:** `NEXT_PUBLIC_API_URL` = `https://leadlock-production.up.railway.app` (your backend URL). This must be set before build so the customer quote view can call the API.
+   - **Required:** `API_URL` = `https://leadlock-production.up.railway.app` (used at runtime in the app shell).
+   - **Required:** `NEXT_PUBLIC_API_URL` = same backend URL (inlined at build for client bundles).
+   - **Recommended:** `API_PROXY_TARGET` = same URL (Next.js rewrites for same-origin `/api/*` calls).
+   - If `/health` shows data but the app lists are empty, the frontend is almost always pointing at the wrong API — set all three to your live API URL and redeploy.
    - Click "Add"
 
 6. **Deploy:**

@@ -48,13 +48,30 @@ export const viewport: Viewport = {
   colorScheme: "light",
 };
 
+function getServerApiBaseUrl(): string {
+  const raw =
+    process.env.API_URL ||
+    process.env.API_PROXY_TARGET ||
+    process.env.NEXT_PUBLIC_API_URL ||
+    '';
+  return raw.trim().replace(/\/+$/, '');
+}
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const apiBaseUrl = getServerApiBaseUrl();
+  const apiUrlScript = `window.__LEADLOCK_API_URL__=${JSON.stringify(apiBaseUrl)};`;
+
   return (
     <html lang="en" className="bg-background">
+      <head>
+        {apiBaseUrl ? (
+          <script dangerouslySetInnerHTML={{ __html: apiUrlScript }} />
+        ) : null}
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background`}
       >

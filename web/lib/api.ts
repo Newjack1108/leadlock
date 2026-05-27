@@ -45,9 +45,7 @@ import {
   type WeeklyPlanBulkSendResult,
 } from '@/lib/types';
 import { getTelUrl } from '@/lib/utils';
-
-// Prefer same-origin API calls so Next.js rewrites can proxy to backend.
-const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+import { resolveApiBaseUrl } from '@/lib/runtimeApiUrl';
 
 declare module 'axios' {
   interface AxiosRequestConfig {
@@ -60,7 +58,7 @@ declare module 'axios' {
 }
 
 const api = axios.create({
-  baseURL: API_URL,
+  baseURL: '',
   headers: {
     'Content-Type': 'application/json',
   },
@@ -70,8 +68,12 @@ const api = axios.create({
 /** Compose, quote email, reply, heavy quote writes: provider + DB often exceed 15s on Railway */
 export const EMAIL_AND_UPLOAD_TIMEOUT_MS = 120_000;
 
-// Add token to requests
+// Add token to requests; resolve API base URL per request (runtime injection from layout).
 api.interceptors.request.use((config) => {
+  const base = resolveApiBaseUrl();
+  if (base) {
+    config.baseURL = base;
+  }
   if (typeof window !== 'undefined') {
     const token = localStorage.getItem('token');
     if (token) {
@@ -650,8 +652,20 @@ export const getPublicCompanyLogo = async (): Promise<{ logo_url: string | null 
   return response.data;
 };
 
-/** Base URL for API (same as axios baseURL). */
-export const getApiBaseUrl = () => process.env.NEXT_PUBLIC_API_URL || '';
+/** Base URL for API (same as axios uses for authenticated calls). */
+export const getApiBaseUrl = () => resolveApiBaseUrl();
+
+export const getDataSummary = async (): Promise<{
+  customers: number;
+  leads: number;
+  leads_not_archived: number;
+  users: number;
+  database_host?: string | null;
+  use_public_database_url?: boolean;
+}> => {
+  const response = await api.get('/api/auth/data-summary');
+  return response.data;
+};
 
 /** Download quote PDF by public view token (no auth). Triggers browser download. */
 export const downloadPublicQuotePdf = async (viewToken: string) => {

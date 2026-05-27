@@ -6,7 +6,7 @@ import Header from '@/components/Header';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { getCustomers, getUnreadCountsByCustomer } from '@/lib/api';
+import { getApiBaseUrl, getApiErrorDetail, getCustomers, getDataSummary, getUnreadCountsByCustomer } from '@/lib/api';
 import { Customer } from '@/lib/types';
 import { getTelUrl } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -28,6 +28,9 @@ function CustomersPageContent() {
   const [searchApplied, setSearchApplied] = useState('');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+  const [fetchState, setFetchState] = useState<'idle' | 'ok' | 'error'>('idle');
+  const [fetchErrorDetail, setFetchErrorDetail] = useState<string | null>(null);
+  const [dbSummaryCustomers, setDbSummaryCustomers] = useState<number | null>(null);
   const [callNotesOpen, setCallNotesOpen] = useState(false);
   const [callNotesCustomer, setCallNotesCustomer] = useState<{ id: number; name: string; phone: string } | null>(null);
 
@@ -38,8 +41,10 @@ function CustomersPageContent() {
   const fetchCustomers = useCallback(async () => {
     try {
       setLoading(true);
+      setFetchState('idle');
+      setFetchErrorDetail(null);
       const searchValue = searchApplied.trim() || undefined;
-      const [customersData, unreadRes] = await Promise.all([
+      const [customersData, unreadRes, summary] = await Promise.all([
         getCustomers({
           search: searchValue,
           sms_opted_out: smsOptedOutFilter || undefined,
@@ -48,16 +53,24 @@ function CustomersPageContent() {
           page_size: CUSTOMERS_PAGE_SIZE,
         }),
         getUnreadCountsByCustomer().catch(() => []),
+        getDataSummary().catch(() => null),
       ]);
-      setCustomers(customersData.items);
-      setTotal(customersData.total);
+      setDbSummaryCustomers(summary?.customers ?? null);
+      setCustomers(customersData.items ?? []);
+      setTotal(typeof customersData.total === 'number' ? customersData.total : 0);
+      setFetchState('ok');
       setUnreadByCustomer(
         Object.fromEntries((unreadRes || []).map((d) => [d.customer_id, d.unread_count]))
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
+      setFetchState('error');
+      setFetchErrorDetail(getApiErrorDetail(error));
       toast.error('Failed to load customers');
-      if (error.response?.status === 401) {
-        router.push('/login');
+      if (typeof error === 'object' && error !== null && 'response' in error) {
+        const status = (error as { response?: { status?: number } }).response?.status;
+        if (status === 401) {
+          router.push('/login');
+        }
       }
     } finally {
       setLoading(false);
@@ -200,8 +213,12 @@ function CustomersPageContent() {
                         ? 'No customers currently flagged as SMS opted out'
                         : searchApplied.trim()
                         ? 'No customers match your search'
-                        : total === 0
-                        ? 'No customers in this database (API total: 0). If you expect data, compare with Postgres Query or open /api/auth/data-summary in Network.'
+                        : fetchState === 'error'
+                        ? `Could not load customers: ${fetchErrorDetail ?? 'request failed'}. API base: ${getApiBaseUrl() || '(same-origin /api — set API_URL on frontend)'}`
+                        : fetchState === 'ok' && total === 0 && dbSummaryCustomers != null && dbSummaryCustomers > 0
+                        ? `List returned 0 customers but /api/auth/data-summary reports ${dbSummaryCustomers} in the database — check filters (unread/SMS) or redeploy frontend with API_URL set.`
+                        : fetchState === 'ok' && total === 0
+                        ? `No customers in this database (list total: 0). API: ${getApiBaseUrl() || 'same-origin'}`
                         : 'No customers found'}
                     </td>
                   </tr>

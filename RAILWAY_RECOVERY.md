@@ -25,6 +25,23 @@
 
 4. **Redeploy** the `leadlock` API service after fixing variables.
 
+## Symptom: `/health` shows `row_counts` > 0 but app says “API total: 0”
+
+The browser is **not** using the same API you opened in the address bar for `/health`, or the customers request **failed** and the UI kept `total` at 0.
+
+1. **LeadLock Frontend → Variables** (set before or at deploy; `API_URL` applies at runtime without rebuild):
+   - `API_URL` = `https://leadlock-production.up.railway.app`
+   - `NEXT_PUBLIC_API_URL` = same URL (for client bundle)
+   - `API_PROXY_TARGET` = same URL (for Next.js `/api` rewrites when using same-origin calls)
+
+2. **Redeploy frontend** after changing variables.
+
+3. While logged in, DevTools → Network:
+   - `GET /api/customers` → full URL must be `leadlock-production...`, status **200**, `"total": 577` (or your count).
+   - `GET /api/auth/data-summary` → same host, matching counts.
+
+4. Clear URL filters: open `/customers` with no `?has_unread=1` or `?sms_opted_out=1`.
+
 ## Symptom: Railway “Application failed to respond” (502)
 
 Railway’s edge could not get a timely response from your container.
