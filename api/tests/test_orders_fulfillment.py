@@ -299,6 +299,77 @@ def test_send_to_production_uses_alternate_delivery_address_and_flags_location(c
     assert payload["delivery_location_notes"] == "Deliver to rear gate"
     assert payload["crm_customer_address"] == "United Kingdom"
     assert "Delivery location notes: Deliver to rear gate" in payload["notes"]
+    assert payload["deposit_paid"] is True
+    assert payload["balance_paid"] is False
+    assert payload["paid_in_full"] is False
+    assert payload["deposit_amount"] == 50.0
+    assert payload["balance_amount"] == 50.0
+
+
+@patch.dict(os.environ, {"PRODUCTION_APP_API_URL": "https://prod.example", "PRODUCTION_APP_API_KEY": "key"})
+def test_send_to_production_includes_payment_status(client, seeded_session):
+    session, user, order, customer, quote = seeded_session
+
+    order.fulfillment_method = QuoteFulfillmentMethod.DELIVERY
+    order.deposit_paid = True
+    order.balance_paid = True
+    order.paid_in_full = False
+    order.deposit_amount = Decimal("60.00")
+    order.balance_amount = Decimal("40.00")
+    order.invoice_number = "INV-2026-001"
+    order.use_alternate_delivery_address = False
+    order.delivery_address_line1 = None
+    customer.address_line1 = "1 CRM Street"
+    customer.city = "CRM City"
+    customer.postcode = "CR1 1AA"
+    session.add(order)
+    session.add(customer)
+    session.commit()
+
+    captured = {}
+
+    class FakeResponse:
+        status_code = 200
+        content = b'{"ok": true}'
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"ok": True}
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def post(self, url, json=None, headers=None):
+            captured["payload"] = json
+            return FakeResponse()
+
+    with patch("app.routers.orders.httpx.AsyncClient", FakeClient):
+        res = client.post(f"/api/orders/{order.id}/send-to-production")
+
+    assert res.status_code == 200
+    payload = captured["payload"]
+    assert payload["deposit_paid"] is True
+    assert payload["balance_paid"] is True
+    assert payload["paid_in_full"] is False
+    assert payload["deposit_amount"] == 60.0
+    assert payload["balance_amount"] == 40.0
+    assert payload["invoice_number"] == "INV-2026-001"
+
+    get_res = client.get(f"/api/orders/{order.id}")
+    assert get_res.status_code == 200
+    body = get_res.json()
+    assert body["sent_to_production_at"] is not None
+    assert body["sent_to_production_by_id"] == user.id
+    assert body["sent_to_production_by_name"] == "Test User"
 
 
 def test_send_to_production_rejects_incomplete_alternate_delivery_address(client, seeded_session):

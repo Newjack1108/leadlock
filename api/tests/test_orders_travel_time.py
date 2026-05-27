@@ -190,6 +190,11 @@ def test_send_to_production_includes_round_trip_when_travel_time_set(engine, see
     assert res.status_code == 200
     assert captured["payload"] is not None
     assert captured["payload"]["travel_time_hours_round_trip"] == pytest.approx(2.5)
+    assert captured["payload"]["deposit_paid"] is True
+    assert captured["payload"]["balance_paid"] is False
+    assert captured["payload"]["paid_in_full"] is False
+    assert captured["payload"]["deposit_amount"] == 50.0
+    assert captured["payload"]["balance_amount"] == 50.0
     # one-way stored as 1.25 -> round trip 2.5
     assert float(order.travel_time_hours_one_way) == 1.25
 
@@ -239,3 +244,5 @@ def test_send_to_production_omits_round_trip_when_travel_time_null(engine, seede
 
     assert res.status_code == 200
     assert "travel_time_hours_round_trip" not in captured["payload"]
+    assert captured["payload"]["deposit_paid"] is True
+    assert captured["payload"]["deposit_amount"] == 50.0

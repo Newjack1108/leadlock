@@ -244,6 +244,7 @@ export default function OrderDetailPage() {
     try {
       setSendingToProduction(true);
       await sendOrderToProduction(orderId);
+      await fetchOrder();
       toast.success('Order sent to production');
     } catch (error: any) {
       toast.error(error.response?.data?.detail || 'Failed to send to production');
@@ -656,15 +657,24 @@ export default function OrderDetailPage() {
                       )}
                     </p>
                   )}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleSendToProduction}
-                    disabled={sendingToProduction || !canSendToProduction}
-                  >
-                    <Send className="h-4 w-4 mr-1" />
-                    {sendingToProduction ? 'Sending...' : 'Send to production'}
-                  </Button>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleSendToProduction}
+                      disabled={sendingToProduction || !canSendToProduction}
+                    >
+                      <Send className="h-4 w-4 mr-1" />
+                      {sendingToProduction ? 'Sending...' : 'Send to production'}
+                    </Button>
+                    {order.sent_to_production_at && (
+                      <p className="text-sm text-muted-foreground">
+                        {order.sent_to_production_by_name
+                          ? `Sent to production by ${order.sent_to_production_by_name} on ${formatDateTime(order.sent_to_production_at)}`
+                          : `Sent to production on ${formatDateTime(order.sent_to_production_at)}`}
+                      </p>
+                    )}
+                  </div>
                 </div>
               </CardContent>
             </Card>

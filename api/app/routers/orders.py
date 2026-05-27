@@ -11,6 +11,7 @@ from app.database import get_session
 from app.models import (
     Order,
     OrderItem,
+    OrderAuditEvent,
     Customer,
     CompanySettings,
     AccessSheetRequest,
@@ -127,6 +128,24 @@ def _build_access_sheet_response(order_id: int, session: Session) -> AccessSheet
     )
 
 
+def _get_latest_production_send(order_id: int, session: Session) -> tuple[datetime | None, int | None, str | None]:
+    """Latest ORDER_SENT_TO_PRODUCTION audit event for this order."""
+    row = session.exec(
+        select(OrderAuditEvent, User)
+        .outerjoin(User, OrderAuditEvent.created_by_id == User.id)
+        .where(
+            OrderAuditEvent.order_id == order_id,
+            OrderAuditEvent.event_type == CustomerHistoryEventType.ORDER_SENT_TO_PRODUCTION.value,
+        )
+        .order_by(OrderAuditEvent.created_at.desc())
+        .limit(1)
+    ).first()
+    if not row:
+        return None, None, None
+    audit_event, user = row
+    return audit_event.created_at, audit_event.created_by_id, (user.full_name if user else None)
+
+
 def build_order_response(order: Order, order_items: List[OrderItem], session: Session) -> OrderResponse:
     """Build OrderResponse with items and optional customer_name."""
     customer_name = None
@@ -147,6 +166,7 @@ def build_order_response(order: Order, order_items: List[OrderItem], session: Se
     is_ninox_origin = lead_source == LeadSource.NINOX or customer_source_system == "Ninox"
 
     access_sheet = _build_access_sheet_response(order.id, session)
+    sent_at, sent_by_id, sent_by_name = _get_latest_production_send(order.id, session)
 
     return OrderResponse(
         id=order.id,
@@ -194,6 +214,9 @@ def build_order_response(order: Order, order_items: List[OrderItem], session: Se
             for item in order_items
         ],
         access_sheet=access_sheet,
+        sent_to_production_at=sent_at,
+        sent_to_production_by_id=sent_by_id,
+        sent_to_production_by_name=sent_by_name,
     )
 
 
@@ -669,6 +692,12 @@ async def send_to_production(
         "installation_booked": order.installation_booked,
         "created_at": order.created_at.isoformat() if order.created_at else None,
         "notes": production_notes,
+        "deposit_paid": bool(order.deposit_paid),
+        "balance_paid": bool(order.balance_paid),
+        "paid_in_full": bool(order.paid_in_full),
+        "deposit_amount": float(order.deposit_amount),
+        "balance_amount": float(order.balance_amount),
+        "invoice_number": order.invoice_number,
     }
     if use_alternate:
         payload["address_is_delivery_location"] = True

@@ -1926,6 +1926,9 @@ class OrderResponse(BaseModel):
     is_ninox_origin: bool = False
     items: List[OrderItemResponse] = []
     access_sheet: Optional[AccessSheetResponse] = None
+    sent_to_production_at: Optional[datetime] = None
+    sent_to_production_by_id: Optional[int] = None
+    sent_to_production_by_name: Optional[str] = None
 
 
 class CustomerFileResponse(BaseModel):

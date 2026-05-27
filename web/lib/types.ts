@@ -1206,6 +1206,9 @@ export interface Order {
   is_ninox_origin?: boolean;
   items: OrderItem[];
   access_sheet?: AccessSheet | null;
+  sent_to_production_at?: string | null;
+  sent_to_production_by_id?: number | null;
+  sent_to_production_by_name?: string | null;
 }
 
 export enum CustomerFileKind {
