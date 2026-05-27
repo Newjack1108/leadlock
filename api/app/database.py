@@ -1166,31 +1166,6 @@ def create_db_and_tables():
                 if "already exists" not in err and "duplicate" not in err:
                     print(f"Warning: could not create ix_activity_customer_id: {e}", file=sys.stderr, flush=True)
 
-        # Step 4c: Additional activity indexes for sort/filter performance
-        if has_activity_table:
-            _activity_indexes = [
-                (
-                    "ix_activity_created_at",
-                    "CREATE INDEX IF NOT EXISTS ix_activity_created_at ON activity (created_at DESC)",
-                ),
-                (
-                    "ix_activity_activity_type",
-                    "CREATE INDEX IF NOT EXISTS ix_activity_activity_type ON activity (activity_type)",
-                ),
-                (
-                    "ix_activity_customer_id_created_at",
-                    "CREATE INDEX IF NOT EXISTS ix_activity_customer_id_created_at ON activity (customer_id, created_at DESC)",
-                ),
-            ]
-            for idx_name, idx_sql in _activity_indexes:
-                try:
-                    with engine.begin() as conn:
-                        conn.execute(sql_text(idx_sql))
-                except Exception as e:
-                    err = str(e).lower()
-                    if "already exists" not in err and "duplicate" not in err:
-                        print(f"Warning: could not create {idx_name}: {e}", file=sys.stderr, flush=True)
-
         # Step 5: Migrate Quote table: lead_id -> customer_id
         if has_quote_table:
             quote_columns = [col['name'] for col in inspector.get_columns("quote")]

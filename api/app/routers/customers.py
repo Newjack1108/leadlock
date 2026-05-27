@@ -521,49 +521,36 @@ async def get_customer_orders(
 @router.get("/{customer_id}/activities", response_model=List[ActivityResponse])
 async def get_customer_activities(
     customer_id: int,
-    page: int = Query(1, ge=1),
-    page_size: int = Query(LIST_PAGE_SIZE_DEFAULT, ge=1, le=LIST_PAGE_SIZE_MAX),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
-    """Get paginated activities for a customer, ordered by most recent first."""
-    try:
-        customer = session.get(Customer, customer_id)
+    """Get activities for a customer."""
+    customer = session.get(Customer, customer_id)
 
-        if not customer:
-            raise HTTPException(status_code=404, detail="Customer not found")
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
 
-        statement = (
-            select(Activity, User)
-            .outerjoin(User, Activity.created_by_id == User.id)
-            .where(Activity.customer_id == customer_id)
-            .order_by(Activity.created_at.desc())
-            .offset((page - 1) * page_size)
-            .limit(page_size)
-        )
+    statement = (
+        select(Activity)
+        .where(Activity.customer_id == customer_id)
+        .order_by(Activity.created_at.desc())
+    )
 
-        results = session.exec(statement).all()
-        activities = []
-        for activity, user in results:
-            activities.append(ActivityResponse(
-                id=activity.id,
-                customer_id=activity.customer_id,
-                activity_type=activity.activity_type,
-                notes=activity.notes,
-                created_by_id=activity.created_by_id,
-                created_at=activity.created_at,
-                created_by_name=user.full_name if user else "Unknown"
-            ))
+    activities = session.exec(statement).all()
+    result = []
+    for activity in activities:
+        user = session.get(User, activity.created_by_id)
+        result.append(ActivityResponse(
+            id=activity.id,
+            customer_id=activity.customer_id,
+            activity_type=activity.activity_type,
+            notes=activity.notes,
+            created_by_id=activity.created_by_id,
+            created_at=activity.created_at,
+            created_by_name=user.full_name if user else "Unknown"
+        ))
 
-        return activities
-    except HTTPException:
-        raise
-    except Exception as e:
-        import traceback
-        error_msg = f"Error fetching activities: {str(e)}"
-        print(error_msg, file=__import__('sys').stderr, flush=True)
-        print(traceback.format_exc(), file=__import__('sys').stderr, flush=True)
-        raise HTTPException(status_code=500, detail=error_msg)
+    return result
 
 
 @router.post("/{customer_id}/activities", response_model=ActivityResponse)
