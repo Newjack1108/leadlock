@@ -205,22 +205,38 @@ def _run_database_initialization() -> None:
         print(traceback.format_exc(), file=sys.stderr, flush=True)
         return
 
-    try:
-        from sqlalchemy import text
-
-        with engine.begin() as conn:
-            conn.execute(text("DROP TABLE IF EXISTS orderfile"))
-    except Exception as e:
-        print(f"Legacy orderfile drop skipped: {e}", file=sys.stderr, flush=True)
-    try:
-        create_db_and_tables()
+    skip_startup_migrations = os.getenv("API_SKIP_STARTUP_MIGRATIONS", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+    if skip_startup_migrations:
+        print(
+            "API_SKIP_STARTUP_MIGRATIONS: skipping create_db_and_tables on API "
+            "(Worker service should run migrations).",
+            file=sys.stderr,
+            flush=True,
+        )
         _migrations_complete = True
-        print("Database initialization complete", file=sys.stderr, flush=True)
-    except Exception as e:
-        _db_init_error = str(e)
-        print("Database migration failed:", str(e), file=sys.stderr, flush=True)
-        print(traceback.format_exc(), file=sys.stderr, flush=True)
-        return
+    else:
+        try:
+            from sqlalchemy import text
+
+            with engine.begin() as conn:
+                conn.execute(text("DROP TABLE IF EXISTS orderfile"))
+        except Exception as e:
+            print(f"Legacy orderfile drop skipped: {e}", file=sys.stderr, flush=True)
+        try:
+            create_db_and_tables()
+            _migrations_complete = True
+            print("Database initialization complete", file=sys.stderr, flush=True)
+        except Exception as e:
+            _db_init_error = str(e)
+            print("Database migration failed:", str(e), file=sys.stderr, flush=True)
+            if os.getenv("DEBUG", "false").lower() == "true":
+                print(traceback.format_exc(), file=sys.stderr, flush=True)
+            return
 
     try:
         from app.email_service import log_inbound_poll_configuration

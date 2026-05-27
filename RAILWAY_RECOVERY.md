@@ -25,6 +25,18 @@
 
 4. **Redeploy** the `leadlock` API service after fixing variables.
 
+## Symptom: `canceling statement due to statement timeout` in deploy logs
+
+We previously set Postgres `statement_timeout` on every connection; that **breaks startup migrations** (`inspector.get_columns("lead")`) and login queries while API + Worker both run `create_db_and_tables()`.
+
+**Fix (API service variables):**
+
+1. Remove `DB_STATEMENT_TIMEOUT_MS` / `DB_LOCK_TIMEOUT_MS` if you added them.
+2. Set **`API_SKIP_STARTUP_MIGRATIONS`** = `true` on the **leadlock API** service only.
+3. Keep full migrations on the **Worker** (`python worker.py`) — not on API.
+4. Redeploy **Worker first** (wait for `Database initialization complete`), then **API**.
+5. Do **not** run API + Worker deploys at the same time.
+
 ## Symptom: `/health` shows `row_counts` > 0 but app says “API total: 0”
 
 The browser is **not** using the same API you opened in the address bar for `/health`, or the customers request **failed** and the UI kept `total` at 0.
