@@ -183,6 +183,7 @@ def _ensure_list_performance_indexes(engine) -> None:
     if getattr(engine.dialect, "name", "") != "postgresql":
         return
     statements = [
+        'CREATE INDEX IF NOT EXISTS ix_user_email_lower ON "user" (lower(email))',
         "CREATE INDEX IF NOT EXISTS ix_customer_created_at ON customer (created_at DESC)",
         (
             "CREATE INDEX IF NOT EXISTS ix_smsmessage_customer_unread "

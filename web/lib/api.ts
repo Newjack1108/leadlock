@@ -62,11 +62,12 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 15000, // 15s - fail fast if API is down
+  timeout: 60_000, // Railway public Postgres + cold pool can exceed 15s on first request
 });
 
-/** List pages (customers, leads) on Railway public DB can exceed 15s on cold start. */
+/** List/auth on Railway public DB can be slow on cold start. */
 export const LIST_FETCH_TIMEOUT_MS = 60_000;
+export const AUTH_FETCH_TIMEOUT_MS = 60_000;
 
 /** Compose, quote email, reply, heavy quote writes: provider + DB often exceed 15s on Railway */
 export const EMAIL_AND_UPLOAD_TIMEOUT_MS = 120_000;

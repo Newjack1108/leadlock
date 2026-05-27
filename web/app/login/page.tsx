@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import Logo from '@/components/Logo';
-import api, { getApiErrorDetail } from '@/lib/api';
+import api, { AUTH_FETCH_TIMEOUT_MS, getApiErrorDetail } from '@/lib/api';
 import { LEADLOCK_LOGIN_GREETING_SESSION_KEY } from '@/lib/loginGreeting';
 import { toast } from 'sonner';
 
@@ -22,10 +22,11 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const response = await api.post('/api/auth/login', {
-        email,
-        password,
-      });
+      const response = await api.post(
+        '/api/auth/login',
+        { email, password },
+        { timeout: AUTH_FETCH_TIMEOUT_MS }
+      );
 
       localStorage.setItem('token', response.data.access_token);
       // Also set cookie for middleware

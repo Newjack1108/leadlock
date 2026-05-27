@@ -60,8 +60,13 @@ def login(credentials: UserLogin, session: Session = Depends(get_session)):
             headers={"WWW-Authenticate": "Bearer"},
         )
     email = credentials.email.strip()
-    statement = select(User).where(func.lower(User.email) == email.lower())
-    user = session.exec(statement).first()
+    email_key = email.lower()
+    # Prefer exact match (uses email index); fall back to case-insensitive lookup.
+    user = session.exec(select(User).where(User.email == email)).first()
+    if user is None and email_key != email:
+        user = session.exec(select(User).where(func.lower(User.email) == email_key)).first()
+    elif user is None:
+        user = session.exec(select(User).where(func.lower(User.email) == email_key)).first()
     
     if not user or not verify_password(credentials.password, user.hashed_password):
         raise HTTPException(
