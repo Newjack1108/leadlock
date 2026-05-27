@@ -315,31 +315,14 @@ async def get_customer_quote_status(
     current_user: User = Depends(get_current_user)
 ):
     """Get quote lock status for customer."""
-    import sys
     statement = select(Customer).where(Customer.id == customer_id)
     customer = session.exec(statement).first()
-    
+
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
-    
-    # Debug: Check what activities exist
-    from app.models import Activity
-    from app.workflow import ENGAGEMENT_PROOF_TYPES
-    debug_statement = select(Activity).where(Activity.customer_id == customer.id)
-    all_activities = session.exec(debug_statement).all()
-    engagement_statement = select(Activity).where(
-        Activity.customer_id == customer.id,
-        Activity.activity_type.in_(list(ENGAGEMENT_PROOF_TYPES))
-    )
-    engagement_activities = session.exec(engagement_statement).all()
-    
-    print(f"[DEBUG] Customer {customer_id} - All activities: {len(all_activities)}", file=sys.stderr, flush=True)
-    print(f"[DEBUG] Customer {customer_id} - Engagement activities: {len(engagement_activities)}", file=sys.stderr, flush=True)
-    for act in engagement_activities:
-        print(f"[DEBUG] Engagement activity: {act.activity_type} (id={act.id})", file=sys.stderr, flush=True)
-    
+
     can_quote, error = check_quote_prerequisites(customer, session)
-    
+
     return {
         "quote_locked": not can_quote,
         "quote_lock_reason": error if not can_quote else None
@@ -526,21 +509,27 @@ async def get_customer_orders(
 @router.get("/{customer_id}/activities", response_model=List[ActivityResponse])
 async def get_customer_activities(
     customer_id: int,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(LIST_PAGE_SIZE_DEFAULT, ge=1, le=LIST_PAGE_SIZE_MAX),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
-    """Get all activities for a customer."""
+    """Get paginated activities for a customer, ordered by most recent first."""
     try:
-        statement = select(Customer).where(Customer.id == customer_id)
-        customer = session.exec(statement).first()
-        
+        customer = session.get(Customer, customer_id)
+
         if not customer:
             raise HTTPException(status_code=404, detail="Customer not found")
-        
-        statement = select(Activity, User).outerjoin(User, Activity.created_by_id == User.id).where(
-            Activity.customer_id == customer_id
-        ).order_by(Activity.created_at.desc())
-        
+
+        statement = (
+            select(Activity, User)
+            .outerjoin(User, Activity.created_by_id == User.id)
+            .where(Activity.customer_id == customer_id)
+            .order_by(Activity.created_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+
         results = session.exec(statement).all()
         activities = []
         for activity, user in results:
@@ -553,7 +542,7 @@ async def get_customer_activities(
                 created_at=activity.created_at,
                 created_by_name=user.full_name if user else "Unknown"
             ))
-        
+
         return activities
     except HTTPException:
         raise
