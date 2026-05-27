@@ -33,6 +33,9 @@ if not DATABASE_URL.startswith("sqlite"):
             "max_overflow": int(os.getenv("DB_MAX_OVERFLOW", "20")),
             "pool_timeout": int(os.getenv("DB_POOL_TIMEOUT", "30")),
             "pool_recycle": int(os.getenv("DB_POOL_RECYCLE", "1800")),
+            "connect_args": {
+                "connect_timeout": int(os.getenv("DB_CONNECT_TIMEOUT", "10")),
+            },
         }
     )
 engine = create_engine(DATABASE_URL, **_engine_kwargs)

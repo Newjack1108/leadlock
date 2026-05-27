@@ -295,24 +295,38 @@ async def root():
     return {"message": "LeadLock API"}
 
 
+def _probe_database_connection():
+    """Return (ok: bool, error_message: str | None)."""
+    from sqlalchemy import text
+
+    with engine.connect() as conn:
+        conn.execute(text("SELECT 1"))
+    return True, None
+
+
 @app.get("/health")
 async def health():
     """Health check for Railway/load balancers. Reports connection and migration status."""
     db_status = "initializing"
     db_detail = None
-    if _db_ready:
+    if _db_init_error:
+        db_status = "error"
+        db_detail = _db_init_error
+    elif _db_ready:
         try:
-            from sqlalchemy import text
-
-            with engine.connect() as conn:
-                conn.execute(text("SELECT 1"))
+            _probe_database_connection()
             db_status = "ok"
         except Exception as exc:
             db_status = "error"
             db_detail = str(exc)
-    elif _db_init_error:
-        db_status = "error"
-        db_detail = _db_init_error
+    else:
+        # Background init not finished yet — probe live so we don't stay "initializing" forever.
+        try:
+            _probe_database_connection()
+            db_status = "ok"
+        except Exception as exc:
+            db_status = "error"
+            db_detail = str(exc)
 
     if db_status == "ok" and not _migrations_complete:
         overall = "degraded"
