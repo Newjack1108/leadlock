@@ -48,6 +48,26 @@ Railway’s edge could not get a timely response from your container.
 
 5. **Health check** (Railway → API service → Settings): Path **`/health/live`**, timeout **120s**. Do not use `/health` alone if the DB is slow — it runs `SELECT 1` and can fail deploy health checks.
 
+## Worker service shows “failed” but logs say “All workers running”
+
+The **Worker** is not a web app: it runs `python worker.py` and has no UI. Railway may mark it failed if a **health check** expects HTTP on `$PORT` while nothing was listening.
+
+1. **Worker → Settings → Start Command**: `python worker.py` (Root Directory **`api`**).
+2. **Same DB env as API**: `DATABASE_URL`, and if used `DATABASE_USE_PUBLIC` + `DATABASE_PUBLIC_URL`.
+3. **Health check**: path **`/health/live`**, or disable health check on the Worker service only.
+4. After deploy `worker.py` with the built-in health server, logs should include `Worker health server on 0.0.0.0:...` then `All workers running`.
+
+Successful worker logs end with:
+
+```text
+IMAP polling thread started
+Scheduled SMS worker started
+Customer outreach worker started
+All workers running. Blocking main thread.
+```
+
+That is **healthy** — email/SMS/outreach run on the Worker, not on the API (unless `WORKER_MODE=true` on API).
+
 ## Symptom: `/health` returns 502
 
 The container is not listening. Check **Deploy logs** for `Database startup failed` or missing `DATABASE_URL`.

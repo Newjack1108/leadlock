@@ -13,14 +13,49 @@ Environment variables match the API (``DATABASE_URL``, Twilio, IMAP, etc.).
 
 from __future__ import annotations
 
+import json
+import os
 import sys
+import threading
 import time
 import traceback
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from sqlmodel import Session
 
 from app.background_workers import start_background_workers
 from app.database import create_db_and_tables, engine
+
+
+def _start_railway_health_server() -> None:
+    """
+    Railway web/worker deploys often require a process listening on $PORT for health checks.
+    Background workers do not run uvicorn; expose a minimal /health/live endpoint instead.
+    """
+    port = int(os.getenv("PORT", "8080"))
+
+    class _Handler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:
+            if self.path.split("?", 1)[0] in ("/health/live", "/health"):
+                body = json.dumps({"status": "live", "service": "worker"}).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            else:
+                self.send_response(404)
+                self.end_headers()
+
+        def log_message(self, *_args) -> None:
+            return
+
+    def _serve() -> None:
+        server = HTTPServer(("0.0.0.0", port), _Handler)
+        print(f"Worker health server on 0.0.0.0:{port} (/health/live)", file=sys.stderr, flush=True)
+        server.serve_forever()
+
+    threading.Thread(target=_serve, name="worker-health", daemon=True).start()
 
 
 def main() -> None:
@@ -59,6 +94,8 @@ def main() -> None:
         print(f"SMS STOP backfill failed (non-fatal): {exc}", file=sys.stderr, flush=True)
 
     print("=" * 50, file=sys.stderr, flush=True)
+
+    _start_railway_health_server()
 
     try:
         start_background_workers()
