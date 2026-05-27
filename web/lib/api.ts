@@ -65,6 +65,9 @@ const api = axios.create({
   timeout: 15000, // 15s - fail fast if API is down
 });
 
+/** List pages (customers, leads) on Railway public DB can exceed 15s on cold start. */
+export const LIST_FETCH_TIMEOUT_MS = 60_000;
+
 /** Compose, quote email, reply, heavy quote writes: provider + DB often exceed 15s on Railway */
 export const EMAIL_AND_UPLOAD_TIMEOUT_MS = 120_000;
 
@@ -388,7 +391,9 @@ export const getDashboardCommunicationTotals = async (
 };
 
 export const getUnreadCountsByCustomer = async (): Promise<{ customer_id: number; unread_count: number }[]> => {
-  const response = await api.get('/api/dashboard/unread-by-customer');
+  const response = await api.get('/api/dashboard/unread-by-customer', {
+    timeout: LIST_FETCH_TIMEOUT_MS,
+  });
   return response.data;
 };
 
@@ -405,7 +410,10 @@ export const getCustomers = async (options?: {
   if (options?.has_unread) params.has_unread = true;
   if (options?.page != null) params.page = options.page;
   if (options?.page_size != null) params.page_size = options.page_size;
-  const response = await api.get('/api/customers', { params: Object.keys(params).length ? params : undefined });
+  const response = await api.get('/api/customers', {
+    params: Object.keys(params).length ? params : undefined,
+    timeout: LIST_FETCH_TIMEOUT_MS,
+  });
   return response.data as CustomerListPayload;
 };
 

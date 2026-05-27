@@ -164,6 +164,36 @@ def _ensure_archive_columns(engine) -> None:
         print(f"Warning: could not ensure archive columns: {e}", file=sys.stderr, flush=True)
 
 
+def _ensure_list_performance_indexes(engine) -> None:
+    """Indexes for customer list ordering and unread-count aggregations (Railway public DB latency)."""
+    import sys
+
+    if getattr(engine.dialect, "name", "") != "postgresql":
+        return
+    statements = [
+        "CREATE INDEX IF NOT EXISTS ix_customer_created_at ON customer (created_at DESC)",
+        (
+            "CREATE INDEX IF NOT EXISTS ix_smsmessage_customer_unread "
+            "ON smsmessage (customer_id) WHERE read_at IS NULL"
+        ),
+        (
+            "CREATE INDEX IF NOT EXISTS ix_messengermessage_customer_unread "
+            "ON messengermessage (customer_id) WHERE read_at IS NULL"
+        ),
+        (
+            "CREATE INDEX IF NOT EXISTS ix_email_customer_unread "
+            "ON email (customer_id) WHERE read_at IS NULL"
+        ),
+    ]
+    try:
+        with engine.begin() as conn:
+            for stmt in statements:
+                conn.execute(text(stmt))
+        print("List/unread performance indexes ensured", file=sys.stderr, flush=True)
+    except Exception as e:
+        print(f"Warning: list performance indexes skipped: {e}", file=sys.stderr, flush=True)
+
+
 def _ensure_dealer_portal_schema(engine) -> None:
     """Add dealer portal tables/columns for strict isolation."""
     import sys
@@ -2489,7 +2519,9 @@ def create_db_and_tables():
         # Facebook advert schema: handled by _ensure_facebook_advert_schema() immediately after create_all.
 
         # messenger_message table is created by SQLModel.metadata.create_all() when MessengerMessage model is imported
-        
+
+        _ensure_list_performance_indexes(engine)
+
         print("Migration check completed", file=sys.stderr, flush=True)
     except Exception as e:
         # Log error but don't crash - migration might have already run

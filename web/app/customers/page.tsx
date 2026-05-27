@@ -44,24 +44,28 @@ function CustomersPageContent() {
       setFetchState('idle');
       setFetchErrorDetail(null);
       const searchValue = searchApplied.trim() || undefined;
-      const [customersData, unreadRes, summary] = await Promise.all([
-        getCustomers({
-          search: searchValue,
-          sms_opted_out: smsOptedOutFilter || undefined,
-          has_unread: hasUnreadFilter || undefined,
-          page,
-          page_size: CUSTOMERS_PAGE_SIZE,
-        }),
-        getUnreadCountsByCustomer().catch(() => []),
-        getDataSummary().catch(() => null),
-      ]);
-      setDbSummaryCustomers(summary?.customers ?? null);
+      const customersData = await getCustomers({
+        search: searchValue,
+        sms_opted_out: smsOptedOutFilter || undefined,
+        has_unread: hasUnreadFilter || undefined,
+        page,
+        page_size: CUSTOMERS_PAGE_SIZE,
+      });
       setCustomers(customersData.items ?? []);
       setTotal(typeof customersData.total === 'number' ? customersData.total : 0);
       setFetchState('ok');
-      setUnreadByCustomer(
-        Object.fromEntries((unreadRes || []).map((d) => [d.customer_id, d.unread_count]))
-      );
+
+      void getDataSummary()
+        .then((summary) => setDbSummaryCustomers(summary?.customers ?? null))
+        .catch(() => setDbSummaryCustomers(null));
+
+      void getUnreadCountsByCustomer()
+        .then((unreadRes) =>
+          setUnreadByCustomer(
+            Object.fromEntries((unreadRes || []).map((d) => [d.customer_id, d.unread_count]))
+          )
+        )
+        .catch(() => setUnreadByCustomer({}));
     } catch (error: unknown) {
       setFetchState('error');
       setFetchErrorDetail(getApiErrorDetail(error));
