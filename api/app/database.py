@@ -37,7 +37,20 @@ if (
     elif "sslmode=" not in DATABASE_URL and "?" in DATABASE_URL:
         DATABASE_URL = DATABASE_URL + "&sslmode=require"
 
-engine = create_engine(DATABASE_URL, echo=False, pool_pre_ping=True)
+_engine_kwargs: dict = {"echo": False, "pool_pre_ping": True}
+if not DATABASE_URL.startswith("sqlite"):
+    _engine_kwargs.update(
+        {
+            "pool_size": int(os.getenv("DB_POOL_SIZE", "10")),
+            "max_overflow": int(os.getenv("DB_MAX_OVERFLOW", "10")),
+            "pool_timeout": int(os.getenv("DB_POOL_TIMEOUT", "30")),
+            "connect_args": {
+                "connect_timeout": int(os.getenv("DB_CONNECT_TIMEOUT", "10")),
+                "options": f"-c statement_timeout={int(os.getenv('DB_STATEMENT_TIMEOUT_MS', '45000'))}",
+            },
+        }
+    )
+engine = create_engine(DATABASE_URL, **_engine_kwargs)
 
 
 def _ensure_facebook_advert_schema(engine) -> None:

@@ -401,6 +401,7 @@ export const getCustomers = async (options?: {
   search?: string;
   sms_opted_out?: boolean;
   has_unread?: boolean;
+  include_total?: boolean;
   page?: number;
   page_size?: number;
 }) => {
@@ -408,6 +409,7 @@ export const getCustomers = async (options?: {
   if (options?.search?.trim()) params.search = options.search.trim();
   if (options?.sms_opted_out) params.sms_opted_out = true;
   if (options?.has_unread) params.has_unread = true;
+  if (options?.include_total === false) params.includeTotal = false;
   if (options?.page != null) params.page = options.page;
   if (options?.page_size != null) params.page_size = options.page_size;
   const response = await api.get('/api/customers', {

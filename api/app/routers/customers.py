@@ -110,16 +110,17 @@ def quote_item_to_response(item: QuoteItem) -> QuoteItemResponse:
 
 
 @router.get("", response_model=CustomerListResponse)
-async def get_customers(
+def get_customers(
     search: Optional[str] = Query(None),
     sms_opted_out: Optional[bool] = Query(None),
     has_unread: Optional[bool] = Query(None),
+    include_total: bool = Query(True, alias="includeTotal"),
     page: int = Query(1, ge=1),
     page_size: int = Query(LIST_PAGE_SIZE_DEFAULT, ge=1, le=LIST_PAGE_SIZE_MAX),
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
-    """Paginated customers list."""
+    """Paginated customers list. Set includeTotal=false to skip COUNT(*) (faster on Railway)."""
     conditions = []
 
     if search and search.strip():
@@ -142,9 +143,12 @@ async def get_customers(
 
     where_clause = and_(*conditions) if conditions else true()
 
-    count_stmt = select(func.count()).select_from(Customer).where(where_clause)
-    _total_row = session.exec(count_stmt).one()
-    total = int(_total_row[0]) if isinstance(_total_row, (tuple, list)) else int(_total_row)
+    total = 0
+    if include_total:
+        from app.db_utils import scalar_int
+
+        count_stmt = select(func.count()).select_from(Customer).where(where_clause)
+        total = scalar_int(session.exec(count_stmt).one())
 
     statement = (
         select(Customer)

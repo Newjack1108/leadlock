@@ -44,20 +44,31 @@ function CustomersPageContent() {
       setFetchState('idle');
       setFetchErrorDetail(null);
       const searchValue = searchApplied.trim() || undefined;
+      const summaryPromise = getDataSummary().catch(() => null);
+
       const customersData = await getCustomers({
         search: searchValue,
         sms_opted_out: smsOptedOutFilter || undefined,
         has_unread: hasUnreadFilter || undefined,
+        include_total: Boolean(searchValue || smsOptedOutFilter || hasUnreadFilter),
         page,
         page_size: CUSTOMERS_PAGE_SIZE,
       });
       setCustomers(customersData.items ?? []);
-      setTotal(typeof customersData.total === 'number' ? customersData.total : 0);
-      setFetchState('ok');
 
-      void getDataSummary()
-        .then((summary) => setDbSummaryCustomers(summary?.customers ?? null))
-        .catch(() => setDbSummaryCustomers(null));
+      const summary = await summaryPromise;
+      setDbSummaryCustomers(summary?.customers ?? null);
+
+      const listTotal = typeof customersData.total === 'number' ? customersData.total : 0;
+      const summaryTotal = summary?.customers ?? 0;
+      setTotal(
+        listTotal > 0
+          ? listTotal
+          : summaryTotal > 0 && !searchValue && !smsOptedOutFilter && !hasUnreadFilter
+            ? summaryTotal
+            : listTotal
+      );
+      setFetchState('ok');
 
       void getUnreadCountsByCustomer()
         .then((unreadRes) =>

@@ -89,7 +89,7 @@ async def get_current_user_info(current_user: User = Depends(get_current_user)):
 
 
 @router.get("/data-summary")
-async def get_data_summary(
+def get_data_summary(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
