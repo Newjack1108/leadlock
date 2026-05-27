@@ -28,6 +28,7 @@ import {
   type DealerWelcome,
   type FacebookAdvertProfile,
   type QuoteTemperature,
+  type QuoteFulfillmentMethod,
   type QuoteStatus,
   type QuoteListPayload,
   type CustomerListPayload,
@@ -891,6 +892,15 @@ export const createQuote = async (quoteData: {
   include_spec_sheets?: boolean;
   include_available_optional_extras?: boolean;
   include_delivery_installation_contact_note?: boolean;
+  fulfillment_method?: QuoteFulfillmentMethod;
+  use_alternate_delivery_address?: boolean;
+  delivery_address_line1?: string;
+  delivery_address_line2?: string;
+  delivery_city?: string;
+  delivery_county?: string;
+  delivery_postcode?: string;
+  delivery_country?: string;
+  delivery_location_notes?: string;
 }) => {
   const response = await api.post('/api/quotes', quoteData);
   return response.data;
@@ -1297,6 +1307,15 @@ export const updateDraftQuote = async (quoteId: number, quoteData: {
   include_spec_sheets?: boolean;
   include_available_optional_extras?: boolean;
   include_delivery_installation_contact_note?: boolean;
+  fulfillment_method?: QuoteFulfillmentMethod;
+  use_alternate_delivery_address?: boolean;
+  delivery_address_line1?: string;
+  delivery_address_line2?: string;
+  delivery_city?: string;
+  delivery_county?: string;
+  delivery_postcode?: string;
+  delivery_country?: string;
+  delivery_location_notes?: string;
 }) => {
   const response = await api.put(`/api/quotes/${quoteId}/draft`, quoteData, {
     timeout: EMAIL_AND_UPLOAD_TIMEOUT_MS,
