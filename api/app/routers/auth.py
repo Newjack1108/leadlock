@@ -61,11 +61,8 @@ def login(credentials: UserLogin, session: Session = Depends(get_session)):
         )
     email = credentials.email.strip()
     email_key = email.lower()
-    # Prefer exact match (uses email index); fall back to case-insensitive lookup.
     user = session.exec(select(User).where(User.email == email)).first()
-    if user is None and email_key != email:
-        user = session.exec(select(User).where(func.lower(User.email) == email_key)).first()
-    elif user is None:
+    if user is None:
         user = session.exec(select(User).where(func.lower(User.email) == email_key)).first()
     
     if not user or not verify_password(credentials.password, user.hashed_password):
