@@ -12,8 +12,8 @@
 2. **Railway → leadlock (API) → Variables**
    - `DATABASE_URL` must be a **reference** to your **existing** Postgres service (not a new empty DB).
    - `SECRET_KEY` must be set (unchanged from before today).
-   - `CORS_ORIGINS` must include `https://leadlock-frontend-production.up.railway.app`  
-     Or **delete** `CORS_ORIGINS` if it is blank so defaults apply.
+   - `CORS_ORIGINS` may list extra origins; the API **always** allows `https://www.csgbsales.co.uk` and `https://csgbsales.co.uk` (see `main.py`).  
+     If the browser reports CORS but `/health` returns **502**, the API is **down** — fix the API deploy first (CORS headers are not added on Railway’s 502 page).
 
 3. **Railway → Postgres → Data / Query**
    ```sql

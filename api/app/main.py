@@ -40,13 +40,18 @@ app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 # CORS: os.getenv("CORS_ORIGINS", default) does NOT use default when the var is set but empty
 # (common in dashboards). Empty list => no Access-Control-Allow-Origin on any response.
-_default_cors_origins = (
-    "http://localhost:3000,http://localhost:3001,"
-    "https://leadlock-frontend-production.up.railway.app,https://leadlock-production.up.railway.app"
+# Production domains are always merged in so a partial CORS_ORIGINS env cannot drop the live site.
+_REQUIRED_CORS_ORIGINS = (
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "https://leadlock-frontend-production.up.railway.app",
+    "https://leadlock-production.up.railway.app",
+    "https://www.csgbsales.co.uk",
+    "https://csgbsales.co.uk",
 )
 _raw_cors = os.getenv("CORS_ORIGINS", "").strip()
-allowed_origins_str = _raw_cors if _raw_cors else _default_cors_origins
-allowed_origins = [origin.strip() for origin in allowed_origins_str.split(",") if origin.strip()]
+_cors_from_env = [origin.strip() for origin in _raw_cors.split(",") if origin.strip()]
+allowed_origins = list(dict.fromkeys(_REQUIRED_CORS_ORIGINS + _cors_from_env))
 
 _sys = __import__("sys")
 if os.getenv("DEBUG", "false").lower() == "true" or not os.getenv("RAILWAY_ENVIRONMENT"):
