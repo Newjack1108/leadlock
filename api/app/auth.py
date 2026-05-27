@@ -52,7 +52,7 @@ def _env_csv(name: str) -> set[str]:
     return {_normalize_email(item) for item in raw.split(",") if _normalize_email(item)}
 
 
-async def get_current_user(
+def get_current_user(
     token: str = Depends(oauth2_scheme),
     session: Session = Depends(get_session)
 ) -> User:

@@ -46,7 +46,11 @@ if not DATABASE_URL.startswith("sqlite"):
             "pool_timeout": int(os.getenv("DB_POOL_TIMEOUT", "30")),
             "connect_args": {
                 "connect_timeout": int(os.getenv("DB_CONNECT_TIMEOUT", "10")),
-                "options": f"-c statement_timeout={int(os.getenv('DB_STATEMENT_TIMEOUT_MS', '45000'))}",
+                # Fail fast when migrations hold locks instead of queuing until statement_timeout.
+                "options": (
+                    f"-c statement_timeout={int(os.getenv('DB_STATEMENT_TIMEOUT_MS', '60000'))} "
+                    f"-c lock_timeout={int(os.getenv('DB_LOCK_TIMEOUT_MS', '15000'))}"
+                ),
             },
         }
     )

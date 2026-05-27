@@ -124,10 +124,10 @@ async def global_exception_handler(request: Request, exc: Exception):
     if isinstance(exc, HTTPException):
         raise exc
     
-    # Log the error
-    error_msg = f"Unhandled exception: {str(exc)}"
-    print(error_msg, file=sys.stderr, flush=True)
-    print(traceback.format_exc(), file=sys.stderr, flush=True)
+    # One line in production — full tracebacks on every request flooded Railway (500 logs/sec).
+    print(f"Unhandled {type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
+    if os.getenv("DEBUG", "false").lower() == "true":
+        print(traceback.format_exc(), file=sys.stderr, flush=True)
     
     # Get the origin from request headers
     origin = request.headers.get("origin")

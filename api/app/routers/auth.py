@@ -52,7 +52,7 @@ async def bootstrap(data: BootstrapCreate, session: Session = Depends(get_sessio
 
 
 @router.post("/login", response_model=Token)
-async def login(credentials: UserLogin, session: Session = Depends(get_session)):
+def login(credentials: UserLogin, session: Session = Depends(get_session)):
     if credentials.email.strip().lower() == system_user_email():
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
