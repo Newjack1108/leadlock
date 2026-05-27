@@ -64,6 +64,7 @@ def main() -> None:
     _start_railway_health_server()
     print("=" * 50, file=sys.stderr, flush=True)
 
+    os.environ["LEADLOCK_MIGRATION_MODE"] = "1"
     try:
         create_db_and_tables()
         print("Database initialization complete", file=sys.stderr, flush=True)
@@ -71,6 +72,8 @@ def main() -> None:
         print(f"Database initialization failed: {exc}", file=sys.stderr, flush=True)
         print(traceback.format_exc(), file=sys.stderr, flush=True)
         sys.exit(1)
+    finally:
+        os.environ.pop("LEADLOCK_MIGRATION_MODE", None)
 
     try:
         from app.email_service import log_inbound_poll_configuration

@@ -25,7 +25,30 @@
 
 4. **Redeploy** the `leadlock` API service after fixing variables.
 
-## Symptom: `canceling statement due to statement timeout` in deploy logs
+## Symptom: Postgres log shows `canceling statement due to statement timeout`
+
+Postgres is up (`database system is ready to accept connections`) but **API + Worker** were fighting over migrations (`ALTER TABLE lead`, `get_columns("lead")`) while login ran (`SELECT FROM "user"`). Each connection hit a **statement timeout** (often ~45–60s from an old deploy or Railway default).
+
+**Fix:**
+
+1. **Postgres → Query** — check and relax server timeout:
+   ```sql
+   SHOW statement_timeout;
+   ALTER DATABASE railway SET statement_timeout TO '120s';
+   ```
+   (Use your actual database name if not `railway`.)
+
+2. **API only:** `API_SKIP_STARTUP_MIGRATIONS=true` (no `create_db_and_tables` on API).
+
+3. **Worker only** runs migrations — **stop Worker**, redeploy API, confirm login works, then **start Worker alone** until `Database initialization complete`.
+
+4. Remove **`DB_STATEMENT_TIMEOUT_MS`** / **`DB_LOCK_TIMEOUT_MS`** from API/Worker variables if set.
+
+5. Latest code sets `LEADLOCK_MIGRATION_MODE` on Worker so migration connections use `SET statement_timeout = 0`.
+
+Do **not** redeploy API and Worker at the same time while Postgres is recovering from a restart.
+
+## Symptom: `canceling statement due to statement timeout` in deploy logs (API)
 
 We previously set Postgres `statement_timeout` on every connection; that **breaks startup migrations** (`inspector.get_columns("lead")`) and login queries while API + Worker both run `create_db_and_tables()`.
 

@@ -1,5 +1,5 @@
 from sqlmodel import SQLModel, create_engine, Session, text as sql_text
-from sqlalchemy import inspect, text
+from sqlalchemy import event, inspect, text
 from typing import Generator
 import os
 from dotenv import load_dotenv
@@ -50,6 +50,23 @@ if not DATABASE_URL.startswith("sqlite"):
         }
     )
 engine = create_engine(DATABASE_URL, **_engine_kwargs)
+
+
+def _migration_mode_enabled() -> bool:
+    return os.getenv("LEADLOCK_MIGRATION_MODE", "").strip().lower() in ("1", "true", "yes", "on")
+
+
+@event.listens_for(engine, "connect")
+def _configure_db_connection(dbapi_connection, _connection_record) -> None:
+    """Worker migrations only: avoid Railway/session statement_timeout aborting DDL."""
+    if not _migration_mode_enabled() or engine.dialect.name != "postgresql":
+        return
+    cursor = dbapi_connection.cursor()
+    try:
+        cursor.execute("SET statement_timeout = 0")
+        cursor.execute("SET lock_timeout = 120000")
+    finally:
+        cursor.close()
 
 
 def _ensure_facebook_advert_schema(engine) -> None:
