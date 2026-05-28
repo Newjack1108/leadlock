@@ -214,6 +214,10 @@ def _ensure_list_performance_indexes(engine) -> None:
             "CREATE INDEX IF NOT EXISTS ix_email_customer_unread "
             "ON email (customer_id) WHERE read_at IS NULL"
         ),
+        (
+            "CREATE INDEX IF NOT EXISTS ix_lead_active_created "
+            "ON lead (created_at DESC) WHERE archived_at IS NULL"
+        ),
     ]
     try:
         with engine.begin() as conn:

@@ -37,7 +37,9 @@ export default function ProductsPage() {
   const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
-  const [categoryFilter, setCategoryFilter] = useState<ProductCategory | 'ALL'>('ALL');
+  const [categoryFilter, setCategoryFilter] = useState<ProductCategory | 'ALL'>(
+    ProductCategory.STABLES
+  );
   const [extrasFilter, setExtrasFilter] = useState<'ALL' | true | false>(false);
   const [subcategoryFilter, setSubcategoryFilter] = useState<'ALL' | ProductSubcategory>('ALL');
   const [viewMode, setViewMode] = useState<'list' | 'tile'>('list');

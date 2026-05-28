@@ -70,13 +70,20 @@ function CustomersPageContent() {
       );
       setFetchState('ok');
 
-      void getUnreadCountsByCustomer()
-        .then((unreadRes) =>
-          setUnreadByCustomer(
-            Object.fromEntries((unreadRes || []).map((d) => [d.customer_id, d.unread_count]))
+      const loadUnreadBadges = () => {
+        void getUnreadCountsByCustomer()
+          .then((unreadRes) =>
+            setUnreadByCustomer(
+              Object.fromEntries((unreadRes || []).map((d) => [d.customer_id, d.unread_count]))
+            )
           )
-        )
-        .catch(() => setUnreadByCustomer({}));
+          .catch(() => setUnreadByCustomer({}));
+      };
+      if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+        window.requestIdleCallback(loadUnreadBadges, { timeout: 2500 });
+      } else {
+        setTimeout(loadUnreadBadges, 100);
+      }
     } catch (error: unknown) {
       setFetchState('error');
       setFetchErrorDetail(getApiErrorDetail(error));

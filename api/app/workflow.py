@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Dict, List, Optional, Set
 from app.models import LeadStatus, UserRole, ActivityType, Timeframe, Lead, Activity, Customer, CompanySettings
 from sqlmodel import Session, select
 from datetime import datetime, timedelta
@@ -46,7 +46,65 @@ def get_allowed_transitions(user_role: UserRole, current_status: LeadStatus) -> 
     return transitions.get(current_status, [])
 
 
-def check_quote_prerequisites(customer: Customer, session: Session) -> tuple[bool, Optional[dict]]:
+def batch_customers_with_any_activity(session: Session, customer_ids: Set[int]) -> Set[int]:
+    if not customer_ids:
+        return set()
+    rows = session.exec(
+        select(Activity.customer_id)
+        .where(Activity.customer_id.in_(customer_ids))
+        .distinct()
+    ).all()
+    return {int(cid) for cid in rows if cid is not None}
+
+
+def batch_customers_with_engagement_proof(session: Session, customer_ids: Set[int]) -> Set[int]:
+    if not customer_ids:
+        return set()
+    rows = session.exec(
+        select(Activity.customer_id)
+        .where(
+            Activity.customer_id.in_(customer_ids),
+            Activity.activity_type.in_(list(ENGAGEMENT_PROOF_TYPES)),
+        )
+        .distinct()
+    ).all()
+    return {int(cid) for cid in rows if cid is not None}
+
+
+def batch_sla_badges_for_leads(session: Session, leads: List[Lead]) -> Dict[int, Optional[str]]:
+    """Compute SLA badges for a page of leads without per-lead activity queries."""
+    now = datetime.utcnow()
+    customer_ids = {int(l.customer_id) for l in leads if l.customer_id is not None}
+    customers_with_activity = batch_customers_with_any_activity(session, customer_ids)
+    customers_with_engagement = batch_customers_with_engagement_proof(session, customer_ids)
+    out: Dict[int, Optional[str]] = {}
+    for lead in leads:
+        if lead.id is None:
+            continue
+        badge: Optional[str] = None
+        if lead.status == LeadStatus.NEW:
+            has_activity = bool(lead.customer_id and int(lead.customer_id) in customers_with_activity)
+            if not has_activity:
+                if now - lead.created_at > timedelta(minutes=15):
+                    badge = "red"
+        elif lead.status == LeadStatus.CONTACT_ATTEMPTED:
+            has_engagement = bool(
+                lead.customer_id and int(lead.customer_id) in customers_with_engagement
+            )
+            if not has_engagement:
+                if now - lead.created_at > timedelta(hours=48):
+                    badge = "amber"
+        out[int(lead.id)] = badge
+    return out
+
+
+def check_quote_prerequisites(
+    customer: Customer,
+    session: Session,
+    *,
+    company_settings: Optional[CompanySettings] = None,
+    has_engagement_proof: Optional[bool] = None,
+) -> tuple[bool, Optional[dict]]:
     """
     Check if customer profile meets quote contact rules.
     At least two of postcode, email, and phone must be present (any pair).
@@ -73,14 +131,14 @@ def check_quote_prerequisites(customer: Customer, session: Session) -> tuple[boo
         }
     
     # Engagement proof: only required when company setting is enabled
-    company_settings = session.exec(select(CompanySettings)).first()
+    if company_settings is None:
+        company_settings = session.exec(select(CompanySettings)).first()
     if company_settings and getattr(company_settings, "require_engagement_proof", False):
-        statement = select(Activity).where(
-            Activity.customer_id == customer.id,
-            Activity.activity_type.in_(list(ENGAGEMENT_PROOF_TYPES))
-        )
-        engagement_activities = session.exec(statement).all()
-        if not engagement_activities:
+        if has_engagement_proof is None:
+            has_engagement_proof = customer.id in batch_customers_with_engagement_proof(
+                session, {int(customer.id)} if customer.id is not None else set()
+            )
+        if not has_engagement_proof:
             return False, {
                 "error": "NO_ENGAGEMENT_PROOF",
                 "message": "No engagement proof found (SMS_RECEIVED, EMAIL_RECEIVED, EMAIL_SENT, WHATSAPP_RECEIVED, or LIVE_CALL)"

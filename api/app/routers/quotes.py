@@ -5,6 +5,7 @@ from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Query, 
 from fastapi.responses import Response
 from sqlmodel import Session, select, or_, and_
 from sqlalchemy import func, true, String as SAString, delete, update
+from datetime import datetime
 from typing import Dict, List, Literal, Optional, Tuple
 from app.database import get_session
 from app.models import (
@@ -23,6 +24,7 @@ from app.models import (
     ActivityType,
     CompanySettings,
     Lead,
+    LeadType,
     LeadStatus,
     QuoteStatus,
     QuoteTemperature,
@@ -420,6 +422,152 @@ def batch_reply_metrics_since_sent(session: Session, quotes: List[Quote]) -> Dic
                 cnt += 1
         out[q.id] = (cnt > 0, cnt)
     return out
+
+
+def batch_quote_list_lookups(
+    session: Session, quotes: List[Quote]
+) -> Tuple[
+    Dict[int, Customer],
+    Dict[int, Lead],
+    Dict[int, int],
+    Dict[int, int],
+    Dict[int, Optional[datetime]],
+]:
+    """One round-trip per lookup type for paginated quote list (avoids N+1 in build_quote_response)."""
+    customer_ids = {q.customer_id for q in quotes if q.customer_id}
+    lead_ids = {q.lead_id for q in quotes if q.lead_id}
+    quote_ids = [q.id for q in quotes if q.id is not None]
+
+    customers_by_id: Dict[int, Customer] = {}
+    if customer_ids:
+        for customer in session.exec(select(Customer).where(Customer.id.in_(customer_ids))).all():
+            if customer.id is not None:
+                customers_by_id[int(customer.id)] = customer
+
+    leads_by_id: Dict[int, Lead] = {}
+    if lead_ids:
+        for lead in session.exec(select(Lead).where(Lead.id.in_(lead_ids))).all():
+            if lead.id is not None:
+                leads_by_id[int(lead.id)] = lead
+
+    open_counts_by_quote: Dict[int, int] = {}
+    if quote_ids:
+        rows = session.exec(
+            select(QuoteEmail.quote_id, func.coalesce(func.sum(QuoteEmail.open_count), 0))
+            .where(QuoteEmail.quote_id.in_(quote_ids))
+            .group_by(QuoteEmail.quote_id)
+        ).all()
+        for qid, cnt in rows:
+            if qid is not None:
+                open_counts_by_quote[int(qid)] = int(cnt) if cnt is not None else 0
+
+    order_id_by_quote: Dict[int, int] = {}
+    accepted_quote_ids = [q.id for q in quotes if q.status == QuoteStatus.ACCEPTED and q.id is not None]
+    if accepted_quote_ids:
+        for row in session.exec(
+            select(Order.quote_id, Order.id).where(Order.quote_id.in_(accepted_quote_ids))
+        ).all():
+            qid, oid = row[0], row[1]
+            if qid is not None and oid is not None:
+                order_id_by_quote[int(qid)] = int(oid)
+
+    last_activity_by_customer: Dict[int, Optional[datetime]] = {}
+    if customer_ids:
+        rows = session.exec(
+            select(Activity.customer_id, func.max(Activity.created_at))
+            .where(Activity.customer_id.in_(customer_ids))
+            .group_by(Activity.customer_id)
+        ).all()
+        for cid, ts in rows:
+            if cid is not None:
+                last_activity_by_customer[int(cid)] = ts
+
+    return (
+        customers_by_id,
+        leads_by_id,
+        open_counts_by_quote,
+        order_id_by_quote,
+        last_activity_by_customer,
+    )
+
+
+def build_quote_list_response(
+    quote: Quote,
+    *,
+    customer_name: Optional[str],
+    lead_name: Optional[str],
+    lead_type: Optional[LeadType],
+    total_open_count: int,
+    order_id: Optional[int],
+    customer_last_interacted_at: Optional[datetime],
+    lead_quotes_sent_count: Optional[int] = None,
+    customer_replied_since_quote_sent: bool = False,
+    inbound_count_since_quote_sent: int = 0,
+) -> QuoteResponse:
+    """Lightweight quote row for GET /api/quotes (no line items, discounts, or per-row DB queries)."""
+    vat_amount = quote.total_amount * VAT_RATE_DECIMAL
+    total_amount_inc_vat = quote.total_amount + vat_amount
+    return QuoteResponse(
+        id=quote.id,
+        customer_id=quote.customer_id,
+        customer_name=customer_name,
+        lead_id=quote.lead_id,
+        lead_name=lead_name,
+        lead_type=lead_type,
+        quote_number=quote.quote_number,
+        version=quote.version,
+        status=quote.status,
+        subtotal=quote.subtotal,
+        discount_total=quote.discount_total,
+        total_amount=quote.total_amount,
+        deposit_amount=quote.deposit_amount,
+        balance_amount=quote.balance_amount,
+        currency=quote.currency,
+        valid_until=quote.valid_until,
+        terms_and_conditions=quote.terms_and_conditions,
+        notes=quote.notes,
+        created_by_id=quote.created_by_id,
+        sent_at=quote.sent_at,
+        viewed_at=quote.viewed_at,
+        last_viewed_at=quote.last_viewed_at,
+        accepted_at=quote.accepted_at,
+        created_at=quote.created_at,
+        updated_at=quote.updated_at,
+        vat_amount=vat_amount,
+        total_amount_inc_vat=total_amount_inc_vat,
+        deposit_amount_inc_vat=quote.deposit_amount,
+        balance_amount_inc_vat=quote.balance_amount,
+        items=[],
+        discounts=[],
+        opportunity_stage=quote.opportunity_stage,
+        close_probability=quote.close_probability,
+        expected_close_date=quote.expected_close_date,
+        next_action=quote.next_action,
+        next_action_due_date=quote.next_action_due_date,
+        loss_reason=quote.loss_reason,
+        loss_category=quote.loss_category,
+        owner_id=quote.owner_id,
+        temperature=quote.temperature,
+        include_spec_sheets=getattr(quote, "include_spec_sheets", True),
+        include_available_optional_extras=getattr(quote, "include_available_optional_extras", False),
+        include_delivery_installation_contact_note=getattr(
+            quote, "include_delivery_installation_contact_note", False
+        ),
+        fulfillment_method=getattr(quote, "fulfillment_method", QuoteFulfillmentMethod.DELIVERY),
+        **delivery_location_response_fields(quote),
+        total_open_count=total_open_count,
+        order_id=order_id,
+        customer_last_interacted_at=customer_last_interacted_at,
+        archived_at=getattr(quote, "archived_at", None),
+        dealer_customer_name=getattr(quote, "dealer_customer_name", None),
+        dealer_customer_email=getattr(quote, "dealer_customer_email", None),
+        dealer_customer_phone=getattr(quote, "dealer_customer_phone", None),
+        dealer_customer_address=getattr(quote, "dealer_customer_address", None),
+        dealer_customer_postcode=getattr(quote, "dealer_customer_postcode", None),
+        lead_quotes_sent_count=lead_quotes_sent_count,
+        customer_replied_since_quote_sent=customer_replied_since_quote_sent,
+        inbound_count_since_quote_sent=inbound_count_since_quote_sent,
+    )
 
 
 def build_quote_response(
@@ -1146,21 +1294,50 @@ async def get_all_quotes(
         )
         quotes = session.exec(statement).all()
 
-        lead_ids_page = list({q.lead_id for q in quotes if q.lead_id})
+        quote_list = list(quotes)
+        lead_ids_page = list({q.lead_id for q in quote_list if q.lead_id})
         lead_sent_map = batch_lead_quotes_sent_counts(session, lead_ids_page)
-        reply_map = batch_reply_metrics_since_sent(session, list(quotes))
+        reply_map = batch_reply_metrics_since_sent(session, quote_list)
+        (
+            customers_by_id,
+            leads_by_id,
+            open_counts_by_quote,
+            order_id_by_quote,
+            last_activity_by_customer,
+        ) = batch_quote_list_lookups(session, quote_list)
 
         result = []
-        for quote in quotes:
-            item_statement = select(QuoteItem).where(QuoteItem.quote_id == quote.id).order_by(QuoteItem.sort_order)
-            quote_items = session.exec(item_statement).all()
-            replied, inbound_n = reply_map.get(quote.id, (False, 0))
+        for quote in quote_list:
+            if quote.id is None:
+                continue
+            qid = int(quote.id)
+            customer_name = None
+            customer_last_interacted_at = None
+            if quote.customer_id:
+                cid = int(quote.customer_id)
+                customer = customers_by_id.get(cid)
+                customer_name = customer.name if customer else None
+                customer_last_interacted_at = last_activity_by_customer.get(cid)
+            elif quote.dealer_customer_name:
+                customer_name = quote.dealer_customer_name
+            lead_name = None
+            lead_type = None
+            if quote.lead_id:
+                lead = leads_by_id.get(int(quote.lead_id))
+                if lead:
+                    lead_name = lead.name
+                    lead_type = lead.lead_type
+            replied, inbound_n = reply_map.get(qid, (False, 0))
             lead_n = lead_sent_map.get(int(quote.lead_id), 0) if quote.lead_id else None
             result.append(
-                build_quote_response(
+                build_quote_list_response(
                     quote,
-                    quote_items,
-                    session,
+                    customer_name=customer_name,
+                    lead_name=lead_name,
+                    lead_type=lead_type,
+                    total_open_count=open_counts_by_quote.get(qid, 0),
+                    order_id=order_id_by_quote.get(qid),
+                    customer_last_interacted_at=customer_last_interacted_at,
                     lead_quotes_sent_count=lead_n,
                     customer_replied_since_quote_sent=replied,
                     inbound_count_since_quote_sent=inbound_n,

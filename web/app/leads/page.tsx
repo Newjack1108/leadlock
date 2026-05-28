@@ -18,7 +18,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Lock, Unlock, Clock, Search, Plus, Eye, MessageCircleReply, Trash2 } from 'lucide-react';
-import api from '@/lib/api';
+import api, { getDataSummary } from '@/lib/api';
 import { formatDateTime } from '@/lib/utils';
 import { Lead, LeadStatus, LeadType, LeadSource, QuoteTemperature } from '@/lib/types';
 import { toast } from 'sonner';
@@ -237,6 +237,18 @@ function LeadsPageContent() {
         params.includeArchived = true;
       }
 
+      const needsExactTotal =
+        Boolean(searchValue) ||
+        statusFilter !== 'ALL' ||
+        leadTypeFilter !== 'ALL' ||
+        leadSourceFilter !== 'ALL' ||
+        myLeadsOnly ||
+        includeArchived;
+      if (!needsExactTotal) {
+        params.includeTotal = false;
+      }
+
+      const summaryPromise = needsExactTotal ? Promise.resolve(null) : getDataSummary().catch(() => null);
       const response = await api.get('/api/leads', { params });
       const payload = response.data as {
         items: Lead[];
@@ -245,7 +257,18 @@ function LeadsPageContent() {
         page_size: number;
       };
       const rows = payload.items ?? [];
-      setTotal(payload.total ?? 0);
+      const summary = await summaryPromise;
+      const listTotal = payload.total ?? 0;
+      const summaryTotal = includeArchived
+        ? (summary?.leads ?? 0)
+        : (summary?.leads_not_archived ?? 0);
+      setTotal(
+        listTotal > 0
+          ? listTotal
+          : !needsExactTotal && summaryTotal > 0
+            ? summaryTotal
+            : listTotal
+      );
       // ALL and terminal-status tabs use the API result as-is; pipeline tabs hide terminal rows
       let filteredLeads: Lead[] = rows;
       if (

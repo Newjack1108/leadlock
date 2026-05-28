@@ -149,3 +149,17 @@ The API **cannot reach Postgres on Railway’s private network**. The URL format
 5. **Do not** point `DATABASE_URL` at a Postgres instance from a **different** Railway project or a deleted service — DNS may resolve but nothing listens → timeout.
 
 After a successful connection, deploy logs should show `Database connection OK`. Then check row counts in Postgres Query tab.
+
+## List pages slow (Customers / Leads / Quotes)
+
+See **[PERFORMANCE.md](PERFORMANCE.md)** for how to measure TTFB in the browser.
+
+**Prefer private Postgres** when API, Worker, and Postgres are in the same Railway project:
+
+1. Remove `DATABASE_USE_PUBLIC` / `DATABASE_PUBLIC_URL` from API and Worker if you added them only as a workaround.
+2. Set `DATABASE_URL` on API and Worker via **Add reference** → Postgres → `DATABASE_URL` (private `postgres.railway.internal`).
+3. Redeploy **Worker first** (applies list indexes including `ix_lead_active_created`), then API, then frontend.
+
+Worker logs should include: `List/unread performance indexes ensured`.
+
+If private networking still times out, keep the public URL workaround from the section above — lists will be slower but functional.

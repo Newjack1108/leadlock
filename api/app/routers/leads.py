@@ -30,6 +30,7 @@ from app.models import (
     UserRole,
     ReminderRule,
     CustomerOutreachChannel,
+    CompanySettings,
 )
 from app.auth import get_current_user, require_role
 from app.schemas import (
@@ -42,7 +43,10 @@ from app.workflow import (
     check_sla_overdue,
     check_quote_prerequisites,
     sync_customer_contact_from_lead_on_qualify,
+    batch_sla_badges_for_leads,
+    batch_customers_with_engagement_proof,
 )
+from app.db_utils import scalar_int
 
 _LEAD_CUSTOMER_SYNC_FIELDS = frozenset({"name", "email", "wrong_email_address", "phone", "postcode"})
 from app.quote_delete import delete_quote_cascade
@@ -341,6 +345,12 @@ def enrich_lead_response(
     current_user: User,
     engagement: Optional[Tuple[bool, bool]] = None,
     quote_stats: Optional[Tuple[Optional[QuoteTemperature], int]] = None,
+    *,
+    customer: Optional[Customer] = None,
+    sla_badge: Optional[str] = None,
+    company_settings: Optional[CompanySettings] = None,
+    customers_with_engagement_proof: Optional[set] = None,
+    advert_profile: Optional[FacebookAdvertProfile] = None,
 ) -> LeadResponse:
     """Enrich lead with SLA badge, quote lock info, engagement flags, and quote list stats."""
     if engagement is None:
@@ -349,21 +359,27 @@ def enrich_lead_response(
     if quote_stats is None:
         quote_stats = compute_lead_quote_list_stats(session, [lead]).get(lead.id, (None, 0))
     latest_quote_temperature, quotes_sent_count = quote_stats
-    sla_badge = check_sla_overdue(lead, session)
+    if sla_badge is None:
+        sla_badge = check_sla_overdue(lead, session)
     
     quote_locked = False
     quote_lock_reason = None
-    customer = None
-    
-    if lead.customer_id:
-        statement = select(Customer).where(Customer.id == lead.customer_id)
-        customer = session.exec(statement).first()
+    if customer is None and lead.customer_id:
+        customer = session.exec(select(Customer).where(Customer.id == lead.customer_id)).first()
         
-        if lead.status == LeadStatus.QUALIFIED and customer:
-            can_quote, error = check_quote_prerequisites(customer, session)
-            if not can_quote:
-                quote_locked = True
-                quote_lock_reason = error
+    if lead.status == LeadStatus.QUALIFIED and customer:
+        has_engagement: Optional[bool] = None
+        if customers_with_engagement_proof is not None and customer.id is not None:
+            has_engagement = int(customer.id) in customers_with_engagement_proof
+        can_quote, error = check_quote_prerequisites(
+            customer,
+            session,
+            company_settings=company_settings,
+            has_engagement_proof=has_engagement,
+        )
+        if not can_quote:
+            quote_locked = True
+            quote_lock_reason = error
     
     from app.models import LeadType, LeadSource, Timeframe
     
@@ -384,20 +400,30 @@ def enrich_lead_response(
         customer_response = customer_to_response(customer)
 
     advert_profile_response = None
-    if lead.facebook_advert_profile_id:
+    if advert_profile:
+        advert_profile_response = FacebookAdvertProfileResponse(
+            id=advert_profile.id,
+            name=advert_profile.name,
+            offer_type=advert_profile.offer_type,
+            image_url=advert_profile.image_url,
+            is_active=advert_profile.is_active,
+            created_at=advert_profile.created_at,
+            updated_at=advert_profile.updated_at,
+        )
+    elif lead.facebook_advert_profile_id:
         advert_statement = select(FacebookAdvertProfile).where(
             FacebookAdvertProfile.id == lead.facebook_advert_profile_id
         )
-        advert_profile = session.exec(advert_statement).first()
-        if advert_profile:
+        advert_profile_row = session.exec(advert_statement).first()
+        if advert_profile_row:
             advert_profile_response = FacebookAdvertProfileResponse(
-                id=advert_profile.id,
-                name=advert_profile.name,
-                offer_type=advert_profile.offer_type,
-                image_url=advert_profile.image_url,
-                is_active=advert_profile.is_active,
-                created_at=advert_profile.created_at,
-                updated_at=advert_profile.updated_at,
+                id=advert_profile_row.id,
+                name=advert_profile_row.name,
+                offer_type=advert_profile_row.offer_type,
+                image_url=advert_profile_row.image_url,
+                is_active=advert_profile_row.is_active,
+                created_at=advert_profile_row.created_at,
+                updated_at=advert_profile_row.updated_at,
             )
     
     return LeadResponse(
@@ -442,9 +468,11 @@ async def get_leads(
     page: int = Query(1, ge=1),
     page_size: int = Query(LIST_PAGE_SIZE_DEFAULT, ge=1, le=LIST_PAGE_SIZE_MAX),
     include_archived: bool = Query(False, alias="includeArchived"),
+    include_total: bool = Query(True, alias="includeTotal"),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
+    """Paginated leads. Set includeTotal=false to skip COUNT(*) (faster default browse)."""
     try:
         effective_include_archived = include_archived or (bool(search and search.strip()))
         conditions = []
@@ -477,9 +505,10 @@ async def get_leads(
 
         where_clause = and_(*conditions) if conditions else true()
 
-        count_stmt = select(func.count()).select_from(Lead).where(where_clause)
-        _total_row = session.exec(count_stmt).one()
-        total = int(_total_row[0]) if isinstance(_total_row, (tuple, list)) else int(_total_row)
+        total = 0
+        if include_total:
+            count_stmt = select(func.count()).select_from(Lead).where(where_clause)
+            total = scalar_int(session.exec(count_stmt).one())
 
         statement = (
             select(Lead)
@@ -492,6 +521,27 @@ async def get_leads(
         lead_list = list(leads)
         engagement_by_lead = compute_lead_engagement_flags(session, lead_list)
         quote_stats_by_lead = compute_lead_quote_list_stats(session, lead_list)
+        sla_by_lead = batch_sla_badges_for_leads(session, lead_list)
+        company_settings = session.exec(select(CompanySettings)).first()
+        customer_ids = {int(l.customer_id) for l in lead_list if l.customer_id is not None}
+        customers_by_id: Dict[int, Customer] = {}
+        if customer_ids:
+            for row in session.exec(select(Customer).where(Customer.id.in_(customer_ids))).all():
+                if row.id is not None:
+                    customers_by_id[int(row.id)] = row
+        customers_with_engagement = batch_customers_with_engagement_proof(session, customer_ids)
+        advert_ids = {
+            int(l.facebook_advert_profile_id)
+            for l in lead_list
+            if l.facebook_advert_profile_id is not None
+        }
+        advert_by_id: Dict[int, FacebookAdvertProfile] = {}
+        if advert_ids:
+            for row in session.exec(
+                select(FacebookAdvertProfile).where(FacebookAdvertProfile.id.in_(advert_ids))
+            ).all():
+                if row.id is not None:
+                    advert_by_id[int(row.id)] = row
         items = [
             enrich_lead_response(
                 lead,
@@ -499,6 +549,13 @@ async def get_leads(
                 current_user,
                 engagement=engagement_by_lead.get(lead.id, (False, False)),
                 quote_stats=quote_stats_by_lead.get(lead.id, (None, 0)),
+                customer=customers_by_id.get(int(lead.customer_id)) if lead.customer_id else None,
+                sla_badge=sla_by_lead.get(lead.id) if lead.id is not None else None,
+                company_settings=company_settings,
+                customers_with_engagement_proof=customers_with_engagement,
+                advert_profile=advert_by_id.get(int(lead.facebook_advert_profile_id))
+                if lead.facebook_advert_profile_id
+                else None,
             )
             for lead in leads
         ]
