@@ -41,12 +41,19 @@ import tempfile
 import urllib.request
 from pathlib import Path
 from urllib.parse import quote
+from xml.sax.saxutils import escape
+
 
 def format_currency(amount: Decimal, currency: str = "GBP") -> str:
     """Format decimal amount as currency string."""
     if currency == "GBP":
         return f"£{amount:,.2f}"
     return f"{currency} {amount:,.2f}"
+
+
+def _pdf_table_paragraph(text: str, style: ParagraphStyle) -> Paragraph:
+    """Wrap table cell text so ReportLab wraps within fixed column widths."""
+    return Paragraph(escape(text or ""), style)
 
 
 def aggregate_quote_discount_lines(session: Session, quote_id: int) -> List[Tuple[str, Decimal]]:
@@ -634,6 +641,14 @@ def generate_quote_pdf(
         fontName="Helvetica-Bold",
         alignment=0,
     )
+    table_cell_style = ParagraphStyle(
+        "TableCell",
+        parent=styles["Normal"],
+        fontSize=9,
+        leading=11,
+        textColor=colors.HexColor("#333333"),
+        alignment=0,
+    )
     terms_style = ParagraphStyle(
         "Terms",
         parent=normal_style,
@@ -805,7 +820,7 @@ def generate_quote_pdf(
     main_items.sort(key=lambda i: getattr(i, "sort_order", 0) or 0)
     for main_item in main_items:
         table_data.append([
-            main_item.description or "",
+            _pdf_table_paragraph(main_item.description or "", table_cell_style),
             str(main_item.quantity),
             format_currency(main_item.unit_price, quote.currency),
             format_currency(main_item.final_line_total, quote.currency),
@@ -814,7 +829,7 @@ def generate_quote_pdf(
         children.sort(key=lambda i: getattr(i, "sort_order", 0) or 0)
         for child in children:
             table_data.append([
-                "    — " + (child.description or ""),
+                _pdf_table_paragraph("    — " + (child.description or ""), table_cell_style),
                 str(child.quantity),
                 format_currency(child.unit_price, quote.currency),
                 format_currency(child.final_line_total, quote.currency),
@@ -831,7 +846,12 @@ def generate_quote_pdf(
         if discount_lines:
             for desc, amt in discount_lines:
                 discount_row_indices.append(len(table_data))
-                table_data.append([f"Discount ({desc}):", "", "", format_currency(amt, quote.currency)])
+                table_data.append([
+                    _pdf_table_paragraph(f"Discount ({desc}):", table_cell_style),
+                    "",
+                    "",
+                    format_currency(amt, quote.currency),
+                ])
         else:
             discount_row_indices.append(len(table_data))
             table_data.append(["Discount:", "", "", format_currency(quote.discount_total, quote.currency)])
@@ -858,6 +878,7 @@ def generate_quote_pdf(
     table_style_list = [
         ("BACKGROUND", (0, 0), (-1, 0), brand_color),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("ALIGN", (0, 0), (-1, -1), "LEFT"),
         ("ALIGN", (1, 0), (1, -1), "CENTER"),
         ("ALIGN", (2, 0), (-1, -1), "RIGHT"),
@@ -957,13 +978,14 @@ def generate_quote_pdf(
             name = getattr(extra, "name", str(extra.get("name", ""))) if hasattr(extra, "name") else str(extra.get("name", ""))
             price = getattr(extra, "base_price", extra.get("base_price", 0)) if hasattr(extra, "base_price") else extra.get("base_price", 0)
             extras_data.append([
-                name,
+                _pdf_table_paragraph(name, table_cell_style),
                 format_currency(Decimal(str(price)), quote.currency),
             ])
         extras_table = Table(extras_data, colWidths=[105*mm, 55*mm])
         extras_table.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e8f5e9")),
             ("TEXTCOLOR", (0, 0), (-1, 0), brand_color),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
             ("ALIGN", (0, 0), (-1, -1), "LEFT"),
             ("ALIGN", (1, 0), (1, -1), "RIGHT"),
             ("FONTSIZE", (0, 0), (-1, -1), 9),

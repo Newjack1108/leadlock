@@ -15,6 +15,7 @@ from app.quote_pdf_service import (
     format_currency,
     _build_header_flowables,
     _make_footer_canvas_drawer,
+    _pdf_table_paragraph,
     _resolve_logo,
     _resolve_footer_logo,
     FOOTER_BOTTOM_MARGIN,
@@ -96,6 +97,14 @@ def _build_invoice_elements(
         fontSize=8,
         textColor=colors.white,
         fontName="Helvetica-Bold",
+        alignment=0,
+    )
+    table_cell_style = ParagraphStyle(
+        "TableCell",
+        parent=styles["Normal"],
+        fontSize=9,
+        leading=11,
+        textColor=colors.HexColor("#333333"),
         alignment=0,
     )
     note_style = ParagraphStyle(
@@ -195,7 +204,7 @@ def _build_invoice_elements(
     sorted_items = sorted(order_items, key=lambda i: getattr(i, "sort_order", 0) or 0)
     for item in sorted_items:
         table_data.append([
-            item.description or "",
+            _pdf_table_paragraph(item.description or "", table_cell_style),
             str(item.quantity),
             format_currency(item.unit_price, order.currency),
             format_currency(item.final_line_total, order.currency),
@@ -228,6 +237,7 @@ def _build_invoice_elements(
     table_style_list = [
         ("BACKGROUND", (0, 0), (-1, 0), brand_color),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("ALIGN", (0, 0), (-1, -1), "LEFT"),
         ("ALIGN", (1, 0), (1, -1), "CENTER"),
         ("ALIGN", (2, 0), (-1, -1), "RIGHT"),
