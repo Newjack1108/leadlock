@@ -46,6 +46,7 @@ def render_sms_template(
     customer: Customer,
     user: Optional[User] = None,
     company_settings: Optional[CompanySettings] = None,
+    extra_context: Optional[Dict] = None,
 ) -> str:
     """Render SMS template body with customer, user, and company data."""
     t = Template(template.body_template)
@@ -53,6 +54,8 @@ def render_sms_template(
     context.update(_customer_context(customer))
     context.update(_user_context(user))
     context.update(_company_context(company_settings))
+    if extra_context:
+        context.update(extra_context)
     return t.render(**context)
 
 

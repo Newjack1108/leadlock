@@ -1192,6 +1192,7 @@ export interface Order {
   installation_completed?: boolean;
   invoice_number?: string | null;
   xero_invoice_id?: string | null;
+  payment_link_url?: string | null;
   /** Stored one-way drive time (hours); production webhook sends 2× as round-trip when set */
   travel_time_hours_one_way?: number | null;
   fulfillment_method?: QuoteFulfillmentMethod;
@@ -1753,6 +1754,7 @@ export enum CustomerHistoryEventType {
   ORDER_ACCESS_SHEET_COMPLETED = "ORDER_ACCESS_SHEET_COMPLETED",
   ORDER_SENT_TO_PRODUCTION = "ORDER_SENT_TO_PRODUCTION",
   ORDER_XERO_PUSHED = "ORDER_XERO_PUSHED",
+  ORDER_PAYMENT_LINK_SENT = "ORDER_PAYMENT_LINK_SENT",
   ORDER_INVOICE_ACTION = "ORDER_INVOICE_ACTION",
 }
 

@@ -26,7 +26,7 @@ import { Order, OrderItem, Customer } from '@/lib/types';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { formatDateTime } from '@/lib/utils';
-import { ArrowLeft, ChevronDown, ExternalLink, CheckCircle, Circle, Eye, FileDown, Mail, Upload, Copy, Link2, Send, Trash2 } from 'lucide-react';
+import { ArrowLeft, ChevronDown, ExternalLink, CheckCircle, Circle, Eye, FileDown, Mail, Upload, Copy, Link2, Send, Trash2, CreditCard } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,6 +35,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import ComposeEmailDialog from '@/components/ComposeEmailDialog';
 import SendQuoteEmailDialog from '@/components/SendQuoteEmailDialog';
+import SendPaymentLinkDialog from '@/components/SendPaymentLinkDialog';
 import NinoxBadge from '@/components/NinoxBadge';
 import FilesCard from '@/components/FilesCard';
 
@@ -91,6 +92,7 @@ export default function OrderDetailPage() {
   const [composeEmailInitialAttachments, setComposeEmailInitialAttachments] = useState<File[]>([]);
   const [composeEmailInitialSubject, setComposeEmailInitialSubject] = useState<string>('');
   const [sendEmailDialogOpen, setSendEmailDialogOpen] = useState(false);
+  const [sendPaymentLinkOpen, setSendPaymentLinkOpen] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
   useEffect(() => {
@@ -523,6 +525,18 @@ export default function OrderDetailPage() {
                     <div className="font-medium">{formatCurrency(order.balance_amount, order.currency)}</div>
                   </div>
                 </div>
+                {customer && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="w-full sm:w-auto"
+                    onClick={() => setSendPaymentLinkOpen(true)}
+                  >
+                    <CreditCard className="h-4 w-4 mr-2" />
+                    Send payment link
+                  </Button>
+                )}
                 <div className="flex flex-wrap gap-2 pt-2">
                   {(['deposit_paid', 'paid_in_full'] as const).map((key) => (
                     <Button
@@ -927,6 +941,15 @@ export default function OrderDetailPage() {
           customer={customer}
           onSuccess={fetchOrder}
           variant="order"
+        />
+      )}
+      {customer && order && (
+        <SendPaymentLinkDialog
+          open={sendPaymentLinkOpen}
+          onOpenChange={setSendPaymentLinkOpen}
+          order={order}
+          customer={customer}
+          onSuccess={fetchOrder}
         />
       )}
     </div>

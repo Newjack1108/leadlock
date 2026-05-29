@@ -37,6 +37,7 @@ import {
   BellOff,
   Bell,
   Info,
+  CreditCard,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -115,6 +116,7 @@ const historyIcons: Record<CustomerHistoryEventType, any> = {
   ORDER_ACCESS_SHEET_COMPLETED: CheckCircle,
   ORDER_SENT_TO_PRODUCTION: Send,
   ORDER_XERO_PUSHED: Upload,
+  ORDER_PAYMENT_LINK_SENT: CreditCard,
   ORDER_INVOICE_ACTION: FileText,
 };
 
@@ -142,6 +144,7 @@ const historyColors: Record<CustomerHistoryEventType, string> = {
   ORDER_ACCESS_SHEET_COMPLETED: 'text-green-600',
   ORDER_SENT_TO_PRODUCTION: 'text-purple-600',
   ORDER_XERO_PUSHED: 'text-blue-600',
+  ORDER_PAYMENT_LINK_SENT: 'text-green-600',
   ORDER_INVOICE_ACTION: 'text-blue-600',
 };
 

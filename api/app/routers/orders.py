@@ -1,11 +1,13 @@
 import os
 import re
 import secrets
+import uuid
+from html import escape
 from datetime import date, datetime
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
 from fastapi.responses import Response
 from sqlmodel import Session, select
-from typing import List
+from typing import List, Optional
 import httpx
 from app.database import get_session
 from app.models import (
@@ -20,6 +22,14 @@ from app.models import (
     Lead,
     LeadSource,
     QuoteFulfillmentMethod,
+    Activity,
+    ActivityType,
+    SmsMessage,
+    SmsDirection,
+    Email,
+    EmailDirection,
+    EmailTemplate,
+    SmsTemplate,
 )
 from app.auth import get_current_user
 from app.delivery_location import (
@@ -36,12 +46,30 @@ from app.schemas import (
     AccessSheetSendResponse,
     AccessSheetResponse,
     CustomerHistoryEventType,
+    OrderSendPaymentLinkRequest,
+    OrderSendPaymentLinkResponse,
 )
 from app.models import User
 from app.invoice_pdf_service import generate_deposit_paid_invoice_pdf, generate_paid_in_full_invoice_pdf
 from app.make_xero_service import push_order_invoice_to_make
 from app.order_delete import delete_order_cascade
 from app.order_audit import record_order_audit_event
+from app.payment_link_service import (
+    validate_payment_url,
+    payment_link_template_context,
+    default_payment_sms_body,
+    default_payment_email_subject,
+    default_payment_email_html,
+)
+from app.email_service import send_email, is_email_configured, build_activity_email_notes, _html_to_plain
+from app.email_template_service import render_email_template
+from app.sms_template_service import render_sms_template
+from app.sms_service import (
+    send_sms,
+    resolve_sms_to_phone,
+    normalize_phone,
+    is_unsubscribed_recipient_error,
+)
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
 
@@ -192,6 +220,7 @@ def build_order_response(order: Order, order_items: List[OrderItem], session: Se
         installation_completed=order.installation_completed,
         invoice_number=order.invoice_number,
         xero_invoice_id=order.xero_invoice_id,
+        payment_link_url=order.payment_link_url,
         travel_time_hours_one_way=order.travel_time_hours_one_way,
         fulfillment_method=getattr(order, "fulfillment_method", QuoteFulfillmentMethod.DELIVERY),
         **delivery_location_response_fields(order),
@@ -351,6 +380,213 @@ async def update_order(
         select(OrderItem).where(OrderItem.order_id == order.id).order_by(OrderItem.sort_order)
     ).all()
     return build_order_response(order, list(items), session)
+
+
+@router.post("/{order_id}/send-payment-link", response_model=OrderSendPaymentLinkResponse)
+async def send_order_payment_link(
+    order_id: int,
+    data: Optional[OrderSendPaymentLinkRequest] = Body(default=None),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Send an external payment URL to the customer by email or SMS."""
+    req = data or OrderSendPaymentLinkRequest(channel="sms")
+    channel = (req.channel or "").strip().lower()
+    if channel not in ("email", "sms"):
+        raise HTTPException(status_code=400, detail="channel must be 'email' or 'sms'")
+
+    order = session.exec(select(Order).where(Order.id == order_id)).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if not order.customer_id:
+        raise HTTPException(status_code=400, detail="Order must be associated with a customer")
+
+    customer = session.exec(select(Customer).where(Customer.id == order.customer_id)).first()
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+
+    raw_url = (req.payment_url or "").strip() or (order.payment_link_url or "").strip()
+    if not raw_url:
+        raise HTTPException(status_code=400, detail="Payment URL is required")
+    try:
+        payment_url = validate_payment_url(raw_url)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    if req.save_link_on_order:
+        order.payment_link_url = payment_url
+        session.add(order)
+
+    quote = session.exec(select(Quote).where(Quote.id == order.quote_id)).first()
+    lead_id = quote.lead_id if quote else None
+    company_settings = session.exec(select(CompanySettings).limit(1)).first()
+    template_ctx = payment_link_template_context(order, payment_url)
+    custom_body = (req.body or "").strip()
+
+    if channel == "sms":
+        to_phone = resolve_sms_to_phone(
+            session,
+            customer,
+            explicit_to=(req.to_phone or "").strip() or None,
+            lead_id=lead_id,
+        )
+        if not to_phone:
+            raise HTTPException(
+                status_code=400,
+                detail="No phone number; set to_phone, add a phone on the customer, or ensure the quote's lead has a phone.",
+            )
+
+        if custom_body:
+            sms_body = custom_body
+        elif req.template_id:
+            template = session.get(SmsTemplate, req.template_id)
+            if not template:
+                raise HTTPException(status_code=404, detail="SMS template not found")
+            sms_body = render_sms_template(
+                template,
+                customer,
+                user=current_user,
+                company_settings=company_settings,
+                extra_context=template_ctx,
+            )
+        else:
+            sms_body = default_payment_sms_body(order, payment_url)
+
+        success, sid, error = send_sms(to_phone, sms_body)
+        if not success:
+            if is_unsubscribed_recipient_error(error):
+                customer.automated_reminder_outreach_opt_out = True
+                session.add(customer)
+                session.commit()
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "Recipient has unsubscribed from SMS (Twilio 21610). "
+                        "Customer has been opted out from automated reminder outreach."
+                    ),
+                )
+            raise HTTPException(status_code=500, detail=error or "Failed to send SMS")
+
+        from_phone = (os.getenv("TWILIO_PHONE_NUMBER") or "").strip()
+        now = datetime.utcnow()
+        session.add(
+            SmsMessage(
+                customer_id=customer.id,
+                lead_id=lead_id,
+                direction=SmsDirection.SENT,
+                from_phone=from_phone,
+                to_phone=normalize_phone(to_phone),
+                body=sms_body,
+                twilio_sid=sid,
+                sent_at=now,
+                created_by_id=current_user.id,
+            )
+        )
+        session.add(
+            Activity(
+                customer_id=customer.id,
+                activity_type=ActivityType.SMS_SENT,
+                notes=f"Payment link for order {order.order_number} sent by SMS to {to_phone}\n{sms_body}",
+                created_by_id=current_user.id,
+            )
+        )
+    else:
+        to_email = (req.to_email or "").strip() or (customer.email or "").strip()
+        if not to_email:
+            raise HTTPException(status_code=400, detail="Recipient email is required")
+
+        if not is_email_configured(current_user.id):
+            raise HTTPException(status_code=400, detail="Email not configured for your user account")
+
+        subject = (req.subject or "").strip()
+        body_html: Optional[str] = None
+        body_text: Optional[str] = None
+
+        if custom_body:
+            if custom_body.lstrip().startswith("<"):
+                body_html = custom_body
+            else:
+                body_html = "<p>" + escape(custom_body).replace("\n", "<br>\n") + "</p>"
+
+        if req.template_id and not custom_body:
+            template = session.get(EmailTemplate, req.template_id)
+            if not template:
+                raise HTTPException(status_code=404, detail="Email template not found")
+            rendered_subject, rendered_body_html = render_email_template(
+                template, customer, custom_variables=template_ctx
+            )
+            if not subject:
+                subject = rendered_subject
+            if not body_html:
+                body_html = rendered_body_html
+
+        if not subject:
+            subject = default_payment_email_subject(order)
+        if not body_html:
+            body_html = default_payment_email_html(order, payment_url)
+        body_text = _html_to_plain(body_html) if body_html else None
+
+        success, message_id, error, sent_html, sent_text = send_email(
+            to_email=to_email,
+            subject=subject,
+            body_html=body_html,
+            body_text=body_text,
+            user_id=current_user.id,
+            customer_number=customer.customer_number,
+        )
+        if not success:
+            raise HTTPException(status_code=500, detail=error or "Failed to send email")
+
+        final_html = sent_html or body_html
+        final_text = sent_text if sent_text is not None else body_text
+        session.add(
+            Email(
+                customer_id=customer.id,
+                message_id=message_id,
+                direction=EmailDirection.SENT,
+                from_email=current_user.email,
+                to_email=to_email,
+                subject=subject,
+                body_html=final_html,
+                body_text=final_text,
+                sent_at=datetime.utcnow(),
+                created_by_id=current_user.id,
+                thread_id=str(uuid.uuid4()),
+            )
+        )
+        session.add(
+            Activity(
+                customer_id=customer.id,
+                activity_type=ActivityType.EMAIL_SENT,
+                notes=build_activity_email_notes(
+                    f"Payment link for order {order.order_number} sent to {to_email}",
+                    subject,
+                    final_text,
+                    final_html,
+                ),
+                created_by_id=current_user.id,
+            )
+        )
+
+    record_order_audit_event(
+        session,
+        event_type=CustomerHistoryEventType.ORDER_PAYMENT_LINK_SENT.value,
+        title="Payment Link Sent",
+        description=f"Payment link for order {order.order_number} sent by {channel}",
+        order=order,
+        metadata={
+            "channel": channel,
+            "order_number": order.order_number,
+            "payment_url": payment_url,
+        },
+        created_by_id=current_user.id,
+    )
+    session.commit()
+
+    return OrderSendPaymentLinkResponse(
+        message="Payment link sent successfully",
+        channel=channel,
+    )
 
 
 @router.get("/{order_id}/invoice/deposit-pdf")

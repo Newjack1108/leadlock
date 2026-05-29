@@ -172,10 +172,18 @@ export default function SmsTemplatesPage() {
             <code className="bg-background px-1 rounded">{'{{ customer.city }}'}</code>,{' '}
             <code className="bg-background px-1 rounded">{'{{ customer.postcode }}'}</code>
           </p>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground mb-2">
             <strong>Sender & company:</strong> <code className="bg-background px-1 rounded">{'{{ user.name }}'}</code>{' '}
             (sending user), <code className="bg-background px-1 rounded">{'{{ company.company_name }}'}</code>,{' '}
             <code className="bg-background px-1 rounded">{'{{ company.trading_name }}'}</code>
+          </p>
+          <p className="text-sm text-muted-foreground">
+            <strong>Payment link (order send):</strong>{' '}
+            <code className="bg-background px-1 rounded">{'{{ payment_link }}'}</code>,{' '}
+            <code className="bg-background px-1 rounded">{'{{ order.order_number }}'}</code>,{' '}
+            <code className="bg-background px-1 rounded">{'{{ order.deposit_amount }}'}</code>,{' '}
+            <code className="bg-background px-1 rounded">{'{{ order.balance_amount }}'}</code>,{' '}
+            <code className="bg-background px-1 rounded">{'{{ order.total_amount }}'}</code>
           </p>
           <p className="text-xs text-muted-foreground mt-2">
             Example: <code className="bg-background px-1 rounded">{"Hi {{ customer.name }}, it's {{ user.name }} from {{ company.company_name }}"}</code>

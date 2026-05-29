@@ -1191,6 +1191,23 @@ export const pushOrderToXero = async (orderId: number) => {
   return response.data;
 };
 
+export const sendOrderPaymentLink = async (
+  orderId: number,
+  data: {
+    channel: 'email' | 'sms';
+    payment_url?: string;
+    to_email?: string;
+    to_phone?: string;
+    subject?: string;
+    body?: string;
+    template_id?: number;
+    save_link_on_order?: boolean;
+  }
+) => {
+  const response = await api.post(`/api/orders/${orderId}/send-payment-link`, data);
+  return response.data as { message: string; channel: string };
+};
+
 /** Send access sheet link for order. Returns URL for staff to copy. Auth required. */
 export const sendAccessSheet = async (orderId: number): Promise<{
   access_sheet_url: string;

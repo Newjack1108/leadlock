@@ -1896,6 +1896,7 @@ class OrderUpdate(BaseModel):
     delivery_postcode: Optional[str] = None
     delivery_country: Optional[str] = None
     delivery_location_notes: Optional[str] = None
+    payment_link_url: Optional[str] = None
 
 
 class AccessSheetResponse(BaseModel):
@@ -1940,6 +1941,7 @@ class OrderResponse(BaseModel):
     delivery_postcode: Optional[str] = None
     delivery_country: Optional[str] = None
     delivery_location_notes: Optional[str] = None
+    payment_link_url: Optional[str] = None
     is_ninox_origin: bool = False
     items: List[OrderItemResponse] = []
     access_sheet: Optional[AccessSheetResponse] = None
@@ -2317,7 +2319,24 @@ class CustomerHistoryEventType(str, Enum):
     ORDER_ACCESS_SHEET_COMPLETED = "ORDER_ACCESS_SHEET_COMPLETED"
     ORDER_SENT_TO_PRODUCTION = "ORDER_SENT_TO_PRODUCTION"
     ORDER_XERO_PUSHED = "ORDER_XERO_PUSHED"
+    ORDER_PAYMENT_LINK_SENT = "ORDER_PAYMENT_LINK_SENT"
     ORDER_INVOICE_ACTION = "ORDER_INVOICE_ACTION"
+
+
+class OrderSendPaymentLinkRequest(BaseModel):
+    channel: str = "sms"  # "email" | "sms"
+    payment_url: Optional[str] = None
+    to_email: Optional[str] = None
+    to_phone: Optional[str] = None
+    subject: Optional[str] = None
+    body: Optional[str] = None
+    template_id: Optional[int] = None
+    save_link_on_order: bool = False
+
+
+class OrderSendPaymentLinkResponse(BaseModel):
+    message: str
+    channel: str
 
 
 class CustomerHistoryEvent(BaseModel):
