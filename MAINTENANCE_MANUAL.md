@@ -107,7 +107,7 @@ Background worker in `main.py` evaluates the same stale conditions as reminder r
 
 ### Cross-environment or production-only API calls
 
-- `PRODUCTION_APP_API_URL`, `PRODUCTION_APP_API_KEY` — used in orders flows when calling another deployment
+- `PRODUCTION_APP_API_URL`, `PRODUCTION_APP_API_KEY` — send orders to the production app; see `PRODUCTION_APP_INTEGRATION.md`
 
 ### Backups (backup service only)
 

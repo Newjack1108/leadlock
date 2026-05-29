@@ -129,6 +129,7 @@ The app will be available at `http://localhost:3000`
 - `CLOUDINARY_API_KEY`: (Optional) Cloudinary API key
 - `CLOUDINARY_API_SECRET`: (Optional) Cloudinary API secret
 - `OPENROUTE_SERVICE_API_KEY`: (Optional) OpenRouteService API key for delivery/installation estimates. When set, road distance and drive time from factory to customer postcode are used (sign up at [openrouteservice.org](https://openrouteservice.org)). If not set, straight-line distance and average speed are used instead.
+- `PRODUCTION_APP_API_URL`, `PRODUCTION_APP_API_KEY`: (Optional) Production app base URL and shared Bearer secret for **Send to production** on orders. See `PRODUCTION_APP_INTEGRATION.md`.
 
 **Note:** See `CLOUDINARY_SETUP.md` for detailed Cloudinary setup instructions.
 
