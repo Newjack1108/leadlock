@@ -11,6 +11,7 @@ from app.models import (
     Quote,
     QuoteConfiguration,
     QuoteDiscount,
+    QuoteDisplayedOptionalExtra,
     QuoteEmail,
     QuoteItem,
     Reminder,
@@ -32,6 +33,11 @@ def delete_quote_cascade(session: Session, quote_id: int) -> None:
     session.flush()
     for discount in session.exec(select(QuoteDiscount).where(QuoteDiscount.quote_id == quote_id)).all():
         session.delete(discount)
+    session.flush()
+    for row in session.exec(
+        select(QuoteDisplayedOptionalExtra).where(QuoteDisplayedOptionalExtra.quote_id == quote_id)
+    ).all():
+        session.delete(row)
     session.flush()
     for cf in session.exec(select(CustomerFile).where(CustomerFile.quote_id == quote_id)).all():
         # If the file is also linked to an order, leave it attached to the

@@ -83,7 +83,14 @@ from app.sms_service import (
     resolve_sms_to_phone,
 )
 from app.quote_pdf_service import generate_quote_pdf
-from app.available_optional_extras import get_available_optional_extras_for_quote
+from app.available_optional_extras import (
+    get_available_optional_extras_for_quote,
+    should_show_available_optional_extras_on_quote,
+)
+from app.quote_displayed_optional_extras import (
+    get_displayed_optional_extra_ids,
+    sync_quote_displayed_optional_extras,
+)
 from app.reminder_service import get_last_activity_date, dismiss_open_reminders_for_quote
 from app.constants import (
     QUOTE_LIST_EXCLUDED_STATUSES,
@@ -567,6 +574,7 @@ def build_quote_list_response(
         lead_quotes_sent_count=lead_quotes_sent_count,
         customer_replied_since_quote_sent=customer_replied_since_quote_sent,
         inbound_count_since_quote_sent=inbound_count_since_quote_sent,
+        displayed_optional_extra_ids=[],
     )
 
 
@@ -682,6 +690,7 @@ def build_quote_response(
         lead_quotes_sent_count=lead_quotes_sent_count,
         customer_replied_since_quote_sent=customer_replied_since_quote_sent,
         inbound_count_since_quote_sent=inbound_count_since_quote_sent,
+        displayed_optional_extra_ids=get_displayed_optional_extra_ids(session, quote.id),
     )
 
 
@@ -1073,6 +1082,12 @@ async def create_quote(
         session.add(quote)
         session.commit()
         session.refresh(quote)
+
+        sync_quote_displayed_optional_extras(
+            session, quote.id, quote_data.displayed_optional_extra_ids
+        )
+        if quote_data.displayed_optional_extra_ids is not None:
+            session.commit()
         
         # Add items with quote_id (parent_quote_item_id set in next step after we have IDs)
         for item in items:
@@ -1630,6 +1645,8 @@ def _build_duplicate_draft_payload_from_source(source: Quote, session: Session) 
             seen.add(d.template_id)
             template_ids.append(d.template_id)
 
+    displayed_extra_ids = get_displayed_optional_extra_ids(session, source.id)
+
     return QuoteDraftUpdate(
         valid_until=source.valid_until,
         terms_and_conditions=source.terms_and_conditions,
@@ -1650,6 +1667,7 @@ def _build_duplicate_draft_payload_from_source(source: Quote, session: Session) 
         delivery_postcode=getattr(source, "delivery_postcode", None),
         delivery_country=getattr(source, "delivery_country", None),
         delivery_location_notes=getattr(source, "delivery_location_notes", None),
+        displayed_optional_extra_ids=displayed_extra_ids if displayed_extra_ids else None,
     )
 
 
@@ -2056,6 +2074,10 @@ def _update_draft_quote_impl(
         quote.include_delivery_installation_contact_note = quote_data.include_delivery_installation_contact_note
     if quote_data.fulfillment_method is not None:
         quote.fulfillment_method = quote_data.fulfillment_method
+
+    sync_quote_displayed_optional_extras(
+        session, quote_id, quote_data.displayed_optional_extra_ids
+    )
 
     # Apply template discounts selected in the editor.
     if quote_data.discount_template_ids:
@@ -2827,14 +2849,22 @@ async def preview_quote_pdf(
     # Generate PDF
     try:
         use_spec_sheets = include_spec_sheets if include_spec_sheets is not None else getattr(quote, "include_spec_sheets", True)
-        use_optional_extras = (
-            include_optional_extras
-            if include_optional_extras is not None
-            else getattr(quote, "include_available_optional_extras", False)
+        show_optional_extras = (
+            include_optional_extras is True
+            or (
+                include_optional_extras is None
+                and should_show_available_optional_extras_on_quote(quote, quote.id, session)
+            )
         )
         available_extras = (
-            get_available_optional_extras_for_quote(list(quote_items), session)
-            if use_optional_extras
+            get_available_optional_extras_for_quote(
+                list(quote_items),
+                session,
+                quote_id=quote.id,
+                include_product_linked=getattr(quote, "include_available_optional_extras", False)
+                or include_optional_extras is True,
+            )
+            if show_optional_extras
             else None
         )
         pdf_buffer = generate_quote_pdf(

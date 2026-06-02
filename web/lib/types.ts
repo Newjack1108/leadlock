@@ -70,6 +70,7 @@ export enum LeadSource {
   FACEBOOK = "FACEBOOK",
   FACEBOOK_WHATSAPP = "Facebook/WhatsApp",
   INSTAGRAM = "INSTAGRAM",
+  GOOGLE = "Google",
   WEBSITE = "WEBSITE",  // Legacy - prefer CSGB/CS/BLC WEBSITE for new leads
   CSGB_WEBSITE = "CSGB WEBSITE",
   CS_WEBSITE = "CS WEBSITE",
@@ -1296,6 +1297,8 @@ export interface Quote {
   include_spec_sheets?: boolean;
   /** Show extras not yet on the quote in customer online view and PDF */
   include_available_optional_extras?: boolean;
+  /** Optional extra product IDs shown on PDF/view only (not quote line items) */
+  displayed_optional_extra_ids?: number[];
   /** Footer note: delivery/installation contact (SMS, email, phone) below totals */
   include_delivery_installation_contact_note?: boolean;
   fulfillment_method?: QuoteFulfillmentMethod;

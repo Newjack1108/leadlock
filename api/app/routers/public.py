@@ -27,7 +27,10 @@ from app.models import (
     Order,
     QuoteFulfillmentMethod,
 )
-from app.available_optional_extras import get_available_optional_extras_for_quote
+from app.available_optional_extras import (
+    get_available_optional_extras_for_quote,
+    should_show_available_optional_extras_on_quote,
+)
 from app.configurator_layout_public import build_layout_for_public_view
 from app.schemas import (
     PublicQuoteViewResponse,
@@ -231,10 +234,17 @@ def get_public_quote_view(
         terms_and_conditions=quote.terms_and_conditions,
         company_display=company_display,
         available_optional_extras=(
-            get_available_optional_extras_for_quote(list(items), session)
-            if (
-                getattr(quote, "include_available_optional_extras", False)
-                or getattr(quote_email, "include_available_extras", False)
+            get_available_optional_extras_for_quote(
+                list(items),
+                session,
+                quote_id=quote.id,
+                include_product_linked=(
+                    getattr(quote, "include_available_optional_extras", False)
+                    or getattr(quote_email, "include_available_extras", False)
+                ),
+            )
+            if should_show_available_optional_extras_on_quote(
+                quote, quote.id, session, quote_email=quote_email
             )
             else None
         ),
@@ -317,11 +327,19 @@ def get_public_quote_pdf(
 
     try:
         include_spec_sheets = getattr(quote, "include_spec_sheets", True)
-        show_optional_extras = getattr(quote, "include_available_optional_extras", False) or getattr(
-            quote_email, "include_available_extras", False
+        show_optional_extras = should_show_available_optional_extras_on_quote(
+            quote, quote.id, session, quote_email=quote_email
         )
         available_extras = (
-            get_available_optional_extras_for_quote(list(quote_items), session)
+            get_available_optional_extras_for_quote(
+                list(quote_items),
+                session,
+                quote_id=quote.id,
+                include_product_linked=(
+                    getattr(quote, "include_available_optional_extras", False)
+                    or getattr(quote_email, "include_available_extras", False)
+                ),
+            )
             if show_optional_extras
             else None
         )

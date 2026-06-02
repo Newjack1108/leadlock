@@ -26,6 +26,7 @@ import { toast } from 'sonner';
 import { Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
 import FulfillmentMethodField from '@/components/quotes/FulfillmentMethodField';
 import DeliveryLocationFields from '@/components/quotes/DeliveryLocationFields';
+import QuoteDisplayedOptionalExtrasSection from '@/components/quotes/QuoteDisplayedOptionalExtrasSection';
 
 interface CreateQuoteDialogProps {
   open: boolean;
@@ -70,6 +71,7 @@ export default function CreateQuoteDialog({
   const [deliveryLocationNotes, setDeliveryLocationNotes] = useState('');
   const [productDetails, setProductDetails] = useState<Record<number, Product>>({});
   const [allOptionalExtras, setAllOptionalExtras] = useState<Product[]>([]);
+  const [displayedOptionalExtraIds, setDisplayedOptionalExtraIds] = useState<number[]>([]);
   const [extraPickerOpen, setExtraPickerOpen] = useState(false);
   const [extraPickerFilter, setExtraPickerFilter] = useState('');
   const [termsExpanded, setTermsExpanded] = useState(false);
@@ -308,6 +310,8 @@ export default function CreateQuoteDialog({
       }
       quoteData.include_spec_sheets = includeSpecSheets;
       quoteData.include_available_optional_extras = includeAvailableOptionalExtras;
+      quoteData.displayed_optional_extra_ids =
+        displayedOptionalExtraIds.length > 0 ? displayedOptionalExtraIds : [];
       quoteData.include_delivery_installation_contact_note = includeDeliveryInstallationContactNote;
       quoteData.fulfillment_method = fulfillmentMethod;
       quoteData.use_alternate_delivery_address = useAlternateDeliveryAddress;
@@ -377,8 +381,8 @@ export default function CreateQuoteDialog({
                 <div>
                   <Label className="text-base font-semibold">Quote Items</Label>
                   <p className="text-sm text-muted-foreground mt-0.5">
-                    Add a product, then add optional extras linked to it, or use Add optional extra for the full extras list.
-                    Quote-level extras are not included in &apos;building items only&apos; discounts.
+                    Add products and priced extras here. Use optional extras for customer below to show on the PDF
+                    without adding to the total.
                   </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
@@ -388,7 +392,7 @@ export default function CreateQuoteDialog({
                   </Button>
                   <Button type="button" variant="outline" size="sm" onClick={() => setExtraPickerOpen(true)}>
                     <Plus className="h-4 w-4 mr-2" />
-                    Add optional extra
+                    Add extra to quote
                   </Button>
                 </div>
               </div>
@@ -580,6 +584,13 @@ export default function CreateQuoteDialog({
               </div>
             </div>
 
+            <QuoteDisplayedOptionalExtrasSection
+              displayedExtraIds={displayedOptionalExtraIds}
+              onChange={setDisplayedOptionalExtraIds}
+              allOptionalExtras={allOptionalExtras}
+              productDetails={productDetails}
+            />
+
             {/* Quote Details */}
             <div className="space-y-4 border-t pt-4">
               <div className="space-y-2">
@@ -656,7 +667,7 @@ export default function CreateQuoteDialog({
                   className="h-4 w-4 rounded border-gray-300"
                 />
                 <Label htmlFor="include_available_optional_extras_dialog" className="font-normal cursor-pointer">
-                  Show available optional extras on customer quote (online view and PDF)
+                  Also show product-linked optional extras not on the quote (in addition to any you add above)
                 </Label>
               </div>
               <FulfillmentMethodField
@@ -725,9 +736,9 @@ export default function CreateQuoteDialog({
     <Dialog open={extraPickerOpen} onOpenChange={setExtraPickerOpen}>
       <DialogContent className="max-w-lg max-h-[min(80vh,520px)] flex flex-col">
         <DialogHeader>
-          <DialogTitle>Add optional extra</DialogTitle>
+          <DialogTitle>Add extra to quote</DialogTitle>
           <DialogDescription>
-            Choose from the full optional extras list. These lines are not included in &apos;building items only&apos;
+            Adds a priced line to the quote (included in the total). Not included in &apos;building items only&apos;
             discounts.
           </DialogDescription>
         </DialogHeader>

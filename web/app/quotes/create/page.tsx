@@ -37,6 +37,7 @@ import {
 } from '@/lib/quoteDraftPayload';
 import DraftConfiguratorCallout from '@/components/configurator/DraftConfiguratorCallout';
 import DraftConfiguratorLink from '@/components/configurator/DraftConfiguratorLink';
+import QuoteDisplayedOptionalExtrasSection from '@/components/quotes/QuoteDisplayedOptionalExtrasSection';
 import {
   optionalExtraIdSetFromList,
   isRootQuoteLevelOptionalExtraLine,
@@ -173,6 +174,7 @@ function CreateQuoteContent() {
   const [selectedDiscountIds, setSelectedDiscountIds] = useState<number[]>([]);
   const [productDetails, setProductDetails] = useState<Record<number, Product>>({});
   const [allOptionalExtras, setAllOptionalExtras] = useState<Product[]>([]);
+  const [displayedOptionalExtraIds, setDisplayedOptionalExtraIds] = useState<number[]>([]);
   const [extraPickerOpen, setExtraPickerOpen] = useState(false);
   const [extraPickerFilter, setExtraPickerFilter] = useState('');
   const [termsExpanded, setTermsExpanded] = useState(false);
@@ -518,6 +520,7 @@ function CreateQuoteContent() {
         temperature,
         includeSpecSheets,
         includeAvailableOptionalExtras,
+        displayedOptionalExtraIds,
         includeDeliveryInstallationContactNote,
         fulfillmentMethod,
         useAlternateDeliveryAddress,
@@ -539,6 +542,7 @@ function CreateQuoteContent() {
       temperature,
       includeSpecSheets,
       includeAvailableOptionalExtras,
+      displayedOptionalExtraIds,
       includeDeliveryInstallationContactNote,
       fulfillmentMethod,
       useAlternateDeliveryAddress,
@@ -564,6 +568,7 @@ function CreateQuoteContent() {
         temperature,
         includeSpecSheets,
         includeAvailableOptionalExtras,
+        displayedOptionalExtraIds,
         includeDeliveryInstallationContactNote,
         fulfillmentMethod,
         useAlternateDeliveryAddress,
@@ -585,6 +590,7 @@ function CreateQuoteContent() {
       temperature,
       includeSpecSheets,
       includeAvailableOptionalExtras,
+      displayedOptionalExtraIds,
       includeDeliveryInstallationContactNote,
       fulfillmentMethod,
       useAlternateDeliveryAddress,
@@ -678,6 +684,7 @@ function CreateQuoteContent() {
           setTemperature(q.temperature ?? QuoteTemperature.WARM);
           setIncludeSpecSheets(q.include_spec_sheets ?? false);
           setIncludeAvailableOptionalExtras(q.include_available_optional_extras ?? false);
+          setDisplayedOptionalExtraIds(q.displayed_optional_extra_ids ?? []);
           setIncludeDeliveryInstallationContactNote(
             q.include_delivery_installation_contact_note ?? false
           );
@@ -963,8 +970,8 @@ function CreateQuoteContent() {
                   <div>
                     <CardTitle>Quote Items</CardTitle>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Add a product, then add optional extras linked to it, or use Add optional extra to pick from the full extras list.
-                      Quote-level extras are not included in &apos;building items only&apos; discounts.
+                      Add products and priced extras here. Use &quot;Optional extras for customer&quot; below to
+                      show extras on the PDF without adding them to the total.
                     </p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
@@ -974,7 +981,7 @@ function CreateQuoteContent() {
                     </Button>
                     <Button type="button" variant="outline" size="sm" onClick={() => setExtraPickerOpen(true)}>
                       <Plus className="h-4 w-4 mr-2" />
-                      Add optional extra
+                      Add extra to quote
                     </Button>
                   </div>
                 </div>
@@ -1245,13 +1252,27 @@ function CreateQuoteContent() {
               </CardContent>
             </Card>
 
+            <Card>
+              <CardHeader>
+                <CardTitle>Customer optional extras</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <QuoteDisplayedOptionalExtrasSection
+                  displayedExtraIds={displayedOptionalExtraIds}
+                  onChange={setDisplayedOptionalExtraIds}
+                  allOptionalExtras={allOptionalExtras}
+                  productDetails={productDetails}
+                />
+              </CardContent>
+            </Card>
+
             <Dialog open={extraPickerOpen} onOpenChange={setExtraPickerOpen}>
               <DialogContent className="max-w-lg max-h-[min(80vh,520px)] flex flex-col">
                 <DialogHeader>
-                  <DialogTitle>Add optional extra</DialogTitle>
+                  <DialogTitle>Add extra to quote</DialogTitle>
                   <DialogDescription>
-                    Choose from the full optional extras list. These lines are not included in &apos;building items
-                    only&apos; discounts.
+                    Adds a priced line to the quote (included in the total). Not included in &apos;building
+                    items only&apos; discounts.
                   </DialogDescription>
                 </DialogHeader>
                 <Input
@@ -1525,7 +1546,7 @@ function CreateQuoteContent() {
                     className="h-4 w-4 rounded border-gray-300"
                   />
                   <Label htmlFor="include_available_optional_extras" className="font-normal cursor-pointer">
-                    Show available optional extras on customer quote (online view and PDF)
+                    Also show product-linked optional extras not on the quote (in addition to any you add above)
                   </Label>
                 </div>
                 {fulfillmentMethod !== 'COLLECTION' && (

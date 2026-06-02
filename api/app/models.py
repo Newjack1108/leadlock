@@ -80,6 +80,7 @@ class LeadSource(str, Enum):
     FACEBOOK = "FACEBOOK"
     FACEBOOK_WHATSAPP = "Facebook/WhatsApp"
     INSTAGRAM = "INSTAGRAM"
+    GOOGLE = "Google"
     WEBSITE = "WEBSITE"  # Legacy - prefer CSGB_WEBSITE, CS_WEBSITE, BLC_WEBSITE for new leads
     CSGB_WEBSITE = "CSGB WEBSITE"
     CS_WEBSITE = "CS WEBSITE"
@@ -665,6 +666,19 @@ class QuoteItem(SQLModel, table=True):
     quote: Quote = Relationship(back_populates="items")
     product: Optional[Product] = Relationship(back_populates="quote_items")
     discounts: List["QuoteDiscount"] = Relationship(back_populates="quote_item")
+
+
+class QuoteDisplayedOptionalExtra(SQLModel, table=True):
+    """Optional extra products to show in 'Other Available Options' on quote PDF/view (not line items)."""
+    __table_args__ = (
+        UniqueConstraint("quote_id", "product_id", name="uq_quote_displayed_optional_extra"),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    quote_id: int = Field(foreign_key="quote.id", index=True)
+    product_id: int = Field(foreign_key="product.id")
+    sort_order: int = Field(default=0)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
 class QuoteConfiguration(SQLModel, table=True):

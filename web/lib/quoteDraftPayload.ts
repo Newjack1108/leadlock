@@ -65,6 +65,7 @@ export type QuoteDraftPayload = {
   temperature?: QuoteTemperature;
   include_spec_sheets?: boolean;
   include_available_optional_extras?: boolean;
+  displayed_optional_extra_ids?: number[];
   include_delivery_installation_contact_note?: boolean;
   fulfillment_method?: QuoteFulfillmentMethod;
   use_alternate_delivery_address?: boolean;
@@ -93,6 +94,7 @@ export interface BuildDraftPayloadInput {
   temperature: QuoteTemperature | '';
   includeSpecSheets: boolean;
   includeAvailableOptionalExtras: boolean;
+  displayedOptionalExtraIds: number[];
   includeDeliveryInstallationContactNote: boolean;
   fulfillmentMethod: QuoteFulfillmentMethod;
   useAlternateDeliveryAddress: boolean;
@@ -116,6 +118,7 @@ export function buildUpdateDraftPayload(input: BuildDraftPayloadInput): QuoteDra
     temperature,
     includeSpecSheets,
     includeAvailableOptionalExtras,
+    displayedOptionalExtraIds,
     includeDeliveryInstallationContactNote,
     fulfillmentMethod,
     useAlternateDeliveryAddress,
@@ -196,6 +199,8 @@ export function buildUpdateDraftPayload(input: BuildDraftPayloadInput): QuoteDra
     discount_template_ids: selectedDiscountIds.length > 0 ? selectedDiscountIds : undefined,
     include_spec_sheets: includeSpecSheets,
     include_available_optional_extras: includeAvailableOptionalExtras,
+    displayed_optional_extra_ids:
+      displayedOptionalExtraIds.length > 0 ? displayedOptionalExtraIds : [],
     include_delivery_installation_contact_note: includeDeliveryInstallationContactNote,
     fulfillment_method: fulfillmentMethod,
     use_alternate_delivery_address: useAlternateDeliveryAddress,
@@ -245,6 +250,7 @@ export function buildPlaceholderOnlyDraftPayloadFromQuote(quote: Quote): QuoteDr
     ],
     include_spec_sheets: quote.include_spec_sheets,
     include_available_optional_extras: quote.include_available_optional_extras,
+    displayed_optional_extra_ids: quote.displayed_optional_extra_ids ?? [],
     include_delivery_installation_contact_note: quote.include_delivery_installation_contact_note,
     fulfillment_method: quote.fulfillment_method ?? 'DELIVERY',
     use_alternate_delivery_address: quote.use_alternate_delivery_address ?? false,

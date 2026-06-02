@@ -1578,6 +1578,7 @@ class QuoteCreate(BaseModel):
     include_spec_sheets: bool = True  # Include product spec sheets when generating quote PDF
     include_available_optional_extras: bool = False  # Show extras not on quote in customer view/PDF
     include_delivery_installation_contact_note: bool = False  # Footer re delivery/install contact
+    displayed_optional_extra_ids: Optional[List[int]] = None  # Show on PDF/view only (not line items)
     fulfillment_method: QuoteFulfillmentMethod = QuoteFulfillmentMethod.DELIVERY
     use_alternate_delivery_address: bool = False
     delivery_address_line1: Optional[str] = None
@@ -1603,6 +1604,7 @@ class QuoteDraftUpdate(BaseModel):
     include_spec_sheets: Optional[bool] = None  # Include product spec sheets when generating quote PDF
     include_available_optional_extras: Optional[bool] = None  # Show extras not on quote in customer view/PDF
     include_delivery_installation_contact_note: Optional[bool] = None  # Footer re delivery/install contact
+    displayed_optional_extra_ids: Optional[List[int]] = None  # Show on PDF/view only (not line items)
     fulfillment_method: Optional[QuoteFulfillmentMethod] = None
     use_alternate_delivery_address: Optional[bool] = None
     delivery_address_line1: Optional[str] = None
@@ -1679,6 +1681,7 @@ class QuoteResponse(BaseModel):
     include_spec_sheets: bool = True  # Include product spec sheets when generating quote PDF
     include_available_optional_extras: bool = False  # Show extras not on quote in customer view/PDF
     include_delivery_installation_contact_note: bool = False  # Footer re delivery/install contact
+    displayed_optional_extra_ids: List[int] = []  # Show on PDF/view only (not line items)
     fulfillment_method: QuoteFulfillmentMethod = QuoteFulfillmentMethod.DELIVERY
     use_alternate_delivery_address: bool = False
     delivery_address_line1: Optional[str] = None
