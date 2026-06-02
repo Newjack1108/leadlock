@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { deleteProduct, getApiErrorDetail, getOptionalExtras, getProducts } from '@/lib/api';
 import { Product, ProductCategory } from '@/lib/types';
+import { CONFIGURATOR_EXTRA_BADGE_CLASS } from '@/lib/productBadges';
 import { formatDateTime } from '@/lib/utils';
 import { toast } from 'sonner';
 import { ArrowLeft, Plus, Edit, Package, Trash2 } from 'lucide-react';
@@ -134,30 +135,39 @@ export default function OptionalExtrasPage() {
         ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {optionalExtras.map((extra) => (
-              <Card key={extra.id} className="hover:shadow-lg transition-shadow">
+              <Card key={extra.id} className="hover:shadow-lg transition-shadow overflow-hidden">
                 <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <CardTitle className="text-lg">{extra.name}</CardTitle>
-                      <div className="flex gap-2 mt-2">
-                        <Badge className={categoryColors[extra.category]}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <CardTitle className="text-lg break-words">{extra.name}</CardTitle>
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        <Badge className={`shrink-0 ${categoryColors[extra.category]}`}>
                           {extra.category}
                         </Badge>
                         {extra.allow_in_configurator && (
-                          <Badge variant="secondary">Configurator</Badge>
+                          <Badge className={`shrink-0 ${CONFIGURATOR_EXTRA_BADGE_CLASS}`}>
+                            Configurator Extra
+                          </Badge>
                         )}
                         {extra.configurator_per_box && (
-                          <Badge variant="secondary">Per box</Badge>
+                          <Badge variant="secondary" className="shrink-0">
+                            Per box
+                          </Badge>
                         )}
                         {extra.subcategory && (
-                          <Badge variant="secondary">{extra.subcategory}</Badge>
+                          <Badge variant="secondary" className="shrink-0 max-w-full truncate">
+                            {extra.subcategory}
+                          </Badge>
                         )}
                         {extra.is_production_synced && (
-                          <Badge variant="secondary">
+                          <Badge variant="secondary" className="shrink-0">
                             Production
-                            {extra.production_pushed_at &&
-                              ` · ${formatDateTime(extra.production_pushed_at)}`}
                           </Badge>
+                        )}
+                        {extra.is_production_synced && extra.production_pushed_at && (
+                          <span className="text-xs text-muted-foreground w-full basis-full">
+                            Pushed {formatDateTime(extra.production_pushed_at)}
+                          </span>
                         )}
                       </div>
                     </div>

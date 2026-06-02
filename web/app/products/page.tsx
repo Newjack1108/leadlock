@@ -28,6 +28,7 @@ import { Plus, Edit, Trash2, List, LayoutGrid, FileDown } from 'lucide-react';
 import Link from 'next/link';
 import api, { getApiErrorDetail } from '@/lib/api';
 import { Product, ProductCategory, PRODUCT_SUBCATEGORIES, ProductSubcategory } from '@/lib/types';
+import { CONFIGURATOR_EXTRA_BADGE_CLASS } from '@/lib/productBadges';
 import { formatDateTime } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -363,7 +364,9 @@ export default function ProductsPage() {
                             {product.category}
                           </Badge>
                           {product.is_extra && <Badge variant="outline">Extra</Badge>}
-                          {product.allow_in_configurator && <Badge variant="secondary">Configurator Extra</Badge>}
+                          {product.allow_in_configurator && (
+                            <Badge className={CONFIGURATOR_EXTRA_BADGE_CLASS}>Configurator Extra</Badge>
+                          )}
                           {product.configurator_is_starter_box && <Badge variant="secondary">Starter</Badge>}
                         </div>
                       </td>
@@ -402,33 +405,47 @@ export default function ProductsPage() {
         ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {[...products].sort((a, b) => a.name.localeCompare(b.name)).map((product) => (
-              <Card key={product.id} className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => router.push(`/products/${product.id}`)}>
+              <Card
+                key={product.id}
+                className="cursor-pointer hover:shadow-lg transition-shadow overflow-hidden"
+                onClick={() => router.push(`/products/${product.id}`)}
+              >
                 <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <CardTitle className="text-lg">{product.name}</CardTitle>
-                      <div className="flex gap-2 mt-2">
-                        <Badge className={categoryColors[product.category]}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <CardTitle className="text-lg break-words">{product.name}</CardTitle>
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        <Badge className={`shrink-0 ${categoryColors[product.category]}`}>
                           {product.category}
                         </Badge>
                         {product.is_extra && (
-                          <Badge variant="outline">Extra</Badge>
+                          <Badge variant="outline" className="shrink-0">
+                            Extra
+                          </Badge>
                         )}
                         {product.allow_in_configurator && (
-                          <Badge variant="secondary">Configurator Extra</Badge>
+                          <Badge className={`shrink-0 ${CONFIGURATOR_EXTRA_BADGE_CLASS}`}>
+                            Configurator Extra
+                          </Badge>
                         )}
                         {product.configurator_is_starter_box && (
-                          <Badge variant="secondary">Starter</Badge>
+                          <Badge variant="secondary" className="shrink-0">
+                            Starter
+                          </Badge>
                         )}
                         {product.is_production_synced && (
-                          <Badge variant="secondary">Production</Badge>
+                          <Badge variant="secondary" className="shrink-0">
+                            Production
+                          </Badge>
                         )}
                         {product.subcategory && (
-                          <Badge variant="secondary">{product.subcategory}</Badge>
+                          <Badge variant="secondary" className="shrink-0 max-w-full truncate">
+                            {product.subcategory}
+                          </Badge>
                         )}
                       </div>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 shrink-0">
                       <Button
                         variant="ghost"
                         size="sm"
