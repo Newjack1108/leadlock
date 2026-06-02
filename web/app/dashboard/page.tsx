@@ -986,9 +986,14 @@ export default function DashboardPage() {
                     href={`/leads?lead_source=${item.source}`}
                     className="flex items-center justify-between p-4 rounded-lg border border-border hover:border-primary/50 transition-colors"
                   >
-                    <span className="font-medium">
-                      {item.source.replace(/_/g, ' ')}
-                    </span>
+                    <div className="min-w-0">
+                      <p className="font-medium">
+                        {item.source.replace(/_/g, ' ')}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Duplicates: {item.duplicate_count ?? 0} ({item.duplicate_rate ?? 0}%)
+                      </p>
+                    </div>
                     <span className="text-lg font-bold">{item.count}</span>
                   </Link>
                 ))}

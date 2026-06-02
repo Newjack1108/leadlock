@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import Header from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -15,8 +16,9 @@ import api, {
   downloadCustomerImportExample,
   importCustomersFromCsv,
   downloadCustomerExport,
+  getSmsTemplates,
 } from '@/lib/api';
-import { CompanySettings, InstallationLeadTime, SmsBotMode } from '@/lib/types';
+import { CompanySettings, InstallationLeadTime, SmsBotMode, SmsTemplate } from '@/lib/types';
 import { toast } from 'sonner';
 
 type WeekdayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
@@ -52,6 +54,7 @@ export default function CompanySettingsPage() {
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [settings, setSettings] = useState<CompanySettings | null>(null);
+  const [smsTemplates, setSmsTemplates] = useState<SmsTemplate[]>([]);
   const [botAvatarMissing, setBotAvatarMissing] = useState(false);
   const [termsExpanded, setTermsExpanded] = useState(false);
   const [smsBotInstructionsExpanded, setSmsBotInstructionsExpanded] = useState(false);
@@ -108,10 +111,21 @@ export default function CompanySettingsPage() {
     account_number: '',
     sort_code: '',
     require_engagement_proof: false,
+    duplicate_sms_template_id: '' as string,
+    duplicate_sms_cooldown_days: '7',
+    auto_close_duplicate_leads: true,
   });
 
   useEffect(() => {
     fetchSettings();
+    void (async () => {
+      try {
+        const templates = await getSmsTemplates();
+        setSmsTemplates(templates);
+      } catch {
+        // Non-blocking; duplicate SMS section still usable after templates load on retry
+      }
+    })();
   }, []);
 
   const fetchSettings = async () => {
@@ -179,6 +193,15 @@ export default function CompanySettingsPage() {
         account_number: response.data.account_number || '',
         sort_code: response.data.sort_code || '',
         require_engagement_proof: response.data.require_engagement_proof ?? false,
+        duplicate_sms_template_id:
+          response.data.duplicate_sms_template_id != null
+            ? String(response.data.duplicate_sms_template_id)
+            : '',
+        duplicate_sms_cooldown_days:
+          response.data.duplicate_sms_cooldown_days != null
+            ? String(response.data.duplicate_sms_cooldown_days)
+            : '7',
+        auto_close_duplicate_leads: response.data.auto_close_duplicate_leads ?? true,
       });
     } catch (error: any) {
       if (error.response?.status === 401) {
@@ -209,6 +232,13 @@ export default function CompanySettingsPage() {
       toast.error('Install quote margin % must be between 0 and 99');
       return;
     }
+    const duplicateCooldownVal = formData.duplicate_sms_cooldown_days
+      ? parseInt(formData.duplicate_sms_cooldown_days, 10)
+      : 7;
+    if (Number.isNaN(duplicateCooldownVal) || duplicateCooldownVal < 0) {
+      toast.error('Duplicate SMS cooldown must be 0 or more days');
+      return;
+    }
 
     try {
       setSaving(true);
@@ -230,6 +260,12 @@ export default function CompanySettingsPage() {
         sms_bot_business_hours_json: JSON.stringify(botSchedule),
         sms_bot_system_instructions:
           formData.sms_bot_system_instructions.trim() === '' ? null : formData.sms_bot_system_instructions.trim(),
+        duplicate_sms_template_id:
+          formData.duplicate_sms_template_id.trim() === ''
+            ? null
+            : parseInt(formData.duplicate_sms_template_id, 10),
+        duplicate_sms_cooldown_days: duplicateCooldownVal,
+        auto_close_duplicate_leads: formData.auto_close_duplicate_leads,
       };
       if (settings) {
         // Update existing: omit logo_filename so existing value is unchanged
@@ -476,6 +512,82 @@ export default function CompanySettingsPage() {
               />
             </div>
 
+            </div>
+
+            <div className="rounded-lg p-4 bg-sky-50/30 dark:bg-sky-950/20 border-l-4 border-l-sky-200 dark:border-l-sky-800 mt-6 space-y-4">
+              <div>
+                <h3 className="text-lg font-medium">Duplicate lead handling</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  When someone submits another enquiry (e.g. Cheshire Stables and CSGB), link it to their existing lead,
+                  send a repeat SMS instead of the welcome message, and optionally close the duplicate for your team.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="duplicate_sms_template_id">Repeat enquiry SMS template</Label>
+                  <Select
+                    value={formData.duplicate_sms_template_id || 'none'}
+                    onValueChange={(v) =>
+                      setFormData({
+                        ...formData,
+                        duplicate_sms_template_id: v === 'none' ? '' : v,
+                      })
+                    }
+                    disabled={saving}
+                  >
+                    <SelectTrigger id="duplicate_sms_template_id">
+                      <SelectValue placeholder="Choose template" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None (no repeat SMS)</SelectItem>
+                      {smsTemplates.map((t) => (
+                        <SelectItem key={t.id} value={String(t.id)}>
+                          {t.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Sent instead of the welcome SMS when a duplicate is detected. Fallback name:{' '}
+                    <span className="font-medium">Duplicate Lead Notice</span>.{' '}
+                    <Link href="/settings/sms-templates" className="text-primary underline hover:no-underline">
+                      Manage SMS templates
+                    </Link>
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="duplicate_sms_cooldown_days">Repeat SMS cooldown (days)</Label>
+                  <Input
+                    id="duplicate_sms_cooldown_days"
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={formData.duplicate_sms_cooldown_days}
+                    onChange={(e) =>
+                      setFormData({ ...formData, duplicate_sms_cooldown_days: e.target.value })
+                    }
+                    disabled={saving}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Minimum days before sending another repeat SMS to the same customer on a new duplicate lead.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="auto_close_duplicate_leads"
+                  checked={formData.auto_close_duplicate_leads}
+                  onChange={(e) =>
+                    setFormData({ ...formData, auto_close_duplicate_leads: e.target.checked })
+                  }
+                  className="rounded"
+                  disabled={saving}
+                />
+                <Label htmlFor="auto_close_duplicate_leads">
+                  Automatically close duplicate leads (keeps them for source reporting)
+                </Label>
+              </div>
             </div>
 
             <div className="rounded-lg p-4 bg-amber-50/30 dark:bg-amber-950/20 border-l-4 border-l-amber-200 dark:border-l-amber-800 mt-6">

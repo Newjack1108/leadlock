@@ -51,6 +51,7 @@ from app.sms_service import (
     is_unsubscribed_recipient_error,
 )
 from app.sms_template_service import render_sms_template
+from app.sms_template_service import get_duplicate_sms_template
 
 _CUSTOMER_OUTREACH_OPTOUT_REASON = "Customer opted out of automated reminder messages"
 _OUTREACH_NO_ACTOR_REASON = (
@@ -620,6 +621,83 @@ def try_customer_outreach_for_new_lead(session: Session, lead: Lead) -> int:
     if not lead.id:
         return 0
     company = session.exec(select(CompanySettings).limit(1)).first()
+
+    # Duplicate leads get a dedicated customer message instead of welcome outreach.
+    if bool(getattr(lead, "is_duplicate", False)) and lead.customer_id:
+        customer = session.get(Customer, lead.customer_id)
+        if not customer:
+            return 0
+        duplicate_template = get_duplicate_sms_template(session, company)
+        if not duplicate_template:
+            return 0
+        cooldown_days = 7
+        if company and getattr(company, "duplicate_sms_cooldown_days", None) is not None:
+            cooldown_days = max(0, int(company.duplicate_sms_cooldown_days))
+        if cooldown_days > 0:
+            cutoff = datetime.utcnow() - timedelta(days=cooldown_days)
+            existing = session.exec(
+                select(SmsMessage)
+                .where(
+                    SmsMessage.customer_id == customer.id,
+                    SmsMessage.lead_id == lead.id,
+                    SmsMessage.direction == SmsDirection.SENT,
+                    SmsMessage.created_at >= cutoff,
+                )
+                .order_by(SmsMessage.created_at.desc())
+                .limit(1)
+            ).first()
+            if existing:
+                return 0
+
+        actor_id = _resolve_actor_user_id(session, lead, None)
+        actor = session.get(User, actor_id) if actor_id else None
+        if not actor:
+            return 0
+        to_phone = (customer.phone or "").strip() or (lead.phone or "").strip()
+        if not to_phone:
+            return 0
+        body = render_sms_template(
+            duplicate_template,
+            customer,
+            user=actor,
+            company_settings=company,
+            extra_context={
+                "duplicate": {
+                    "primary_lead_id": lead.primary_lead_id,
+                    "reason": lead.duplicate_reason or "",
+                }
+            },
+        )
+        ok, sid, err = send_sms(to_phone, body)
+        if not ok:
+            return 0
+
+        system_uid = get_system_user_id(session)
+        sid_value = sid or ""
+        session.add(
+            SmsMessage(
+                customer_id=customer.id,
+                lead_id=lead.id,
+                direction=SmsDirection.SENT,
+                from_phone=(get_twilio_config()[2] or ""),
+                to_phone=normalize_phone(to_phone),
+                body=body,
+                twilio_sid=sid_value,
+                sent_at=datetime.utcnow(),
+                created_by_id=system_uid,
+            )
+        )
+        session.add(
+            Activity(
+                customer_id=customer.id,
+                activity_type=ActivityType.SMS_SENT,
+                notes=f"Automated SMS (duplicate lead) to {to_phone}\n{body}",
+                created_by_id=system_uid,
+            )
+        )
+        session.commit()
+        return 1
+
     statement = (
         select(ReminderRule)
         .where(

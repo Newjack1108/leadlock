@@ -826,6 +826,12 @@ class LeadResponse(BaseModel):
     facebook_advert_profile: Optional[FacebookAdvertProfileResponse] = None
     assigned_to_id: Optional[int]
     customer_id: Optional[int] = None
+    is_duplicate: bool = False
+    primary_lead_id: Optional[int] = None
+    duplicate_confidence: Optional[Decimal] = None
+    duplicate_reason: Optional[str] = None
+    duplicate_matched_fields: Optional[str] = None
+    duplicate_detected_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
     sla_badge: Optional[str] = None
@@ -880,6 +886,8 @@ class StatusHistoryResponse(BaseModel):
 class LeadSourceCount(BaseModel):
     source: str
     count: int
+    duplicate_count: int = 0
+    duplicate_rate: float = 0.0
 
 
 class LeadLocationItem(BaseModel):
@@ -1378,6 +1386,9 @@ class CompanySettingsCreate(BaseModel):
     sms_bot_max_replies_per_thread: Optional[int] = None
     sms_bot_pause_minutes_after_handover: Optional[int] = None
     sms_bot_system_instructions: Optional[str] = None
+    duplicate_sms_template_id: Optional[int] = None
+    duplicate_sms_cooldown_days: Optional[int] = 7
+    auto_close_duplicate_leads: Optional[bool] = True
     bank_name: Optional[str] = None
     bank_account_name: Optional[str] = None
     account_number: Optional[str] = None
@@ -1424,6 +1435,9 @@ class CompanySettingsUpdate(BaseModel):
     sms_bot_max_replies_per_thread: Optional[int] = None
     sms_bot_pause_minutes_after_handover: Optional[int] = None
     sms_bot_system_instructions: Optional[str] = None
+    duplicate_sms_template_id: Optional[int] = None
+    duplicate_sms_cooldown_days: Optional[int] = None
+    auto_close_duplicate_leads: Optional[bool] = None
     bank_name: Optional[str] = None
     bank_account_name: Optional[str] = None
     account_number: Optional[str] = None
@@ -1471,6 +1485,9 @@ class CompanySettingsResponse(BaseModel):
     sms_bot_max_replies_per_thread: int = 3
     sms_bot_pause_minutes_after_handover: int = 720
     sms_bot_system_instructions: Optional[str] = None
+    duplicate_sms_template_id: Optional[int] = None
+    duplicate_sms_cooldown_days: int = 7
+    auto_close_duplicate_leads: bool = True
     bank_name: Optional[str] = None
     bank_account_name: Optional[str] = None
     account_number: Optional[str] = None

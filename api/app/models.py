@@ -216,6 +216,12 @@ class Lead(SQLModel, table=True):
     facebook_advert_profile_id: Optional[int] = Field(default=None, foreign_key="facebookadvertprofile.id")
     assigned_to_id: Optional[int] = Field(default=None, foreign_key="user.id")
     customer_id: Optional[int] = Field(default=None, foreign_key="customer.id")  # Link to Customer when qualified
+    is_duplicate: bool = Field(default=False, index=True)
+    primary_lead_id: Optional[int] = Field(default=None, foreign_key="lead.id", index=True)
+    duplicate_confidence: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(5, 2)))
+    duplicate_reason: Optional[str] = None
+    duplicate_matched_fields: Optional[str] = None
+    duplicate_detected_at: Optional[datetime] = None
     messenger_psid: Optional[str] = Field(default=None, index=True)  # Facebook Page-Scoped ID for Messenger
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
@@ -485,6 +491,9 @@ class CompanySettings(SQLModel, table=True):
     sms_bot_max_replies_per_thread: int = Field(default=3)
     sms_bot_pause_minutes_after_handover: int = Field(default=720)
     sms_bot_system_instructions: Optional[str] = None  # Extra system prompt for out-of-hours SMS bot (Responses API)
+    duplicate_sms_template_id: Optional[int] = Field(default=None, foreign_key="smstemplate.id")
+    duplicate_sms_cooldown_days: int = Field(default=7)
+    auto_close_duplicate_leads: bool = Field(default=True)
     # Bank details (shown on quote and invoice PDFs)
     bank_name: Optional[str] = None
     bank_account_name: Optional[str] = None  # Name on the account (payee for BACS)

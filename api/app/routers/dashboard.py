@@ -109,7 +109,11 @@ async def get_dashboard_stats(
 
     # Leads by source (grouped count, with optional date filter)
     leads_by_source_stmt = (
-        select(Lead.lead_source, func.count(Lead.id).label("count"))
+        select(
+            Lead.lead_source,
+            func.count(Lead.id).label("count"),
+            func.count(Lead.id).filter(Lead.is_duplicate == True).label("duplicate_count"),  # noqa: E712
+        )
         .group_by(Lead.lead_source)
     )
     if date_filter is not None:
@@ -120,13 +124,23 @@ async def get_dashboard_stats(
         if row[1] <= 0:
             continue
         source_val = row[0]
+        duplicate_count = int(row[2] or 0)
         if source_val is None:
             source_str = "Unknown"
         elif hasattr(source_val, "value"):
             source_str = source_val.value
         else:
             source_str = str(source_val)
-        leads_by_source.append(LeadSourceCount(source=source_str, count=row[1]))
+        source_count = int(row[1] or 0)
+        duplicate_rate = round((duplicate_count / source_count * 100), 1) if source_count > 0 else 0.0
+        leads_by_source.append(
+            LeadSourceCount(
+                source=source_str,
+                count=source_count,
+                duplicate_count=duplicate_count,
+                duplicate_rate=duplicate_rate,
+            )
+        )
     leads_by_source.sort(key=lambda x: x.count, reverse=True)
     
     engaged_percentage = (engaged_count / total_leads * 100) if total_leads > 0 else 0.0

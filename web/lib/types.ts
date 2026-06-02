@@ -330,6 +330,12 @@ export interface Lead {
   facebook_advert_profile?: FacebookAdvertProfile | null;
   assigned_to_id?: number;
   customer_id?: number;
+  is_duplicate?: boolean;
+  primary_lead_id?: number | null;
+  duplicate_confidence?: number | null;
+  duplicate_reason?: string | null;
+  duplicate_matched_fields?: string | null;
+  duplicate_detected_at?: string | null;
   created_at: string;
   updated_at: string;
   sla_badge?: string;
@@ -396,6 +402,8 @@ export interface StatusHistory {
 export interface LeadSourceCount {
   source: string;
   count: number;
+  duplicate_count?: number;
+  duplicate_rate?: number;
 }
 
 export interface LeadLocationItem {
@@ -681,6 +689,9 @@ export interface CompanySettings {
   sms_bot_max_replies_per_thread?: number;
   sms_bot_pause_minutes_after_handover?: number;
   sms_bot_system_instructions?: string | null;
+  duplicate_sms_template_id?: number | null;
+  duplicate_sms_cooldown_days?: number;
+  auto_close_duplicate_leads?: boolean;
   bank_name?: string;
   bank_account_name?: string;
   account_number?: string;

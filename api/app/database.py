@@ -585,6 +585,7 @@ def create_db_and_tables():
         has_quote_table = inspector.has_table("quote")
         has_customer_order_table = inspector.has_table("customer_order")
         has_orderitem_table = inspector.has_table("orderitem")
+        has_company_settings_table = inspector.has_table("companysettings")
 
         # Ensure leadstatus enum contains CLOSED before any queries rely on it.
         if has_lead_table:
@@ -980,6 +981,74 @@ def create_db_and_tables():
                     error_str = str(e).lower()
                     if "already exists" not in error_str and "duplicate" not in error_str:
                         print(f"Error adding messenger_psid to lead: {e}", file=sys.stderr, flush=True)
+            lead_columns = [col["name"] for col in inspector.get_columns("lead")]
+            if "is_duplicate" not in lead_columns:
+                print("Adding is_duplicate column to lead table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(
+                            text("ALTER TABLE lead ADD COLUMN is_duplicate BOOLEAN DEFAULT FALSE NOT NULL")
+                        )
+                    print("Added is_duplicate to lead table", file=sys.stderr, flush=True)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Error adding is_duplicate to lead: {e}", file=sys.stderr, flush=True)
+            lead_columns = [col["name"] for col in inspector.get_columns("lead")]
+            if "primary_lead_id" not in lead_columns:
+                print("Adding primary_lead_id column to lead table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE lead ADD COLUMN primary_lead_id INTEGER"))
+                    print("Added primary_lead_id to lead table", file=sys.stderr, flush=True)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Error adding primary_lead_id to lead: {e}", file=sys.stderr, flush=True)
+            lead_columns = [col["name"] for col in inspector.get_columns("lead")]
+            if "duplicate_confidence" not in lead_columns:
+                print("Adding duplicate_confidence column to lead table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE lead ADD COLUMN duplicate_confidence NUMERIC(5, 2)"))
+                    print("Added duplicate_confidence to lead table", file=sys.stderr, flush=True)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Error adding duplicate_confidence to lead: {e}", file=sys.stderr, flush=True)
+            lead_columns = [col["name"] for col in inspector.get_columns("lead")]
+            if "duplicate_reason" not in lead_columns:
+                print("Adding duplicate_reason column to lead table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE lead ADD COLUMN duplicate_reason TEXT"))
+                    print("Added duplicate_reason to lead table", file=sys.stderr, flush=True)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Error adding duplicate_reason to lead: {e}", file=sys.stderr, flush=True)
+            lead_columns = [col["name"] for col in inspector.get_columns("lead")]
+            if "duplicate_matched_fields" not in lead_columns:
+                print("Adding duplicate_matched_fields column to lead table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE lead ADD COLUMN duplicate_matched_fields TEXT"))
+                    print("Added duplicate_matched_fields to lead table", file=sys.stderr, flush=True)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Error adding duplicate_matched_fields to lead: {e}", file=sys.stderr, flush=True)
+            lead_columns = [col["name"] for col in inspector.get_columns("lead")]
+            if "duplicate_detected_at" not in lead_columns:
+                print("Adding duplicate_detected_at column to lead table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE lead ADD COLUMN duplicate_detected_at TIMESTAMP"))
+                    print("Added duplicate_detected_at to lead table", file=sys.stderr, flush=True)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Error adding duplicate_detected_at to lead: {e}", file=sys.stderr, flush=True)
         
         # Step 1: Add customer_id to Lead table if it doesn't exist
         if has_lead_table:
@@ -1005,6 +1074,49 @@ def create_db_and_tables():
                     error_str = str(e).lower()
                     if "already exists" not in error_str and "duplicate" not in error_str:
                         print(f"Error adding wrong_email_address to lead: {e}", file=sys.stderr, flush=True)
+
+        if has_company_settings_table:
+            company_columns = [col["name"] for col in inspector.get_columns("companysettings")]
+            if "duplicate_sms_template_id" not in company_columns:
+                print("Adding duplicate_sms_template_id column to companysettings table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE companysettings ADD COLUMN duplicate_sms_template_id INTEGER"))
+                    print("Added duplicate_sms_template_id to companysettings table", file=sys.stderr, flush=True)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Error adding duplicate_sms_template_id to companysettings: {e}", file=sys.stderr, flush=True)
+            company_columns = [col["name"] for col in inspector.get_columns("companysettings")]
+            if "duplicate_sms_cooldown_days" not in company_columns:
+                print("Adding duplicate_sms_cooldown_days column to companysettings table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(
+                            text(
+                                "ALTER TABLE companysettings ADD COLUMN duplicate_sms_cooldown_days INTEGER DEFAULT 7 NOT NULL"
+                            )
+                        )
+                    print("Added duplicate_sms_cooldown_days to companysettings table", file=sys.stderr, flush=True)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Error adding duplicate_sms_cooldown_days to companysettings: {e}", file=sys.stderr, flush=True)
+            company_columns = [col["name"] for col in inspector.get_columns("companysettings")]
+            if "auto_close_duplicate_leads" not in company_columns:
+                print("Adding auto_close_duplicate_leads column to companysettings table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(
+                            text(
+                                "ALTER TABLE companysettings ADD COLUMN auto_close_duplicate_leads BOOLEAN DEFAULT TRUE NOT NULL"
+                            )
+                        )
+                    print("Added auto_close_duplicate_leads to companysettings table", file=sys.stderr, flush=True)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Error adding auto_close_duplicate_leads to companysettings: {e}", file=sys.stderr, flush=True)
         
         # Step 2: Migrate existing qualified leads to Customer records
         if has_lead_table and has_customer_table:

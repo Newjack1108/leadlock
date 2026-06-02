@@ -2,6 +2,7 @@
 Service for rendering SMS templates with customer, user, and company data.
 """
 from typing import Dict, Optional
+from sqlmodel import Session, select
 from jinja2 import Template
 from app.models import SmsTemplate, Customer, User, CompanySettings
 from app.email_template_service import get_sample_customer_data
@@ -65,3 +66,20 @@ def get_sample_sms_context() -> Dict:
     context["user"] = {"name": "Sample User"}
     context["company"] = {"company_name": "Cheshire Stables", "trading_name": "Cheshire Stables"}
     return context
+
+
+def get_duplicate_sms_template(
+    session: Session,
+    company_settings: Optional[CompanySettings] = None,
+) -> Optional[SmsTemplate]:
+    """
+    Resolve duplicate/repeat-lead SMS template in priority order:
+    1) Company setting `duplicate_sms_template_id`
+    2) Template named exactly `Duplicate Lead Notice`
+    """
+    if company_settings and company_settings.duplicate_sms_template_id:
+        template = session.get(SmsTemplate, int(company_settings.duplicate_sms_template_id))
+        if template:
+            return template
+    statement = select(SmsTemplate).where(SmsTemplate.name == "Duplicate Lead Notice")
+    return session.exec(statement).first()
