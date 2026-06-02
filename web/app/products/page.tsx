@@ -28,6 +28,7 @@ import { Plus, Edit, Trash2, List, LayoutGrid, FileDown } from 'lucide-react';
 import Link from 'next/link';
 import api, { getApiErrorDetail } from '@/lib/api';
 import { Product, ProductCategory, PRODUCT_SUBCATEGORIES, ProductSubcategory } from '@/lib/types';
+import { formatDateTime } from '@/lib/utils';
 import { toast } from 'sonner';
 
 const PRODUCT_UNIT_OPTIONS = ['Per Box', 'Unit', 'Set'] as const;
@@ -329,6 +330,7 @@ export default function ProductsPage() {
                     <th className="text-left p-3 font-medium">Price</th>
                     <th className="text-left p-3 font-medium">Unit</th>
                     <th className="text-left p-3 font-medium">SKU</th>
+                    <th className="text-left p-3 font-medium">Pushed</th>
                     <th className="text-right p-3 font-medium w-[100px]">Actions</th>
                   </tr>
                 </thead>
@@ -368,6 +370,11 @@ export default function ProductsPage() {
                       <td className="p-3 font-semibold">£{Number(product.base_price).toFixed(2)}</td>
                       <td className="p-3 text-muted-foreground">{product.unit || '—'}</td>
                       <td className="p-3 text-muted-foreground">{product.sku || '—'}</td>
+                      <td className="p-3 text-muted-foreground text-sm">
+                        {product.production_pushed_at
+                          ? formatDateTime(product.production_pushed_at)
+                          : '—'}
+                      </td>
                       <td className="p-3 text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex gap-1 justify-end">
                           <Button
@@ -458,6 +465,12 @@ export default function ProductsPage() {
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">SKU:</span>
                         <span>{product.sku}</span>
+                      </div>
+                    )}
+                    {product.production_pushed_at && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Pushed:</span>
+                        <span>{formatDateTime(product.production_pushed_at)}</span>
                       </div>
                     )}
                   </div>

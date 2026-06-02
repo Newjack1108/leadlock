@@ -1,3 +1,5 @@
+import asyncio
+from datetime import datetime, timedelta
 from decimal import Decimal
 import sys
 import types
@@ -23,8 +25,7 @@ def _session() -> Session:
     return Session(engine)
 
 
-@pytest.mark.asyncio
-async def test_import_extra_uses_payload_category_precedence():
+def test_import_extra_uses_payload_category_precedence():
     with _session() as session:
         payload = ProductImportPayload(
             product_id=101,
@@ -37,16 +38,16 @@ async def test_import_extra_uses_payload_category_precedence():
             category="sheds",
         )
 
-        await import_product_webhook(payload=payload, _api_key="test", session=session)
+        asyncio.run(import_product_webhook(payload=payload, _api_key="test", session=session))
 
         product = session.exec(select(Product).where(Product.production_product_id == 101)).first()
         assert product is not None
         assert product.is_extra is True
         assert product.category == ProductCategory.SHEDS
+        assert product.production_pushed_at is not None
 
 
-@pytest.mark.asyncio
-async def test_import_non_extra_uses_payload_category():
+def test_import_non_extra_uses_payload_category():
     with _session() as session:
         payload = ProductImportPayload(
             product_id=102,
@@ -59,7 +60,7 @@ async def test_import_non_extra_uses_payload_category():
             category="cabins",
         )
 
-        await import_product_webhook(payload=payload, _api_key="test", session=session)
+        asyncio.run(import_product_webhook(payload=payload, _api_key="test", session=session))
 
         product = session.exec(select(Product).where(Product.production_product_id == 102)).first()
         assert product is not None
@@ -67,8 +68,7 @@ async def test_import_non_extra_uses_payload_category():
         assert product.category == ProductCategory.CABINS
 
 
-@pytest.mark.asyncio
-async def test_import_missing_category_falls_back_to_product_type():
+def test_import_missing_category_falls_back_to_product_type():
     with _session() as session:
         payload = ProductImportPayload(
             product_id=103,
@@ -80,12 +80,43 @@ async def test_import_missing_category_falls_back_to_product_type():
             product_type="sheds",
         )
 
-        await import_product_webhook(payload=payload, _api_key="test", session=session)
+        asyncio.run(import_product_webhook(payload=payload, _api_key="test", session=session))
 
         product = session.exec(select(Product).where(Product.production_product_id == 103)).first()
         assert product is not None
         assert product.is_extra is False
         assert product.category == ProductCategory.SHEDS
+
+
+def test_import_sets_production_pushed_at_and_updates_on_reimport():
+    with _session() as session:
+        payload = ProductImportPayload(
+            product_id=201,
+            name="Pushed Product",
+            description="",
+            price_ex_vat=Decimal("100"),
+            install_hours=Decimal("1"),
+            number_of_boxes=Decimal("1"),
+            product_type="product",
+            category="stables",
+        )
+
+        asyncio.run(import_product_webhook(payload=payload, _api_key="test", session=session))
+
+        product = session.exec(select(Product).where(Product.production_product_id == 201)).first()
+        assert product is not None
+        assert product.production_pushed_at is not None
+
+        past = datetime.utcnow() - timedelta(hours=1)
+        product.production_pushed_at = past
+        session.add(product)
+        session.commit()
+
+        asyncio.run(import_product_webhook(payload=payload, _api_key="test", session=session))
+
+        session.refresh(product)
+        assert product.production_pushed_at is not None
+        assert product.production_pushed_at > past
 
 
 def test_invalid_category_returns_422_validation_error():

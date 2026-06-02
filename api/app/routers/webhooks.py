@@ -292,6 +292,7 @@ async def import_product_webhook(
             existing.category = resolved_category
         if payload.product_id is not None:
             existing.production_product_id = payload.product_id
+        existing.production_pushed_at = datetime.utcnow()
         existing.updated_at = datetime.utcnow()
         session.add(existing)
         session.commit()
@@ -310,6 +311,7 @@ async def import_product_webhook(
             installation_hours=installation_hours,
             boxes_per_product=number_of_boxes_int,
             production_product_id=payload.product_id,
+            production_pushed_at=datetime.utcnow(),
         )
         session.add(product)
         session.commit()

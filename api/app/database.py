@@ -2246,6 +2246,23 @@ def create_db_and_tables():
                     if "already exists" not in error_str and "duplicate" not in error_str:
                         print(f"Error adding production_product_id column: {e}", file=sys.stderr, flush=True)
             product_columns = [col["name"] for col in inspector.get_columns("product")]
+            if "production_pushed_at" not in product_columns:
+                print("Adding production_pushed_at column to product table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE product ADD COLUMN production_pushed_at TIMESTAMP"))
+                        conn.execute(
+                            text(
+                                "UPDATE product SET production_pushed_at = updated_at "
+                                "WHERE production_product_id IS NOT NULL AND production_pushed_at IS NULL"
+                            )
+                        )
+                    print("Added production_pushed_at column to product table", file=sys.stderr, flush=True)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Error adding production_pushed_at column: {e}", file=sys.stderr, flush=True)
+            product_columns = [col["name"] for col in inspector.get_columns("product")]
             if "allow_trade_dealer_sale" not in product_columns:
                 print("Adding allow_trade_dealer_sale column to product table...", file=sys.stderr, flush=True)
                 try:

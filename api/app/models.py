@@ -427,6 +427,7 @@ class Product(SQLModel, table=True):
     installation_hours: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(10, 2)))  # Hours required for installation
     boxes_per_product: Optional[int] = None  # Number of boxes per product (optional; used in installation calculation)
     production_product_id: Optional[int] = Field(default=None, index=True)  # Production app's product ID for sync
+    production_pushed_at: Optional[datetime] = Field(default=None)  # Last push from production app via webhook
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     

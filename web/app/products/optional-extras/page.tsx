@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { deleteProduct, getApiErrorDetail, getOptionalExtras, getProducts } from '@/lib/api';
 import { Product, ProductCategory } from '@/lib/types';
+import { formatDateTime } from '@/lib/utils';
 import { toast } from 'sonner';
 import { ArrowLeft, Plus, Edit, Package, Trash2 } from 'lucide-react';
 import Link from 'next/link';
@@ -150,6 +151,13 @@ export default function OptionalExtrasPage() {
                         )}
                         {extra.subcategory && (
                           <Badge variant="secondary">{extra.subcategory}</Badge>
+                        )}
+                        {extra.is_production_synced && (
+                          <Badge variant="secondary">
+                            Production
+                            {extra.production_pushed_at &&
+                              ` · ${formatDateTime(extra.production_pushed_at)}`}
+                          </Badge>
                         )}
                       </div>
                     </div>

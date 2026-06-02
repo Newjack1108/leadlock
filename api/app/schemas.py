@@ -1270,6 +1270,7 @@ class ProductResponse(BaseModel):
     installation_hours: Optional[Decimal] = None
     boxes_per_product: Optional[int] = None
     is_production_synced: bool = False
+    production_pushed_at: Optional[datetime] = None
     optional_extras: Optional[List["ProductResponse"]] = None  # Nested optional extras
     created_at: datetime
     updated_at: datetime
