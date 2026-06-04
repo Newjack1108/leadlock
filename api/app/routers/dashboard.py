@@ -18,11 +18,14 @@ from app.models import (
     MessengerDirection,
     Email,
     EmailDirection,
+    User,
+    UserRole,
 )
 from app.distance_service import bulk_geocode_postcodes
 from app.date_ranges import resolve_date_range
 from app.db_utils import scalar_int
 from app.auth import require_non_dealer_user
+from app.closer_pipeline import customer_in_closer_pipeline_exists
 from app.schemas import (
     DashboardStats,
     DashboardChannelDirectionCounts,
@@ -358,20 +361,24 @@ async def get_lead_locations(
 @router.get("/unread-sms", response_model=UnreadSmsSummary)
 async def get_unread_sms(
     session: Session = Depends(get_session),
-    current_user=Depends(require_non_dealer_user),
+    current_user: User = Depends(require_non_dealer_user),
 ):
     """Get count and list of unread received SMS for the dashboard."""
     # Unread = RECEIVED messages with read_at IS NULL
+    unread_conds = [
+        SmsMessage.direction == SmsDirection.RECEIVED,
+        SmsMessage.read_at.is_(None),
+    ]
+    if current_user.role == UserRole.CLOSER:
+        unread_conds.append(customer_in_closer_pipeline_exists(SmsMessage.customer_id))
     statement = (
         select(SmsMessage)
-        .where(SmsMessage.direction == SmsDirection.RECEIVED, SmsMessage.read_at.is_(None))
+        .where(*unread_conds)
         .order_by(SmsMessage.created_at.desc())
         .limit(10)
     )
     messages = list(session.exec(statement).all())
-    count_statement = select(func.count(SmsMessage.id)).where(
-        SmsMessage.direction == SmsDirection.RECEIVED, SmsMessage.read_at.is_(None)
-    )
+    count_statement = select(func.count(SmsMessage.id)).where(*unread_conds)
     count = session.exec(count_statement).one()
 
     items = []
@@ -397,19 +404,23 @@ async def get_unread_sms(
 @router.get("/unread-messenger", response_model=UnreadMessengerSummary)
 async def get_unread_messenger(
     session: Session = Depends(get_session),
-    current_user=Depends(require_non_dealer_user),
+    current_user: User = Depends(require_non_dealer_user),
 ):
     """Get count and list of unread received Messenger messages for the dashboard."""
+    unread_conds = [
+        MessengerMessage.direction == MessengerDirection.RECEIVED,
+        MessengerMessage.read_at.is_(None),
+    ]
+    if current_user.role == UserRole.CLOSER:
+        unread_conds.append(customer_in_closer_pipeline_exists(MessengerMessage.customer_id))
     statement = (
         select(MessengerMessage)
-        .where(MessengerMessage.direction == MessengerDirection.RECEIVED, MessengerMessage.read_at.is_(None))
+        .where(*unread_conds)
         .order_by(MessengerMessage.created_at.desc())
         .limit(10)
     )
     messages = list(session.exec(statement).all())
-    count_statement = select(func.count(MessengerMessage.id)).where(
-        MessengerMessage.direction == MessengerDirection.RECEIVED, MessengerMessage.read_at.is_(None)
-    )
+    count_statement = select(func.count(MessengerMessage.id)).where(*unread_conds)
     count = session.exec(count_statement).one()
     items = []
     for msg in messages:
@@ -433,13 +444,16 @@ async def get_unread_messenger(
 @router.get("/unread-email", response_model=UnreadEmailSummary)
 async def get_unread_email(
     session: Session = Depends(get_session),
-    current_user=Depends(require_non_dealer_user),
+    current_user: User = Depends(require_non_dealer_user),
 ):
     """Count of unread received inbound emails (read_at IS NULL)."""
-    count_statement = select(func.count(Email.id)).where(
+    unread_conds = [
         Email.direction == EmailDirection.RECEIVED,
         Email.read_at.is_(None),
-    )
+    ]
+    if current_user.role == UserRole.CLOSER:
+        unread_conds.append(customer_in_closer_pipeline_exists(Email.customer_id))
+    count_statement = select(func.count(Email.id)).where(*unread_conds)
     count = session.exec(count_statement).one()
     return UnreadEmailSummary(count=count)
 
@@ -505,32 +519,52 @@ async def get_qualified_for_quoting(
 @router.get("/unread-by-customer", response_model=list[UnreadByCustomerItem])
 async def get_unread_by_customer(
     session: Session = Depends(get_session),
-    current_user=Depends(require_non_dealer_user),
+    current_user: User = Depends(require_non_dealer_user),
 ):
     """Get unread message count per customer (SMS + Messenger + email). Only includes customers with at least one unread."""
+    unread_conds = [
+        SmsMessage.direction == SmsDirection.RECEIVED,
+        SmsMessage.read_at.is_(None),
+    ]
+    if current_user.role == UserRole.CLOSER:
+        unread_conds.append(customer_in_closer_pipeline_exists(SmsMessage.customer_id))
     # Unread SMS counts per customer_id
     sms_statement = (
         select(SmsMessage.customer_id, func.count(SmsMessage.id).label("cnt"))
-        .where(SmsMessage.direction == SmsDirection.RECEIVED, SmsMessage.read_at.is_(None))
+        .where(*unread_conds)
         .group_by(SmsMessage.customer_id)
     )
     sms_rows = session.exec(sms_statement).all()
     merged: dict[int, int] = {row[0]: row[1] for row in sms_rows}
 
+    messenger_unread_conds = [
+        MessengerMessage.direction == MessengerDirection.RECEIVED,
+        MessengerMessage.read_at.is_(None),
+    ]
+    if current_user.role == UserRole.CLOSER:
+        messenger_unread_conds.append(
+            customer_in_closer_pipeline_exists(MessengerMessage.customer_id)
+        )
     # Unread Messenger counts per customer_id
     messenger_statement = (
         select(MessengerMessage.customer_id, func.count(MessengerMessage.id).label("cnt"))
-        .where(MessengerMessage.direction == MessengerDirection.RECEIVED, MessengerMessage.read_at.is_(None))
+        .where(*messenger_unread_conds)
         .group_by(MessengerMessage.customer_id)
     )
     messenger_rows = session.exec(messenger_statement).all()
     for customer_id, cnt in messenger_rows:
         merged[customer_id] = merged.get(customer_id, 0) + cnt
 
+    email_unread_conds = [
+        Email.direction == EmailDirection.RECEIVED,
+        Email.read_at.is_(None),
+    ]
+    if current_user.role == UserRole.CLOSER:
+        email_unread_conds.append(customer_in_closer_pipeline_exists(Email.customer_id))
     # Unread inbound email counts per customer_id
     email_statement = (
         select(Email.customer_id, func.count(Email.id).label("cnt"))
-        .where(Email.direction == EmailDirection.RECEIVED, Email.read_at.is_(None))
+        .where(*email_unread_conds)
         .group_by(Email.customer_id)
     )
     email_rows = session.exec(email_statement).all()

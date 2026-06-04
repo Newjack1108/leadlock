@@ -32,6 +32,8 @@ from app.models import (
 )
 from app.models import LeadType, LeadSource
 from app.auth import get_current_user
+from app.closer_pipeline import customer_in_closer_pipeline_exists
+from app.models import UserRole
 from app.schemas import (
     ChannelDirectionCounts,
     CustomerCommunicationStats,
@@ -62,9 +64,9 @@ from datetime import datetime
 router = APIRouter(prefix="/api/customers", tags=["customers"])
 
 
-def _customer_has_unread_exists():
+def _customer_has_unread_exists(user_role: Optional[UserRole] = None):
     """Customer has at least one unread received SMS, Messenger, or email."""
-    return or_(
+    has_unread = or_(
         exists(
             select(SmsMessage.id).where(
                 SmsMessage.customer_id == Customer.id,
@@ -87,6 +89,9 @@ def _customer_has_unread_exists():
             )
         ),
     )
+    if user_role == UserRole.CLOSER:
+        return and_(has_unread, customer_in_closer_pipeline_exists(Customer.id))
+    return has_unread
 
 
 def quote_item_to_response(item: QuoteItem) -> QuoteItemResponse:
@@ -139,7 +144,7 @@ def get_customers(
         conditions.append(Customer.automated_reminder_outreach_opt_out == sms_opted_out)
 
     if has_unread:
-        conditions.append(_customer_has_unread_exists())
+        conditions.append(_customer_has_unread_exists(current_user.role))
 
     where_clause = and_(*conditions) if conditions else true()
 
