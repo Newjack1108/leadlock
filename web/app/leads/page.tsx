@@ -32,6 +32,11 @@ import {
 } from '@/components/ui/select';
 import NinoxBadge from '@/components/NinoxBadge';
 import { canRemoveSpamLead } from '@/lib/leadSpam';
+import {
+  STAFF_SELECTABLE_LEAD_SOURCES,
+  SELECTABLE_LEAD_TYPES,
+  leadFieldsAllowQualify,
+} from '@/lib/leadQualifyRules';
 
 const temperatureColors: Record<QuoteTemperature, string> = {
   HOT: 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300',
@@ -71,9 +76,6 @@ function getDisplayLeadType(leadType?: LeadType | null): LeadType | null {
 const TERMINAL_STATUSES: LeadStatus[] = [LeadStatus.QUOTED, LeadStatus.WON, LeadStatus.LOST, LeadStatus.CLOSED];
 
 const LEADS_PAGE_SIZE = 50;
-
-// Exclude legacy WEBSITE from new-lead dropdown; prefer CSGB/CS/BLC WEBSITE
-const LEAD_SOURCE_OPTIONS_FOR_NEW = Object.values(LeadSource).filter((s) => s !== LeadSource.WEBSITE);
 
 // Closers only see these statuses; default to QUALIFIED
 const CLOSER_STATUS_TABS: LeadStatus[] = [
@@ -119,8 +121,8 @@ function LeadsPageContent() {
     phone: '',
     postcode: '',
     description: '',
-    lead_type: LeadType.UNKNOWN,
-    lead_source: LeadSource.MANUAL_ENTRY,
+    lead_type: '' as LeadType | '',
+    lead_source: '' as LeadSource | '',
   });
   const [removingSpamId, setRemovingSpamId] = useState<number | null>(null);
 
@@ -316,9 +318,28 @@ function LeadsPageContent() {
     }
   };
 
+  const emptyNewLead = () => ({
+    name: '',
+    email: '',
+    wrong_email_address: false,
+    phone: '',
+    postcode: '',
+    description: '',
+    lead_type: '' as LeadType | '',
+    lead_source: '' as LeadSource | '',
+  });
+
   const handleCreateLead = async () => {
     if (!newLead.name.trim()) {
       toast.error('Name is required');
+      return;
+    }
+    if (!newLead.lead_source || !newLead.lead_type) {
+      toast.error('Lead source and lead type are required');
+      return;
+    }
+    if (!leadFieldsAllowQualify(newLead.lead_source, newLead.lead_type)) {
+      toast.error('Choose a valid lead source and lead type');
       return;
     }
 
@@ -337,7 +358,7 @@ function LeadsPageContent() {
       
       toast.success('Lead created successfully');
       setCreateDialogOpen(false);
-      setNewLead({ name: '', email: '', wrong_email_address: false, phone: '', postcode: '', description: '', lead_type: LeadType.UNKNOWN, lead_source: LeadSource.MANUAL_ENTRY });
+      setNewLead(emptyNewLead());
       await fetchLeads(1);
     } catch (error: any) {
       toast.error(error.response?.data?.detail || 'Failed to create lead');
@@ -745,15 +766,15 @@ function LeadsPageContent() {
               <div className="space-y-2">
                 <Label htmlFor="lead_type">Lead Type</Label>
                 <Select
-                  value={newLead.lead_type}
+                  value={newLead.lead_type || undefined}
                   onValueChange={(value) => setNewLead({ ...newLead, lead_type: value as LeadType })}
                   disabled={creating}
                 >
                   <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue placeholder="Select lead type" />
                   </SelectTrigger>
                   <SelectContent>
-                    {Object.values(LeadType).map((type) => (
+                    {SELECTABLE_LEAD_TYPES.map((type) => (
                       <SelectItem key={type} value={type}>{type}</SelectItem>
                     ))}
                   </SelectContent>
@@ -762,15 +783,15 @@ function LeadsPageContent() {
               <div className="space-y-2">
                 <Label htmlFor="lead_source">Lead Source</Label>
                 <Select
-                  value={newLead.lead_source}
+                  value={newLead.lead_source || undefined}
                   onValueChange={(value) => setNewLead({ ...newLead, lead_source: value as LeadSource })}
                   disabled={creating}
                 >
                   <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue placeholder="Select lead source" />
                   </SelectTrigger>
                   <SelectContent>
-                    {LEAD_SOURCE_OPTIONS_FOR_NEW.map((source) => (
+                    {STAFF_SELECTABLE_LEAD_SOURCES.map((source) => (
                       <SelectItem key={source} value={source}>{source.replace('_', ' ')}</SelectItem>
                     ))}
                   </SelectContent>
@@ -782,13 +803,21 @@ function LeadsPageContent() {
                 variant="outline"
                 onClick={() => {
                   setCreateDialogOpen(false);
-                  setNewLead({ name: '', email: '', wrong_email_address: false, phone: '', postcode: '', description: '', lead_type: LeadType.UNKNOWN, lead_source: LeadSource.MANUAL_ENTRY });
+                  setNewLead(emptyNewLead());
                 }}
                 disabled={creating}
               >
                 Cancel
               </Button>
-              <Button onClick={handleCreateLead} disabled={creating || !newLead.name.trim()}>
+              <Button
+                onClick={handleCreateLead}
+                disabled={
+                  creating ||
+                  !newLead.name.trim() ||
+                  !newLead.lead_source ||
+                  !newLead.lead_type
+                }
+              >
                 {creating ? 'Creating...' : 'Create Lead'}
               </Button>
             </DialogFooter>

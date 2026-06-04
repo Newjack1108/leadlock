@@ -47,6 +47,12 @@ import { toast } from 'sonner';
 import NinoxBadge from '@/components/NinoxBadge';
 import SendConfiguratorLinkDialog from '@/components/configurator/SendConfiguratorLinkDialog';
 import { canRemoveSpamLead } from '@/lib/leadSpam';
+import {
+  leadFieldsAllowQualify,
+  qualifyFieldsMessage,
+  leadSourceSelectOptions,
+  leadTypeSelectOptions,
+} from '@/lib/leadQualifyRules';
 
 const activityIcons: Record<ActivityType, any> = {
   SMS_SENT: MessageSquare,
@@ -221,6 +227,10 @@ export default function LeadDetailPage() {
   const handleQualify = async () => {
     if (!allowedTransitions.includes('QUALIFIED')) return;
     if (!lead) return;
+    if (!leadFieldsAllowQualify(lead.lead_source, lead.lead_type)) {
+      toast.error(qualifyFieldsMessage(lead.lead_source, lead.lead_type));
+      return;
+    }
     setQualifyLoading(true);
     try {
       const name = (lead.name || '').trim() || 'Lead';
@@ -366,6 +376,8 @@ export default function LeadDetailPage() {
   }
 
   const isNinoxLead = lead.lead_source === LeadSource.NINOX || lead.customer?.source_system === 'Ninox';
+  const canQualifyFields = leadFieldsAllowQualify(lead.lead_source, lead.lead_type);
+  const qualifyFieldsHint = qualifyFieldsMessage(lead.lead_source, lead.lead_type);
 
   return (
     <div className="min-h-screen">
@@ -398,7 +410,8 @@ export default function LeadDetailPage() {
                       <Button
                         size="sm"
                         onClick={handleQualify}
-                        disabled={qualifyLoading}
+                        disabled={qualifyLoading || !canQualifyFields}
+                        title={!canQualifyFields ? qualifyFieldsHint : undefined}
                         className="gap-1"
                       >
                         <CheckCircle className="h-4 w-4" />
@@ -550,7 +563,7 @@ export default function LeadDetailPage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {Object.values(LeadType).map((type) => (
+                        {leadTypeSelectOptions(lead.lead_type).map((type) => (
                           <SelectItem key={type} value={type}>
                             {type}
                           </SelectItem>
@@ -571,7 +584,7 @@ export default function LeadDetailPage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {Object.values(LeadSource).map((source) => (
+                        {leadSourceSelectOptions(lead.lead_source).map((source) => (
                           <SelectItem key={source} value={source}>
                             {source.replace('_', ' ')}
                           </SelectItem>

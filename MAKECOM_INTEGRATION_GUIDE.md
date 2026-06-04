@@ -31,8 +31,8 @@ LeadLock accepts leads via a webhook at `POST /api/webhooks/leads`. Use Make.com
 | `postcode` | string | No | Location postcode |
 | `description` | string | No | Enquiry/project details |
 | `product_interest` | string | No | Product type (e.g. stables, sheds) |
-| `lead_source` | string | No | One of: `FACEBOOK`, `EMAIL`, `INSTAGRAM`, `WEBSITE`, `CSGB WEBSITE`, `CS WEBSITE`, `BLC WEBSITE`, `MANUAL_ENTRY`, `SMS`, `PHONE`, `REFERRAL`, `OTHER`, `UNKNOWN` |
-| `lead_type` | string | No | One of: `STABLES`, `SHEDS`, `CABINS`, `UNKNOWN` |
+| `lead_source` | string | No | e.g. `FACEBOOK`, `EMAIL`, `INSTAGRAM`, `CSGB WEBSITE`, `CS WEBSITE`, `BLC WEBSITE`, `SMS`, `PHONE`, `REFERRAL`, `UNKNOWN` (do not use `MANUAL_ENTRY` or `OTHER` — staff set those in LeadLock) |
+| `lead_type` | string | No | `STABLES`, `SHEDS`, or `CABINS` preferred for reporting (`UNKNOWN` allowed on inbound webhooks; staff must set type before qualifying in the app) |
 
 **Behaviour:** If email or phone matches an existing Customer, the new lead is linked to that Customer (returning submitters). No Customer is created for new people until the lead is qualified in LeadLock.
 

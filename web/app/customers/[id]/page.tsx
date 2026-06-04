@@ -45,6 +45,21 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import api, {
   getCustomerHistory,
   getCustomerCommunicationStats,
@@ -53,7 +68,8 @@ import api, {
   deleteCustomer,
 } from '@/lib/api';
 import { formatDateTime, formatActivityTypeLabel } from '@/lib/utils';
-import { Customer, Activity, ActivityType, Lead, CustomerHistoryEvent, CustomerHistoryEventType, WebsiteVisit, Order, CustomerCommunicationStats } from '@/lib/types';
+import { Customer, Activity, ActivityType, Lead, CustomerHistoryEvent, CustomerHistoryEventType, WebsiteVisit, Order, CustomerCommunicationStats, LeadSource, LeadType } from '@/lib/types';
+import { STAFF_SELECTABLE_LEAD_SOURCES, SELECTABLE_LEAD_TYPES } from '@/lib/leadQualifyRules';
 import SendQuoteEmailDialog from '@/components/SendQuoteEmailDialog';
 import SendConfiguratorLinkDialog from '@/components/configurator/SendConfiguratorLinkDialog';
 import ComposeEmailDialog from '@/components/ComposeEmailDialog';
@@ -183,6 +199,9 @@ export default function CustomerDetailPage() {
   const [editingName, setEditingName] = useState(false);
   const [nameBeforeEdit, setNameBeforeEdit] = useState('');
   const [createLeadLoading, setCreateLeadLoading] = useState(false);
+  const [newQuoteLeadDialogOpen, setNewQuoteLeadDialogOpen] = useState(false);
+  const [newQuoteLeadSource, setNewQuoteLeadSource] = useState<LeadSource | ''>('');
+  const [newQuoteLeadType, setNewQuoteLeadType] = useState<LeadType | ''>('');
   const [unreadChannels, setUnreadChannels] = useState({
     sms_unread: 0,
     messenger_unread: 0,
@@ -322,6 +341,36 @@ export default function CustomerDetailPage() {
       }
     } catch (error) {
       console.error('Failed to check quote prerequisites:', error);
+    }
+  };
+
+  const openNewQuoteLeadDialog = () => {
+    setNewQuoteLeadSource('');
+    setNewQuoteLeadType('');
+    setNewQuoteLeadDialogOpen(true);
+  };
+
+  const handleCreateLeadAndQuote = async () => {
+    if (!newQuoteLeadSource || !newQuoteLeadType) {
+      toast.error('Lead source and lead type are required');
+      return;
+    }
+    setCreateLeadLoading(true);
+    try {
+      const newLead = await createLeadFromCustomer(customerId, {
+        lead_source: newQuoteLeadSource,
+        lead_type: newQuoteLeadType,
+      });
+      await api.post(`/api/leads/${newLead.id}/transition`, { new_status: 'QUALIFIED' });
+      toast.success('Lead created and qualified');
+      setNewQuoteLeadDialogOpen(false);
+      fetchLeads();
+      router.push(`/quotes/create?customer_id=${customerId}&lead_id=${newLead.id}`);
+    } catch (err: any) {
+      const d = err.response?.data?.detail;
+      toast.error(typeof d === 'object' && d?.message ? d.message : d || 'Failed to create lead');
+    } finally {
+      setCreateLeadLoading(false);
     }
   };
 
@@ -793,21 +842,9 @@ export default function CustomerDetailPage() {
                         ))}
                         <DropdownMenuItem
                           disabled={createLeadLoading}
-                          onClick={async () => {
-                            setCreateLeadLoading(true);
-                            try {
-                              const newLead = await createLeadFromCustomer(customerId);
-                              toast.success('Pre-qualified lead created');
-                              fetchLeads();
-                              router.push(`/quotes/create?customer_id=${customerId}&lead_id=${newLead.id}`);
-                            } catch (err: any) {
-                              toast.error(err.response?.data?.detail || 'Failed to create lead');
-                            } finally {
-                              setCreateLeadLoading(false);
-                            }
-                          }}
+                          onClick={openNewQuoteLeadDialog}
                         >
-                          {createLeadLoading ? 'Creating...' : 'Create new lead (pre-qualified) and quote'}
+                          New lead and quote…
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -839,21 +876,9 @@ export default function CustomerDetailPage() {
                           ))}
                           <DropdownMenuItem
                             disabled={createLeadLoading}
-                            onClick={async () => {
-                              setCreateLeadLoading(true);
-                              try {
-                                const newLead = await createLeadFromCustomer(customerId);
-                                toast.success('Pre-qualified lead created');
-                                fetchLeads();
-                                router.push(`/quotes/create?customer_id=${customerId}&lead_id=${newLead.id}`);
-                              } catch (err: any) {
-                                toast.error(err.response?.data?.detail || 'Failed to create lead');
-                              } finally {
-                                setCreateLeadLoading(false);
-                              }
-                            }}
+                            onClick={openNewQuoteLeadDialog}
                           >
-                            {createLeadLoading ? 'Creating...' : 'Create new lead (pre-qualified) and quote'}
+                            New lead and quote…
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -1315,6 +1340,66 @@ export default function CustomerDetailPage() {
           }}
         />
       )}
+
+      <Dialog open={newQuoteLeadDialogOpen} onOpenChange={setNewQuoteLeadDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>New lead and quote</DialogTitle>
+            <DialogDescription>
+              Choose where this enquiry came from and the product type before creating the lead and opening the quote.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Lead source</Label>
+              <Select
+                value={newQuoteLeadSource || undefined}
+                onValueChange={(v) => setNewQuoteLeadSource(v as LeadSource)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select lead source" />
+                </SelectTrigger>
+                <SelectContent>
+                  {STAFF_SELECTABLE_LEAD_SOURCES.map((source) => (
+                    <SelectItem key={source} value={source}>
+                      {source.replace('_', ' ')}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Lead type</Label>
+              <Select
+                value={newQuoteLeadType || undefined}
+                onValueChange={(v) => setNewQuoteLeadType(v as LeadType)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select lead type" />
+                </SelectTrigger>
+                <SelectContent>
+                  {SELECTABLE_LEAD_TYPES.map((type) => (
+                    <SelectItem key={type} value={type}>
+                      {type}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setNewQuoteLeadDialogOpen(false)} disabled={createLeadLoading}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreateLeadAndQuote}
+              disabled={createLeadLoading || !newQuoteLeadSource || !newQuoteLeadType}
+            >
+              {createLeadLoading ? 'Creating...' : 'Create lead and open quote'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
     </div>
   );

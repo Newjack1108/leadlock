@@ -315,6 +315,12 @@ def auto_transition_lead_status(
     
     if not allowed:
         return False
+
+    if new_status == LeadStatus.QUALIFIED:
+        from app.lead_qualify_rules import lead_fields_allow_qualify
+
+        if not lead_fields_allow_qualify(lead.lead_source, lead.lead_type):
+            return False
     
     old_status = lead.status
     lead.status = new_status

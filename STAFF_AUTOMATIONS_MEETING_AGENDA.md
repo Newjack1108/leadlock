@@ -31,7 +31,8 @@
 | Also automatic | Notes |
 |----------------|-------|
 | **Opportunity** created when qualified (if none exists) | Draft quote in Opportunities |
-| Manual entry / Closer-created lead | Starts **QUALIFIED** |
+| Closer-created lead (valid source + type) | Starts **QUALIFIED**; all qualifies need source (not Manual/Other) + type (Stables/Sheds/Cabins) |
+| Customer → **New lead and quote** | Modal for source + type; lead starts **NEW**, then qualify before quote |
 | SLA badges | Red (NEW >15 min), amber (no engagement >48h) — **visual only** |
 
 **Demo path:** Open **NEW** lead → log a note → refresh status → fill customer fields → show **QUALIFIED** + new opportunity.

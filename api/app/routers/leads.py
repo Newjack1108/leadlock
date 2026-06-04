@@ -57,6 +57,12 @@ from app.lead_delete import (
 )
 from app.constants import QUOTE_LIST_EXCLUDED_STATUSES, LIST_PAGE_SIZE_DEFAULT, LIST_PAGE_SIZE_MAX
 from app.handover_pdf_service import generate_lead_handover_pdf
+from app.lead_qualify_rules import (
+    lead_fields_allow_qualify,
+    qualify_fields_error,
+    staff_may_set_lead_source,
+    staff_may_set_lead_type,
+)
 from datetime import datetime
 import os
 from app.sms_service import normalize_phone
@@ -651,9 +657,11 @@ async def create_lead(
         lead = Lead(**lead_data.dict())
         lead.assigned_to_id = current_user.id
 
-        # Manual entry leads auto-qualify; closers' in-app creates always qualify so they appear
-        # on QUALIFIED+ tabs regardless of selected lead_source (e.g. REFERRAL).
-        if lead.lead_source == LeadSource.MANUAL_ENTRY or current_user.role == UserRole.CLOSER:
+        # Closers' in-app creates qualify when source and type are set (for QUALIFIED+ tabs).
+        if (
+            current_user.role == UserRole.CLOSER
+            and lead_fields_allow_qualify(lead.lead_source, lead.lead_type)
+        ):
             lead.status = LeadStatus.QUALIFIED
         initial_status = lead.status
 
@@ -760,6 +768,22 @@ async def update_lead(
     lead.archived_at = None
 
     update_data = lead_data.dict(exclude_unset=True)
+    if "lead_source" in update_data and not staff_may_set_lead_source(update_data["lead_source"]):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "error": "LEAD_SOURCE_NOT_ALLOWED",
+                "message": "Manual entry and Other are not valid lead sources.",
+            },
+        )
+    if "lead_type" in update_data and not staff_may_set_lead_type(update_data["lead_type"]):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "error": "LEAD_TYPE_NOT_ALLOWED",
+                "message": "Select a lead type: Stables, Sheds, or Cabins.",
+            },
+        )
     advert_profile_id = update_data.get("facebook_advert_profile_id")
     if advert_profile_id is not None:
         advert_statement = select(FacebookAdvertProfile).where(
@@ -825,6 +849,11 @@ async def transition_lead_status(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=error
         )
+
+    if transition.new_status == LeadStatus.QUALIFIED:
+        field_error = qualify_fields_error(lead.lead_source, lead.lead_type)
+        if field_error:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=field_error)
     
     old_status = lead.status
     lead.status = transition.new_status

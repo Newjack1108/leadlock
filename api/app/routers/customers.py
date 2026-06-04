@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from fastapi.responses import Response
 from sqlalchemy import and_, exists, func, true
 from sqlmodel import Session, select, or_
@@ -664,26 +664,39 @@ async def create_lead_from_customer(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
-    """Create a pre-qualified lead for an existing customer (e.g. for additional quoting)."""
+    """Create a new lead for an existing customer (NEW until qualified; source/type required)."""
     from app.routers.leads import enrich_lead_response
+    from app.lead_qualify_rules import lead_fields_allow_qualify, qualify_fields_error
 
     customer = session.exec(select(Customer).where(Customer.id == customer_id)).first()
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
 
     data = body or CustomerLeadCreate()
+    if data.lead_source is None or data.lead_type is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "error": "LEAD_FIELDS_REQUIRED",
+                "message": "lead_source and lead_type are required when creating a lead for a customer.",
+            },
+        )
+    field_error = qualify_fields_error(data.lead_source, data.lead_type)
+    if field_error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=field_error)
+
     lead = Lead(
         name=customer.name,
         email=customer.email,
         wrong_email_address=bool(getattr(customer, "wrong_email_address", False)),
         phone=customer.phone,
         postcode=customer.postcode,
-        status=LeadStatus.QUALIFIED,
+        status=LeadStatus.NEW,
         customer_id=customer_id,
         description=data.description,
         product_interest=data.product_interest,
-        lead_type=data.lead_type or LeadType.UNKNOWN,
-        lead_source=data.lead_source or LeadSource.MANUAL_ENTRY,
+        lead_type=data.lead_type,
+        lead_source=data.lead_source,
         scope_notes=data.scope_notes,
         assigned_to_id=current_user.id,
     )
@@ -694,7 +707,7 @@ async def create_lead_from_customer(
     from app.models import StatusHistory
     status_history = StatusHistory(
         lead_id=lead.id,
-        new_status=LeadStatus.QUALIFIED,
+        new_status=LeadStatus.NEW,
         changed_by_id=current_user.id
     )
     session.add(status_history)

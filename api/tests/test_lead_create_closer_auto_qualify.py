@@ -1,4 +1,4 @@
-"""Closer POST /api/leads auto-qualifies regardless of lead_source (e.g. REFERRAL)."""
+"""Closer POST /api/leads auto-qualifies when lead source and type allow qualify."""
 import os
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
@@ -16,6 +16,7 @@ from app.models import (
     CustomerOutreachChannel,
     LeadSource,
     LeadStatus,
+    LeadType,
     ReminderPriority,
     ReminderRule,
     SmsTemplate,
@@ -92,6 +93,7 @@ def test_closer_create_lead_referral_is_qualified_with_customer(api_client, sqli
         json={
             "name": "Walk-in Pat",
             "lead_source": LeadSource.REFERRAL.value,
+            "lead_type": LeadType.STABLES.value,
             "phone": "+447700900001",
         },
     )
