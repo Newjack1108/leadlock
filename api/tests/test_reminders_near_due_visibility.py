@@ -117,6 +117,57 @@ def test_get_reminders_hides_far_future_user_tasks(engine):
     assert "Non-task reminder" in titles
 
 
+def test_stale_summary_matches_active_reminder_visibility(engine):
+    today = date_type.today()
+    with Session(engine) as session:
+        user = User(
+            email="reminders-summary@example.com",
+            hashed_password="dummy",
+            full_name="Summary User",
+            role=UserRole.DIRECTOR,
+        )
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+
+        session.add(
+            Reminder(
+                reminder_type=ReminderType.USER_TASK,
+                assigned_to_id=user.id,
+                created_by_id=user.id,
+                priority=ReminderPriority.MEDIUM,
+                title="Far future task",
+                message="Excluded from summary",
+                suggested_action=SuggestedAction.FOLLOW_UP,
+                days_stale=0,
+                due_date=today + timedelta(days=2),
+            )
+        )
+        session.add(
+            Reminder(
+                reminder_type=ReminderType.LEAD_STALE,
+                assigned_to_id=user.id,
+                created_by_id=user.id,
+                priority=ReminderPriority.HIGH,
+                title="Stale lead",
+                message="Counted",
+                suggested_action=SuggestedAction.REVIEW_QUOTE,
+                days_stale=4,
+            )
+        )
+        session.commit()
+        user_ctx = SimpleNamespace(id=user.id, role=user.role, full_name=user.full_name)
+
+    app = _make_test_app(engine, user_ctx)
+    client = TestClient(app)
+    list_res = client.get("/api/reminders")
+    summary_res = client.get("/api/reminders/stale-summary")
+    assert list_res.status_code == 200
+    assert summary_res.status_code == 200
+    assert len(list_res.json()) == 1
+    assert summary_res.json()["total_reminders"] == 1
+
+
 def test_get_done_reminders_keeps_far_future_user_tasks(engine):
     today = date_type.today()
     with Session(engine) as session:

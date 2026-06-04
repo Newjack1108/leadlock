@@ -1620,10 +1620,20 @@ let staleSummaryInFlight: Promise<StaleSummary> | null = null;
 let staleSummaryCache: { data: StaleSummary; expiresAt: number } | null = null;
 const STALE_SUMMARY_TTL_MS = 12_000;
 
+/** Dispatched after reminder mutations so the header badge updates without a route change. */
+export const LEADLOCK_REFRESH_REMINDERS_EVENT = 'leadlock:refreshReminderCounts';
+
+export function dispatchRefreshReminderCounts(): void {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(LEADLOCK_REFRESH_REMINDERS_EVENT));
+  }
+}
+
 /** Clear client cache after mutations so header counts refresh immediately. */
 export const invalidateStaleSummaryCache = () => {
   staleSummaryCache = null;
   staleSummaryInFlight = null;
+  dispatchRefreshReminderCounts();
 };
 
 export const getStaleSummary = async (): Promise<StaleSummary> => {

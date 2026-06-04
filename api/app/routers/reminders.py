@@ -62,6 +62,15 @@ _QUOTE_CHECK_TYPES = frozenset({
 _USER_TASK_NEAR_DUE_DAYS = 1
 
 
+def _user_task_near_due_filter(today: date_type):
+    """Match active reminder lists: hide user tasks until due within one day."""
+    near_due_cutoff = today + timedelta(days=_USER_TASK_NEAR_DUE_DAYS)
+    return or_(
+        Reminder.reminder_type != ReminderType.USER_TASK,
+        Reminder.due_date <= near_due_cutoff,
+    )
+
+
 def _weekly_plan_run_to_response(run: WeeklyPlanRun) -> WeeklyPlanRunResponse:
     return WeeklyPlanRunResponse(
         id=run.id,
@@ -333,13 +342,7 @@ def _build_reminders_statement(
 
     # Keep user tasks out of active reminder lists until they are near due.
     if done is not True and dismissed is False:
-        near_due_cutoff = today + timedelta(days=_USER_TASK_NEAR_DUE_DAYS)
-        statement = statement.where(
-            or_(
-                Reminder.reminder_type != ReminderType.USER_TASK,
-                Reminder.due_date <= near_due_cutoff,
-            )
-        )
+        statement = statement.where(_user_task_near_due_filter(today))
     return statement
 
 
@@ -718,10 +721,12 @@ async def get_stale_summary(
     current_user: User = Depends(get_current_user)
 ):
     """Get summary of stale items and reminders (per role; Directors see all)."""
+    today = date_type.today()
     visibility = _reminder_visibility_filter(current_user)
     base_conds = [
         Reminder.dismissed_at.is_(None),
         Reminder.acted_upon_at.is_(None),
+        _user_task_near_due_filter(today),
     ]
     if visibility is not None:
         base_conds.append(visibility)

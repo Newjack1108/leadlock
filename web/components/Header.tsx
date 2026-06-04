@@ -37,6 +37,7 @@ import {
   getUnreadConfiguratorSubmissionsCount,
   LEADLOCK_REFRESH_CONFIGURATOR_SUBMISSIONS_EVENT,
   LEADLOCK_REFRESH_UNREAD_EVENT,
+  LEADLOCK_REFRESH_REMINDERS_EVENT,
 } from '@/lib/api';
 import {
   DropdownMenu,
@@ -176,6 +177,14 @@ export default function Header() {
     };
     window.addEventListener(LEADLOCK_REFRESH_UNREAD_EVENT, onRefreshUnread);
     return () => window.removeEventListener(LEADLOCK_REFRESH_UNREAD_EVENT, onRefreshUnread);
+  }, []);
+
+  useEffect(() => {
+    const onRefreshReminders = () => {
+      void fetchReminderCount();
+    };
+    window.addEventListener(LEADLOCK_REFRESH_REMINDERS_EVENT, onRefreshReminders);
+    return () => window.removeEventListener(LEADLOCK_REFRESH_REMINDERS_EVENT, onRefreshReminders);
   }, []);
 
   useEffect(() => {
