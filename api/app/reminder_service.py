@@ -10,6 +10,11 @@ from app.models import (
     AutomatedReminderCleanupSuppression, ReminderCleanupTargetKind,
 )
 from app.constants import QUOTE_LIST_EXCLUDED_STATUSES
+from app.stale_reference_service import (
+    resolve_stale_reference_for_lead,
+    resolve_stale_reference_for_quote,
+    resolve_stale_reference_for_opportunity,
+)
 
 
 def get_reminder_cleanup_target(
@@ -452,9 +457,12 @@ def generate_reminders(session: Session, user_id: Optional[int] = None) -> int:
                 continue  # Don't create or update; reminder was completed or dismissed
             # Update existing reminder if days_stale increased
             if days_stale > existing.days_stale:
+                ref_at, ref_label = resolve_stale_reference_for_lead(lead, rule, session)
                 existing.days_stale = days_stale
                 existing.priority = calculate_priority(days_stale, rule.priority)
                 existing.message = f"Lead has been stale for {days_stale} days"
+                existing.stale_reference_at = ref_at
+                existing.stale_source_label = ref_label
                 session.add(existing)
             continue
         
@@ -468,6 +476,7 @@ def generate_reminders(session: Session, user_id: Optional[int] = None) -> int:
         
         # Calculate priority
         priority = calculate_priority(days_stale, rule.priority)
+        ref_at, ref_label = resolve_stale_reference_for_lead(lead, rule, session)
         
         # Create reminder
         reminder = Reminder(
@@ -479,7 +488,9 @@ def generate_reminders(session: Session, user_id: Optional[int] = None) -> int:
             title=f"Stale Lead: {lead.name}",
             message=f"Lead '{lead.name}' has been stale for {days_stale} days (Status: {lead.status.value})",
             suggested_action=suggested_action,
-            days_stale=days_stale
+            days_stale=days_stale,
+            stale_reference_at=ref_at,
+            stale_source_label=ref_label,
         )
         session.add(reminder)
         count += 1
@@ -515,6 +526,7 @@ def generate_reminders(session: Session, user_id: Optional[int] = None) -> int:
                 continue  # Don't create or update; reminder was completed or dismissed
             # Update existing reminder if days_stale increased
             if days_stale > existing.days_stale:
+                ref_at, ref_label = resolve_stale_reference_for_quote(quote, rule)
                 existing.days_stale = days_stale
                 existing.priority = calculate_priority(days_stale, rule.priority)
                 if reminder_type == ReminderType.QUOTE_EXPIRED:
@@ -525,6 +537,8 @@ def generate_reminders(session: Session, user_id: Optional[int] = None) -> int:
                     existing.message = f"Quote {quote.quote_number} opened but no reply for {days_stale} days. Schedule a call."
                 else:
                     existing.message = f"Quote {quote.quote_number} has been stale for {days_stale} days"
+                existing.stale_reference_at = ref_at
+                existing.stale_source_label = ref_label
                 session.add(existing)
             continue
 
@@ -560,6 +574,7 @@ def generate_reminders(session: Session, user_id: Optional[int] = None) -> int:
             title = f"Stale Quote: {quote.quote_number}"
             message = f"Quote {quote.quote_number} has been stale for {days_stale} days (Status: {quote.status.value})"
 
+        ref_at, ref_label = resolve_stale_reference_for_quote(quote, rule)
         reminder = Reminder(
             reminder_type=reminder_type,
             quote_id=quote.id,
@@ -569,7 +584,9 @@ def generate_reminders(session: Session, user_id: Optional[int] = None) -> int:
             title=title,
             message=message,
             suggested_action=suggested_action,
-            days_stale=days_stale
+            days_stale=days_stale,
+            stale_reference_at=ref_at,
+            stale_source_label=ref_label,
         )
         session.add(reminder)
         count += 1
@@ -626,9 +643,12 @@ def generate_reminders(session: Session, user_id: Optional[int] = None) -> int:
         if existing:
             # Update existing reminder
             if days_overdue > existing.days_stale:
+                ref_at, ref_label = resolve_stale_reference_for_opportunity(opp, reason, session)
                 existing.days_stale = days_overdue
                 existing.priority = priority
                 existing.message = message
+                existing.stale_reference_at = ref_at
+                existing.stale_source_label = ref_label
                 session.add(existing)
             continue
         
@@ -640,6 +660,7 @@ def generate_reminders(session: Session, user_id: Optional[int] = None) -> int:
         # Get suggested action
         suggested_action = get_suggested_action_for_opportunity(opp, reason, days_overdue)
         
+        ref_at, ref_label = resolve_stale_reference_for_opportunity(opp, reason, session)
         # Create reminder
         reminder = Reminder(
             reminder_type=reminder_type,
@@ -650,7 +671,9 @@ def generate_reminders(session: Session, user_id: Optional[int] = None) -> int:
             title=title,
             message=message,
             suggested_action=suggested_action,
-            days_stale=days_overdue
+            days_stale=days_overdue,
+            stale_reference_at=ref_at,
+            stale_source_label=ref_label,
         )
         session.add(reminder)
         count += 1

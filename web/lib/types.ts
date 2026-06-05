@@ -1587,6 +1587,8 @@ export interface Reminder {
   message: string;
   suggested_action: SuggestedAction;
   days_stale: number;
+  stale_reference_at?: string | null;
+  stale_source_label?: string | null;
   created_at: string;
   dismissed_at?: string;
   acted_upon_at?: string;
@@ -1750,6 +1752,9 @@ export interface WeeklyPlanItem {
   auto_eligible: boolean;
   suggested_message?: string | null;
   due_date?: string | null;
+  days_stale?: number | null;
+  stale_reference_at?: string | null;
+  stale_source_label?: string | null;
   executed_at?: string | null;
   execution_error?: string | null;
   outcome_result?: string | null;

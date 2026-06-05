@@ -1094,6 +1094,8 @@ class Reminder(SQLModel, table=True):
     message: str
     suggested_action: SuggestedAction
     days_stale: int
+    stale_reference_at: Optional[datetime] = None
+    stale_source_label: Optional[str] = None
     due_date: Optional[date] = Field(default=None)  # USER_TASK / optional MANUAL: drives overdue
     created_by_id: Optional[int] = Field(default=None, foreign_key="user.id")  # Who created USER_TASK
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -1258,6 +1260,9 @@ class WeeklyPlanItem(SQLModel, table=True):
     auto_eligible: bool = Field(default=False)
     suggested_message: Optional[str] = None
     due_date: Optional[date] = None
+    days_stale: Optional[int] = None
+    stale_reference_at: Optional[datetime] = None
+    stale_source_label: Optional[str] = None
     executed_at: Optional[datetime] = None
     execution_error: Optional[str] = None
     outcome_result: Optional[str] = None

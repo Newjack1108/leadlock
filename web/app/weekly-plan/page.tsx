@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import Header from '@/components/Header';
 import { Button } from '@/components/ui/button';
@@ -22,7 +23,7 @@ import ComposeEmailDialog from '@/components/ComposeEmailDialog';
 import ComposeSmsDialog from '@/components/ComposeSmsDialog';
 import { Badge } from '@/components/ui/badge';
 import { Customer, WeeklyPlanItem, WeeklyPlanItemStatus, WeeklyPlanListResponse } from '@/lib/types';
-import { CheckCircle2, Mail, MessageSquare, RefreshCw, XCircle } from 'lucide-react';
+import { CheckCircle2, Mail, MessageSquare, RefreshCw, User, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   LineChart,
@@ -689,6 +690,17 @@ export default function WeeklyPlanPage() {
                     Likelihood {Number(item.order_likelihood_score || 0).toFixed(1)} (conf {Number(item.order_likelihood_confidence || 0).toFixed(2)})
                   </div>
                   <div className="text-xs text-muted-foreground">{(item.reason_codes || []).join(', ')}</div>
+                  {item.stale_source_label && item.stale_reference_at ? (
+                    <div className="text-xs text-muted-foreground">
+                      {item.days_stale != null ? `${item.days_stale}d since ` : 'Since '}
+                      {item.stale_source_label} ·{' '}
+                      {new Date(item.stale_reference_at).toLocaleDateString('en-GB', {
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric',
+                      })}
+                    </div>
+                  ) : null}
                   {(item.order_likelihood_reasons || []).length > 0 ? (
                     <div className="text-xs text-muted-foreground">AI/heuristic: {(item.order_likelihood_reasons || []).join(', ')}</div>
                   ) : null}
@@ -724,6 +736,17 @@ export default function WeeklyPlanPage() {
                   <div className="flex flex-wrap gap-2">
                     {item.customer_id != null ? (
                       <>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          asChild
+                          title={item.customer_name ? `Open ${item.customer_name}` : 'Open customer profile'}
+                        >
+                          <Link href={`/customers/${item.customer_id}`}>
+                            <User className="h-4 w-4 mr-1" />
+                            Customer profile
+                          </Link>
+                        </Button>
                         <Button
                           size="sm"
                           variant="outline"

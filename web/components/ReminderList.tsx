@@ -103,6 +103,16 @@ export default function ReminderList({
     return d < today;
   };
 
+  const formatStaleReferenceDate = (iso: string) =>
+    new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+
+  const staleSourceLine = (r: Reminder): string | null => {
+    if (r.stale_source_label && r.stale_reference_at) {
+      return `${r.stale_source_label} · ${formatStaleReferenceDate(r.stale_reference_at)}`;
+    }
+    return null;
+  };
+
   const staleLabel = (r: Reminder) => {
     if (r.reminder_type === ReminderType.USER_TASK && r.due_date) {
       const due = new Date(`${r.due_date}T12:00:00`);
@@ -383,6 +393,7 @@ export default function ReminderList({
                       )}
                       <span className={isTaskOverdue(reminder) ? 'font-medium text-destructive' : ''}>
                         {staleLabel(reminder)}
+                        {staleSourceLine(reminder) ? ` · ${staleSourceLine(reminder)}` : ''}
                       </span>
                       {isDoneMode && reminder.acted_upon_at && (
                         <span>

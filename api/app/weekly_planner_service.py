@@ -47,6 +47,11 @@ from app.reminder_service import (
 )
 from app.sms_service import normalize_phone, send_sms
 from app.system_user_service import get_system_user_id
+from app.stale_reference_service import (
+    resolve_stale_reference_for_lead,
+    resolve_stale_reference_for_quote,
+    resolve_stale_reference_for_opportunity,
+)
 
 POSITIVE_BUY_SIGNALS = (
     "ready to order",
@@ -599,6 +604,7 @@ def generate_weekly_plan(
                 reasons=likelihood_reasons,
             )
         final_score = _blend_final_priority(min(Decimal("100"), score), likelihood_score)
+        lead_ref_at, lead_ref_label = resolve_stale_reference_for_lead(lead, rule, session)
         plan_items.append(
             WeeklyPlanItem(
                 plan_run_id=run.id,
@@ -625,6 +631,9 @@ def generate_weekly_plan(
                     fallback_customer_name=customer_name,
                 ),
                 due_date=datetime.utcnow().date() + timedelta(days=2),
+                days_stale=days_stale,
+                stale_reference_at=lead_ref_at,
+                stale_source_label=lead_ref_label,
             )
         )
 
@@ -682,6 +691,7 @@ def generate_weekly_plan(
                 reasons=likelihood_reasons,
             )
         final_score = _blend_final_priority(min(Decimal("100"), score), likelihood_score)
+        quote_ref_at, quote_ref_label = resolve_stale_reference_for_quote(quote, rule)
         plan_items.append(
             WeeklyPlanItem(
                 plan_run_id=run.id,
@@ -709,6 +719,9 @@ def generate_weekly_plan(
                     fallback_customer_name=customer_name,
                 ),
                 due_date=datetime.utcnow().date() + timedelta(days=2),
+                days_stale=days_stale,
+                stale_reference_at=quote_ref_at,
+                stale_source_label=quote_ref_label,
             )
         )
         if quote.customer_id is not None:
@@ -762,6 +775,7 @@ def generate_weekly_plan(
                 reasons=likelihood_reasons,
             )
         final_score = _blend_final_priority(min(Decimal("100"), score), likelihood_score)
+        opp_ref_at, opp_ref_label = resolve_stale_reference_for_opportunity(opp, reason, session)
         plan_items.append(
             WeeklyPlanItem(
                 plan_run_id=run.id,
@@ -789,6 +803,9 @@ def generate_weekly_plan(
                     fallback_customer_name=customer_name,
                 ),
                 due_date=datetime.utcnow().date() + timedelta(days=1),
+                days_stale=days_overdue,
+                stale_reference_at=opp_ref_at,
+                stale_source_label=opp_ref_label,
             )
         )
         if opp.customer_id is not None:

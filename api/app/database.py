@@ -2856,6 +2856,37 @@ def create_db_and_tables():
                     error_str = str(e).lower()
                     if "already exists" not in error_str and "duplicate" not in error_str:
                         print(f"Warning adding order_id to reminder: {e}", file=sys.stderr, flush=True)
+            reminder_columns = [col["name"] for col in inspector.get_columns("reminder")]
+            for col_name, col_type in (
+                ("stale_reference_at", "TIMESTAMP"),
+                ("stale_source_label", "VARCHAR(64)"),
+            ):
+                if col_name not in reminder_columns:
+                    try:
+                        with engine.begin() as conn:
+                            conn.execute(text(f"ALTER TABLE reminder ADD COLUMN {col_name} {col_type}"))
+                        print(f"Added {col_name} to reminder", file=sys.stderr, flush=True)
+                    except Exception as e:
+                        error_str = str(e).lower()
+                        if "already exists" not in error_str and "duplicate" not in error_str:
+                            print(f"Warning adding {col_name} to reminder: {e}", file=sys.stderr, flush=True)
+
+        if inspector.has_table("weeklyplanitem"):
+            wp_columns = [col["name"] for col in inspector.get_columns("weeklyplanitem")]
+            for col_name, col_type in (
+                ("days_stale", "INTEGER"),
+                ("stale_reference_at", "TIMESTAMP"),
+                ("stale_source_label", "VARCHAR(64)"),
+            ):
+                if col_name not in wp_columns:
+                    try:
+                        with engine.begin() as conn:
+                            conn.execute(text(f"ALTER TABLE weeklyplanitem ADD COLUMN {col_name} {col_type}"))
+                        print(f"Added {col_name} to weeklyplanitem", file=sys.stderr, flush=True)
+                    except Exception as e:
+                        error_str = str(e).lower()
+                        if "already exists" not in error_str and "duplicate" not in error_str:
+                            print(f"Warning adding {col_name} to weeklyplanitem: {e}", file=sys.stderr, flush=True)
 
         # Facebook advert schema: handled by _ensure_facebook_advert_schema() immediately after create_all.
 

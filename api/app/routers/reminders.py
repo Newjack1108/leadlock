@@ -97,6 +97,9 @@ def _weekly_plan_item_to_response(
     lead = lead_by_id.get(item.lead_id) if item.lead_id else None
     quote = quote_by_id.get(item.quote_id) if item.quote_id else None
     customer = customer_by_id.get(item.customer_id) if item.customer_id else None
+    from app.stale_reference_service import enrich_weekly_plan_item_stale_fields
+
+    stale_ref_at, stale_label, days_stale = enrich_weekly_plan_item_stale_fields(item, session)
     return WeeklyPlanItemResponse(
         id=item.id,
         plan_run_id=item.plan_run_id,
@@ -130,6 +133,9 @@ def _weekly_plan_item_to_response(
         auto_eligible=item.auto_eligible,
         suggested_message=item.suggested_message,
         due_date=item.due_date,
+        days_stale=days_stale,
+        stale_reference_at=stale_ref_at,
+        stale_source_label=stale_label or None,
         executed_at=item.executed_at,
         execution_error=item.execution_error,
         outcome_result=item.outcome_result,
@@ -494,6 +500,10 @@ def _reminder_to_response(
         reminder, outreach_by_target
     )
 
+    from app.stale_reference_service import enrich_reminder_stale_fields
+
+    stale_ref_at, stale_label = enrich_reminder_stale_fields(reminder, session)
+
     return ReminderResponse(
         id=reminder.id,
         reminder_type=reminder.reminder_type,
@@ -508,6 +518,8 @@ def _reminder_to_response(
         message=reminder.message,
         suggested_action=reminder.suggested_action,
         days_stale=eff_days,
+        stale_reference_at=stale_ref_at,
+        stale_source_label=stale_label or None,
         created_at=reminder.created_at,
         dismissed_at=reminder.dismissed_at,
         acted_upon_at=reminder.acted_upon_at,

@@ -38,6 +38,7 @@ from app.schemas import CustomerHistoryEventType
 from app.sms_service import send_sms, normalize_phone, is_unsubscribed_recipient_error, resolve_sms_to_phone
 from app.sms_template_service import render_sms_template
 from app.system_user_service import get_system_user_id
+from app.stale_reference_service import resolve_stale_reference_for_order
 
 
 def build_review_template_context(
@@ -183,6 +184,7 @@ def create_review_reminder(order: Order, session: Session) -> Optional[Reminder]
         days_since = max(0, (datetime.utcnow() - order.installation_completed_at).days)
 
     links_block = _format_review_links_message(settings)
+    ref_at, ref_label = resolve_stale_reference_for_order(order)
     reminder = Reminder(
         reminder_type=ReminderType.REQUEST_REVIEW,
         order_id=order.id,
@@ -197,6 +199,8 @@ def create_review_reminder(order: Order, session: Session) -> Optional[Reminder]
         ),
         suggested_action=SuggestedAction.REQUEST_REVIEW,
         days_stale=days_since,
+        stale_reference_at=ref_at,
+        stale_source_label=ref_label,
     )
     session.add(reminder)
     session.flush()

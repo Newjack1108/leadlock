@@ -2103,6 +2103,8 @@ class ReminderResponse(BaseModel):
     message: str
     suggested_action: SuggestedAction
     days_stale: int
+    stale_reference_at: Optional[datetime] = None
+    stale_source_label: Optional[str] = None
     created_at: datetime
     dismissed_at: Optional[datetime]
     acted_upon_at: Optional[datetime]
@@ -2285,6 +2287,9 @@ class WeeklyPlanItemResponse(BaseModel):
     auto_eligible: bool
     suggested_message: Optional[str] = None
     due_date: Optional[date] = None
+    days_stale: Optional[int] = None
+    stale_reference_at: Optional[datetime] = None
+    stale_source_label: Optional[str] = None
     executed_at: Optional[datetime] = None
     execution_error: Optional[str] = None
     outcome_result: Optional[str] = None
