@@ -21,12 +21,14 @@ from app.review_prize_draw_service import (
     list_entries,
     pick_random_winner,
     reject_entry,
+    reset_winner_for_month,
 )
 from app.schemas import (
     ReviewPrizeDrawEntriesResponse,
     ReviewPrizeDrawEntryListItem,
     ReviewPrizeDrawPickWinnerRequest,
     ReviewPrizeDrawRejectRequest,
+    ReviewPrizeDrawResetWinnerResponse,
     ReviewPrizeDrawWinnerResponse,
 )
 
@@ -154,3 +156,16 @@ async def pick_prize_draw_winner(
     session.commit()
     session.refresh(winner)
     return _winner_to_response(winner, session)
+
+
+@router.post("/reset-winner", response_model=ReviewPrizeDrawResetWinnerResponse)
+async def reset_prize_draw_winner(
+    body: ReviewPrizeDrawPickWinnerRequest,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_role([UserRole.DIRECTOR])),
+):
+    success, err = reset_winner_for_month(body.month, current_user, session)
+    if not success:
+        raise HTTPException(status_code=400, detail=err)
+    session.commit()
+    return ReviewPrizeDrawResetWinnerResponse(success=True, month=body.month)

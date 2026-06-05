@@ -142,6 +142,7 @@ const historyIcons: Record<CustomerHistoryEventType, any> = {
   REVIEW_PRIZE_DRAW_APPROVED: CheckCircle,
   REVIEW_PRIZE_DRAW_REJECTED: XCircle,
   REVIEW_PRIZE_DRAW_WINNER: Trophy,
+  REVIEW_PRIZE_DRAW_WINNER_RESET: Trophy,
 };
 
 const historyColors: Record<CustomerHistoryEventType, string> = {
@@ -175,6 +176,7 @@ const historyColors: Record<CustomerHistoryEventType, string> = {
   REVIEW_PRIZE_DRAW_APPROVED: 'text-green-600',
   REVIEW_PRIZE_DRAW_REJECTED: 'text-red-600',
   REVIEW_PRIZE_DRAW_WINNER: 'text-amber-600',
+  REVIEW_PRIZE_DRAW_WINNER_RESET: 'text-muted-foreground',
 };
 
 export default function CustomerDetailPage() {

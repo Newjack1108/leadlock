@@ -14,6 +14,7 @@ import {
   getReviewPrizeDrawWinner,
   pickReviewPrizeDrawWinner,
   rejectReviewPrizeDrawEntry,
+  resetReviewPrizeDrawWinner,
 } from '@/lib/api';
 import { ReviewPrizeDrawEntryListItem, ReviewPrizeDrawWinner } from '@/lib/types';
 import { Gift, Trophy } from 'lucide-react';
@@ -34,6 +35,7 @@ export default function ReviewPrizeDrawPage() {
   const [winner, setWinner] = useState<ReviewPrizeDrawWinner | null>(null);
   const [loading, setLoading] = useState(true);
   const [picking, setPicking] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [busyId, setBusyId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
@@ -119,6 +121,29 @@ export default function ReviewPrizeDrawPage() {
     }
   };
 
+  const handleResetWinner = async () => {
+    const confirmed = window.confirm(
+      `Clear the picked winner for ${month}? Approved entries will stay eligible for a new draw.`
+    );
+    if (!confirmed) return;
+
+    try {
+      setResetting(true);
+      await resetReviewPrizeDrawWinner(month);
+      setWinner(null);
+      toast.success(`Draw reset for ${month}`);
+      await load();
+    } catch (error: unknown) {
+      const detail =
+        error && typeof error === 'object' && 'response' in error
+          ? (error as { response?: { data?: { detail?: string } } }).response?.data?.detail
+          : undefined;
+      toast.error(detail || 'Could not reset draw');
+    } finally {
+      setResetting(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -192,12 +217,23 @@ export default function ReviewPrizeDrawPage() {
             ) : (
               <p className="text-sm text-muted-foreground">No winner picked yet for this month.</p>
             )}
-            <Button
-              onClick={() => void handlePickWinner()}
-              disabled={picking || !!winner || approvedCount === 0}
-            >
-              {picking ? 'Picking…' : 'Pick random winner'}
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                onClick={() => void handlePickWinner()}
+                disabled={picking || resetting || !!winner || approvedCount === 0}
+              >
+                {picking ? 'Picking…' : 'Pick random winner'}
+              </Button>
+              {winner ? (
+                <Button
+                  variant="outline"
+                  onClick={() => void handleResetWinner()}
+                  disabled={picking || resetting}
+                >
+                  {resetting ? 'Resetting…' : 'Reset draw'}
+                </Button>
+              ) : null}
+            </div>
             {approvedCount === 0 && !winner ? (
               <p className="text-xs text-muted-foreground">No approved entries for {month}.</p>
             ) : null}

@@ -24,6 +24,7 @@ from app.review_prize_draw_service import (
     get_winner_for_month,
     pick_random_winner,
     reject_entry,
+    reset_winner_for_month,
     submit_prize_draw_entry,
 )
 from app.review_request_service import build_review_template_context
@@ -167,6 +168,46 @@ def test_reject_allows_resubmit(sqlite_engine):
         session.commit()
         assert err is None
         assert updated.status == ReviewPrizeDrawEntryStatus.PENDING
+
+
+def test_reset_winner_for_month_clears_and_allows_repick(sqlite_engine):
+    with Session(sqlite_engine) as session:
+        settings, order = _seed(session)
+        user = session.get(User, settings.updated_by_id)
+        entry = ensure_prize_draw_entry(order, session)
+        submit_prize_draw_entry(entry.access_token, ["GOOGLE", "FACEBOOK"], session)
+        approve_entry(entry.id, user, session)
+        session.commit()
+
+        month = datetime.utcnow().strftime("%Y-%m")
+        first, err = pick_random_winner(month, user, session)
+        session.commit()
+        assert err is None
+        assert first is not None
+
+        success, reset_err = reset_winner_for_month(month, user, session)
+        session.commit()
+        assert success is True
+        assert reset_err is None
+        assert get_winner_for_month(session, month) is None
+
+        second, err2 = pick_random_winner(month, user, session)
+        session.commit()
+        assert err2 is None
+        assert second is not None
+        assert second.entry_id == entry.id
+        assert get_winner_for_month(session, month) is not None
+
+
+def test_reset_winner_for_month_without_winner_returns_error(sqlite_engine):
+    with Session(sqlite_engine) as session:
+        settings, _order = _seed(session)
+        user = session.get(User, settings.updated_by_id)
+        month = datetime.utcnow().strftime("%Y-%m")
+
+        success, err = reset_winner_for_month(month, user, session)
+        assert success is False
+        assert "no winner" in (err or "").lower()
 
 
 def test_pick_random_winner_idempotent(sqlite_engine):

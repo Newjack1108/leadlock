@@ -307,6 +307,38 @@ def pick_random_winner(
     return winner, None
 
 
+def reset_winner_for_month(
+    month: str,
+    user: User,
+    session: Session,
+) -> Tuple[bool, Optional[str]]:
+    """Clear the picked winner for a month so the draw can be run again."""
+    winner = get_winner_for_month(session, month)
+    if not winner:
+        return False, "No winner picked for this month"
+
+    entry = session.get(ReviewPrizeDrawEntry, winner.entry_id)
+    order = session.get(Order, entry.order_id) if entry else None
+    customer = session.get(Customer, entry.customer_id) if entry else None
+    previous_entry_id = winner.entry_id
+    session.delete(winner)
+
+    if order:
+        record_order_audit_event(
+            session,
+            event_type=CustomerHistoryEventType.REVIEW_PRIZE_DRAW_WINNER_RESET.value,
+            title="Review Prize Draw Reset",
+            description=(
+                f"{month} review prize draw reset"
+                f"{f' (previous winner: {customer.name})' if customer else ''}"
+            ),
+            order=order,
+            metadata={"month": month, "previous_entry_id": previous_entry_id},
+            created_by_id=user.id,
+        )
+    return True, None
+
+
 def build_prize_draw_entry_response(
     entry: Optional[ReviewPrizeDrawEntry],
 ) -> Optional[dict]:

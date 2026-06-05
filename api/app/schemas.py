@@ -2440,6 +2440,7 @@ class CustomerHistoryEventType(str, Enum):
     REVIEW_PRIZE_DRAW_APPROVED = "REVIEW_PRIZE_DRAW_APPROVED"
     REVIEW_PRIZE_DRAW_REJECTED = "REVIEW_PRIZE_DRAW_REJECTED"
     REVIEW_PRIZE_DRAW_WINNER = "REVIEW_PRIZE_DRAW_WINNER"
+    REVIEW_PRIZE_DRAW_WINNER_RESET = "REVIEW_PRIZE_DRAW_WINNER_RESET"
 
 
 class ReviewPrizeDrawEntryListItem(BaseModel):
@@ -2467,6 +2468,11 @@ class ReviewPrizeDrawRejectRequest(BaseModel):
 
 
 class ReviewPrizeDrawPickWinnerRequest(BaseModel):
+    month: str
+
+
+class ReviewPrizeDrawResetWinnerResponse(BaseModel):
+    success: bool
     month: str
 
 

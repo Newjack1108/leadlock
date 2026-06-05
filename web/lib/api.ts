@@ -1391,6 +1391,11 @@ export const pickReviewPrizeDrawWinner = async (month: string) => {
   return response.data as import('@/lib/types').ReviewPrizeDrawWinner;
 };
 
+export const resetReviewPrizeDrawWinner = async (month: string) => {
+  const response = await api.post('/api/review-prize-draw/reset-winner', { month });
+  return response.data as { success: boolean; month: string };
+};
+
 export const updateDraftQuote = async (quoteId: number, quoteData: {
   valid_until?: string;
   terms_and_conditions?: string;
