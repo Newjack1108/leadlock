@@ -106,6 +106,8 @@ def _weekly_plan_item_to_response(
         assigned_to_id=item.assigned_to_id,
         assigned_to_name=assignee_name,
         customer_name=customer.name if customer else None,
+        customer_email=customer.email if customer else None,
+        customer_phone=customer.phone if customer else None,
         quote_number=quote.quote_number if quote else None,
         lead_name=lead.name if lead else None,
         priority_score=item.priority_score,
@@ -1066,6 +1068,7 @@ async def update_weekly_plan_item_outcome(
         status=payload.status,
         outcome_result=payload.outcome_result,
         response_received=payload.response_received,
+        suggested_message=payload.suggested_message,
     )
     if not item:
         raise HTTPException(status_code=404, detail="Weekly plan item not found")

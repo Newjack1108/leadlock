@@ -2232,6 +2232,8 @@ class WeeklyPlanItemResponse(BaseModel):
     assigned_to_id: Optional[int] = None
     assigned_to_name: Optional[str] = None
     customer_name: Optional[str] = None
+    customer_email: Optional[str] = None
+    customer_phone: Optional[str] = None
     quote_number: Optional[str] = None
     lead_name: Optional[str] = None
     priority_score: Decimal
@@ -2260,6 +2262,7 @@ class WeeklyPlanItemOutcomeUpdate(BaseModel):
     status: Optional[WeeklyPlanItemStatus] = None
     outcome_result: Optional[str] = None
     response_received: Optional[bool] = None
+    suggested_message: Optional[str] = None
 
 
 class WeeklyPlanListResponse(BaseModel):

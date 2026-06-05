@@ -922,6 +922,7 @@ def mark_plan_item_outcome(
     status: Optional[WeeklyPlanItemStatus] = None,
     outcome_result: Optional[str] = None,
     response_received: Optional[bool] = None,
+    suggested_message: Optional[str] = None,
 ) -> Optional[WeeklyPlanItem]:
     item = session.get(WeeklyPlanItem, item_id)
     if not item:
@@ -932,6 +933,8 @@ def mark_plan_item_outcome(
         item.outcome_result = outcome_result
     if response_received is not None:
         item.response_received = response_received
+    if suggested_message is not None:
+        item.suggested_message = suggested_message.strip() or None
     item.updated_at = datetime.utcnow()
     session.add(item)
     session.commit()

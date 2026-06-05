@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Header from '@/components/Header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import api, {
   generateWeeklyPlan,
   getApiErrorDetail,
@@ -18,8 +19,9 @@ import api, {
   updateWeeklyPlanItem,
 } from '@/lib/api';
 import ComposeEmailDialog from '@/components/ComposeEmailDialog';
+import ComposeSmsDialog from '@/components/ComposeSmsDialog';
 import { Customer, WeeklyPlanItem, WeeklyPlanItemStatus, WeeklyPlanListResponse } from '@/lib/types';
-import { CheckCircle2, Mail, RefreshCw, XCircle } from 'lucide-react';
+import { CheckCircle2, Mail, MessageSquare, RefreshCw, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   LineChart,
@@ -46,8 +48,29 @@ function plainTextToEmailHtml(text: string): string {
     .join('');
 }
 
-function isEmailChannelItem(item: WeeklyPlanItem): boolean {
-  return (item.channel || '').toUpperCase() === 'EMAIL' && item.customer_id != null;
+function isEditableMessageChannel(channel?: string | null): boolean {
+  const upper = (channel || '').toUpperCase();
+  return upper === 'SMS' || upper === 'EMAIL';
+}
+
+function isSmsChannelItem(item: WeeklyPlanItem): boolean {
+  return (item.channel || '').toUpperCase() === 'SMS' && item.customer_id != null;
+}
+
+function canComposeEmail(item: WeeklyPlanItem): boolean {
+  return item.customer_id != null && Boolean(item.customer_email?.trim());
+}
+
+function canComposeSms(item: WeeklyPlanItem): boolean {
+  return isSmsChannelItem(item) && Boolean(item.customer_phone?.trim());
+}
+
+function buildMessageDrafts(items: WeeklyPlanItem[]): Record<number, string> {
+  const drafts: Record<number, string> = {};
+  for (const item of items) {
+    drafts[item.id] = item.suggested_message || '';
+  }
+  return drafts;
 }
 
 export default function WeeklyPlanPage() {
@@ -60,22 +83,63 @@ export default function WeeklyPlanPage() {
   const [metrics, setMetrics] = useState<Record<string, unknown> | null>(null);
   const [trend, setTrend] = useState<Array<{ week_start: string; average_order_likelihood: number }>>([]);
   const [users, setUsers] = useState<AssignableUser[]>([]);
+  const [messageDrafts, setMessageDrafts] = useState<Record<number, string>>({});
 
   const [ownerFilter, setOwnerFilter] = useState<string>('all');
   const [channelFilter, setChannelFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [likelihoodFilter, setLikelihoodFilter] = useState<string>('all');
   const [selectedItemIds, setSelectedItemIds] = useState<number[]>([]);
-  const [composeOpen, setComposeOpen] = useState(false);
+
+  const [composeEmailOpen, setComposeEmailOpen] = useState(false);
   const [composeCustomer, setComposeCustomer] = useState<Customer | null>(null);
   const [composeInitialSubject, setComposeInitialSubject] = useState('');
   const [composeInitialBody, setComposeInitialBody] = useState('');
-  const composeItemIdRef = useRef<number | null>(null);
+  const composeEmailItemIdRef = useRef<number | null>(null);
 
-  const resetComposeState = () => {
+  const [composeSmsOpen, setComposeSmsOpen] = useState(false);
+  const [composeSmsCustomerId, setComposeSmsCustomerId] = useState<number | null>(null);
+  const [composeSmsLeadId, setComposeSmsLeadId] = useState<number | null>(null);
+  const [composeSmsPhone, setComposeSmsPhone] = useState('');
+  const [composeSmsInitialBody, setComposeSmsInitialBody] = useState('');
+  const composeSmsItemIdRef = useRef<number | null>(null);
+
+  const resetComposeEmailState = () => {
     setComposeCustomer(null);
     setComposeInitialSubject('');
     setComposeInitialBody('');
+  };
+
+  const resetComposeSmsState = () => {
+    setComposeSmsCustomerId(null);
+    setComposeSmsLeadId(null);
+    setComposeSmsPhone('');
+    setComposeSmsInitialBody('');
+  };
+
+  const getItemDraft = useCallback(
+    (item: WeeklyPlanItem) => messageDrafts[item.id] ?? item.suggested_message ?? '',
+    [messageDrafts]
+  );
+
+  const setItemDraft = (itemId: number, value: string) => {
+    setMessageDrafts((prev) => ({ ...prev, [itemId]: value }));
+  };
+
+  const saveDraftIfDirty = async (item: WeeklyPlanItem): Promise<void> => {
+    const draft = getItemDraft(item).trim();
+    const server = (item.suggested_message || '').trim();
+    if (draft === server) return;
+    await updateWeeklyPlanItem(item.id, { suggested_message: draft });
+    setPlan((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        items: prev.items.map((it) =>
+          it.id === item.id ? { ...it, suggested_message: draft || null } : it
+        ),
+      };
+    });
   };
 
   const loadData = async () => {
@@ -86,6 +150,7 @@ export default function WeeklyPlanPage() {
         getAssignableUsers().catch(() => []),
       ]);
       setPlan(latestPlan);
+      setMessageDrafts(buildMessageDrafts(latestPlan?.items || []));
       setUsers(assignableUsers || []);
       if (latestPlan?.run?.id) {
         const [metricsResult, trendResult] = await Promise.all([
@@ -111,6 +176,7 @@ export default function WeeklyPlanPage() {
       }
       setPlan(null);
       setMetrics(null);
+      setMessageDrafts({});
     } finally {
       setLoading(false);
     }
@@ -155,10 +221,17 @@ export default function WeeklyPlanPage() {
     }
   };
 
+  const saveDraftsForItems = async (itemIds: number[]) => {
+    if (!plan?.items) return;
+    const items = plan.items.filter((it) => itemIds.includes(it.id));
+    await Promise.all(items.map((item) => saveDraftIfDirty(item)));
+  };
+
   const handleSendSelected = async () => {
     if (selectedItemIds.length === 0) return;
     try {
       setSendingBulk(true);
+      await saveDraftsForItems(selectedItemIds);
       const result = await sendWeeklyPlanItemsBulk(selectedItemIds);
       toast.success(result.message);
       await loadData();
@@ -172,6 +245,7 @@ export default function WeeklyPlanPage() {
   const handleSendItem = async (item: WeeklyPlanItem) => {
     try {
       setBusyItemId(item.id);
+      await saveDraftIfDirty(item);
       const updated = await sendWeeklyPlanItem(item.id);
       if (updated.status === WeeklyPlanItemStatus.AUTO_SENT) {
         const channel = (item.channel || '').toUpperCase();
@@ -197,11 +271,11 @@ export default function WeeklyPlanPage() {
         toast.error('Customer has no email address');
         return;
       }
-      composeItemIdRef.current = item.id;
+      composeEmailItemIdRef.current = item.id;
       setComposeInitialSubject(WEEKLY_PLAN_EMAIL_SUBJECT);
-      setComposeInitialBody(plainTextToEmailHtml(item.suggested_message || ''));
+      setComposeInitialBody(plainTextToEmailHtml(getItemDraft(item)));
       setComposeCustomer(customer);
-      setComposeOpen(true);
+      setComposeEmailOpen(true);
     } catch (error) {
       toast.error(getApiErrorDetail(error) || 'Failed to load customer');
     } finally {
@@ -209,20 +283,19 @@ export default function WeeklyPlanPage() {
     }
   };
 
-  const handleComposeOpenChange = (open: boolean) => {
-    setComposeOpen(open);
+  const handleComposeEmailOpenChange = (open: boolean) => {
+    setComposeEmailOpen(open);
     if (!open) {
-      resetComposeState();
-      // ComposeEmailDialog calls onSuccess after onOpenChange; defer ref clear so success can read it.
+      resetComposeEmailState();
       window.setTimeout(() => {
-        composeItemIdRef.current = null;
+        composeEmailItemIdRef.current = null;
       }, 200);
     }
   };
 
-  const handleComposeSuccess = async () => {
-    const itemId = composeItemIdRef.current;
-    composeItemIdRef.current = null;
+  const handleComposeEmailSuccess = async () => {
+    const itemId = composeEmailItemIdRef.current;
+    composeEmailItemIdRef.current = null;
     if (!itemId) return;
     try {
       setBusyItemId(itemId);
@@ -237,10 +310,66 @@ export default function WeeklyPlanPage() {
           items: prev.items.filter((it) => it.id !== itemId),
         };
       });
+      setMessageDrafts((prev) => {
+        const next = { ...prev };
+        delete next[itemId];
+        return next;
+      });
       setSelectedItemIds((prev) => prev.filter((id) => id !== itemId));
       toast.success('Email sent and item marked complete');
     } catch {
       toast.error('Email sent but failed to update weekly plan item');
+    } finally {
+      setBusyItemId(null);
+    }
+  };
+
+  const handleComposeSms = (item: WeeklyPlanItem) => {
+    if (!item.customer_id || !item.customer_phone?.trim()) return;
+    composeSmsItemIdRef.current = item.id;
+    setComposeSmsCustomerId(item.customer_id);
+    setComposeSmsLeadId(item.lead_id ?? null);
+    setComposeSmsPhone(item.customer_phone.trim());
+    setComposeSmsInitialBody(getItemDraft(item));
+    setComposeSmsOpen(true);
+  };
+
+  const handleComposeSmsOpenChange = (open: boolean) => {
+    setComposeSmsOpen(open);
+    if (!open) {
+      resetComposeSmsState();
+      window.setTimeout(() => {
+        composeSmsItemIdRef.current = null;
+      }, 200);
+    }
+  };
+
+  const handleComposeSmsSuccess = async () => {
+    const itemId = composeSmsItemIdRef.current;
+    composeSmsItemIdRef.current = null;
+    if (!itemId) return;
+    try {
+      setBusyItemId(itemId);
+      await updateWeeklyPlanItem(itemId, {
+        status: WeeklyPlanItemStatus.COMPLETED,
+        outcome_result: 'completed_via_compose_sms',
+      });
+      setPlan((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          items: prev.items.filter((it) => it.id !== itemId),
+        };
+      });
+      setMessageDrafts((prev) => {
+        const next = { ...prev };
+        delete next[itemId];
+        return next;
+      });
+      setSelectedItemIds((prev) => prev.filter((id) => id !== itemId));
+      toast.success('SMS sent and item marked complete');
+    } catch {
+      toast.error('SMS sent but failed to update weekly plan item');
     } finally {
       setBusyItemId(null);
     }
@@ -261,6 +390,11 @@ export default function WeeklyPlanPage() {
             ...prev,
             items: prev.items.filter((it) => it.id !== item.id),
           };
+        });
+        setMessageDrafts((prev) => {
+          const next = { ...prev };
+          delete next[item.id];
+          return next;
         });
       }
       toast.success(successMessage);
@@ -506,17 +640,48 @@ export default function WeeklyPlanPage() {
                       </ul>
                     </div>
                   ) : null}
-                  {item.suggested_message ? (
+                  {isEditableMessageChannel(item.channel) ? (
+                    <div className="space-y-1">
+                      <div className="text-xs font-medium text-muted-foreground">Suggested message</div>
+                      <Textarea
+                        value={getItemDraft(item)}
+                        onChange={(e) => setItemDraft(item.id, e.target.value)}
+                        rows={4}
+                        className="text-sm bg-muted/50"
+                        placeholder="Edit message before sending..."
+                      />
+                    </div>
+                  ) : item.suggested_message ? (
                     <div className="text-sm bg-muted/50 rounded p-2">{item.suggested_message}</div>
                   ) : null}
                   <div className="flex flex-wrap gap-2">
-                    {isEmailChannelItem(item) ? (
+                    {isSmsChannelItem(item) ? (
                       <Button
                         size="sm"
                         variant="outline"
-                        disabled={busyItemId === item.id}
+                        disabled={busyItemId === item.id || !canComposeSms(item)}
+                        onClick={() => handleComposeSms(item)}
+                        title={
+                          canComposeSms(item)
+                            ? 'Open SMS composer with suggested message'
+                            : 'Customer has no phone number'
+                        }
+                      >
+                        <MessageSquare className="h-4 w-4 mr-1" />
+                        Compose SMS
+                      </Button>
+                    ) : null}
+                    {item.customer_id != null ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={busyItemId === item.id || !canComposeEmail(item)}
                         onClick={() => handleComposeEmail(item)}
-                        title="Open email composer with suggested message"
+                        title={
+                          canComposeEmail(item)
+                            ? 'Open email composer with suggested message'
+                            : 'Customer has no email address'
+                        }
                       >
                         <Mail className="h-4 w-4 mr-1" />
                         Compose email
@@ -588,12 +753,24 @@ export default function WeeklyPlanPage() {
 
       {composeCustomer && (
         <ComposeEmailDialog
-          open={composeOpen}
-          onOpenChange={handleComposeOpenChange}
+          open={composeEmailOpen}
+          onOpenChange={handleComposeEmailOpenChange}
           customer={composeCustomer}
           initialSubject={composeInitialSubject}
           initialBody={composeInitialBody}
-          onSuccess={handleComposeSuccess}
+          onSuccess={handleComposeEmailSuccess}
+        />
+      )}
+
+      {composeSmsCustomerId != null && (
+        <ComposeSmsDialog
+          open={composeSmsOpen}
+          onOpenChange={handleComposeSmsOpenChange}
+          customerId={composeSmsCustomerId}
+          leadId={composeSmsLeadId}
+          toPhone={composeSmsPhone}
+          initialBody={composeSmsInitialBody}
+          onSuccess={handleComposeSmsSuccess}
         />
       )}
     </div>

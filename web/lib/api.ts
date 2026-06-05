@@ -1723,7 +1723,12 @@ export const sendWeeklyPlanItemsBulk = async (itemIds: number[]): Promise<Weekly
 
 export const updateWeeklyPlanItem = async (
   itemId: number,
-  payload: { status?: WeeklyPlanItemStatus; outcome_result?: string; response_received?: boolean }
+  payload: {
+    status?: WeeklyPlanItemStatus;
+    outcome_result?: string;
+    response_received?: boolean;
+    suggested_message?: string;
+  }
 ): Promise<WeeklyPlanItem> => {
   const response = await api.patch(`/api/reminders/weekly-plan/items/${itemId}`, payload);
   return response.data;

@@ -1716,6 +1716,8 @@ export interface WeeklyPlanItem {
   assigned_to_id?: number | null;
   assigned_to_name?: string | null;
   customer_name?: string | null;
+  customer_email?: string | null;
+  customer_phone?: string | null;
   quote_number?: string | null;
   lead_name?: string | null;
   priority_score: number;
