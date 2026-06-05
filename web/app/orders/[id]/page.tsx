@@ -40,6 +40,7 @@ import SendQuoteEmailDialog from '@/components/SendQuoteEmailDialog';
 import SendPaymentLinkDialog from '@/components/SendPaymentLinkDialog';
 import NinoxBadge from '@/components/NinoxBadge';
 import FilesCard from '@/components/FilesCard';
+import ReviewRequestSection from '@/components/ReviewRequestSection';
 
 function formatCurrency(amount: number, currency: string = 'GBP'): string {
   return new Intl.NumberFormat('en-GB', {
@@ -247,30 +248,6 @@ export default function OrderDetailPage() {
     } finally {
       setSendingAccessSheet(false);
     }
-  };
-
-  const getReviewRequestStatus = (): string | null => {
-    if (!order?.installation_completed) return null;
-    if (!order.installation_completed_at) {
-      return 'Toggle installation completed again to schedule a review reminder.';
-    }
-    if (order.review_request_customer_sent_at) {
-      const sent = formatDateTime(order.review_request_customer_sent_at);
-      const channel = order.review_request_customer_channel
-        ? ` via ${order.review_request_customer_channel}`
-        : '';
-      return `Customer review request sent${channel} on ${sent}.`;
-    }
-    const delayDays = companySettings?.review_request_delay_days ?? 3;
-    const completedAt = new Date(order.installation_completed_at);
-    const dueAt = new Date(completedAt);
-    dueAt.setDate(dueAt.getDate() + delayDays);
-    const now = new Date();
-    if (now < dueAt) {
-      const daysLeft = Math.ceil((dueAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-      return `Review request due in ${daysLeft} day${daysLeft === 1 ? '' : 's'} (staff reminder + optional customer message).`;
-    }
-    return 'Review request is due — check Reminders or send now below.';
   };
 
   const handleSendReviewRequest = async () => {
@@ -626,21 +603,6 @@ export default function OrderDetailPage() {
                     </Button>
                   ))}
                 </div>
-                {getReviewRequestStatus() && (
-                  <div className="mt-4 rounded-md border bg-muted/40 p-3 space-y-2">
-                    <p className="text-sm text-muted-foreground">{getReviewRequestStatus()}</p>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      onClick={handleSendReviewRequest}
-                      disabled={sendingReviewRequest}
-                    >
-                      <Send className="h-4 w-4 mr-1" />
-                      {sendingReviewRequest ? 'Sending…' : 'Send review request now'}
-                    </Button>
-                  </div>
-                )}
                 <div className="mt-4 pt-4 border-t space-y-2">
                   <Label className="block">Delivery location for works order</Label>
                   <div className="flex items-center gap-2">
@@ -751,6 +713,28 @@ export default function OrderDetailPage() {
                 </div>
               </CardContent>
             </Card>
+
+            {order.installation_completed ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Review requests</CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    Ask the customer for a Google, Facebook, or Trustpilot review after installation.
+                  </p>
+                </CardHeader>
+                <CardContent>
+                  <ReviewRequestSection
+                    companySettings={companySettings}
+                    installationCompleted={order.installation_completed}
+                    installationCompletedAt={order.installation_completed_at}
+                    reviewRequestCustomerSentAt={order.review_request_customer_sent_at}
+                    reviewRequestCustomerChannel={order.review_request_customer_channel}
+                    onSendReviewRequest={handleSendReviewRequest}
+                    sendingReviewRequest={sendingReviewRequest}
+                  />
+                </CardContent>
+              </Card>
+            ) : null}
 
             {/* Plans & Documents */}
             <FilesCard context="order" id={orderId} />

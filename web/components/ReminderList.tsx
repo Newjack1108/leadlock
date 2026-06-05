@@ -4,14 +4,17 @@ import { useState, useEffect, type KeyboardEvent } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Reminder, ReminderPriority, SuggestedAction, ReminderType } from '@/lib/types';
-import { 
+import { CompanySettings, Reminder, ReminderPriority, SuggestedAction, ReminderType } from '@/lib/types';
+import {
   getReminders,
   dismissReminder,
   actOnReminder,
   invalidateStaleSummaryCache,
-  generateReminders 
+  generateReminders,
+  getCompanySettings,
+  sendOrderReviewRequest,
 } from '@/lib/api';
+import ReviewRequestSection from '@/components/ReviewRequestSection';
 import { toast } from 'sonner';
 import { 
   RefreshCw, X, CheckCircle2, Mail, Phone, 
@@ -56,6 +59,8 @@ export default function ReminderList({
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [companySettings, setCompanySettings] = useState<CompanySettings | null>(null);
+  const [sendingReviewOrderId, setSendingReviewOrderId] = useState<number | null>(null);
 
   const fetchReminders = async () => {
     try {
@@ -93,6 +98,12 @@ export default function ReminderList({
   useEffect(() => {
     fetchReminders();
   }, [mode, priorityFilter, typeFilter, assignedToMe, limit, refreshTrigger]);
+
+  useEffect(() => {
+    void getCompanySettings()
+      .then(setCompanySettings)
+      .catch(() => setCompanySettings(null));
+  }, []);
 
   const isTaskOverdue = (r: Reminder) => {
     if (r.reminder_type !== ReminderType.USER_TASK || !r.due_date) return false;
@@ -188,6 +199,32 @@ export default function ReminderList({
       if (reminder.lead_id) {
         router.push(`/leads/${reminder.lead_id}`);
       }
+    } else if (action === SuggestedAction.REQUEST_REVIEW) {
+      if (reminder.order_id) {
+        router.push(`/orders/${reminder.order_id}`);
+      } else if (reminder.customer_id) {
+        router.push(`/customers/${reminder.customer_id}`);
+      }
+    }
+  };
+
+  const handleSendReviewRequest = async (reminder: Reminder) => {
+    if (!reminder.order_id) {
+      toast.error('No order linked to this review reminder');
+      return;
+    }
+    try {
+      setSendingReviewOrderId(reminder.order_id);
+      const result = await sendOrderReviewRequest(reminder.order_id);
+      invalidateStaleSummaryCache();
+      toast.success(result.message || 'Review request sent');
+      await fetchReminders();
+      onReminderAction?.();
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || 'Failed to send review request');
+      console.error('Error sending review request:', error);
+    } finally {
+      setSendingReviewOrderId(null);
     }
   };
 
@@ -371,7 +408,28 @@ export default function ReminderList({
                       )}
                       <span className="font-semibold">{reminder.title}</span>
                     </div>
-                    <p className="text-sm text-muted-foreground mb-2">{reminder.message}</p>
+                    {reminder.reminder_type !== ReminderType.REQUEST_REVIEW ? (
+                      <p className="text-sm text-muted-foreground mb-2">{reminder.message}</p>
+                    ) : null}
+                    {reminder.reminder_type === ReminderType.REQUEST_REVIEW ? (
+                      <div className="mb-3" onClick={(e) => e.stopPropagation()}>
+                        <ReviewRequestSection
+                          companySettings={companySettings}
+                          installationCompleted
+                          installationCompletedAt={reminder.stale_reference_at}
+                          reviewRequestCustomerSentAt={reminder.review_request_customer_sent_at}
+                          reviewRequestCustomerChannel={reminder.review_request_customer_channel}
+                          compact
+                          showSendButton={!!reminder.order_id && !reminder.review_request_customer_sent_at}
+                          sendingReviewRequest={sendingReviewOrderId === reminder.order_id}
+                          onSendReviewRequest={
+                            reminder.order_id
+                              ? () => handleSendReviewRequest(reminder)
+                              : undefined
+                          }
+                        />
+                      </div>
+                    ) : null}
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
                       {reminder.lead_name && (
                         <span>Lead: {reminder.lead_name}</span>
@@ -451,12 +509,18 @@ export default function ReminderList({
                     variant="default"
                     className={compact ? 'h-7 text-xs' : ''}
                     onClick={() => {
+                      if (reminder.reminder_type === ReminderType.REQUEST_REVIEW) {
+                        handleQuickAction(reminder, reminder.suggested_action);
+                        return;
+                      }
                       handleQuickAction(reminder, reminder.suggested_action);
                       handleAct(reminder.id, reminder.suggested_action);
                     }}
                   >
                     {getActionIcon(reminder.suggested_action)}
-                    <span className="ml-2">{getActionLabel(reminder.suggested_action)}</span>
+                    <span className="ml-2">
+                      {reminder.reminder_type === ReminderType.REQUEST_REVIEW ? 'View order' : getActionLabel(reminder.suggested_action)}
+                    </span>
                   </Button>
                   <Button
                     size="sm"

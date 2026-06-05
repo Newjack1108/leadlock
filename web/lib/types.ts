@@ -1605,6 +1605,8 @@ export interface Reminder {
   auto_outreach_sent_at?: string | null;
   auto_outreach_failure_reason?: string | null;
   auto_outreach_rule_name?: string | null;
+  review_request_customer_sent_at?: string | null;
+  review_request_customer_channel?: string | null;
 }
 
 export interface AssignableUser {

@@ -479,12 +479,16 @@ def _reminder_to_response(
             customer = session.exec(select(Customer).where(Customer.id == reminder.customer_id)).first()
         if customer:
             customer_name = customer.name
+    review_request_customer_sent_at = None
+    review_request_customer_channel = None
     if reminder.order_id:
         from app.models import Order
 
         order = session.exec(select(Order).where(Order.id == reminder.order_id)).first()
         if order:
             order_number = order.order_number
+            review_request_customer_sent_at = order.review_request_customer_sent_at
+            review_request_customer_channel = order.review_request_customer_channel
 
     au = uid_map.get(reminder.assigned_to_id)
     assigned_to_name = au.full_name if au else None
@@ -535,6 +539,8 @@ def _reminder_to_response(
         auto_outreach_sent_at=auto_sent_at,
         auto_outreach_failure_reason=auto_fail,
         auto_outreach_rule_name=auto_rule,
+        review_request_customer_sent_at=review_request_customer_sent_at,
+        review_request_customer_channel=review_request_customer_channel,
     )
 
 

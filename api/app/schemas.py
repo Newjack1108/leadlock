@@ -2121,6 +2121,8 @@ class ReminderResponse(BaseModel):
     auto_outreach_sent_at: Optional[datetime] = None
     auto_outreach_failure_reason: Optional[str] = None
     auto_outreach_rule_name: Optional[str] = None
+    review_request_customer_sent_at: Optional[datetime] = None
+    review_request_customer_channel: Optional[str] = None
 
 
 class UserTaskCreate(BaseModel):
