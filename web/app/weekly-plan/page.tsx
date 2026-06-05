@@ -53,16 +53,12 @@ function isEditableMessageChannel(channel?: string | null): boolean {
   return upper === 'SMS' || upper === 'EMAIL';
 }
 
-function isSmsChannelItem(item: WeeklyPlanItem): boolean {
-  return (item.channel || '').toUpperCase() === 'SMS' && item.customer_id != null;
-}
-
 function canComposeEmail(item: WeeklyPlanItem): boolean {
   return item.customer_id != null && Boolean(item.customer_email?.trim());
 }
 
 function canComposeSms(item: WeeklyPlanItem): boolean {
-  return isSmsChannelItem(item) && Boolean(item.customer_phone?.trim());
+  return item.customer_id != null && Boolean(item.customer_phone?.trim());
 }
 
 function buildMessageDrafts(items: WeeklyPlanItem[]): Record<number, string> {
@@ -206,6 +202,11 @@ export default function WeeklyPlanPage() {
     const unique = new Set<string>();
     (plan?.items || []).forEach((item) => unique.add(item.channel || 'NONE'));
     return Array.from(unique);
+  }, [plan]);
+
+  const outstandingItemsCount = useMemo(() => {
+    if (!plan?.items) return 0;
+    return plan.items.filter((item) => item.status !== WeeklyPlanItemStatus.COMPLETED).length;
   }, [plan]);
 
   const handleGenerate = async () => {
@@ -454,9 +455,9 @@ export default function WeeklyPlanPage() {
             </Card>
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Items</CardTitle>
+                <CardTitle className="text-sm font-medium">Outstanding</CardTitle>
               </CardHeader>
-              <CardContent className="text-xl font-semibold">{plan.run.total_items}</CardContent>
+              <CardContent className="text-xl font-semibold">{outstandingItemsCount}</CardContent>
             </Card>
             <Card>
               <CardHeader className="pb-2">
@@ -655,37 +656,37 @@ export default function WeeklyPlanPage() {
                     <div className="text-sm bg-muted/50 rounded p-2">{item.suggested_message}</div>
                   ) : null}
                   <div className="flex flex-wrap gap-2">
-                    {isSmsChannelItem(item) ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={busyItemId === item.id || !canComposeSms(item)}
-                        onClick={() => handleComposeSms(item)}
-                        title={
-                          canComposeSms(item)
-                            ? 'Open SMS composer with suggested message'
-                            : 'Customer has no phone number'
-                        }
-                      >
-                        <MessageSquare className="h-4 w-4 mr-1" />
-                        Compose SMS
-                      </Button>
-                    ) : null}
                     {item.customer_id != null ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={busyItemId === item.id || !canComposeEmail(item)}
-                        onClick={() => handleComposeEmail(item)}
-                        title={
-                          canComposeEmail(item)
-                            ? 'Open email composer with suggested message'
-                            : 'Customer has no email address'
-                        }
-                      >
-                        <Mail className="h-4 w-4 mr-1" />
-                        Compose email
-                      </Button>
+                      <>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={busyItemId === item.id || !canComposeSms(item)}
+                          onClick={() => handleComposeSms(item)}
+                          title={
+                            canComposeSms(item)
+                              ? 'Open SMS composer with suggested message'
+                              : 'Customer has no phone number'
+                          }
+                        >
+                          <MessageSquare className="h-4 w-4 mr-1" />
+                          Compose SMS
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={busyItemId === item.id || !canComposeEmail(item)}
+                          onClick={() => handleComposeEmail(item)}
+                          title={
+                            canComposeEmail(item)
+                              ? 'Open email composer with suggested message'
+                              : 'Customer has no email address'
+                          }
+                        >
+                          <Mail className="h-4 w-4 mr-1" />
+                          Compose email
+                        </Button>
+                      </>
                     ) : null}
                     <Button
                       size="sm"
