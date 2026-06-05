@@ -722,6 +722,7 @@ export default function OrderDetailPage() {
                     reviewRequestCustomerSentAt={order.review_request_customer_sent_at}
                     reviewRequestCustomerChannel={order.review_request_customer_channel}
                     reviewHubUrl={order.review_hub_url}
+                    isReturningCustomer={order.is_returning_customer_for_review}
                     onSendReviewRequest={handleSendReviewRequest}
                   />
                   <PrizeDrawStaffPanel
@@ -999,6 +1000,9 @@ export default function OrderDetailPage() {
           orderId={orderId}
           orderNumber={order.order_number}
           customer={customer}
+          isReturningCustomer={order.is_returning_customer_for_review}
+          freeGiftTitle={companySettings?.review_free_gift_title}
+          returningGiftEnabled={companySettings?.review_returning_customer_enabled}
           onSuccess={fetchOrder}
         />
       )}

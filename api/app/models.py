@@ -511,6 +511,11 @@ class CompanySettings(SQLModel, table=True):
     review_request_outreach_channel: str = Field(default="sms")  # sms | email — default for automated sends
     review_request_sms_template_id: Optional[int] = Field(default=None, foreign_key="smstemplate.id")
     review_request_email_template_id: Optional[int] = Field(default=None, foreign_key="emailtemplate.id")
+    review_returning_customer_enabled: bool = Field(default=True)
+    review_free_gift_title: Optional[str] = None
+    review_free_gift_terms: Optional[str] = None
+    review_returning_sms_template_id: Optional[int] = Field(default=None, foreign_key="smstemplate.id")
+    review_returning_email_template_id: Optional[int] = Field(default=None, foreign_key="emailtemplate.id")
     review_prize_draw_enabled: bool = Field(default=False)
     review_prize_draw_title: Optional[str] = None
     review_prize_draw_terms: Optional[str] = None

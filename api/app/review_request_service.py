@@ -47,6 +47,21 @@ from app.review_prize_draw_service import (
 )
 
 
+def is_returning_customer_for_review(order: Order, session: Session) -> bool:
+    """True when this customer had another completed installation before this order."""
+    if not order.customer_id or not order.id:
+        return False
+    conditions = [
+        Order.customer_id == order.customer_id,
+        Order.id != order.id,
+        Order.installation_completed == True,  # noqa: E712
+    ]
+    if order.installation_completed_at:
+        conditions.append(Order.installation_completed_at < order.installation_completed_at)
+    prior = session.exec(select(Order.id).where(and_(*conditions)).limit(1)).first()
+    return prior is not None
+
+
 def build_review_template_context(
     company_settings: Optional[CompanySettings],
     order: Order,
@@ -70,6 +85,15 @@ def build_review_template_context(
             "company_name": company_settings.company_name or "",
             "trading_name": company_settings.trading_name or "",
         }
+    is_returning = is_returning_customer_for_review(order, session) if session else False
+    min_reviews_for_gift = 2
+    if company_settings and company_settings.review_prize_draw_min_platforms:
+        min_reviews_for_gift = max(1, int(company_settings.review_prize_draw_min_platforms))
+    free_gift_title = "free gift"
+    free_gift_terms = ""
+    if company_settings:
+        free_gift_title = company_settings.review_free_gift_title or "free gift"
+        free_gift_terms = company_settings.review_free_gift_terms or ""
     return {
         "order": {
             "order_number": order.order_number or "",
@@ -82,7 +106,11 @@ def build_review_template_context(
             "trustpilot_url": (company_settings.review_trustpilot_url or "") if company_settings else "",
             "prize_draw_url": prize_draw_url,
             "prize_draw_title": prize_draw_title,
+            "free_gift_title": free_gift_title,
+            "free_gift_terms": free_gift_terms,
+            "min_reviews_for_gift": min_reviews_for_gift,
         },
+        "customer_type": {"is_returning": is_returning},
     }
 
 
@@ -223,6 +251,16 @@ def create_review_reminder(order: Order, session: Session) -> Optional[Reminder]
         links_block = _format_review_links_message(settings)
 
     ref_at, ref_label = resolve_stale_reference_for_order(order)
+    message = (
+        f"Installation completed for order {order.order_number}. "
+        f"Ask {customer_name} for a Google, Facebook, or Trustpilot review.\n\n"
+        f"{links_block}"
+    )
+    if is_returning_customer_for_review(order, session):
+        message += (
+            "\n\nReturning customer — use Send review request to send the "
+            "2-review free gift message (manual)."
+        )
     reminder = Reminder(
         reminder_type=ReminderType.REQUEST_REVIEW,
         order_id=order.id,
@@ -230,11 +268,7 @@ def create_review_reminder(order: Order, session: Session) -> Optional[Reminder]
         assigned_to_id=order.created_by_id,
         priority=ReminderPriority.MEDIUM,
         title=f"Request review: {customer_name}",
-        message=(
-            f"Installation completed for order {order.order_number}. "
-            f"Ask {customer_name} for a Google, Facebook, or Trustpilot review.\n\n"
-            f"{links_block}"
-        ),
+        message=message,
         suggested_action=SuggestedAction.REQUEST_REVIEW,
         days_stale=days_since,
         stale_reference_at=ref_at,
@@ -264,15 +298,35 @@ def _channel_has_review_template(settings: CompanySettings, channel: str) -> boo
     return False
 
 
+def _channel_has_returning_review_template(settings: CompanySettings, channel: str) -> bool:
+    if channel == CustomerOutreachChannel.SMS.value:
+        return bool(settings.review_returning_sms_template_id)
+    if channel == CustomerOutreachChannel.EMAIL.value:
+        return bool(settings.review_returning_email_template_id)
+    return False
+
+
+def _channel_has_review_template_for_send(
+    settings: CompanySettings,
+    channel: str,
+    *,
+    use_returning: bool,
+) -> bool:
+    if use_returning and _channel_has_returning_review_template(settings, channel):
+        return True
+    return _channel_has_review_template(settings, channel)
+
+
 def _resolve_outreach_channel(
     settings: CompanySettings,
     *,
     channel: Optional[str] = None,
     allow_fallback: bool = True,
+    use_returning: bool = False,
 ) -> Optional[str]:
     explicit = _normalize_review_channel(channel)
     if explicit:
-        if _channel_has_review_template(settings, explicit):
+        if _channel_has_review_template_for_send(settings, explicit, use_returning=use_returning):
             return explicit
         return None
 
@@ -280,7 +334,7 @@ def _resolve_outreach_channel(
     if not preferred:
         preferred = CustomerOutreachChannel.SMS.value
 
-    if _channel_has_review_template(settings, preferred):
+    if _channel_has_review_template_for_send(settings, preferred, use_returning=use_returning):
         return preferred
 
     if not allow_fallback:
@@ -291,9 +345,47 @@ def _resolve_outreach_channel(
         if preferred == CustomerOutreachChannel.SMS.value
         else CustomerOutreachChannel.SMS.value
     )
-    if _channel_has_review_template(settings, other):
+    if _channel_has_review_template_for_send(settings, other, use_returning=use_returning):
         return other
     return None
+
+
+def _should_use_returning_review_templates(
+    order: Order,
+    settings: CompanySettings,
+    session: Session,
+    *,
+    use_returning_template: Optional[bool],
+    force: bool,
+) -> bool:
+    """Manual sends only; auto when eligible unless explicitly disabled."""
+    if not force:
+        return False
+    if use_returning_template is False:
+        return False
+    if not getattr(settings, "review_returning_customer_enabled", True):
+        return False
+    if not is_returning_customer_for_review(order, session):
+        return False
+    return True
+
+
+def _resolve_review_template_id(
+    settings: CompanySettings,
+    channel: str,
+    *,
+    use_returning: bool,
+) -> Tuple[Optional[int], str]:
+    if use_returning:
+        if channel == CustomerOutreachChannel.SMS.value and settings.review_returning_sms_template_id:
+            return settings.review_returning_sms_template_id, "returning"
+        if channel == CustomerOutreachChannel.EMAIL.value and settings.review_returning_email_template_id:
+            return settings.review_returning_email_template_id, "returning"
+    if channel == CustomerOutreachChannel.SMS.value:
+        return settings.review_request_sms_template_id, "standard"
+    if channel == CustomerOutreachChannel.EMAIL.value:
+        return settings.review_request_email_template_id, "standard"
+    return None, "standard"
 
 
 def _resolve_actor_user(session: Session, order: Order) -> Optional[User]:
@@ -328,6 +420,7 @@ def send_review_request_to_customer(
     actor_user: Optional[User] = None,
     force: bool = False,
     channel: Optional[str] = None,
+    use_returning_template: Optional[bool] = None,
 ) -> Tuple[bool, Optional[str]]:
     """
     Send automated review request SMS or email to the customer.
@@ -352,11 +445,19 @@ def send_review_request_to_customer(
     if customer.automated_reminder_outreach_opt_out:
         return False, "Customer opted out of automated reminder messages"
 
+    use_returning = _should_use_returning_review_templates(
+        order,
+        settings,
+        session,
+        use_returning_template=use_returning_template,
+        force=force,
+    )
     explicit_channel = _normalize_review_channel(channel)
     resolved_channel = _resolve_outreach_channel(
         settings,
         channel=channel,
         allow_fallback=explicit_channel is None,
+        use_returning=use_returning,
     )
     if not resolved_channel:
         if explicit_channel:
@@ -364,6 +465,9 @@ def send_review_request_to_customer(
             return False, f"Review request {label} template is not configured"
         return False, "No review request SMS or email template configured"
     channel = resolved_channel
+    template_id, template_variant = _resolve_review_template_id(
+        settings, channel, use_returning=use_returning
+    )
 
     if _is_within_outreach_quiet_hours(settings):
         return False, "Skipped during outreach quiet hours (23:00-06:00 local company timezone)"
@@ -379,7 +483,7 @@ def send_review_request_to_customer(
     now = datetime.utcnow()
 
     if channel == CustomerOutreachChannel.SMS.value:
-        template = session.get(SmsTemplate, settings.review_request_sms_template_id)
+        template = session.get(SmsTemplate, template_id)
         if not template:
             return False, "SMS template not found"
         to_phone = (customer.phone or "").strip()
@@ -429,7 +533,7 @@ def send_review_request_to_customer(
         )
         order.review_request_customer_channel = CustomerOutreachChannel.SMS.value
     else:
-        template = session.get(EmailTemplate, settings.review_request_email_template_id)
+        template = session.get(EmailTemplate, template_id)
         if not template:
             return False, "Email template not found"
         to_email = (customer.email or "").strip()
@@ -500,6 +604,8 @@ def send_review_request_to_customer(
         metadata={
             "channel": order.review_request_customer_channel,
             "sent_at": now.isoformat(),
+            "returning_customer": is_returning_customer_for_review(order, session),
+            "template_variant": template_variant,
         },
         created_by_id=actor.id,
     )

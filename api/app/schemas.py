@@ -1403,6 +1403,11 @@ class CompanySettingsCreate(BaseModel):
     review_request_outreach_channel: Optional[str] = "sms"
     review_request_sms_template_id: Optional[int] = None
     review_request_email_template_id: Optional[int] = None
+    review_returning_customer_enabled: Optional[bool] = True
+    review_free_gift_title: Optional[str] = None
+    review_free_gift_terms: Optional[str] = None
+    review_returning_sms_template_id: Optional[int] = None
+    review_returning_email_template_id: Optional[int] = None
     review_prize_draw_enabled: Optional[bool] = False
     review_prize_draw_title: Optional[str] = None
     review_prize_draw_terms: Optional[str] = None
@@ -1464,6 +1469,11 @@ class CompanySettingsUpdate(BaseModel):
     review_request_outreach_channel: Optional[str] = None
     review_request_sms_template_id: Optional[int] = None
     review_request_email_template_id: Optional[int] = None
+    review_returning_customer_enabled: Optional[bool] = None
+    review_free_gift_title: Optional[str] = None
+    review_free_gift_terms: Optional[str] = None
+    review_returning_sms_template_id: Optional[int] = None
+    review_returning_email_template_id: Optional[int] = None
     review_prize_draw_enabled: Optional[bool] = None
     review_prize_draw_title: Optional[str] = None
     review_prize_draw_terms: Optional[str] = None
@@ -1526,6 +1536,11 @@ class CompanySettingsResponse(BaseModel):
     review_request_outreach_channel: str = "sms"
     review_request_sms_template_id: Optional[int] = None
     review_request_email_template_id: Optional[int] = None
+    review_returning_customer_enabled: bool = True
+    review_free_gift_title: Optional[str] = None
+    review_free_gift_terms: Optional[str] = None
+    review_returning_sms_template_id: Optional[int] = None
+    review_returning_email_template_id: Optional[int] = None
     review_prize_draw_enabled: bool = False
     review_prize_draw_title: Optional[str] = None
     review_prize_draw_terms: Optional[str] = None
@@ -2016,6 +2031,7 @@ class OrderResponse(BaseModel):
     items: List[OrderItemResponse] = []
     access_sheet: Optional[AccessSheetResponse] = None
     review_hub_url: Optional[str] = None
+    is_returning_customer_for_review: bool = False
     prize_draw_entry: Optional[PrizeDrawEntryResponse] = None
     sent_to_production_at: Optional[datetime] = None
     sent_to_production_by_id: Optional[int] = None
@@ -2111,6 +2127,7 @@ class DiscountRequestReject(BaseModel):
 
 class OrderSendReviewRequestRequest(BaseModel):
     channel: str = "sms"  # "email" | "sms"
+    use_returning_template: Optional[bool] = None  # None = auto when eligible
 
 
 class OrderSendReviewRequestResponse(BaseModel):

@@ -707,6 +707,11 @@ export interface CompanySettings {
   review_request_outreach_channel?: 'sms' | 'email';
   review_request_sms_template_id?: number | null;
   review_request_email_template_id?: number | null;
+  review_returning_customer_enabled?: boolean;
+  review_free_gift_title?: string | null;
+  review_free_gift_terms?: string | null;
+  review_returning_sms_template_id?: number | null;
+  review_returning_email_template_id?: number | null;
   review_prize_draw_enabled?: boolean;
   review_prize_draw_title?: string | null;
   review_prize_draw_terms?: string | null;
@@ -1300,6 +1305,7 @@ export interface Order {
   items: OrderItem[];
   access_sheet?: AccessSheet | null;
   review_hub_url?: string | null;
+  is_returning_customer_for_review?: boolean;
   prize_draw_entry?: PrizeDrawEntry | null;
   sent_to_production_at?: string | null;
   sent_to_production_by_id?: number | null;

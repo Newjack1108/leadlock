@@ -400,6 +400,10 @@ export default function ReminderList({
                       {reminder.reminder_type === ReminderType.USER_TASK && (
                         <Badge variant="outline">Task</Badge>
                       )}
+                      {reminder.reminder_type === ReminderType.REQUEST_REVIEW &&
+                      reminder.message?.includes('Returning customer') ? (
+                        <Badge variant="secondary">Returning customer</Badge>
+                      ) : null}
                       <span className="font-semibold">{reminder.title}</span>
                     </div>
                     {reminder.reminder_type !== ReminderType.REQUEST_REVIEW ? (
@@ -413,6 +417,7 @@ export default function ReminderList({
                           installationCompletedAt={reminder.stale_reference_at}
                           reviewRequestCustomerSentAt={reminder.review_request_customer_sent_at}
                           reviewRequestCustomerChannel={reminder.review_request_customer_channel}
+                          isReturningCustomer={reminder.message?.includes('Returning customer') ?? false}
                           compact
                           showSendButton={!!reminder.order_id && !reminder.review_request_customer_sent_at}
                           onSendReviewRequest={

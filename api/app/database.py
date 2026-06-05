@@ -567,6 +567,34 @@ def _default_review_request_email_subject() -> str:
     return "We would love your feedback"
 
 
+def _default_returning_review_request_sms_body() -> str:
+    return (
+        "Hi {{ customer.name }}, welcome back to "
+        "{{ company.trading_name or company.company_name }}! "
+        "Leave reviews on {{ review.min_reviews_for_gift }} platforms and claim your "
+        "{{ review.free_gift_title }}: {{ review.hub_url }}"
+    )
+
+
+def _default_returning_review_request_email_subject() -> str:
+    return "Welcome back — claim your {{ review.free_gift_title }}"
+
+
+def _default_returning_review_request_email_body() -> str:
+    return (
+        "<p>Hi {{ customer.name }},</p>"
+        "<p>Welcome back to {{ company.trading_name or company.company_name }}! "
+        "Thank you for choosing us again.</p>"
+        "<p>Leave reviews on at least {{ review.min_reviews_for_gift }} platforms "
+        "and claim your <strong>{{ review.free_gift_title }}</strong>:</p>"
+        "<p><a href=\"{{ review.hub_url }}\">Leave your reviews</a></p>"
+        "{% if review.free_gift_terms %}"
+        "<p><em>{{ review.free_gift_terms }}</em></p>"
+        "{% endif %}"
+        "<p>Thank you again for your continued business.</p>"
+    )
+
+
 def _default_review_request_email_body() -> str:
     return (
         "<p>Hi {{ customer.name }},</p>"
@@ -693,6 +721,70 @@ def backfill_review_request_templates(session: Session) -> None:
         session.add(settings)
         session.commit()
         print("Backfilled post-install review request templates", file=sys.stderr, flush=True)
+
+
+def backfill_returning_review_request_templates(session: Session) -> None:
+    """Seed returning-customer review SMS/email templates and link when unset."""
+    import sys
+
+    from sqlmodel import select
+
+    from app.models import CompanySettings, EmailTemplate, SmsTemplate, User, UserRole
+
+    settings = session.exec(select(CompanySettings).limit(1)).first()
+    if not settings:
+        return
+
+    director = session.exec(select(User).where(User.role == UserRole.DIRECTOR).limit(1)).first()
+    if not director:
+        director = session.exec(select(User).limit(1)).first()
+    if not director:
+        return
+
+    sms_body = _default_returning_review_request_sms_body()
+    email_subject = _default_returning_review_request_email_subject()
+    email_body = _default_returning_review_request_email_body()
+
+    changed = False
+
+    existing_sms = session.exec(
+        select(SmsTemplate).where(SmsTemplate.name == "Post-Install Review Request (Returning)")
+    ).first()
+    if not existing_sms:
+        existing_sms = SmsTemplate(
+            name="Post-Install Review Request (Returning)",
+            body_template=sms_body,
+            created_by_id=director.id,
+        )
+        session.add(existing_sms)
+        session.flush()
+        changed = True
+
+    existing_email = session.exec(
+        select(EmailTemplate).where(EmailTemplate.name == "Post-Install Review Request (Returning)")
+    ).first()
+    if not existing_email:
+        existing_email = EmailTemplate(
+            name="Post-Install Review Request (Returning)",
+            subject_template=email_subject,
+            body_template=email_body,
+            created_by_id=director.id,
+        )
+        session.add(existing_email)
+        session.flush()
+        changed = True
+
+    if not settings.review_returning_sms_template_id:
+        settings.review_returning_sms_template_id = existing_sms.id
+        changed = True
+    if not settings.review_returning_email_template_id:
+        settings.review_returning_email_template_id = existing_email.id
+        changed = True
+
+    if changed:
+        session.add(settings)
+        session.commit()
+        print("Backfilled returning-customer review request templates", file=sys.stderr, flush=True)
 
 
 def create_db_and_tables():
@@ -1339,6 +1431,11 @@ def create_db_and_tables():
                     "review_prize_draw_title": "VARCHAR(255)",
                     "review_prize_draw_terms": "TEXT",
                     "review_prize_draw_min_platforms": "INTEGER DEFAULT 2 NOT NULL",
+                    "review_returning_customer_enabled": "BOOLEAN DEFAULT TRUE NOT NULL",
+                    "review_free_gift_title": "VARCHAR(255)",
+                    "review_free_gift_terms": "TEXT",
+                    "review_returning_sms_template_id": "INTEGER REFERENCES smstemplate(id)",
+                    "review_returning_email_template_id": "INTEGER REFERENCES emailtemplate(id)",
                 }
                 for col_name, col_type in review_company_cols.items():
                     if col_name not in company_columns:
@@ -2377,6 +2474,7 @@ def create_db_and_tables():
             try:
                 with Session(engine) as session:
                     backfill_review_request_templates(session)
+                    backfill_returning_review_request_templates(session)
             except Exception as e:
                 print(f"Error backfilling review request templates: {e}", file=sys.stderr, flush=True)
         

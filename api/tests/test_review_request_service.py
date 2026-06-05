@@ -28,6 +28,7 @@ from app.review_request_service import (
     detect_due_review_requests,
     dismiss_open_review_reminders_for_order,
     generate_review_reminders,
+    is_returning_customer_for_review,
     on_installation_completed,
     on_installation_uncompleted,
     run_review_request_cycle,
@@ -487,3 +488,175 @@ def test_manual_send_missing_template_returns_clear_error(sqlite_engine):
         success, error = send_review_request_to_customer(order, session, force=True, channel="email")
         assert success is False
         assert "email template" in (error or "").lower()
+
+
+def test_is_returning_customer_for_review_with_prior_completed_order(sqlite_engine):
+    with Session(sqlite_engine) as session:
+        _seed_company(session)
+        prior = _seed_completed_order(
+            session,
+            completed_at=datetime.utcnow() - timedelta(days=30),
+            suffix="1",
+        )
+        repeat = _seed_completed_order(
+            session,
+            completed_at=datetime.utcnow() - timedelta(days=1),
+            suffix="2",
+        )
+        repeat.customer_id = prior.customer_id
+        session.add(repeat)
+        session.commit()
+        session.refresh(repeat)
+
+        assert is_returning_customer_for_review(prior, session) is False
+        assert is_returning_customer_for_review(repeat, session) is True
+
+
+def test_returning_reminder_includes_gift_hint(sqlite_engine):
+    with Session(sqlite_engine) as session:
+        _seed_company(session)
+        prior = _seed_completed_order(
+            session,
+            completed_at=datetime.utcnow() - timedelta(days=30),
+            suffix="1",
+        )
+        repeat = _seed_completed_order(
+            session,
+            completed_at=datetime.utcnow() - timedelta(days=5),
+            suffix="2",
+        )
+        repeat.customer_id = prior.customer_id
+        session.add(repeat)
+        session.commit()
+        session.refresh(repeat)
+
+        reminder = create_review_reminder(repeat, session)
+        assert reminder is not None
+        assert "Returning customer" in reminder.message
+        assert "2-review free gift" in reminder.message
+
+
+@patch("app.review_request_service._is_within_outreach_quiet_hours", return_value=False)
+@patch("app.review_request_service.is_email_configured", return_value=True)
+@patch(
+    "app.review_request_service.send_email",
+    return_value=(True, "msg-id", None, "<p>Welcome back gift</p>", "Welcome back gift"),
+)
+def test_manual_send_uses_returning_email_template(mock_send_email, mock_email_cfg, mock_quiet, sqlite_engine):
+    with Session(sqlite_engine) as session:
+        from app.models import EmailTemplate
+
+        settings = _seed_company(session, outreach_enabled=True)
+        user = session.exec(select(User)).first()
+        assert user is not None
+
+        standard = EmailTemplate(
+            name="Standard Review Email",
+            subject_template="Thanks",
+            body_template="<p>Standard review</p>",
+            created_by_id=user.id,
+        )
+        returning = EmailTemplate(
+            name="Returning Review Email",
+            subject_template="Welcome back",
+            body_template="<p>Claim your {{ review.free_gift_title }}</p>",
+            created_by_id=user.id,
+        )
+        session.add(standard)
+        session.add(returning)
+        session.commit()
+        session.refresh(standard)
+        session.refresh(returning)
+
+        settings.review_request_email_template_id = standard.id
+        settings.review_returning_email_template_id = returning.id
+        settings.review_returning_customer_enabled = True
+        settings.review_free_gift_title = "mug"
+        session.add(settings)
+        session.commit()
+
+        prior = _seed_completed_order(
+            session,
+            completed_at=datetime.utcnow() - timedelta(days=30),
+            suffix="1",
+        )
+        repeat = _seed_completed_order(
+            session,
+            completed_at=datetime.utcnow() - timedelta(days=5),
+            suffix="2",
+        )
+        repeat.customer_id = prior.customer_id
+        session.add(repeat)
+        session.commit()
+        session.refresh(repeat)
+
+        success, error = send_review_request_to_customer(
+            repeat,
+            session,
+            force=True,
+            channel="email",
+            use_returning_template=True,
+        )
+        assert success is True
+        assert error is None
+        mock_send_email.assert_called_once()
+        assert "Claim your mug" in mock_send_email.call_args.kwargs["body_html"]
+
+
+@patch("app.review_request_service._is_within_outreach_quiet_hours", return_value=False)
+@patch("app.review_request_service.is_email_configured", return_value=True)
+@patch(
+    "app.review_request_service.send_email",
+    return_value=(True, "msg-id", None, "<p>Standard review</p>", "Standard review"),
+)
+def test_manual_send_falls_back_to_standard_when_returning_template_missing(
+    mock_send_email, mock_email_cfg, mock_quiet, sqlite_engine
+):
+    with Session(sqlite_engine) as session:
+        from app.models import EmailTemplate
+
+        settings = _seed_company(session, outreach_enabled=True)
+        user = session.exec(select(User)).first()
+        assert user is not None
+
+        standard = EmailTemplate(
+            name="Standard Only Email",
+            subject_template="Thanks",
+            body_template="<p>Standard review only</p>",
+            created_by_id=user.id,
+        )
+        session.add(standard)
+        session.commit()
+        session.refresh(standard)
+
+        settings.review_request_email_template_id = standard.id
+        settings.review_returning_customer_enabled = True
+        session.add(settings)
+        session.commit()
+
+        prior = _seed_completed_order(
+            session,
+            completed_at=datetime.utcnow() - timedelta(days=30),
+            suffix="1",
+        )
+        repeat = _seed_completed_order(
+            session,
+            completed_at=datetime.utcnow() - timedelta(days=5),
+            suffix="2",
+        )
+        repeat.customer_id = prior.customer_id
+        session.add(repeat)
+        session.commit()
+        session.refresh(repeat)
+
+        success, error = send_review_request_to_customer(
+            repeat,
+            session,
+            force=True,
+            channel="email",
+            use_returning_template=True,
+        )
+        assert success is True
+        assert error is None
+        mock_send_email.assert_called_once()
+        assert "Standard review only" in mock_send_email.call_args.kwargs["body_html"]

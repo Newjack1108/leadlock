@@ -125,6 +125,11 @@ export default function CompanySettingsPage() {
     review_request_outreach_channel: 'sms' as 'sms' | 'email',
     review_request_sms_template_id: '' as string,
     review_request_email_template_id: '' as string,
+    review_returning_customer_enabled: true,
+    review_free_gift_title: '',
+    review_free_gift_terms: '',
+    review_returning_sms_template_id: '' as string,
+    review_returning_email_template_id: '' as string,
     review_prize_draw_enabled: false,
     review_prize_draw_title: '',
     review_prize_draw_terms: '',
@@ -237,6 +242,17 @@ export default function CompanySettingsPage() {
           response.data.review_request_email_template_id != null
             ? String(response.data.review_request_email_template_id)
             : '',
+        review_returning_customer_enabled: response.data.review_returning_customer_enabled ?? true,
+        review_free_gift_title: response.data.review_free_gift_title || '',
+        review_free_gift_terms: response.data.review_free_gift_terms || '',
+        review_returning_sms_template_id:
+          response.data.review_returning_sms_template_id != null
+            ? String(response.data.review_returning_sms_template_id)
+            : '',
+        review_returning_email_template_id:
+          response.data.review_returning_email_template_id != null
+            ? String(response.data.review_returning_email_template_id)
+            : '',
         review_prize_draw_enabled: response.data.review_prize_draw_enabled ?? false,
         review_prize_draw_title: response.data.review_prize_draw_title || '',
         review_prize_draw_terms: response.data.review_prize_draw_terms || '',
@@ -336,6 +352,17 @@ export default function CompanySettingsPage() {
           formData.review_request_email_template_id.trim() === ''
             ? null
             : parseInt(formData.review_request_email_template_id, 10),
+        review_returning_customer_enabled: formData.review_returning_customer_enabled,
+        review_free_gift_title: formData.review_free_gift_title.trim() || null,
+        review_free_gift_terms: formData.review_free_gift_terms.trim() || null,
+        review_returning_sms_template_id:
+          formData.review_returning_sms_template_id.trim() === ''
+            ? null
+            : parseInt(formData.review_returning_sms_template_id, 10),
+        review_returning_email_template_id:
+          formData.review_returning_email_template_id.trim() === ''
+            ? null
+            : parseInt(formData.review_returning_email_template_id, 10),
         review_prize_draw_enabled: formData.review_prize_draw_enabled,
         review_prize_draw_title: formData.review_prize_draw_title.trim() || null,
         review_prize_draw_terms: formData.review_prize_draw_terms.trim() || null,
@@ -844,6 +871,123 @@ export default function CompanySettingsPage() {
                         </Link>
                       </p>
                     </div>
+                  </div>
+                  <div className="rounded-md border p-4 space-y-4 bg-background/60">
+                    <p className="text-sm font-medium">Returning customer free gift (manual send)</p>
+                    <p className="text-xs text-muted-foreground">
+                      When a customer has a previous completed installation, staff can send a welcome-back message
+                      promoting 2 reviews for a free gift. Automated outreach still uses the standard templates above.
+                    </p>
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        id="review_returning_customer_enabled"
+                        checked={formData.review_returning_customer_enabled}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            review_returning_customer_enabled: e.target.checked,
+                          })
+                        }
+                        className="rounded"
+                        disabled={saving}
+                      />
+                      <Label htmlFor="review_returning_customer_enabled">
+                        Enable returning customer gift messages on manual send
+                      </Label>
+                    </div>
+                    {formData.review_returning_customer_enabled ? (
+                      <>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="review_free_gift_title">Free gift title</Label>
+                            <Input
+                              id="review_free_gift_title"
+                              value={formData.review_free_gift_title}
+                              onChange={(e) =>
+                                setFormData({ ...formData, review_free_gift_title: e.target.value })
+                              }
+                              disabled={saving}
+                              placeholder="e.g. Free gift"
+                            />
+                          </div>
+                          <div className="space-y-2 md:col-span-2">
+                            <Label htmlFor="review_free_gift_terms">Free gift terms (optional)</Label>
+                            <Textarea
+                              id="review_free_gift_terms"
+                              value={formData.review_free_gift_terms}
+                              onChange={(e) =>
+                                setFormData({ ...formData, review_free_gift_terms: e.target.value })
+                              }
+                              disabled={saving}
+                              rows={2}
+                              placeholder="Short terms shown in email templates."
+                            />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="review_returning_sms_template_id">Returning customer SMS template</Label>
+                            <Select
+                              value={formData.review_returning_sms_template_id || 'none'}
+                              onValueChange={(v) =>
+                                setFormData({
+                                  ...formData,
+                                  review_returning_sms_template_id: v === 'none' ? '' : v,
+                                })
+                              }
+                              disabled={saving}
+                            >
+                              <SelectTrigger id="review_returning_sms_template_id">
+                                <SelectValue placeholder="Choose template" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">None</SelectItem>
+                                {smsTemplates.map((t) => (
+                                  <SelectItem key={t.id} value={String(t.id)}>
+                                    {t.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="review_returning_email_template_id">
+                              Returning customer email template
+                            </Label>
+                            <Select
+                              value={formData.review_returning_email_template_id || 'none'}
+                              onValueChange={(v) =>
+                                setFormData({
+                                  ...formData,
+                                  review_returning_email_template_id: v === 'none' ? '' : v,
+                                })
+                              }
+                              disabled={saving}
+                            >
+                              <SelectTrigger id="review_returning_email_template_id">
+                                <SelectValue placeholder="Choose template" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">None</SelectItem>
+                                {emailTemplates.map((t) => (
+                                  <SelectItem key={t.id} value={String(t.id)}>
+                                    {t.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Template variables:{' '}
+                          <code className="text-xs">{'{{ review.hub_url }}'}</code>,{' '}
+                          <code className="text-xs">{'{{ review.free_gift_title }}'}</code>,{' '}
+                          <code className="text-xs">{'{{ review.free_gift_terms }}'}</code>,{' '}
+                          <code className="text-xs">{'{{ review.min_reviews_for_gift }}'}</code>.
+                        </p>
+                      </>
+                    ) : null}
                   </div>
                   <div className="rounded-md border p-4 space-y-4 bg-background/60">
                     <div className="flex items-center space-x-2">

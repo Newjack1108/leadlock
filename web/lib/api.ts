@@ -1193,7 +1193,7 @@ export const pushOrderToXero = async (orderId: number) => {
 
 export const sendOrderReviewRequest = async (
   orderId: number,
-  data?: { channel: 'email' | 'sms' }
+  data?: { channel: 'email' | 'sms'; use_returning_template?: boolean | null }
 ) => {
   const response = await api.post(`/api/orders/${orderId}/send-review-request`, data ?? { channel: 'sms' });
   return response.data as {

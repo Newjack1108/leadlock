@@ -8,6 +8,7 @@ import {
   getReviewRequestStatusMessage,
 } from '@/lib/reviewRequest';
 import { formatDateTime } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
 import { Copy, ExternalLink, Send, Star } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -18,6 +19,7 @@ type ReviewRequestSectionProps = {
   reviewRequestCustomerSentAt?: string | null;
   reviewRequestCustomerChannel?: string | null;
   reviewHubUrl?: string | null;
+  isReturningCustomer?: boolean;
   onSendReviewRequest?: () => void | Promise<void>;
   sendingReviewRequest?: boolean;
   showSendButton?: boolean;
@@ -31,6 +33,7 @@ export default function ReviewRequestSection({
   reviewRequestCustomerSentAt,
   reviewRequestCustomerChannel,
   reviewHubUrl,
+  isReturningCustomer = false,
   onSendReviewRequest,
   sendingReviewRequest = false,
   showSendButton = true,
@@ -68,7 +71,19 @@ export default function ReviewRequestSection({
       <div className="flex items-start gap-2">
         <Star className={`shrink-0 text-teal-600 ${compact ? 'h-4 w-4 mt-0.5' : 'h-5 w-5'}`} />
         <div className="min-w-0 space-y-1">
-          <p className={`font-medium ${compact ? 'text-sm' : ''}`}>Review request</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className={`font-medium ${compact ? 'text-sm' : ''}`}>Review request</p>
+            {isReturningCustomer ? (
+              <Badge variant="secondary" className={compact ? 'text-[10px] px-1.5 py-0' : ''}>
+                Returning customer
+              </Badge>
+            ) : null}
+          </div>
+          {isReturningCustomer ? (
+            <p className="text-xs text-muted-foreground">
+              Manual send can use the 2-review free gift template when configured in Company Settings.
+            </p>
+          ) : null}
           {installationCompletedAt ? (
             <p className="text-xs text-muted-foreground">
               Installation completed {formatDateTime(installationCompletedAt)}

@@ -23,6 +23,9 @@ interface SendReviewRequestDialogProps {
   orderId: number;
   orderNumber?: string;
   customer?: Customer | null;
+  isReturningCustomer?: boolean;
+  freeGiftTitle?: string | null;
+  returningGiftEnabled?: boolean;
   onSuccess?: () => void;
 }
 
@@ -32,6 +35,9 @@ export default function SendReviewRequestDialog({
   orderId,
   orderNumber,
   customer: customerProp,
+  isReturningCustomer: isReturningCustomerProp,
+  freeGiftTitle: freeGiftTitleProp,
+  returningGiftEnabled: returningGiftEnabledProp,
   onSuccess,
 }: SendReviewRequestDialogProps) {
   const [channel, setChannel] = useState<'email' | 'sms'>('sms');
@@ -39,6 +45,9 @@ export default function SendReviewRequestDialog({
   const [loadingCustomer, setLoadingCustomer] = useState(false);
   const [customer, setCustomer] = useState<Customer | null>(customerProp ?? null);
   const [resolvedOrderNumber, setResolvedOrderNumber] = useState(orderNumber ?? '');
+  const [isReturningCustomer, setIsReturningCustomer] = useState(isReturningCustomerProp ?? false);
+  const [freeGiftTitle, setFreeGiftTitle] = useState(freeGiftTitleProp ?? 'free gift');
+  const [returningGiftEnabled, setReturningGiftEnabled] = useState(returningGiftEnabledProp ?? true);
 
   useEffect(() => {
     if (!open) return;
@@ -46,14 +55,34 @@ export default function SendReviewRequestDialog({
     setChannel(customerProp?.phone?.trim() ? 'sms' : 'email');
     setCustomer(customerProp ?? null);
     setResolvedOrderNumber(orderNumber ?? '');
-
-    if (customerProp) return;
+    setIsReturningCustomer(isReturningCustomerProp ?? false);
+    setFreeGiftTitle(freeGiftTitleProp ?? 'free gift');
+    setReturningGiftEnabled(returningGiftEnabledProp ?? true);
 
     const load = async () => {
       setLoadingCustomer(true);
       try {
-        const order = await getOrder(orderId);
+        const [order, settingsResponse] = await Promise.all([
+          getOrder(orderId),
+          api.get('/api/settings/company').catch(() => null),
+        ]);
         setResolvedOrderNumber(order.order_number ?? '');
+        if (isReturningCustomerProp === undefined) {
+          setIsReturningCustomer(order.is_returning_customer_for_review ?? false);
+        }
+        if (settingsResponse?.data) {
+          const settings = settingsResponse.data as {
+            review_returning_customer_enabled?: boolean;
+            review_free_gift_title?: string | null;
+          };
+          if (returningGiftEnabledProp === undefined) {
+            setReturningGiftEnabled(settings.review_returning_customer_enabled ?? true);
+          }
+          if (freeGiftTitleProp === undefined) {
+            setFreeGiftTitle(settings.review_free_gift_title || 'free gift');
+          }
+        }
+        if (customerProp) return;
         if (order.customer_id) {
           const response = await api.get(`/api/customers/${order.customer_id}`);
           const loaded = response.data as Customer;
@@ -68,12 +97,22 @@ export default function SendReviewRequestDialog({
       }
     };
     void load();
-  }, [open, orderId, orderNumber, customerProp]);
+  }, [
+    open,
+    orderId,
+    orderNumber,
+    customerProp,
+    isReturningCustomerProp,
+    freeGiftTitleProp,
+    returningGiftEnabledProp,
+  ]);
 
   const recipientEmail = (customer?.email ?? '').trim();
   const recipientPhone = (customer?.phone ?? '').trim();
   const canSend =
     channel === 'email' ? !!recipientEmail && !customer?.wrong_email_address : !!recipientPhone;
+  const useReturningTemplate =
+    isReturningCustomer && returningGiftEnabled;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -88,7 +127,10 @@ export default function SendReviewRequestDialog({
 
     setLoading(true);
     try {
-      const result = await sendOrderReviewRequest(orderId, { channel });
+      const result = await sendOrderReviewRequest(orderId, {
+        channel,
+        use_returning_template: useReturningTemplate ? true : false,
+      });
       toast.success(result.message || `Review request sent by ${channel}`);
       onOpenChange(false);
       onSuccess?.();
@@ -108,8 +150,18 @@ export default function SendReviewRequestDialog({
             Send review request
           </DialogTitle>
           <DialogDescription>
-            Send post-install review links to the customer
-            {resolvedOrderNumber ? ` for order ${resolvedOrderNumber}` : ''}.
+            {useReturningTemplate ? (
+              <>
+                This returning customer will receive the welcome-back message promoting{' '}
+                <strong>2 reviews for a {freeGiftTitle}</strong>
+                {resolvedOrderNumber ? ` for order ${resolvedOrderNumber}` : ''}.
+              </>
+            ) : (
+              <>
+                Send post-install review links to the customer
+                {resolvedOrderNumber ? ` for order ${resolvedOrderNumber}` : ''}.
+              </>
+            )}
           </DialogDescription>
         </DialogHeader>
 

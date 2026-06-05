@@ -52,6 +52,7 @@ from app.schemas import (
     OrderSendReviewRequestResponse,
 )
 from app.review_request_service import (
+    is_returning_customer_for_review,
     on_installation_completed,
     on_installation_uncompleted,
     send_review_request_to_customer,
@@ -241,6 +242,7 @@ def build_order_response(order: Order, order_items: List[OrderItem], session: Se
 
     access_sheet = _build_access_sheet_response(order.id, session)
     review_hub_url = _build_review_hub_url(order, session)
+    is_returning_for_review = is_returning_customer_for_review(order, session)
     prize_draw_entry = _build_prize_draw_entry_response(order, session)
     sent_at, sent_by_id, sent_by_name = _get_latest_production_send(order.id, session)
 
@@ -295,6 +297,7 @@ def build_order_response(order: Order, order_items: List[OrderItem], session: Se
         ],
         access_sheet=access_sheet,
         review_hub_url=review_hub_url,
+        is_returning_customer_for_review=is_returning_for_review,
         prize_draw_entry=prize_draw_entry,
         sent_to_production_at=sent_at,
         sent_to_production_by_id=sent_by_id,
@@ -675,6 +678,7 @@ async def send_order_review_request(
         actor_user=current_user,
         force=True,
         channel=channel,
+        use_returning_template=req.use_returning_template,
     )
     if not success:
         session.rollback()
