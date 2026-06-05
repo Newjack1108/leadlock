@@ -716,6 +716,8 @@ export interface CompanySettings {
   review_prize_draw_title?: string | null;
   review_prize_draw_terms?: string | null;
   review_prize_draw_min_platforms?: number;
+  review_prize_draw_congratulations_sms_template_id?: number | null;
+  review_prize_draw_congratulations_email_template_id?: number | null;
   updated_at: string;
 }
 
@@ -755,6 +757,9 @@ export interface ReviewPrizeDrawWinner {
   picked_at: string;
   picked_by_id: number;
   picked_by_name?: string | null;
+  congratulations_sent_at?: string | null;
+  congratulations_channel?: string | null;
+  congratulations_sent_by_name?: string | null;
 }
 
 export interface ReviewHubPublicContext {
@@ -1879,6 +1884,7 @@ export enum CustomerHistoryEventType {
   REVIEW_PRIZE_DRAW_REJECTED = "REVIEW_PRIZE_DRAW_REJECTED",
   REVIEW_PRIZE_DRAW_WINNER = "REVIEW_PRIZE_DRAW_WINNER",
   REVIEW_PRIZE_DRAW_WINNER_RESET = "REVIEW_PRIZE_DRAW_WINNER_RESET",
+  REVIEW_PRIZE_DRAW_CONGRATULATIONS_SENT = "REVIEW_PRIZE_DRAW_CONGRATULATIONS_SENT",
 }
 
 export interface CustomerHistoryEvent {

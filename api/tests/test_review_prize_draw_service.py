@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 
 import pytest
+from unittest.mock import patch
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
 
@@ -25,6 +26,7 @@ from app.review_prize_draw_service import (
     pick_random_winner,
     reject_entry,
     reset_winner_for_month,
+    send_congratulations_to_winner,
     submit_prize_draw_entry,
 )
 from app.review_request_service import build_review_template_context
@@ -208,6 +210,118 @@ def test_reset_winner_for_month_without_winner_returns_error(sqlite_engine):
         success, err = reset_winner_for_month(month, user, session)
         assert success is False
         assert "no winner" in (err or "").lower()
+
+
+def _seed_winner(session: Session):
+    from app.models import EmailTemplate
+
+    settings, order = _seed(session)
+    user = session.get(User, settings.updated_by_id)
+    email_template = EmailTemplate(
+        name="Congrats Email",
+        subject_template="You won {{ prize_draw.title }}",
+        body_template="<p>Hi {{ customer.name }}, you won {{ prize_draw.title }} for {{ prize_draw.month }}.</p>",
+        created_by_id=user.id,
+    )
+    session.add(email_template)
+    session.commit()
+    session.refresh(email_template)
+    settings.review_prize_draw_congratulations_email_template_id = email_template.id
+    session.add(settings)
+
+    entry = ensure_prize_draw_entry(order, session)
+    submit_prize_draw_entry(entry.access_token, ["GOOGLE", "FACEBOOK"], session)
+    approve_entry(entry.id, user, session)
+    session.commit()
+
+    month = datetime.utcnow().strftime("%Y-%m")
+    winner, err = pick_random_winner(month, user, session)
+    session.commit()
+    assert err is None
+    return settings, order, user, winner, month
+
+
+@patch("app.review_prize_draw_service.is_email_configured", return_value=True)
+@patch(
+    "app.review_prize_draw_service.send_email",
+    return_value=(True, "msg-id", None, "<p>You won</p>", "You won"),
+)
+def test_send_congratulations_sets_sent_timestamp(mock_send_email, mock_email_cfg, sqlite_engine):
+    with Session(sqlite_engine) as session:
+        _settings, _order, user, winner, month = _seed_winner(session)
+
+        updated, err = send_congratulations_to_winner(month, user, session, channel="email")
+        session.commit()
+        session.refresh(updated)
+
+        assert err is None
+        assert updated.congratulations_sent_at is not None
+        assert updated.congratulations_channel == "EMAIL"
+        mock_send_email.assert_called_once()
+
+
+@patch("app.review_prize_draw_service.is_email_configured", return_value=True)
+@patch(
+    "app.review_prize_draw_service.send_email",
+    return_value=(True, "msg-id", None, "<p>You won</p>", "You won"),
+)
+def test_send_congratulations_blocks_duplicate_without_force(
+    mock_send_email, mock_email_cfg, sqlite_engine
+):
+    with Session(sqlite_engine) as session:
+        _settings, _order, user, _winner, month = _seed_winner(session)
+
+        send_congratulations_to_winner(month, user, session, channel="email")
+        session.commit()
+        mock_send_email.reset_mock()
+
+        updated, err = send_congratulations_to_winner(month, user, session, channel="email")
+        assert updated is None
+        assert "already sent" in (err or "").lower()
+        mock_send_email.assert_not_called()
+
+
+@patch("app.review_prize_draw_service.is_email_configured", return_value=True)
+@patch(
+    "app.review_prize_draw_service.send_email",
+    side_effect=[
+        (True, "msg-id-1", None, "<p>You won</p>", "You won"),
+        (True, "msg-id-2", None, "<p>You won again</p>", "You won again"),
+    ],
+)
+def test_send_congratulations_force_resend(mock_send_email, mock_email_cfg, sqlite_engine):
+    with Session(sqlite_engine) as session:
+        _settings, _order, user, _winner, month = _seed_winner(session)
+
+        send_congratulations_to_winner(month, user, session, channel="email")
+        session.commit()
+        mock_send_email.reset_mock()
+
+        updated, err = send_congratulations_to_winner(
+            month, user, session, channel="email", force=True
+        )
+        session.commit()
+        assert err is None
+        assert updated.congratulations_sent_at is not None
+        mock_send_email.assert_called_once()
+
+
+def test_send_congratulations_missing_template_returns_error(sqlite_engine):
+    with Session(sqlite_engine) as session:
+        settings, order = _seed(session)
+        user = session.get(User, settings.updated_by_id)
+        entry = ensure_prize_draw_entry(order, session)
+        submit_prize_draw_entry(entry.access_token, ["GOOGLE", "FACEBOOK"], session)
+        approve_entry(entry.id, user, session)
+        session.commit()
+
+        month = datetime.utcnow().strftime("%Y-%m")
+        pick_random_winner(month, user, session)
+        session.commit()
+
+        updated, err = send_congratulations_to_winner(month, user, session, channel="email")
+        assert updated is None
+        assert "email template" in (err or "").lower()
 
 
 def test_pick_random_winner_idempotent(sqlite_engine):

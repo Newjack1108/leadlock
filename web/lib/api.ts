@@ -1396,6 +1396,18 @@ export const resetReviewPrizeDrawWinner = async (month: string) => {
   return response.data as { success: boolean; month: string };
 };
 
+export const sendReviewPrizeDrawCongratulations = async (
+  month: string,
+  data: { channel: 'email' | 'sms'; force?: boolean }
+) => {
+  const response = await api.post('/api/review-prize-draw/send-congratulations', {
+    month,
+    channel: data.channel,
+    force: data.force ?? false,
+  });
+  return response.data as import('@/lib/types').ReviewPrizeDrawWinner;
+};
+
 export const updateDraftQuote = async (quoteId: number, quoteData: {
   valid_until?: string;
   terms_and_conditions?: string;

@@ -520,6 +520,12 @@ class CompanySettings(SQLModel, table=True):
     review_prize_draw_title: Optional[str] = None
     review_prize_draw_terms: Optional[str] = None
     review_prize_draw_min_platforms: int = Field(default=2)
+    review_prize_draw_congratulations_sms_template_id: Optional[int] = Field(
+        default=None, foreign_key="smstemplate.id"
+    )
+    review_prize_draw_congratulations_email_template_id: Optional[int] = Field(
+        default=None, foreign_key="emailtemplate.id"
+    )
     updated_by_id: int = Field(foreign_key="user.id")
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     
@@ -1020,9 +1026,17 @@ class ReviewPrizeDrawWinner(SQLModel, table=True):
     entry_id: int = Field(foreign_key="reviewprizedrawentry.id")
     picked_at: datetime = Field(default_factory=datetime.utcnow)
     picked_by_id: int = Field(foreign_key="user.id")
+    congratulations_sent_at: Optional[datetime] = None
+    congratulations_channel: Optional[str] = None
+    congratulations_sent_by_id: Optional[int] = Field(default=None, foreign_key="user.id")
 
     entry: ReviewPrizeDrawEntry = Relationship()
-    picked_by: "User" = Relationship()
+    picked_by: "User" = Relationship(
+        sa_relationship_kwargs={"foreign_keys": "[ReviewPrizeDrawWinner.picked_by_id]"}
+    )
+    congratulations_sent_by: Optional["User"] = Relationship(
+        sa_relationship_kwargs={"foreign_keys": "[ReviewPrizeDrawWinner.congratulations_sent_by_id]"}
+    )
 
 
 class ReviewHubRequest(SQLModel, table=True):

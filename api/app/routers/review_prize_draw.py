@@ -22,6 +22,7 @@ from app.review_prize_draw_service import (
     pick_random_winner,
     reject_entry,
     reset_winner_for_month,
+    send_congratulations_to_winner,
 )
 from app.schemas import (
     ReviewPrizeDrawEntriesResponse,
@@ -29,6 +30,7 @@ from app.schemas import (
     ReviewPrizeDrawPickWinnerRequest,
     ReviewPrizeDrawRejectRequest,
     ReviewPrizeDrawResetWinnerResponse,
+    ReviewPrizeDrawSendCongratulationsRequest,
     ReviewPrizeDrawWinnerResponse,
 )
 
@@ -63,6 +65,10 @@ def _winner_to_response(winner: ReviewPrizeDrawWinner, session: Session) -> Revi
     order = session.get(Order, entry.order_id) if entry else None
     customer = session.get(Customer, entry.customer_id) if entry else None
     picker = session.get(User, winner.picked_by_id)
+    sent_by_name = None
+    if winner.congratulations_sent_by_id:
+        sent_by = session.get(User, winner.congratulations_sent_by_id)
+        sent_by_name = sent_by.full_name if sent_by else None
     return ReviewPrizeDrawWinnerResponse(
         month=winner.month,
         entry_id=winner.entry_id,
@@ -74,6 +80,9 @@ def _winner_to_response(winner: ReviewPrizeDrawWinner, session: Session) -> Revi
         picked_at=winner.picked_at,
         picked_by_id=winner.picked_by_id,
         picked_by_name=picker.full_name if picker else None,
+        congratulations_sent_at=winner.congratulations_sent_at,
+        congratulations_channel=winner.congratulations_channel,
+        congratulations_sent_by_name=sent_by_name,
     )
 
 
@@ -169,3 +178,27 @@ async def reset_prize_draw_winner(
         raise HTTPException(status_code=400, detail=err)
     session.commit()
     return ReviewPrizeDrawResetWinnerResponse(success=True, month=body.month)
+
+
+@router.post("/send-congratulations", response_model=ReviewPrizeDrawWinnerResponse)
+async def send_prize_draw_congratulations(
+    body: ReviewPrizeDrawSendCongratulationsRequest,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_role([UserRole.DIRECTOR])),
+):
+    channel = (body.channel or "").strip().lower()
+    if channel not in ("email", "sms"):
+        raise HTTPException(status_code=400, detail="channel must be 'email' or 'sms'")
+
+    winner, err = send_congratulations_to_winner(
+        body.month,
+        current_user,
+        session,
+        channel=channel,
+        force=body.force,
+    )
+    if err:
+        raise HTTPException(status_code=400, detail=err)
+    session.commit()
+    session.refresh(winner)
+    return _winner_to_response(winner, session)

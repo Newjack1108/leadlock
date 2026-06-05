@@ -787,6 +787,92 @@ def backfill_returning_review_request_templates(session: Session) -> None:
         print("Backfilled returning-customer review request templates", file=sys.stderr, flush=True)
 
 
+def _default_prize_draw_congratulations_sms_body() -> str:
+    return (
+        "Congratulations {{ customer.name }}! You've won our {{ prize_draw.title }} "
+        "({{ prize_draw.month }}). We'll be in touch soon. "
+        "— {{ company.trading_name or company.company_name }}"
+    )
+
+
+def _default_prize_draw_congratulations_email_subject() -> str:
+    return "Congratulations — you won {{ prize_draw.title }}"
+
+
+def _default_prize_draw_congratulations_email_body() -> str:
+    return (
+        "<p>Hi {{ customer.name }},</p>"
+        "<p>Congratulations! You are the winner of our <strong>{{ prize_draw.title }}</strong> "
+        "for {{ prize_draw.month }}.</p>"
+        "<p>Thank you for leaving your reviews — we'll be in touch soon to arrange your prize.</p>"
+        "<p>{{ company.trading_name or company.company_name }}</p>"
+    )
+
+
+def backfill_prize_draw_congratulations_templates(session: Session) -> None:
+    """Seed prize draw winner congratulations SMS/email templates."""
+    import sys
+
+    from sqlmodel import select
+
+    from app.models import CompanySettings, EmailTemplate, SmsTemplate, User, UserRole
+
+    settings = session.exec(select(CompanySettings).limit(1)).first()
+    if not settings:
+        return
+
+    director = session.exec(select(User).where(User.role == UserRole.DIRECTOR).limit(1)).first()
+    if not director:
+        director = session.exec(select(User).limit(1)).first()
+    if not director:
+        return
+
+    sms_body = _default_prize_draw_congratulations_sms_body()
+    email_subject = _default_prize_draw_congratulations_email_subject()
+    email_body = _default_prize_draw_congratulations_email_body()
+
+    changed = False
+
+    existing_sms = session.exec(
+        select(SmsTemplate).where(SmsTemplate.name == "Prize Draw Winner Congratulations")
+    ).first()
+    if not existing_sms:
+        existing_sms = SmsTemplate(
+            name="Prize Draw Winner Congratulations",
+            body_template=sms_body,
+            created_by_id=director.id,
+        )
+        session.add(existing_sms)
+        session.flush()
+        changed = True
+
+    existing_email = session.exec(
+        select(EmailTemplate).where(EmailTemplate.name == "Prize Draw Winner Congratulations")
+    ).first()
+    if not existing_email:
+        existing_email = EmailTemplate(
+            name="Prize Draw Winner Congratulations",
+            subject_template=email_subject,
+            body_template=email_body,
+            created_by_id=director.id,
+        )
+        session.add(existing_email)
+        session.flush()
+        changed = True
+
+    if not settings.review_prize_draw_congratulations_sms_template_id:
+        settings.review_prize_draw_congratulations_sms_template_id = existing_sms.id
+        changed = True
+    if not settings.review_prize_draw_congratulations_email_template_id:
+        settings.review_prize_draw_congratulations_email_template_id = existing_email.id
+        changed = True
+
+    if changed:
+        session.add(settings)
+        session.commit()
+        print("Backfilled prize draw congratulations templates", file=sys.stderr, flush=True)
+
+
 def create_db_and_tables():
     """Create all tables and migrate existing data."""
     import sys
@@ -1068,6 +1154,30 @@ def create_db_and_tables():
                     print("Created reviewprizedrawwinner table", file=sys.stderr, flush=True)
             except Exception as e:
                 print(f"Error creating reviewprizedrawwinner table: {e}", file=sys.stderr, flush=True)
+
+        if inspector.has_table("reviewprizedrawwinner"):
+            winner_columns = [col["name"] for col in inspector.get_columns("reviewprizedrawwinner")]
+            prize_winner_cols = {
+                "congratulations_sent_at": "TIMESTAMP",
+                "congratulations_channel": "VARCHAR(8)",
+                "congratulations_sent_by_id": 'INTEGER REFERENCES "user"(id)',
+            }
+            for col_name, col_type in prize_winner_cols.items():
+                if col_name not in winner_columns:
+                    try:
+                        with engine.begin() as conn:
+                            conn.execute(
+                                text(f"ALTER TABLE reviewprizedrawwinner ADD COLUMN {col_name} {col_type}")
+                            )
+                        print(f"Added {col_name} to reviewprizedrawwinner", file=sys.stderr, flush=True)
+                    except Exception as e:
+                        error_str = str(e).lower()
+                        if "already exists" not in error_str and "duplicate" not in error_str:
+                            print(
+                                f"Error adding {col_name} to reviewprizedrawwinner: {e}",
+                                file=sys.stderr,
+                                flush=True,
+                            )
 
         has_configurator_invite_table = inspector.has_table("configuratorinvite")
         if not has_configurator_invite_table:
@@ -1436,6 +1546,8 @@ def create_db_and_tables():
                     "review_free_gift_terms": "TEXT",
                     "review_returning_sms_template_id": "INTEGER REFERENCES smstemplate(id)",
                     "review_returning_email_template_id": "INTEGER REFERENCES emailtemplate(id)",
+                    "review_prize_draw_congratulations_sms_template_id": "INTEGER REFERENCES smstemplate(id)",
+                    "review_prize_draw_congratulations_email_template_id": "INTEGER REFERENCES emailtemplate(id)",
                 }
                 for col_name, col_type in review_company_cols.items():
                     if col_name not in company_columns:
@@ -2475,6 +2587,7 @@ def create_db_and_tables():
                 with Session(engine) as session:
                     backfill_review_request_templates(session)
                     backfill_returning_review_request_templates(session)
+                    backfill_prize_draw_congratulations_templates(session)
             except Exception as e:
                 print(f"Error backfilling review request templates: {e}", file=sys.stderr, flush=True)
         

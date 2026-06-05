@@ -1412,6 +1412,8 @@ class CompanySettingsCreate(BaseModel):
     review_prize_draw_title: Optional[str] = None
     review_prize_draw_terms: Optional[str] = None
     review_prize_draw_min_platforms: Optional[int] = 2
+    review_prize_draw_congratulations_sms_template_id: Optional[int] = None
+    review_prize_draw_congratulations_email_template_id: Optional[int] = None
 
 
 class CompanySettingsUpdate(BaseModel):
@@ -1478,6 +1480,8 @@ class CompanySettingsUpdate(BaseModel):
     review_prize_draw_title: Optional[str] = None
     review_prize_draw_terms: Optional[str] = None
     review_prize_draw_min_platforms: Optional[int] = None
+    review_prize_draw_congratulations_sms_template_id: Optional[int] = None
+    review_prize_draw_congratulations_email_template_id: Optional[int] = None
 
 
 class CompanySettingsResponse(BaseModel):
@@ -1545,6 +1549,8 @@ class CompanySettingsResponse(BaseModel):
     review_prize_draw_title: Optional[str] = None
     review_prize_draw_terms: Optional[str] = None
     review_prize_draw_min_platforms: int = 2
+    review_prize_draw_congratulations_sms_template_id: Optional[int] = None
+    review_prize_draw_congratulations_email_template_id: Optional[int] = None
     updated_at: datetime
 
 
@@ -2441,6 +2447,7 @@ class CustomerHistoryEventType(str, Enum):
     REVIEW_PRIZE_DRAW_REJECTED = "REVIEW_PRIZE_DRAW_REJECTED"
     REVIEW_PRIZE_DRAW_WINNER = "REVIEW_PRIZE_DRAW_WINNER"
     REVIEW_PRIZE_DRAW_WINNER_RESET = "REVIEW_PRIZE_DRAW_WINNER_RESET"
+    REVIEW_PRIZE_DRAW_CONGRATULATIONS_SENT = "REVIEW_PRIZE_DRAW_CONGRATULATIONS_SENT"
 
 
 class ReviewPrizeDrawEntryListItem(BaseModel):
@@ -2476,6 +2483,12 @@ class ReviewPrizeDrawResetWinnerResponse(BaseModel):
     month: str
 
 
+class ReviewPrizeDrawSendCongratulationsRequest(BaseModel):
+    month: str
+    channel: str = "sms"  # "email" | "sms"
+    force: bool = False
+
+
 class ReviewPrizeDrawWinnerResponse(BaseModel):
     month: str
     entry_id: int
@@ -2487,6 +2500,9 @@ class ReviewPrizeDrawWinnerResponse(BaseModel):
     picked_at: datetime
     picked_by_id: int
     picked_by_name: Optional[str] = None
+    congratulations_sent_at: Optional[datetime] = None
+    congratulations_channel: Optional[str] = None
+    congratulations_sent_by_name: Optional[str] = None
 
 
 class ReviewPrizePublicPlatform(BaseModel):

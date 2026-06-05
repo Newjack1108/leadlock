@@ -134,6 +134,8 @@ export default function CompanySettingsPage() {
     review_prize_draw_title: '',
     review_prize_draw_terms: '',
     review_prize_draw_min_platforms: '2',
+    review_prize_draw_congratulations_sms_template_id: '' as string,
+    review_prize_draw_congratulations_email_template_id: '' as string,
   });
 
   useEffect(() => {
@@ -260,6 +262,14 @@ export default function CompanySettingsPage() {
           response.data.review_prize_draw_min_platforms != null
             ? String(response.data.review_prize_draw_min_platforms)
             : '2',
+        review_prize_draw_congratulations_sms_template_id:
+          response.data.review_prize_draw_congratulations_sms_template_id != null
+            ? String(response.data.review_prize_draw_congratulations_sms_template_id)
+            : '',
+        review_prize_draw_congratulations_email_template_id:
+          response.data.review_prize_draw_congratulations_email_template_id != null
+            ? String(response.data.review_prize_draw_congratulations_email_template_id)
+            : '',
       });
     } catch (error: any) {
       if (error.response?.status === 401) {
@@ -367,6 +377,14 @@ export default function CompanySettingsPage() {
         review_prize_draw_title: formData.review_prize_draw_title.trim() || null,
         review_prize_draw_terms: formData.review_prize_draw_terms.trim() || null,
         review_prize_draw_min_platforms: prizeMinPlatformsVal,
+        review_prize_draw_congratulations_sms_template_id:
+          formData.review_prize_draw_congratulations_sms_template_id.trim() === ''
+            ? null
+            : parseInt(formData.review_prize_draw_congratulations_sms_template_id, 10),
+        review_prize_draw_congratulations_email_template_id:
+          formData.review_prize_draw_congratulations_email_template_id.trim() === ''
+            ? null
+            : parseInt(formData.review_prize_draw_congratulations_email_template_id, 10),
       };
       if (settings) {
         // Update existing: omit logo_filename so existing value is unchanged
@@ -1046,8 +1064,72 @@ export default function CompanySettingsPage() {
                             placeholder="One entry per completed installation. Winner drawn monthly."
                           />
                         </div>
+                        <div className="space-y-2 md:col-span-2">
+                          <p className="text-sm font-medium">Winner congratulations templates</p>
+                          <p className="text-xs text-muted-foreground">
+                            Used when staff send congratulations to the monthly draw winner.
+                          </p>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="review_prize_draw_congratulations_sms_template_id">
+                            Congratulations SMS template
+                          </Label>
+                          <Select
+                            value={formData.review_prize_draw_congratulations_sms_template_id || 'none'}
+                            onValueChange={(v) =>
+                              setFormData({
+                                ...formData,
+                                review_prize_draw_congratulations_sms_template_id: v === 'none' ? '' : v,
+                              })
+                            }
+                            disabled={saving}
+                          >
+                            <SelectTrigger id="review_prize_draw_congratulations_sms_template_id">
+                              <SelectValue placeholder="Choose template" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">None</SelectItem>
+                              {smsTemplates.map((t) => (
+                                <SelectItem key={t.id} value={String(t.id)}>
+                                  {t.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="review_prize_draw_congratulations_email_template_id">
+                            Congratulations email template
+                          </Label>
+                          <Select
+                            value={formData.review_prize_draw_congratulations_email_template_id || 'none'}
+                            onValueChange={(v) =>
+                              setFormData({
+                                ...formData,
+                                review_prize_draw_congratulations_email_template_id: v === 'none' ? '' : v,
+                              })
+                            }
+                            disabled={saving}
+                          >
+                            <SelectTrigger id="review_prize_draw_congratulations_email_template_id">
+                              <SelectValue placeholder="Choose template" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">None</SelectItem>
+                              {emailTemplates.map((t) => (
+                                <SelectItem key={t.id} value={String(t.id)}>
+                                  {t.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
                         <p className="text-xs text-muted-foreground md:col-span-2">
-                          Template variable: <code className="text-xs">{'{{ review.prize_draw_url }}'}</code>.{' '}
+                          Variables: <code className="text-xs">{'{{ prize_draw.title }}'}</code>,{' '}
+                          <code className="text-xs">{'{{ prize_draw.month }}'}</code>,{' '}
+                          <code className="text-xs">{'{{ customer.name }}'}</code>,{' '}
+                          <code className="text-xs">{'{{ company.trading_name }}'}</code>. Entry form:{' '}
+                          <code className="text-xs">{'{{ review.prize_draw_url }}'}</code>.{' '}
                           <Link href="/settings/review-prize-draw" className="text-primary underline hover:no-underline">
                             Manage monthly draw
                           </Link>

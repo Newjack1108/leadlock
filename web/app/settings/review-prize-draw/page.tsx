@@ -17,7 +17,8 @@ import {
   resetReviewPrizeDrawWinner,
 } from '@/lib/api';
 import { ReviewPrizeDrawEntryListItem, ReviewPrizeDrawWinner } from '@/lib/types';
-import { Gift, Trophy } from 'lucide-react';
+import SendPrizeDrawCongratulationsDialog from '@/components/SendPrizeDrawCongratulationsDialog';
+import { Gift, Send, Trophy } from 'lucide-react';
 import { toast } from 'sonner';
 
 function currentMonthValue() {
@@ -36,6 +37,7 @@ export default function ReviewPrizeDrawPage() {
   const [loading, setLoading] = useState(true);
   const [picking, setPicking] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [congratsDialogOpen, setCongratsDialogOpen] = useState(false);
   const [busyId, setBusyId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
@@ -213,6 +215,18 @@ export default function ReviewPrizeDrawPage() {
                   Picked {new Date(winner.picked_at).toLocaleString('en-GB')}
                   {winner.picked_by_name ? ` by ${winner.picked_by_name}` : ''}
                 </p>
+                {winner.congratulations_sent_at ? (
+                  <p className="text-xs text-teal-700 dark:text-teal-400">
+                    Congratulations sent
+                    {winner.congratulations_channel
+                      ? ` by ${winner.congratulations_channel.toLowerCase()}`
+                      : ''}{' '}
+                    on {new Date(winner.congratulations_sent_at).toLocaleString('en-GB')}
+                    {winner.congratulations_sent_by_name
+                      ? ` by ${winner.congratulations_sent_by_name}`
+                      : ''}
+                  </p>
+                ) : null}
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">No winner picked yet for this month.</p>
@@ -225,13 +239,23 @@ export default function ReviewPrizeDrawPage() {
                 {picking ? 'Picking…' : 'Pick random winner'}
               </Button>
               {winner ? (
-                <Button
-                  variant="outline"
-                  onClick={() => void handleResetWinner()}
-                  disabled={picking || resetting}
-                >
-                  {resetting ? 'Resetting…' : 'Reset draw'}
-                </Button>
+                <>
+                  <Button
+                    variant="secondary"
+                    onClick={() => setCongratsDialogOpen(true)}
+                    disabled={picking || resetting}
+                  >
+                    <Send className="h-4 w-4 mr-1" />
+                    {winner.congratulations_sent_at ? 'Resend congratulations' : 'Send congratulations'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => void handleResetWinner()}
+                    disabled={picking || resetting}
+                  >
+                    {resetting ? 'Resetting…' : 'Reset draw'}
+                  </Button>
+                </>
               ) : null}
             </div>
             {approvedCount === 0 && !winner ? (
@@ -294,6 +318,15 @@ export default function ReviewPrizeDrawPage() {
           </CardContent>
         </Card>
       </main>
+      {winner ? (
+        <SendPrizeDrawCongratulationsDialog
+          open={congratsDialogOpen}
+          onOpenChange={setCongratsDialogOpen}
+          month={month}
+          winner={winner}
+          onSuccess={() => void load()}
+        />
+      ) : null}
     </div>
   );
 }
