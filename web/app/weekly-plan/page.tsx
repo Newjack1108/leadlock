@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Header from '@/components/Header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import {
+import api, {
   generateWeeklyPlan,
   getApiErrorDetail,
   getAssignableUsers,
@@ -17,8 +17,9 @@ import {
   getWeeklyPlanTrend,
   updateWeeklyPlanItem,
 } from '@/lib/api';
-import { WeeklyPlanItem, WeeklyPlanItemStatus, WeeklyPlanListResponse } from '@/lib/types';
-import { CheckCircle2, RefreshCw, XCircle } from 'lucide-react';
+import ComposeEmailDialog from '@/components/ComposeEmailDialog';
+import { Customer, WeeklyPlanItem, WeeklyPlanItemStatus, WeeklyPlanListResponse } from '@/lib/types';
+import { CheckCircle2, Mail, RefreshCw, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   LineChart,
@@ -31,6 +32,23 @@ import {
 } from 'recharts';
 
 type AssignableUser = { id: number; full_name: string; email: string };
+
+const WEEKLY_PLAN_EMAIL_SUBJECT = 'Quick follow-up from LeadLock';
+
+function plainTextToEmailHtml(text: string): string {
+  const trimmed = text.trim();
+  if (!trimmed) return '';
+  return trimmed
+    .split(/\n\s*\n/)
+    .map((para) => para.trim())
+    .filter(Boolean)
+    .map((para) => `<p>${para.replace(/\n/g, '<br>')}</p>`)
+    .join('');
+}
+
+function isEmailChannelItem(item: WeeklyPlanItem): boolean {
+  return (item.channel || '').toUpperCase() === 'EMAIL' && item.customer_id != null;
+}
 
 export default function WeeklyPlanPage() {
   const router = useRouter();
@@ -48,6 +66,17 @@ export default function WeeklyPlanPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [likelihoodFilter, setLikelihoodFilter] = useState<string>('all');
   const [selectedItemIds, setSelectedItemIds] = useState<number[]>([]);
+  const [composeOpen, setComposeOpen] = useState(false);
+  const [composeCustomer, setComposeCustomer] = useState<Customer | null>(null);
+  const [composeInitialSubject, setComposeInitialSubject] = useState('');
+  const [composeInitialBody, setComposeInitialBody] = useState('');
+  const composeItemIdRef = useRef<number | null>(null);
+
+  const resetComposeState = () => {
+    setComposeCustomer(null);
+    setComposeInitialSubject('');
+    setComposeInitialBody('');
+  };
 
   const loadData = async () => {
     try {
@@ -153,6 +182,65 @@ export default function WeeklyPlanPage() {
       await loadData();
     } catch (error) {
       toast.error(getApiErrorDetail(error) || 'Failed to send item');
+    } finally {
+      setBusyItemId(null);
+    }
+  };
+
+  const handleComposeEmail = async (item: WeeklyPlanItem) => {
+    if (!item.customer_id) return;
+    try {
+      setBusyItemId(item.id);
+      const response = await api.get<Customer>(`/api/customers/${item.customer_id}`);
+      const customer = response.data;
+      if (!customer.email?.trim()) {
+        toast.error('Customer has no email address');
+        return;
+      }
+      composeItemIdRef.current = item.id;
+      setComposeInitialSubject(WEEKLY_PLAN_EMAIL_SUBJECT);
+      setComposeInitialBody(plainTextToEmailHtml(item.suggested_message || ''));
+      setComposeCustomer(customer);
+      setComposeOpen(true);
+    } catch (error) {
+      toast.error(getApiErrorDetail(error) || 'Failed to load customer');
+    } finally {
+      setBusyItemId(null);
+    }
+  };
+
+  const handleComposeOpenChange = (open: boolean) => {
+    setComposeOpen(open);
+    if (!open) {
+      resetComposeState();
+      // ComposeEmailDialog calls onSuccess after onOpenChange; defer ref clear so success can read it.
+      window.setTimeout(() => {
+        composeItemIdRef.current = null;
+      }, 200);
+    }
+  };
+
+  const handleComposeSuccess = async () => {
+    const itemId = composeItemIdRef.current;
+    composeItemIdRef.current = null;
+    if (!itemId) return;
+    try {
+      setBusyItemId(itemId);
+      await updateWeeklyPlanItem(itemId, {
+        status: WeeklyPlanItemStatus.COMPLETED,
+        outcome_result: 'completed_via_compose',
+      });
+      setPlan((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          items: prev.items.filter((it) => it.id !== itemId),
+        };
+      });
+      setSelectedItemIds((prev) => prev.filter((id) => id !== itemId));
+      toast.success('Email sent and item marked complete');
+    } catch {
+      toast.error('Email sent but failed to update weekly plan item');
     } finally {
       setBusyItemId(null);
     }
@@ -422,6 +510,18 @@ export default function WeeklyPlanPage() {
                     <div className="text-sm bg-muted/50 rounded p-2">{item.suggested_message}</div>
                   ) : null}
                   <div className="flex flex-wrap gap-2">
+                    {isEmailChannelItem(item) ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={busyItemId === item.id}
+                        onClick={() => handleComposeEmail(item)}
+                        title="Open email composer with suggested message"
+                      >
+                        <Mail className="h-4 w-4 mr-1" />
+                        Compose email
+                      </Button>
+                    ) : null}
                     <Button
                       size="sm"
                       disabled={busyItemId === item.id || !isItemSendable(item)}
@@ -485,6 +585,17 @@ export default function WeeklyPlanPage() {
           </CardContent>
         </Card>
       </main>
+
+      {composeCustomer && (
+        <ComposeEmailDialog
+          open={composeOpen}
+          onOpenChange={handleComposeOpenChange}
+          customer={composeCustomer}
+          initialSubject={composeInitialSubject}
+          initialBody={composeInitialBody}
+          onSuccess={handleComposeSuccess}
+        />
+      )}
     </div>
   );
 }

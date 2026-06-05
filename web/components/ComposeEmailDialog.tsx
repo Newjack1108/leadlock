@@ -30,6 +30,7 @@ interface ComposeEmailDialogProps {
   onSuccess?: () => void;
   initialAttachments?: File[];
   initialSubject?: string;
+  initialBody?: string;
 }
 
 export default function ComposeEmailDialog({
@@ -39,6 +40,7 @@ export default function ComposeEmailDialog({
   onSuccess,
   initialAttachments,
   initialSubject,
+  initialBody,
 }: ComposeEmailDialogProps) {
   const [loading, setLoading] = useState(false);
   const [templates, setTemplates] = useState<EmailTemplate[]>([]);
@@ -89,13 +91,13 @@ export default function ComposeEmailDialog({
         to_email: customer.email || '',
         cc: '',
         subject: initialSubject ?? '',
-        body: '',
+        body: initialBody ?? '',
       });
       setAttachments(initialAttachments ?? []);
       setSelectedTemplateId(undefined);
       setLoading(false);
     }
-  }, [open, customer, initialAttachments, initialSubject]);
+  }, [open, customer, initialAttachments, initialSubject, initialBody]);
 
   const fetchUserSignature = async () => {
     try {
