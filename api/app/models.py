@@ -526,6 +526,7 @@ class CompanySettings(SQLModel, table=True):
     review_prize_draw_congratulations_email_template_id: Optional[int] = Field(
         default=None, foreign_key="emailtemplate.id"
     )
+    review_prize_draw_congratulations_banner_url: Optional[str] = None
     updated_by_id: int = Field(foreign_key="user.id")
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     

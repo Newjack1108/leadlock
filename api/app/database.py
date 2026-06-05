@@ -789,10 +789,16 @@ def backfill_returning_review_request_templates(session: Session) -> None:
 
 def _default_prize_draw_congratulations_sms_body() -> str:
     return (
-        "Congratulations {{ customer.name }}! You've won our {{ prize_draw.title }} "
-        "({{ prize_draw.month }}). We'll be in touch soon. "
-        "— {{ company.trading_name or company.company_name }}"
+        "🎉 Congratulations {{ customer.name }}! You've won our {{ prize_draw.title }} "
+        "({{ prize_draw.month }}) 🏆 We'll be in touch soon to arrange your prize. "
+        "— {{ company.trading_name or company.company_name }} 🎊"
     )
+
+
+def _template_missing_prize_draw_sms_celebration(body: str | None) -> bool:
+    if not body:
+        return True
+    return "🎉" not in body
 
 
 def _default_prize_draw_congratulations_email_subject() -> str:
@@ -801,12 +807,26 @@ def _default_prize_draw_congratulations_email_subject() -> str:
 
 def _default_prize_draw_congratulations_email_body() -> str:
     return (
+        '<table width="100%" cellpadding="0" cellspacing="0" role="presentation">'
+        '<tr><td align="center" style="background:#fef3c7;padding:16px;border-radius:8px 8px 0 0;">'
+        '<img src="{{ prize_draw.celebration_banner_url }}" alt="Congratulations!" width="520" '
+        'style="max-width:100%;display:block;" />'
+        '<p style="font-size:28px;margin:12px 0 0;">🎉 🎊 🏆</p>'
+        "</td></tr>"
+        '<tr><td style="padding:20px;">'
         "<p>Hi {{ customer.name }},</p>"
         "<p>Congratulations! You are the winner of our <strong>{{ prize_draw.title }}</strong> "
         "for {{ prize_draw.month }}.</p>"
         "<p>Thank you for leaving your reviews — we'll be in touch soon to arrange your prize.</p>"
         "<p>{{ company.trading_name or company.company_name }}</p>"
+        "</td></tr></table>"
     )
+
+
+def _template_missing_celebration_banner(body: str | None) -> bool:
+    if not body:
+        return True
+    return "celebration_banner_url" not in body and "prize-draw-celebration" not in body
 
 
 def backfill_prize_draw_congratulations_templates(session: Session) -> None:
@@ -845,6 +865,10 @@ def backfill_prize_draw_congratulations_templates(session: Session) -> None:
         session.add(existing_sms)
         session.flush()
         changed = True
+    elif _template_missing_prize_draw_sms_celebration(existing_sms.body_template):
+        existing_sms.body_template = sms_body
+        session.add(existing_sms)
+        changed = True
 
     existing_email = session.exec(
         select(EmailTemplate).where(EmailTemplate.name == "Prize Draw Winner Congratulations")
@@ -859,6 +883,10 @@ def backfill_prize_draw_congratulations_templates(session: Session) -> None:
         session.add(existing_email)
         session.flush()
         changed = True
+    elif _template_missing_celebration_banner(existing_email.body_template):
+        existing_email.body_template = email_body
+        session.add(existing_email)
+        changed = True
 
     if not settings.review_prize_draw_congratulations_sms_template_id:
         settings.review_prize_draw_congratulations_sms_template_id = existing_sms.id
@@ -866,6 +894,25 @@ def backfill_prize_draw_congratulations_templates(session: Session) -> None:
     if not settings.review_prize_draw_congratulations_email_template_id:
         settings.review_prize_draw_congratulations_email_template_id = existing_email.id
         changed = True
+    else:
+        linked_sms = session.get(SmsTemplate, settings.review_prize_draw_congratulations_sms_template_id)
+        if linked_sms and linked_sms.id != existing_sms.id and _template_missing_prize_draw_sms_celebration(
+            linked_sms.body_template
+        ):
+            linked_sms.body_template = sms_body
+            session.add(linked_sms)
+            changed = True
+
+    if settings.review_prize_draw_congratulations_email_template_id:
+        linked_email = session.get(
+            EmailTemplate, settings.review_prize_draw_congratulations_email_template_id
+        )
+        if linked_email and linked_email.id != existing_email.id and _template_missing_celebration_banner(
+            linked_email.body_template
+        ):
+            linked_email.body_template = email_body
+            session.add(linked_email)
+            changed = True
 
     if changed:
         session.add(settings)
@@ -1548,6 +1595,7 @@ def create_db_and_tables():
                     "review_returning_email_template_id": "INTEGER REFERENCES emailtemplate(id)",
                     "review_prize_draw_congratulations_sms_template_id": "INTEGER REFERENCES smstemplate(id)",
                     "review_prize_draw_congratulations_email_template_id": "INTEGER REFERENCES emailtemplate(id)",
+                    "review_prize_draw_congratulations_banner_url": "VARCHAR(2048)",
                 }
                 for col_name, col_type in review_company_cols.items():
                     if col_name not in company_columns:

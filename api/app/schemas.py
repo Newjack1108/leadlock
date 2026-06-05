@@ -1414,6 +1414,7 @@ class CompanySettingsCreate(BaseModel):
     review_prize_draw_min_platforms: Optional[int] = 2
     review_prize_draw_congratulations_sms_template_id: Optional[int] = None
     review_prize_draw_congratulations_email_template_id: Optional[int] = None
+    review_prize_draw_congratulations_banner_url: Optional[str] = None
 
 
 class CompanySettingsUpdate(BaseModel):
@@ -1482,6 +1483,7 @@ class CompanySettingsUpdate(BaseModel):
     review_prize_draw_min_platforms: Optional[int] = None
     review_prize_draw_congratulations_sms_template_id: Optional[int] = None
     review_prize_draw_congratulations_email_template_id: Optional[int] = None
+    review_prize_draw_congratulations_banner_url: Optional[str] = None
 
 
 class CompanySettingsResponse(BaseModel):
@@ -1551,6 +1553,7 @@ class CompanySettingsResponse(BaseModel):
     review_prize_draw_min_platforms: int = 2
     review_prize_draw_congratulations_sms_template_id: Optional[int] = None
     review_prize_draw_congratulations_email_template_id: Optional[int] = None
+    review_prize_draw_congratulations_banner_url: Optional[str] = None
     updated_at: datetime
 
 

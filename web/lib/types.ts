@@ -718,6 +718,7 @@ export interface CompanySettings {
   review_prize_draw_min_platforms?: number;
   review_prize_draw_congratulations_sms_template_id?: number | null;
   review_prize_draw_congratulations_email_template_id?: number | null;
+  review_prize_draw_congratulations_banner_url?: string | null;
   updated_at: string;
 }
 

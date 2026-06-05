@@ -54,12 +54,26 @@ def is_prize_draw_enabled(settings: Optional[CompanySettings]) -> bool:
     return bool(settings and settings.review_prize_draw_enabled)
 
 
-def build_prize_draw_url(token: str) -> str:
+def _frontend_base_url() -> str:
     frontend = (os.getenv("FRONTEND_URL") or os.getenv("PUBLIC_FRONTEND_URL") or "").strip()
     if not frontend or not (frontend.startswith("http://") or frontend.startswith("https://")):
         frontend = "https://leadlock-frontend-production.up.railway.app"
-    base = frontend.rstrip("/")
-    return f"{base}/review-prize/{token}"
+    return frontend.rstrip("/")
+
+
+def build_prize_draw_url(token: str) -> str:
+    return f"{_frontend_base_url()}/review-prize/{token}"
+
+
+def build_prize_draw_celebration_banner_url(settings: Optional[CompanySettings]) -> str:
+    custom = (
+        (settings.review_prize_draw_congratulations_banner_url or "").strip()
+        if settings
+        else ""
+    )
+    if custom:
+        return custom
+    return f"{_frontend_base_url()}/email/prize-draw-celebration.png"
 
 
 def get_entry_for_order(session: Session, order_id: int) -> Optional[ReviewPrizeDrawEntry]:
@@ -375,6 +389,7 @@ def build_prize_draw_congratulations_context(
         "prize_draw": {
             "month": month,
             "title": prize_title,
+            "celebration_banner_url": build_prize_draw_celebration_banner_url(settings),
         },
     }
 

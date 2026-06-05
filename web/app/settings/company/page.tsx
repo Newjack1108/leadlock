@@ -136,6 +136,7 @@ export default function CompanySettingsPage() {
     review_prize_draw_min_platforms: '2',
     review_prize_draw_congratulations_sms_template_id: '' as string,
     review_prize_draw_congratulations_email_template_id: '' as string,
+    review_prize_draw_congratulations_banner_url: '',
   });
 
   useEffect(() => {
@@ -270,6 +271,8 @@ export default function CompanySettingsPage() {
           response.data.review_prize_draw_congratulations_email_template_id != null
             ? String(response.data.review_prize_draw_congratulations_email_template_id)
             : '',
+        review_prize_draw_congratulations_banner_url:
+          response.data.review_prize_draw_congratulations_banner_url || '',
       });
     } catch (error: any) {
       if (error.response?.status === 401) {
@@ -385,6 +388,8 @@ export default function CompanySettingsPage() {
           formData.review_prize_draw_congratulations_email_template_id.trim() === ''
             ? null
             : parseInt(formData.review_prize_draw_congratulations_email_template_id, 10),
+        review_prize_draw_congratulations_banner_url:
+          formData.review_prize_draw_congratulations_banner_url.trim() || null,
       };
       if (settings) {
         // Update existing: omit logo_filename so existing value is unchanged
@@ -1124,11 +1129,35 @@ export default function CompanySettingsPage() {
                             </SelectContent>
                           </Select>
                         </div>
+                        <div className="space-y-2 md:col-span-2">
+                          <Label htmlFor="review_prize_draw_congratulations_banner_url">
+                            Congratulations email banner image URL (optional)
+                          </Label>
+                          <Input
+                            id="review_prize_draw_congratulations_banner_url"
+                            type="url"
+                            value={formData.review_prize_draw_congratulations_banner_url}
+                            onChange={(e) =>
+                              setFormData({
+                                ...formData,
+                                review_prize_draw_congratulations_banner_url: e.target.value,
+                              })
+                            }
+                            disabled={saving}
+                            placeholder="Leave blank for default confetti banner"
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Used as <code className="text-xs">{'{{ prize_draw.celebration_banner_url }}'}</code>{' '}
+                            in the email template. GIF or PNG recommended.
+                          </p>
+                        </div>
                         <p className="text-xs text-muted-foreground md:col-span-2">
                           Variables: <code className="text-xs">{'{{ prize_draw.title }}'}</code>,{' '}
                           <code className="text-xs">{'{{ prize_draw.month }}'}</code>,{' '}
+                          <code className="text-xs">{'{{ prize_draw.celebration_banner_url }}'}</code>,{' '}
                           <code className="text-xs">{'{{ customer.name }}'}</code>,{' '}
-                          <code className="text-xs">{'{{ company.trading_name }}'}</code>. Entry form:{' '}
+                          <code className="text-xs">{'{{ company.trading_name }}'}</code>. Default SMS
+                          includes celebration emojis (🎉 🏆 🎊). Entry form:{' '}
                           <code className="text-xs">{'{{ review.prize_draw_url }}'}</code>.{' '}
                           <Link href="/settings/review-prize-draw" className="text-primary underline hover:no-underline">
                             Manage monthly draw

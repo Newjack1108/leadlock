@@ -21,6 +21,8 @@ from app.models import (
 )
 from app.review_prize_draw_service import (
     approve_entry,
+    build_prize_draw_celebration_banner_url,
+    build_prize_draw_congratulations_context,
     ensure_prize_draw_entry,
     get_winner_for_month,
     pick_random_winner,
@@ -386,3 +388,108 @@ def test_template_context_includes_prize_draw_url(sqlite_engine):
         ctx = build_review_template_context(settings, order, session)
         assert ctx["review"]["prize_draw_url"]
         assert ctx["review"]["prize_draw_title"] == "Monthly voucher"
+
+
+def test_congratulations_context_includes_celebration_banner_url(sqlite_engine):
+    from app.models import Customer
+
+    with Session(sqlite_engine) as session:
+        settings, order = _seed(session)
+        customer = session.get(Customer, order.customer_id)
+        assert customer is not None
+        month = "2026-06"
+
+        ctx = build_prize_draw_congratulations_context(settings, order, customer, month)
+        banner_url = ctx["prize_draw"]["celebration_banner_url"]
+        assert banner_url
+        assert "/email/prize-draw-celebration.png" in banner_url
+
+        settings.review_prize_draw_congratulations_banner_url = "https://example.com/custom.gif"
+        session.add(settings)
+        session.commit()
+        ctx_custom = build_prize_draw_congratulations_context(settings, order, customer, month)
+        assert ctx_custom["prize_draw"]["celebration_banner_url"] == "https://example.com/custom.gif"
+
+
+def test_build_prize_draw_celebration_banner_url_custom_override(sqlite_engine):
+    with Session(sqlite_engine) as session:
+        settings, _order = _seed(session)
+        settings.review_prize_draw_congratulations_banner_url = "https://cdn.example.com/banner.png"
+        assert (
+            build_prize_draw_celebration_banner_url(settings) == "https://cdn.example.com/banner.png"
+        )
+
+
+@patch("app.review_prize_draw_service.is_email_configured", return_value=True)
+@patch(
+    "app.review_prize_draw_service.send_email",
+    return_value=(True, "msg-id", None, "<p>Banner</p>", "Banner"),
+)
+def test_send_congratulations_email_includes_banner_url(mock_send_email, mock_email_cfg, sqlite_engine):
+    from app.models import EmailTemplate
+
+    with Session(sqlite_engine) as session:
+        settings, order, user, _winner, month = _seed_winner(session)
+        email_template = session.get(
+            EmailTemplate, settings.review_prize_draw_congratulations_email_template_id
+        )
+        assert email_template is not None
+        email_template.body_template = (
+            '<img src="{{ prize_draw.celebration_banner_url }}" alt="Congrats" />'
+            "<p>Hi {{ customer.name }}</p>"
+        )
+        session.add(email_template)
+        session.commit()
+
+        send_congratulations_to_winner(month, user, session, channel="email")
+        session.commit()
+
+        body_html = mock_send_email.call_args.kwargs["body_html"]
+        assert "/email/prize-draw-celebration.png" in body_html
+
+
+def test_backfill_congratulations_email_adds_celebration_banner(sqlite_engine):
+    from app.database import backfill_prize_draw_congratulations_templates
+    from app.models import EmailTemplate
+
+    with Session(sqlite_engine) as session:
+        settings, _order = _seed(session)
+        user = session.get(User, settings.updated_by_id)
+        stale_email = EmailTemplate(
+            name="Prize Draw Winner Congratulations",
+            subject_template="You won",
+            body_template="<p>Hi {{ customer.name }}, you won.</p>",
+            created_by_id=user.id,
+        )
+        session.add(stale_email)
+        session.commit()
+        session.refresh(stale_email)
+
+        backfill_prize_draw_congratulations_templates(session)
+        session.refresh(stale_email)
+
+        assert "celebration_banner_url" in stale_email.body_template
+        assert "🎉" in stale_email.body_template
+
+
+def test_backfill_congratulations_sms_adds_celebration_emojis(sqlite_engine):
+    from app.database import backfill_prize_draw_congratulations_templates
+    from app.models import SmsTemplate
+
+    with Session(sqlite_engine) as session:
+        settings, _order = _seed(session)
+        user = session.get(User, settings.updated_by_id)
+        stale_sms = SmsTemplate(
+            name="Prize Draw Winner Congratulations",
+            body_template="Congratulations {{ customer.name }}! You won.",
+            created_by_id=user.id,
+        )
+        session.add(stale_sms)
+        session.commit()
+        session.refresh(stale_sms)
+
+        backfill_prize_draw_congratulations_templates(session)
+        session.refresh(stale_sms)
+
+        assert "🎉" in stale_sms.body_template
+        assert "🏆" in stale_sms.body_template
