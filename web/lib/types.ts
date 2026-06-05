@@ -1718,6 +1718,8 @@ export interface WeeklyPlanItem {
   customer_name?: string | null;
   customer_email?: string | null;
   customer_phone?: string | null;
+  customer_sms_bot_stopped?: boolean;
+  customer_automated_outreach_opt_out?: boolean;
   quote_number?: string | null;
   lead_name?: string | null;
   priority_score: number;

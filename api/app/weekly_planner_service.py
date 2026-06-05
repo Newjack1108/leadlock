@@ -27,6 +27,7 @@ from app.models import (
     Quote,
     QuoteStatus,
     ReminderPriority,
+    ReminderRule,
     SmsDirection,
     SmsMessage,
     SuggestedAction,
@@ -42,6 +43,7 @@ from app.reminder_service import (
     detect_stale_leads,
     detect_stale_opportunities,
     detect_stale_quotes,
+    latest_quotes_per_customer,
 )
 from app.sms_service import normalize_phone, send_sms
 from app.system_user_service import get_system_user_id
@@ -406,6 +408,80 @@ def _blend_final_priority(base_priority_score: Decimal, likelihood_score: Decima
     return max(Decimal("1"), min(Decimal("100"), blended))
 
 
+def _stale_quote_entry_score(quote: Quote, rule: ReminderRule, days_stale: int) -> Decimal:
+    return (
+        Decimal("22")
+        + Decimal(days_stale)
+        + _priority_weight(rule.priority)
+        + _value_weight(quote)
+        + _probability_weight(quote)
+    )
+
+
+def _stale_opportunity_entry_score(opp: Quote, days_overdue: int) -> Decimal:
+    return Decimal("30") + Decimal(days_overdue * 2) + _value_weight(opp) + _probability_weight(opp)
+
+
+def _reduce_stale_quote_entries(
+    entries: List[Tuple[Quote, ReminderRule, int]],
+) -> List[Tuple[Quote, ReminderRule, int]]:
+    """Keep one stale quote entry per customer, using the latest quote globally."""
+    if not entries:
+        return []
+    no_customer: List[Tuple[Quote, ReminderRule, int]] = []
+    by_customer: Dict[int, List[Tuple[Quote, ReminderRule, int]]] = {}
+    for entry in entries:
+        quote = entry[0]
+        if quote.customer_id is None:
+            no_customer.append(entry)
+            continue
+        by_customer.setdefault(quote.customer_id, []).append(entry)
+
+    reduced: List[Tuple[Quote, ReminderRule, int]] = list(no_customer)
+    for customer_entries in by_customer.values():
+        latest_quotes = latest_quotes_per_customer([entry[0] for entry in customer_entries])
+        if not latest_quotes:
+            continue
+        latest_quote = latest_quotes[0]
+        if latest_quote.id is None:
+            continue
+        matching = [entry for entry in customer_entries if entry[0].id == latest_quote.id]
+        if not matching:
+            continue
+        reduced.append(max(matching, key=lambda entry: _stale_quote_entry_score(entry[0], entry[1], entry[2])))
+    return reduced
+
+
+def _reduce_stale_opportunity_entries(
+    entries: List[Tuple[Quote, str, int]],
+) -> List[Tuple[Quote, str, int]]:
+    """Keep one stale opportunity entry per customer, using the latest opportunity quote."""
+    if not entries:
+        return []
+    no_customer: List[Tuple[Quote, str, int]] = []
+    by_customer: Dict[int, List[Tuple[Quote, str, int]]] = {}
+    for entry in entries:
+        opp = entry[0]
+        if opp.customer_id is None:
+            no_customer.append(entry)
+            continue
+        by_customer.setdefault(opp.customer_id, []).append(entry)
+
+    reduced: List[Tuple[Quote, str, int]] = []
+    for customer_entries in by_customer.values():
+        latest_quotes = latest_quotes_per_customer([entry[0] for entry in customer_entries])
+        if not latest_quotes:
+            continue
+        latest_opp = latest_quotes[0]
+        if latest_opp.id is None:
+            continue
+        matching = [entry for entry in customer_entries if entry[0].id == latest_opp.id]
+        if not matching:
+            continue
+        reduced.append(max(matching, key=lambda entry: _stale_opportunity_entry_score(entry[0], entry[2])))
+    return reduced + no_customer
+
+
 def _ordered_customer_and_lead_ids(session: Session) -> tuple[set[int], set[int]]:
     ordered_customer_ids = {
         customer_id
@@ -518,12 +594,15 @@ def generate_weekly_plan(
         )
 
     quote_by_id = {}
-    for quote, rule, days_stale in detect_stale_quotes(session):
+    seen_quote_customer_ids: set[int] = set()
+    for quote, rule, days_stale in _reduce_stale_quote_entries(detect_stale_quotes(session)):
         if not quote.id:
             continue
         if (quote.customer_id is not None and quote.customer_id in ordered_customer_ids) or (
             quote.lead_id is not None and quote.lead_id in ordered_lead_ids
         ):
+            continue
+        if quote.customer_id is not None and quote.customer_id in seen_quote_customer_ids:
             continue
         quote_by_id[quote.id] = quote
         key = ("quote", quote.id)
@@ -593,13 +672,17 @@ def generate_weekly_plan(
                 due_date=datetime.utcnow().date() + timedelta(days=2),
             )
         )
+        if quote.customer_id is not None:
+            seen_quote_customer_ids.add(quote.customer_id)
 
-    for opp, reason, days_overdue in detect_stale_opportunities(session):
+    for opp, reason, days_overdue in _reduce_stale_opportunity_entries(detect_stale_opportunities(session)):
         if not opp.id:
             continue
         if (opp.customer_id is not None and opp.customer_id in ordered_customer_ids) or (
             opp.lead_id is not None and opp.lead_id in ordered_lead_ids
         ):
+            continue
+        if opp.customer_id is not None and opp.customer_id in seen_quote_customer_ids:
             continue
         key = ("opp", opp.id)
         if key in seen_keys:
@@ -665,6 +748,8 @@ def generate_weekly_plan(
                 due_date=datetime.utcnow().date() + timedelta(days=1),
             )
         )
+        if opp.customer_id is not None:
+            seen_quote_customer_ids.add(opp.customer_id)
 
     plan_items.sort(key=lambda item: (item.priority_score, item.created_at), reverse=True)
     for item in plan_items:

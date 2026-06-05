@@ -2234,6 +2234,8 @@ class WeeklyPlanItemResponse(BaseModel):
     customer_name: Optional[str] = None
     customer_email: Optional[str] = None
     customer_phone: Optional[str] = None
+    customer_sms_bot_stopped: bool = False
+    customer_automated_outreach_opt_out: bool = False
     quote_number: Optional[str] = None
     lead_name: Optional[str] = None
     priority_score: Decimal

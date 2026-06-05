@@ -108,6 +108,12 @@ def _weekly_plan_item_to_response(
         customer_name=customer.name if customer else None,
         customer_email=customer.email if customer else None,
         customer_phone=customer.phone if customer else None,
+        customer_sms_bot_stopped=bool(getattr(customer, "sms_bot_stopped", False)) if customer else False,
+        customer_automated_outreach_opt_out=bool(
+            getattr(customer, "automated_reminder_outreach_opt_out", False)
+        )
+        if customer
+        else False,
         quote_number=quote.quote_number if quote else None,
         lead_name=lead.name if lead else None,
         priority_score=item.priority_score,

@@ -1689,7 +1689,10 @@ export const generateWeeklyPlan = async (params?: {
   dry_run?: boolean;
 }): Promise<WeeklyPlanRun> => {
   const response = await api.post('/api/reminders/weekly-plan/generate', null, {
-    params: { auto_execute: false, ...(params || {}) },
+    params: {
+      auto_execute: params?.auto_execute ?? false,
+      dry_run: params?.dry_run ?? false,
+    },
     timeout: 120_000,
   });
   return response.data;

@@ -20,6 +20,7 @@ import api, {
 } from '@/lib/api';
 import ComposeEmailDialog from '@/components/ComposeEmailDialog';
 import ComposeSmsDialog from '@/components/ComposeSmsDialog';
+import { Badge } from '@/components/ui/badge';
 import { Customer, WeeklyPlanItem, WeeklyPlanItemStatus, WeeklyPlanListResponse } from '@/lib/types';
 import { CheckCircle2, Mail, MessageSquare, RefreshCw, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
@@ -36,6 +37,7 @@ import {
 type AssignableUser = { id: number; full_name: string; email: string };
 
 const WEEKLY_PLAN_EMAIL_SUBJECT = 'Quick follow-up from LeadLock';
+const WEEKLY_PLAN_AUTO_EXECUTE_STORAGE_KEY = 'll-weekly-plan-auto-execute';
 
 function plainTextToEmailHtml(text: string): string {
   const trimmed = text.trim();
@@ -57,8 +59,20 @@ function canComposeEmail(item: WeeklyPlanItem): boolean {
   return item.customer_id != null && Boolean(item.customer_email?.trim());
 }
 
+function hasSmsStop(item: WeeklyPlanItem): boolean {
+  return Boolean(item.customer_sms_bot_stopped);
+}
+
+function hasManualOutreachOptOut(item: WeeklyPlanItem): boolean {
+  return Boolean(item.customer_automated_outreach_opt_out) && !item.customer_sms_bot_stopped;
+}
+
 function canComposeSms(item: WeeklyPlanItem): boolean {
-  return item.customer_id != null && Boolean(item.customer_phone?.trim());
+  return item.customer_id != null && Boolean(item.customer_phone?.trim()) && !hasSmsStop(item);
+}
+
+function isSmsSendBlocked(item: WeeklyPlanItem): boolean {
+  return (item.channel || '').toUpperCase() === 'SMS' && hasSmsStop(item);
 }
 
 function buildMessageDrafts(items: WeeklyPlanItem[]): Record<number, string> {
@@ -86,6 +100,7 @@ export default function WeeklyPlanPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [likelihoodFilter, setLikelihoodFilter] = useState<string>('all');
   const [selectedItemIds, setSelectedItemIds] = useState<number[]>([]);
+  const [autoExecuteOnGenerate, setAutoExecuteOnGenerate] = useState(false);
 
   const [composeEmailOpen, setComposeEmailOpen] = useState(false);
   const [composeCustomer, setComposeCustomer] = useState<Customer | null>(null);
@@ -182,6 +197,23 @@ export default function WeeklyPlanPage() {
     loadData();
   }, []);
 
+  useEffect(() => {
+    try {
+      setAutoExecuteOnGenerate(localStorage.getItem(WEEKLY_PLAN_AUTO_EXECUTE_STORAGE_KEY) === 'true');
+    } catch {
+      // ignore localStorage errors
+    }
+  }, []);
+
+  const handleAutoExecuteToggle = (checked: boolean) => {
+    setAutoExecuteOnGenerate(checked);
+    try {
+      localStorage.setItem(WEEKLY_PLAN_AUTO_EXECUTE_STORAGE_KEY, String(checked));
+    } catch {
+      // ignore localStorage errors
+    }
+  };
+
   const filteredItems = useMemo(() => {
     if (!plan?.items) return [];
     return plan.items.filter((item) => {
@@ -212,8 +244,12 @@ export default function WeeklyPlanPage() {
   const handleGenerate = async () => {
     try {
       setLoadingRun(true);
-      const run = await generateWeeklyPlan({ auto_execute: false, dry_run: false });
-      toast.success(`Weekly plan generated (${run.total_items} items)`);
+      const run = await generateWeeklyPlan({ auto_execute: autoExecuteOnGenerate, dry_run: false });
+      toast.success(
+        autoExecuteOnGenerate
+          ? `Weekly plan generated (${run.total_items} items, ${run.auto_sent_items} auto-sent)`
+          : `Weekly plan generated (${run.total_items} items)`
+      );
       await loadData();
     } catch (error) {
       toast.error(getApiErrorDetail(error) || 'Failed to generate weekly plan');
@@ -431,7 +467,21 @@ export default function WeeklyPlanPage() {
               Prioritized AI recommendations with quick outcome updates.
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={autoExecuteOnGenerate}
+                onChange={(e) => handleAutoExecuteToggle(e.target.checked)}
+                className="h-4 w-4 rounded border-input"
+              />
+              <span>
+                Auto-send eligible items on generate
+                <span className="block text-xs text-muted-foreground font-normal">
+                  Sends up to 25 eligible SMS/email items without review
+                </span>
+              </span>
+            </label>
             <Button variant="outline" onClick={loadData}>
               <RefreshCw className="h-4 w-4 mr-2" />
               Refresh
@@ -614,6 +664,22 @@ export default function WeeklyPlanPage() {
                       ) : null}
                       Score {Number(item.priority_score).toFixed(1)} · {item.recommended_action}
                       {item.channel ? ` via ${item.channel}` : ''} · {item.status}
+                      {hasSmsStop(item) ? (
+                        <Badge
+                          variant="destructive"
+                          title="Customer opted out via STOP — do not send automated SMS"
+                        >
+                          SMS STOP
+                        </Badge>
+                      ) : null}
+                      {hasManualOutreachOptOut(item) ? (
+                        <Badge
+                          variant="outline"
+                          title="Automated reminder SMS/email stopped manually — manual messages still allowed"
+                        >
+                          No auto SMS
+                        </Badge>
+                      ) : null}
                     </div>
                     <div className="text-xs text-muted-foreground">
                       {item.assigned_to_name || 'Unassigned'} · {item.customer_name || item.lead_name || item.quote_number || 'Unknown target'}
@@ -664,9 +730,11 @@ export default function WeeklyPlanPage() {
                           disabled={busyItemId === item.id || !canComposeSms(item)}
                           onClick={() => handleComposeSms(item)}
                           title={
-                            canComposeSms(item)
-                              ? 'Open SMS composer with suggested message'
-                              : 'Customer has no phone number'
+                            hasSmsStop(item)
+                              ? 'Customer opted out via SMS STOP'
+                              : canComposeSms(item)
+                                ? 'Open SMS composer with suggested message'
+                                : 'Customer has no phone number'
                           }
                         >
                           <MessageSquare className="h-4 w-4 mr-1" />
@@ -690,12 +758,14 @@ export default function WeeklyPlanPage() {
                     ) : null}
                     <Button
                       size="sm"
-                      disabled={busyItemId === item.id || !isItemSendable(item)}
+                      disabled={busyItemId === item.id || !isItemSendable(item) || isSmsSendBlocked(item)}
                       onClick={() => handleSendItem(item)}
                       title={
-                        isItemSendable(item)
-                          ? 'Send or log this action now'
-                          : 'Only pending review items can be sent'
+                        isSmsSendBlocked(item)
+                          ? 'Customer opted out via SMS STOP'
+                          : isItemSendable(item)
+                            ? 'Send or log this action now'
+                            : 'Only pending review items can be sent'
                       }
                     >
                       Send now
