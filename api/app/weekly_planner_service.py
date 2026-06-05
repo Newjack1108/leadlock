@@ -482,6 +482,34 @@ def _reduce_stale_opportunity_entries(
     return reduced + no_customer
 
 
+def _resolved_weekly_plan_targets(
+    session: Session,
+    week_start: date,
+) -> tuple[set[int], set[int], set[int]]:
+    """Lead/quote/customer IDs closed out (completed or rejected) in prior runs this week."""
+    excluded_lead_ids: set[int] = set()
+    excluded_quote_ids: set[int] = set()
+    excluded_customer_ids: set[int] = set()
+    rows = session.exec(
+        select(WeeklyPlanItem.lead_id, WeeklyPlanItem.quote_id, WeeklyPlanItem.customer_id).where(
+            WeeklyPlanItem.status.in_(
+                [WeeklyPlanItemStatus.COMPLETED, WeeklyPlanItemStatus.REJECTED]
+            ),
+            WeeklyPlanItem.plan_run_id.in_(
+                select(WeeklyPlanRun.id).where(WeeklyPlanRun.week_start == week_start)
+            ),
+        )
+    ).all()
+    for lead_id, quote_id, customer_id in rows:
+        if lead_id is not None:
+            excluded_lead_ids.add(lead_id)
+        if quote_id is not None:
+            excluded_quote_ids.add(quote_id)
+        if customer_id is not None:
+            excluded_customer_ids.add(customer_id)
+    return excluded_lead_ids, excluded_quote_ids, excluded_customer_ids
+
+
 def _ordered_customer_and_lead_ids(session: Session) -> tuple[set[int], set[int]]:
     ordered_customer_ids = {
         customer_id
@@ -524,9 +552,16 @@ def generate_weekly_plan(
     plan_items: List[WeeklyPlanItem] = []
     seen_keys: set[tuple[str, int]] = set()
     ordered_customer_ids, ordered_lead_ids = _ordered_customer_and_lead_ids(session)
+    excluded_lead_ids, excluded_quote_ids, excluded_customer_ids = _resolved_weekly_plan_targets(
+        session, week_start
+    )
 
     for lead, rule, days_stale in detect_stale_leads(session):
         if not lead.id:
+            continue
+        if lead.id in excluded_lead_ids:
+            continue
+        if lead.customer_id is not None and lead.customer_id in excluded_customer_ids:
             continue
         if (lead.customer_id is not None and lead.customer_id in ordered_customer_ids) or lead.id in ordered_lead_ids:
             continue
@@ -597,6 +632,10 @@ def generate_weekly_plan(
     seen_quote_customer_ids: set[int] = set()
     for quote, rule, days_stale in _reduce_stale_quote_entries(detect_stale_quotes(session)):
         if not quote.id:
+            continue
+        if quote.id in excluded_quote_ids:
+            continue
+        if quote.customer_id is not None and quote.customer_id in excluded_customer_ids:
             continue
         if (quote.customer_id is not None and quote.customer_id in ordered_customer_ids) or (
             quote.lead_id is not None and quote.lead_id in ordered_lead_ids
@@ -677,6 +716,10 @@ def generate_weekly_plan(
 
     for opp, reason, days_overdue in _reduce_stale_opportunity_entries(detect_stale_opportunities(session)):
         if not opp.id:
+            continue
+        if opp.id in excluded_quote_ids:
+            continue
+        if opp.customer_id is not None and opp.customer_id in excluded_customer_ids:
             continue
         if (opp.customer_id is not None and opp.customer_id in ordered_customer_ids) or (
             opp.lead_id is not None and opp.lead_id in ordered_lead_ids
