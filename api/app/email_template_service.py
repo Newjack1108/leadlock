@@ -77,7 +77,9 @@ def get_email_template_preview_context(customer: Optional[Customer] = None) -> D
     """
     review_sample = {
         "order": {"order_number": "ORD-2025-001"},
+        "company": {"company_name": "Sample Company Ltd", "trading_name": "Sample Co"},
         "review": {
+            "hub_url": "https://example.com/review/sample-token",
             "google_url": "https://example.com/google-review",
             "facebook_url": "https://example.com/facebook-review",
             "trustpilot_url": "https://example.com/trustpilot-review",

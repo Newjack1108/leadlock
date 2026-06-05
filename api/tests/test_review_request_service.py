@@ -437,6 +437,48 @@ def test_manual_send_sms_requires_phone(mock_quiet, sqlite_engine):
         assert "phone" in (error or "").lower()
 
 
+@patch("app.review_request_service._is_within_outreach_quiet_hours", return_value=False)
+@patch("app.review_request_service.is_email_configured", return_value=True)
+@patch(
+    "app.review_request_service.send_email",
+    return_value=(True, "msg-id", None, "<p>Thanks</p>", "Thanks"),
+)
+def test_manual_send_email_renders_company_variables(
+    mock_send_email, mock_email_cfg, mock_quiet, sqlite_engine
+):
+    with Session(sqlite_engine) as session:
+        from app.models import EmailTemplate
+
+        settings = _seed_company(session, outreach_enabled=True)
+        user = session.exec(select(User)).first()
+        assert user is not None
+
+        email_template = EmailTemplate(
+            name="Review Email",
+            subject_template="Feedback for {{ company.trading_name or company.company_name }}",
+            body_template=(
+                "<p>Hi {{ customer.name }}, thanks from "
+                "{{ company.trading_name or company.company_name }}.</p>"
+                "<p><a href=\"{{ review.hub_url }}\">Review hub</a></p>"
+            ),
+            created_by_id=user.id,
+        )
+        session.add(email_template)
+        session.commit()
+        session.refresh(email_template)
+        settings.review_request_email_template_id = email_template.id
+        session.add(settings)
+        session.commit()
+
+        order = _seed_completed_order(session, completed_at=datetime.utcnow() - timedelta(days=5))
+        success, error = send_review_request_to_customer(order, session, force=True, channel="email")
+        assert success is True
+        assert error is None
+        mock_send_email.assert_called_once()
+        call_kwargs = mock_send_email.call_args.kwargs
+        assert "Test Co" in call_kwargs["body_html"]
+
+
 def test_manual_send_missing_template_returns_clear_error(sqlite_engine):
     with Session(sqlite_engine) as session:
         settings = _seed_company(session, outreach_enabled=True)

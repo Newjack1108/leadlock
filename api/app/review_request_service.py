@@ -64,10 +64,17 @@ def build_review_template_context(
         if entry:
             prize_draw_url = build_prize_draw_url(entry.access_token)
             prize_draw_title = company_settings.review_prize_draw_title or "Monthly prize draw"
+    company_ctx = {"company_name": "", "trading_name": ""}
+    if company_settings:
+        company_ctx = {
+            "company_name": company_settings.company_name or "",
+            "trading_name": company_settings.trading_name or "",
+        }
     return {
         "order": {
             "order_number": order.order_number or "",
         },
+        "company": company_ctx,
         "review": {
             "hub_url": hub_url,
             "google_url": (company_settings.review_google_url or "") if company_settings else "",
