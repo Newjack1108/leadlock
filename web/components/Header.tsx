@@ -551,6 +551,12 @@ export default function Header() {
                       Reminder Triggers
                     </DropdownMenuItem>
                   </Link>
+                  <Link href="/settings/review-prize-draw">
+                    <DropdownMenuItem className="cursor-pointer">
+                      <Gift className="h-4 w-4 mr-2" />
+                      Review Prize Draw
+                    </DropdownMenuItem>
+                  </Link>
                   <Link href="/discounts">
                     <DropdownMenuItem className="cursor-pointer">
                       <Gift className="h-4 w-4 mr-2" />
@@ -942,6 +948,19 @@ export default function Header() {
                       <span className="flex items-center gap-2">
                         <Bell className="h-4 w-4 shrink-0" />
                         Reminder Triggers
+                      </span>
+                    </Link>
+                    <Link
+                      href="/settings/review-prize-draw"
+                      onClick={closeMobile}
+                      className={cn(
+                        mobileNavLinkClass,
+                        pathname?.startsWith('/settings/review-prize-draw') && 'bg-accent'
+                      )}
+                    >
+                      <span className="flex items-center gap-2">
+                        <Gift className="h-4 w-4 shrink-0" />
+                        Review Prize Draw
                       </span>
                     </Link>
                     <Link

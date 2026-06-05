@@ -139,6 +139,27 @@ def generate_invoice_number(session: Session) -> str:
     return f"INV-{year}-{next_num:03d}"
 
 
+def _build_prize_draw_entry_response(order: Order, session: Session):
+    from app.models import CompanySettings
+    from app.review_prize_draw_service import (
+        build_prize_draw_entry_response,
+        ensure_prize_draw_entry,
+        get_entry_for_order,
+        is_prize_draw_enabled,
+    )
+    from app.schemas import PrizeDrawEntryResponse
+
+    settings = session.exec(select(CompanySettings).limit(1)).first()
+    if order.installation_completed and is_prize_draw_enabled(settings):
+        ensure_prize_draw_entry(order, session)
+        session.flush()
+    entry = get_entry_for_order(session, order.id)
+    data = build_prize_draw_entry_response(entry)
+    if not data:
+        return None
+    return PrizeDrawEntryResponse(**data)
+
+
 def _build_access_sheet_response(order_id: int, session: Session) -> AccessSheetResponse | None:
     """Build AccessSheetResponse from latest AccessSheetRequest for order."""
     req = session.exec(
@@ -202,6 +223,7 @@ def build_order_response(order: Order, order_items: List[OrderItem], session: Se
     is_ninox_origin = lead_source == LeadSource.NINOX or customer_source_system == "Ninox"
 
     access_sheet = _build_access_sheet_response(order.id, session)
+    prize_draw_entry = _build_prize_draw_entry_response(order, session)
     sent_at, sent_by_id, sent_by_name = _get_latest_production_send(order.id, session)
 
     return OrderResponse(
@@ -254,6 +276,7 @@ def build_order_response(order: Order, order_items: List[OrderItem], session: Se
             for item in order_items
         ],
         access_sheet=access_sheet,
+        prize_draw_entry=prize_draw_entry,
         sent_to_production_at=sent_at,
         sent_to_production_by_id=sent_by_id,
         sent_to_production_by_name=sent_by_name,

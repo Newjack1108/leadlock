@@ -555,8 +555,52 @@ def backfill_default_reminder_rules(session: Session) -> None:
         print(f"Backfilled {len(to_add)} default reminder rules", file=sys.stderr, flush=True)
 
 
+def _default_review_request_sms_body() -> str:
+    return (
+        "Hi {{ customer.name }}, thank you for choosing "
+        "{{ company.trading_name or company.company_name }}! "
+        "We would love your feedback:\n"
+        "Google: {{ review.google_url }}\n"
+        "Facebook: {{ review.facebook_url }}\n"
+        "Trustpilot: {{ review.trustpilot_url }}"
+        "{% if review.prize_draw_url %}\n\n"
+        "Leave reviews on 2+ platforms and enter our monthly prize draw "
+        "({{ review.prize_draw_title }}): {{ review.prize_draw_url }}{% endif %}"
+    )
+
+
+def _default_review_request_email_subject() -> str:
+    return "We would love your feedback"
+
+
+def _default_review_request_email_body() -> str:
+    return (
+        "<p>Hi {{ customer.name }},</p>"
+        "<p>Thank you for choosing {{ company.trading_name or company.company_name }}. "
+        "We hope you are delighted with your installation.</p>"
+        "<p>If you have a moment, we would really appreciate a review:</p>"
+        "<ul>"
+        "<li><a href=\"{{ review.google_url }}\">Google review</a></li>"
+        "<li><a href=\"{{ review.facebook_url }}\">Facebook review</a></li>"
+        "<li><a href=\"{{ review.trustpilot_url }}\">Trustpilot review</a></li>"
+        "</ul>"
+        "{% if review.prize_draw_url %}"
+        "<p>Leave reviews on at least two platforms and you can enter our monthly prize draw "
+        "(<strong>{{ review.prize_draw_title }}</strong>): "
+        "<a href=\"{{ review.prize_draw_url }}\">Enter the prize draw</a>.</p>"
+        "{% endif %}"
+        "<p>Thank you again for your business.</p>"
+    )
+
+
+def _template_missing_prize_draw(body: str | None) -> bool:
+    if not body:
+        return True
+    return "prize_draw" not in body
+
+
 def backfill_review_request_templates(session: Session) -> None:
-    """Seed default post-install review SMS/email templates when none are configured."""
+    """Seed and refresh post-install review SMS/email templates."""
     import sys
 
     from sqlmodel import select
@@ -573,59 +617,70 @@ def backfill_review_request_templates(session: Session) -> None:
     if not director:
         return
 
-    sms_body = (
-        "Hi {{ customer.name }}, thank you for choosing "
-        "{{ company.trading_name or company.company_name }}! "
-        "We would love your feedback:\n"
-        "Google: {{ review.google_url }}\n"
-        "Facebook: {{ review.facebook_url }}\n"
-        "Trustpilot: {{ review.trustpilot_url }}"
-    )
-    email_subject = "We would love your feedback"
-    email_body = (
-        "<p>Hi {{ customer.name }},</p>"
-        "<p>Thank you for choosing {{ company.trading_name or company.company_name }}. "
-        "We hope you are delighted with your installation.</p>"
-        "<p>If you have a moment, we would really appreciate a review:</p>"
-        "<ul>"
-        "<li><a href=\"{{ review.google_url }}\">Google review</a></li>"
-        "<li><a href=\"{{ review.facebook_url }}\">Facebook review</a></li>"
-        "<li><a href=\"{{ review.trustpilot_url }}\">Trustpilot review</a></li>"
-        "</ul>"
-        "<p>Thank you again for your business.</p>"
-    )
+    sms_body = _default_review_request_sms_body()
+    email_subject = _default_review_request_email_subject()
+    email_body = _default_review_request_email_body()
 
     changed = False
-    if not settings.review_request_sms_template_id:
-        existing_sms = session.exec(
-            select(SmsTemplate).where(SmsTemplate.name == "Post-Install Review Request")
-        ).first()
-        if not existing_sms:
-            existing_sms = SmsTemplate(
-                name="Post-Install Review Request",
-                body_template=sms_body,
-                created_by_id=director.id,
-            )
-            session.add(existing_sms)
-            session.flush()
-        settings.review_request_sms_template_id = existing_sms.id
+
+    existing_sms = session.exec(
+        select(SmsTemplate).where(SmsTemplate.name == "Post-Install Review Request")
+    ).first()
+    if not existing_sms:
+        existing_sms = SmsTemplate(
+            name="Post-Install Review Request",
+            body_template=sms_body,
+            created_by_id=director.id,
+        )
+        session.add(existing_sms)
+        session.flush()
+        changed = True
+    elif _template_missing_prize_draw(existing_sms.body_template):
+        existing_sms.body_template = sms_body
+        session.add(existing_sms)
         changed = True
 
+    existing_email = session.exec(
+        select(EmailTemplate).where(EmailTemplate.name == "Post-Install Review Request")
+    ).first()
+    if not existing_email:
+        existing_email = EmailTemplate(
+            name="Post-Install Review Request",
+            subject_template=email_subject,
+            body_template=email_body,
+            created_by_id=director.id,
+        )
+        session.add(existing_email)
+        session.flush()
+        changed = True
+    elif _template_missing_prize_draw(existing_email.body_template):
+        existing_email.body_template = email_body
+        session.add(existing_email)
+        changed = True
+
+    if not settings.review_request_sms_template_id:
+        settings.review_request_sms_template_id = existing_sms.id
+        changed = True
+    else:
+        linked_sms = session.get(SmsTemplate, settings.review_request_sms_template_id)
+        if linked_sms and linked_sms.id != existing_sms.id and _template_missing_prize_draw(
+            linked_sms.body_template
+        ):
+            linked_sms.body_template = sms_body
+            session.add(linked_sms)
+            changed = True
+
     if not settings.review_request_email_template_id:
-        existing_email = session.exec(
-            select(EmailTemplate).where(EmailTemplate.name == "Post-Install Review Request")
-        ).first()
-        if not existing_email:
-            existing_email = EmailTemplate(
-                name="Post-Install Review Request",
-                subject_template=email_subject,
-                body_template=email_body,
-                created_by_id=director.id,
-            )
-            session.add(existing_email)
-            session.flush()
         settings.review_request_email_template_id = existing_email.id
         changed = True
+    else:
+        linked_email = session.get(EmailTemplate, settings.review_request_email_template_id)
+        if linked_email and linked_email.id != existing_email.id and _template_missing_prize_draw(
+            linked_email.body_template
+        ):
+            linked_email.body_template = email_body
+            session.add(linked_email)
+            changed = True
 
     if changed:
         session.add(settings)
@@ -847,6 +902,54 @@ def create_db_and_tables():
                 print(f"Error creating accesssheetrequest table: {e}", file=sys.stderr, flush=True)
                 import traceback
                 print(traceback.format_exc(), file=sys.stderr, flush=True)
+
+        has_prize_draw_entry_table = inspector.has_table("reviewprizedrawentry")
+        if has_customer_order_table and not has_prize_draw_entry_table:
+            print("Creating reviewprizedrawentry table...", file=sys.stderr, flush=True)
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text("""
+                        CREATE TABLE IF NOT EXISTS reviewprizedrawentry (
+                            id SERIAL PRIMARY KEY,
+                            order_id INTEGER NOT NULL REFERENCES customer_order(id),
+                            customer_id INTEGER NOT NULL REFERENCES customer(id),
+                            access_token VARCHAR(255) NOT NULL UNIQUE,
+                            platforms_claimed JSONB DEFAULT '[]',
+                            status VARCHAR(16) NOT NULL DEFAULT 'PENDING',
+                            submitted_at TIMESTAMP,
+                            reviewed_at TIMESTAMP,
+                            reviewed_by_id INTEGER REFERENCES "user"(id),
+                            rejection_note TEXT,
+                            entry_month VARCHAR(7),
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+                        )
+                    """))
+                    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_reviewprizedrawentry_order_id ON reviewprizedrawentry (order_id)"))
+                    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_reviewprizedrawentry_access_token ON reviewprizedrawentry (access_token)"))
+                    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_reviewprizedrawentry_status ON reviewprizedrawentry (status)"))
+                    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_reviewprizedrawentry_entry_month ON reviewprizedrawentry (entry_month)"))
+                    print("Created reviewprizedrawentry table", file=sys.stderr, flush=True)
+            except Exception as e:
+                print(f"Error creating reviewprizedrawentry table: {e}", file=sys.stderr, flush=True)
+
+        has_prize_draw_winner_table = inspector.has_table("reviewprizedrawwinner")
+        if not has_prize_draw_winner_table:
+            print("Creating reviewprizedrawwinner table...", file=sys.stderr, flush=True)
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text("""
+                        CREATE TABLE IF NOT EXISTS reviewprizedrawwinner (
+                            id SERIAL PRIMARY KEY,
+                            month VARCHAR(7) NOT NULL UNIQUE,
+                            entry_id INTEGER NOT NULL REFERENCES reviewprizedrawentry(id),
+                            picked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                            picked_by_id INTEGER NOT NULL REFERENCES "user"(id)
+                        )
+                    """))
+                    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_reviewprizedrawwinner_month ON reviewprizedrawwinner (month)"))
+                    print("Created reviewprizedrawwinner table", file=sys.stderr, flush=True)
+            except Exception as e:
+                print(f"Error creating reviewprizedrawwinner table: {e}", file=sys.stderr, flush=True)
 
         has_configurator_invite_table = inspector.has_table("configuratorinvite")
         if not has_configurator_invite_table:
@@ -1205,6 +1308,10 @@ def create_db_and_tables():
                     "review_request_customer_outreach_enabled": "BOOLEAN DEFAULT FALSE NOT NULL",
                     "review_request_sms_template_id": "INTEGER REFERENCES smstemplate(id)",
                     "review_request_email_template_id": "INTEGER REFERENCES emailtemplate(id)",
+                    "review_prize_draw_enabled": "BOOLEAN DEFAULT FALSE NOT NULL",
+                    "review_prize_draw_title": "VARCHAR(255)",
+                    "review_prize_draw_terms": "TEXT",
+                    "review_prize_draw_min_platforms": "INTEGER DEFAULT 2 NOT NULL",
                 }
                 for col_name, col_type in review_company_cols.items():
                     if col_name not in company_columns:

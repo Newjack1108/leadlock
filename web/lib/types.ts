@@ -706,7 +706,62 @@ export interface CompanySettings {
   review_request_customer_outreach_enabled?: boolean;
   review_request_sms_template_id?: number | null;
   review_request_email_template_id?: number | null;
+  review_prize_draw_enabled?: boolean;
+  review_prize_draw_title?: string | null;
+  review_prize_draw_terms?: string | null;
+  review_prize_draw_min_platforms?: number;
   updated_at: string;
+}
+
+export interface PrizeDrawEntry {
+  id?: number | null;
+  status?: string | null;
+  prize_draw_url?: string | null;
+  platforms_claimed?: string[];
+  submitted_at?: string | null;
+  entry_month?: string | null;
+  rejection_note?: string | null;
+}
+
+export interface ReviewPrizeDrawEntryListItem {
+  id: number;
+  order_id: number;
+  order_number: string;
+  customer_id: number;
+  customer_name: string;
+  platforms_claimed: string[];
+  status: string;
+  submitted_at?: string | null;
+  entry_month?: string | null;
+  rejection_note?: string | null;
+  reviewed_at?: string | null;
+  reviewed_by_name?: string | null;
+}
+
+export interface ReviewPrizeDrawWinner {
+  month: string;
+  entry_id: number;
+  order_id: number;
+  order_number: string;
+  customer_id: number;
+  customer_name: string;
+  platforms_claimed: string[];
+  picked_at: string;
+  picked_by_id: number;
+  picked_by_name?: string | null;
+}
+
+export interface ReviewPrizePublicContext {
+  customer_name: string;
+  order_number: string;
+  prize_title?: string | null;
+  prize_terms?: string | null;
+  min_platforms: number;
+  platforms: Array<{ code: string; label: string }>;
+  status?: string | null;
+  platforms_claimed?: string[];
+  submitted_at?: string | null;
+  can_submit: boolean;
 }
 
 export interface DeliveryInstallEstimateRequest {
@@ -1230,6 +1285,7 @@ export interface Order {
   is_ninox_origin?: boolean;
   items: OrderItem[];
   access_sheet?: AccessSheet | null;
+  prize_draw_entry?: PrizeDrawEntry | null;
   sent_to_production_at?: string | null;
   sent_to_production_by_id?: number | null;
   sent_to_production_by_name?: string | null;
@@ -1797,6 +1853,10 @@ export enum CustomerHistoryEventType {
   ORDER_PAYMENT_LINK_SENT = "ORDER_PAYMENT_LINK_SENT",
   ORDER_INVOICE_ACTION = "ORDER_INVOICE_ACTION",
   ORDER_REVIEW_REQUEST_SENT = "ORDER_REVIEW_REQUEST_SENT",
+  REVIEW_PRIZE_DRAW_SUBMITTED = "REVIEW_PRIZE_DRAW_SUBMITTED",
+  REVIEW_PRIZE_DRAW_APPROVED = "REVIEW_PRIZE_DRAW_APPROVED",
+  REVIEW_PRIZE_DRAW_REJECTED = "REVIEW_PRIZE_DRAW_REJECTED",
+  REVIEW_PRIZE_DRAW_WINNER = "REVIEW_PRIZE_DRAW_WINNER",
 }
 
 export interface CustomerHistoryEvent {

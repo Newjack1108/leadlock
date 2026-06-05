@@ -124,6 +124,10 @@ export default function CompanySettingsPage() {
     review_request_customer_outreach_enabled: false,
     review_request_sms_template_id: '' as string,
     review_request_email_template_id: '' as string,
+    review_prize_draw_enabled: false,
+    review_prize_draw_title: '',
+    review_prize_draw_terms: '',
+    review_prize_draw_min_platforms: '2',
   });
 
   useEffect(() => {
@@ -230,6 +234,13 @@ export default function CompanySettingsPage() {
           response.data.review_request_email_template_id != null
             ? String(response.data.review_request_email_template_id)
             : '',
+        review_prize_draw_enabled: response.data.review_prize_draw_enabled ?? false,
+        review_prize_draw_title: response.data.review_prize_draw_title || '',
+        review_prize_draw_terms: response.data.review_prize_draw_terms || '',
+        review_prize_draw_min_platforms:
+          response.data.review_prize_draw_min_platforms != null
+            ? String(response.data.review_prize_draw_min_platforms)
+            : '2',
       });
     } catch (error: any) {
       if (error.response?.status === 401) {
@@ -274,6 +285,13 @@ export default function CompanySettingsPage() {
       toast.error('Review request delay must be 0 or more days');
       return;
     }
+    const prizeMinPlatformsVal = formData.review_prize_draw_min_platforms
+      ? parseInt(formData.review_prize_draw_min_platforms, 10)
+      : 2;
+    if (Number.isNaN(prizeMinPlatformsVal) || prizeMinPlatformsVal < 2 || prizeMinPlatformsVal > 3) {
+      toast.error('Prize draw minimum platforms must be 2 or 3');
+      return;
+    }
 
     try {
       setSaving(true);
@@ -314,6 +332,10 @@ export default function CompanySettingsPage() {
           formData.review_request_email_template_id.trim() === ''
             ? null
             : parseInt(formData.review_request_email_template_id, 10),
+        review_prize_draw_enabled: formData.review_prize_draw_enabled,
+        review_prize_draw_title: formData.review_prize_draw_title.trim() || null,
+        review_prize_draw_terms: formData.review_prize_draw_terms.trim() || null,
+        review_prize_draw_min_platforms: prizeMinPlatformsVal,
       };
       if (settings) {
         // Update existing: omit logo_filename so existing value is unchanged
@@ -752,7 +774,10 @@ export default function CompanySettingsPage() {
                       <p className="text-xs text-muted-foreground">
                         Variables: <code className="text-xs">{'{{ review.google_url }}'}</code>,{' '}
                         <code className="text-xs">{'{{ review.facebook_url }}'}</code>,{' '}
-                        <code className="text-xs">{'{{ review.trustpilot_url }}'}</code>.{' '}
+                        <code className="text-xs">{'{{ review.trustpilot_url }}'}</code>,{' '}
+                        <code className="text-xs">{'{{ review.prize_draw_url }}'}</code>,{' '}
+                        <code className="text-xs">{'{{ review.prize_draw_title }}'}</code> (when prize draw is
+                        enabled).{' '}
                         <Link href="/settings/sms-templates" className="text-primary underline hover:no-underline">
                           Manage SMS templates
                         </Link>
@@ -783,12 +808,81 @@ export default function CompanySettingsPage() {
                         </SelectContent>
                       </Select>
                       <p className="text-xs text-muted-foreground">
-                        Used when no SMS template is set.{' '}
+                        Used when no SMS template is set. Variables include review URLs plus{' '}
+                        <code className="text-xs">{'{{ review.prize_draw_url }}'}</code> and{' '}
+                        <code className="text-xs">{'{{ review.prize_draw_title }}'}</code> when the monthly draw is
+                        enabled.{' '}
                         <Link href="/settings/email-templates" className="text-primary underline hover:no-underline">
                           Manage email templates
                         </Link>
                       </p>
                     </div>
+                  </div>
+                  <div className="rounded-md border p-4 space-y-4 bg-background/60">
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        id="review_prize_draw_enabled"
+                        checked={formData.review_prize_draw_enabled}
+                        onChange={(e) =>
+                          setFormData({ ...formData, review_prize_draw_enabled: e.target.checked })
+                        }
+                        className="rounded"
+                        disabled={saving}
+                      />
+                      <Label htmlFor="review_prize_draw_enabled">
+                        Offer monthly prize draw after 2+ reviews (customer submits, staff approves)
+                      </Label>
+                    </div>
+                    {formData.review_prize_draw_enabled ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="review_prize_draw_title">Prize draw title</Label>
+                          <Input
+                            id="review_prize_draw_title"
+                            value={formData.review_prize_draw_title}
+                            onChange={(e) =>
+                              setFormData({ ...formData, review_prize_draw_title: e.target.value })
+                            }
+                            disabled={saving}
+                            placeholder="e.g. Monthly £50 Amazon voucher"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="review_prize_draw_min_platforms">Minimum platforms reviewed</Label>
+                          <Input
+                            id="review_prize_draw_min_platforms"
+                            type="number"
+                            min="2"
+                            max="3"
+                            value={formData.review_prize_draw_min_platforms}
+                            onChange={(e) =>
+                              setFormData({ ...formData, review_prize_draw_min_platforms: e.target.value })
+                            }
+                            disabled={saving}
+                          />
+                        </div>
+                        <div className="space-y-2 md:col-span-2">
+                          <Label htmlFor="review_prize_draw_terms">Terms shown on entry form</Label>
+                          <Textarea
+                            id="review_prize_draw_terms"
+                            value={formData.review_prize_draw_terms}
+                            onChange={(e) =>
+                              setFormData({ ...formData, review_prize_draw_terms: e.target.value })
+                            }
+                            disabled={saving}
+                            rows={3}
+                            placeholder="One entry per completed installation. Winner drawn monthly."
+                          />
+                        </div>
+                        <p className="text-xs text-muted-foreground md:col-span-2">
+                          Template variable: <code className="text-xs">{'{{ review.prize_draw_url }}'}</code>.{' '}
+                          <Link href="/settings/review-prize-draw" className="text-primary underline hover:no-underline">
+                            Manage monthly draw
+                          </Link>
+                        </p>
+                      </div>
+                    ) : null}
                   </div>
                 </>
               )}

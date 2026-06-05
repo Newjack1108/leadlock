@@ -1344,6 +1344,45 @@ export const submitAccessSheet = async (
   return response.data;
 };
 
+export const getReviewPrizeContext = async (token: string) => {
+  const response = await api.get(`/api/public/review-prize/${token}`, { skipAuthRedirect: true });
+  return response.data;
+};
+
+export const submitReviewPrizeEntry = async (token: string, platforms: string[]) => {
+  const response = await api.post(
+    `/api/public/review-prize/${token}`,
+    { platforms },
+    { skipAuthRedirect: true }
+  );
+  return response.data;
+};
+
+export const getReviewPrizeDrawEntries = async (params?: { month?: string; status?: string }) => {
+  const response = await api.get('/api/review-prize-draw/entries', { params });
+  return response.data as { entries: import('@/lib/types').ReviewPrizeDrawEntryListItem[]; approved_count: number };
+};
+
+export const approveReviewPrizeDrawEntry = async (entryId: number) => {
+  const response = await api.post(`/api/review-prize-draw/entries/${entryId}/approve`);
+  return response.data;
+};
+
+export const rejectReviewPrizeDrawEntry = async (entryId: number, note?: string) => {
+  const response = await api.post(`/api/review-prize-draw/entries/${entryId}/reject`, { note: note || null });
+  return response.data;
+};
+
+export const getReviewPrizeDrawWinner = async (month: string) => {
+  const response = await api.get('/api/review-prize-draw/winners', { params: { month } });
+  return response.data as import('@/lib/types').ReviewPrizeDrawWinner | null;
+};
+
+export const pickReviewPrizeDrawWinner = async (month: string) => {
+  const response = await api.post('/api/review-prize-draw/pick-winner', { month });
+  return response.data as import('@/lib/types').ReviewPrizeDrawWinner;
+};
+
 export const updateDraftQuote = async (quoteId: number, quoteData: {
   valid_until?: string;
   terms_and_conditions?: string;

@@ -39,6 +39,8 @@ import {
   Info,
   CreditCard,
   Star,
+  Gift,
+  Trophy,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -136,6 +138,10 @@ const historyIcons: Record<CustomerHistoryEventType, any> = {
   ORDER_PAYMENT_LINK_SENT: CreditCard,
   ORDER_INVOICE_ACTION: FileText,
   ORDER_REVIEW_REQUEST_SENT: Star,
+  REVIEW_PRIZE_DRAW_SUBMITTED: Gift,
+  REVIEW_PRIZE_DRAW_APPROVED: CheckCircle,
+  REVIEW_PRIZE_DRAW_REJECTED: XCircle,
+  REVIEW_PRIZE_DRAW_WINNER: Trophy,
 };
 
 const historyColors: Record<CustomerHistoryEventType, string> = {
@@ -165,6 +171,10 @@ const historyColors: Record<CustomerHistoryEventType, string> = {
   ORDER_PAYMENT_LINK_SENT: 'text-green-600',
   ORDER_INVOICE_ACTION: 'text-blue-600',
   ORDER_REVIEW_REQUEST_SENT: 'text-teal-600',
+  REVIEW_PRIZE_DRAW_SUBMITTED: 'text-teal-600',
+  REVIEW_PRIZE_DRAW_APPROVED: 'text-green-600',
+  REVIEW_PRIZE_DRAW_REJECTED: 'text-red-600',
+  REVIEW_PRIZE_DRAW_WINNER: 'text-amber-600',
 };
 
 export default function CustomerDetailPage() {

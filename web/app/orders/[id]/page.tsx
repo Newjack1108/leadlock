@@ -41,6 +41,7 @@ import SendPaymentLinkDialog from '@/components/SendPaymentLinkDialog';
 import NinoxBadge from '@/components/NinoxBadge';
 import FilesCard from '@/components/FilesCard';
 import ReviewRequestSection from '@/components/ReviewRequestSection';
+import PrizeDrawStaffPanel from '@/components/PrizeDrawStaffPanel';
 
 function formatCurrency(amount: number, currency: string = 'GBP'): string {
   return new Intl.NumberFormat('en-GB', {
@@ -731,6 +732,11 @@ export default function OrderDetailPage() {
                     reviewRequestCustomerChannel={order.review_request_customer_channel}
                     onSendReviewRequest={handleSendReviewRequest}
                     sendingReviewRequest={sendingReviewRequest}
+                  />
+                  <PrizeDrawStaffPanel
+                    entry={order.prize_draw_entry}
+                    prizeDrawEnabled={companySettings?.review_prize_draw_enabled}
+                    onUpdated={fetchOrder}
                   />
                 </CardContent>
               </Card>

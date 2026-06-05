@@ -510,6 +510,10 @@ class CompanySettings(SQLModel, table=True):
     review_request_customer_outreach_enabled: bool = Field(default=False)
     review_request_sms_template_id: Optional[int] = Field(default=None, foreign_key="smstemplate.id")
     review_request_email_template_id: Optional[int] = Field(default=None, foreign_key="emailtemplate.id")
+    review_prize_draw_enabled: bool = Field(default=False)
+    review_prize_draw_title: Optional[str] = None
+    review_prize_draw_terms: Optional[str] = None
+    review_prize_draw_min_platforms: int = Field(default=2)
     updated_by_id: int = Field(foreign_key="user.id")
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     
@@ -967,6 +971,51 @@ class Order(SQLModel, table=True):
     created_by: User = Relationship()
     items: List["OrderItem"] = Relationship(back_populates="order")
     access_sheet_requests: List["AccessSheetRequest"] = Relationship(back_populates="order")
+    review_prize_draw_entries: List["ReviewPrizeDrawEntry"] = Relationship(back_populates="order")
+
+
+class ReviewPrizeDrawPlatform(str, Enum):
+    GOOGLE = "GOOGLE"
+    FACEBOOK = "FACEBOOK"
+    TRUSTPILOT = "TRUSTPILOT"
+
+
+class ReviewPrizeDrawEntryStatus(str, Enum):
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+
+
+class ReviewPrizeDrawEntry(SQLModel, table=True):
+    """Customer self-declared review platforms for monthly prize draw (staff-approved)."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    order_id: int = Field(foreign_key="customer_order.id", index=True)
+    customer_id: int = Field(foreign_key="customer.id", index=True)
+    access_token: str = Field(unique=True, index=True)
+    platforms_claimed: List[str] = Field(default_factory=list, sa_column=Column(JSON))
+    status: ReviewPrizeDrawEntryStatus = Field(default=ReviewPrizeDrawEntryStatus.PENDING, index=True)
+    submitted_at: Optional[datetime] = None
+    reviewed_at: Optional[datetime] = None
+    reviewed_by_id: Optional[int] = Field(default=None, foreign_key="user.id")
+    rejection_note: Optional[str] = None
+    entry_month: Optional[str] = Field(default=None, index=True)  # YYYY-MM set on approval
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    order: "Order" = Relationship(back_populates="review_prize_draw_entries")
+    customer: Optional["Customer"] = Relationship()
+    reviewed_by: Optional["User"] = Relationship()
+
+
+class ReviewPrizeDrawWinner(SQLModel, table=True):
+    """One recorded winner per calendar month."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    month: str = Field(unique=True, index=True)  # YYYY-MM
+    entry_id: int = Field(foreign_key="reviewprizedrawentry.id")
+    picked_at: datetime = Field(default_factory=datetime.utcnow)
+    picked_by_id: int = Field(foreign_key="user.id")
+
+    entry: ReviewPrizeDrawEntry = Relationship()
+    picked_by: "User" = Relationship()
 
 
 class OrderAuditEvent(SQLModel, table=True):

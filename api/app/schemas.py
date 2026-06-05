@@ -1402,6 +1402,10 @@ class CompanySettingsCreate(BaseModel):
     review_request_customer_outreach_enabled: Optional[bool] = False
     review_request_sms_template_id: Optional[int] = None
     review_request_email_template_id: Optional[int] = None
+    review_prize_draw_enabled: Optional[bool] = False
+    review_prize_draw_title: Optional[str] = None
+    review_prize_draw_terms: Optional[str] = None
+    review_prize_draw_min_platforms: Optional[int] = 2
 
 
 class CompanySettingsUpdate(BaseModel):
@@ -1458,6 +1462,10 @@ class CompanySettingsUpdate(BaseModel):
     review_request_customer_outreach_enabled: Optional[bool] = None
     review_request_sms_template_id: Optional[int] = None
     review_request_email_template_id: Optional[int] = None
+    review_prize_draw_enabled: Optional[bool] = None
+    review_prize_draw_title: Optional[str] = None
+    review_prize_draw_terms: Optional[str] = None
+    review_prize_draw_min_platforms: Optional[int] = None
 
 
 class CompanySettingsResponse(BaseModel):
@@ -1515,6 +1523,10 @@ class CompanySettingsResponse(BaseModel):
     review_request_customer_outreach_enabled: bool = False
     review_request_sms_template_id: Optional[int] = None
     review_request_email_template_id: Optional[int] = None
+    review_prize_draw_enabled: bool = False
+    review_prize_draw_title: Optional[str] = None
+    review_prize_draw_terms: Optional[str] = None
+    review_prize_draw_min_platforms: int = 2
     updated_at: datetime
 
 
@@ -1949,6 +1961,16 @@ class AccessSheetResponse(BaseModel):
     answers: Optional[dict] = None
 
 
+class PrizeDrawEntryResponse(BaseModel):
+    id: Optional[int] = None
+    status: Optional[str] = None
+    prize_draw_url: Optional[str] = None
+    platforms_claimed: List[str] = []
+    submitted_at: Optional[datetime] = None
+    entry_month: Optional[str] = None
+    rejection_note: Optional[str] = None
+
+
 class OrderResponse(BaseModel):
     id: int
     quote_id: int
@@ -1990,6 +2012,7 @@ class OrderResponse(BaseModel):
     is_ninox_origin: bool = False
     items: List[OrderItemResponse] = []
     access_sheet: Optional[AccessSheetResponse] = None
+    prize_draw_entry: Optional[PrizeDrawEntryResponse] = None
     sent_to_production_at: Optional[datetime] = None
     sent_to_production_by_id: Optional[int] = None
     sent_to_production_by_name: Optional[str] = None
@@ -2388,6 +2411,73 @@ class CustomerHistoryEventType(str, Enum):
     ORDER_PAYMENT_LINK_SENT = "ORDER_PAYMENT_LINK_SENT"
     ORDER_INVOICE_ACTION = "ORDER_INVOICE_ACTION"
     ORDER_REVIEW_REQUEST_SENT = "ORDER_REVIEW_REQUEST_SENT"
+    REVIEW_PRIZE_DRAW_SUBMITTED = "REVIEW_PRIZE_DRAW_SUBMITTED"
+    REVIEW_PRIZE_DRAW_APPROVED = "REVIEW_PRIZE_DRAW_APPROVED"
+    REVIEW_PRIZE_DRAW_REJECTED = "REVIEW_PRIZE_DRAW_REJECTED"
+    REVIEW_PRIZE_DRAW_WINNER = "REVIEW_PRIZE_DRAW_WINNER"
+
+
+class ReviewPrizeDrawEntryListItem(BaseModel):
+    id: int
+    order_id: int
+    order_number: str
+    customer_id: int
+    customer_name: str
+    platforms_claimed: List[str]
+    status: str
+    submitted_at: Optional[datetime] = None
+    entry_month: Optional[str] = None
+    rejection_note: Optional[str] = None
+    reviewed_at: Optional[datetime] = None
+    reviewed_by_name: Optional[str] = None
+
+
+class ReviewPrizeDrawEntriesResponse(BaseModel):
+    entries: List[ReviewPrizeDrawEntryListItem]
+    approved_count: int = 0
+
+
+class ReviewPrizeDrawRejectRequest(BaseModel):
+    note: Optional[str] = None
+
+
+class ReviewPrizeDrawPickWinnerRequest(BaseModel):
+    month: str
+
+
+class ReviewPrizeDrawWinnerResponse(BaseModel):
+    month: str
+    entry_id: int
+    order_id: int
+    order_number: str
+    customer_id: int
+    customer_name: str
+    platforms_claimed: List[str]
+    picked_at: datetime
+    picked_by_id: int
+    picked_by_name: Optional[str] = None
+
+
+class ReviewPrizePublicPlatform(BaseModel):
+    code: str
+    label: str
+
+
+class ReviewPrizePublicContextResponse(BaseModel):
+    customer_name: str
+    order_number: str
+    prize_title: Optional[str] = None
+    prize_terms: Optional[str] = None
+    min_platforms: int = 2
+    platforms: List[ReviewPrizePublicPlatform] = []
+    status: Optional[str] = None
+    platforms_claimed: List[str] = []
+    submitted_at: Optional[datetime] = None
+    can_submit: bool = True
+
+
+class ReviewPrizePublicSubmitRequest(BaseModel):
+    platforms: List[str]
 
 
 class OrderSendPaymentLinkRequest(BaseModel):

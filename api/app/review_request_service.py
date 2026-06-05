@@ -39,13 +39,26 @@ from app.sms_service import send_sms, normalize_phone, is_unsubscribed_recipient
 from app.sms_template_service import render_sms_template
 from app.system_user_service import get_system_user_id
 from app.stale_reference_service import resolve_stale_reference_for_order
+from app.review_prize_draw_service import (
+    build_prize_draw_url,
+    ensure_prize_draw_entry,
+    is_prize_draw_enabled,
+)
 
 
 def build_review_template_context(
     company_settings: Optional[CompanySettings],
     order: Order,
+    session: Optional[Session] = None,
 ) -> dict:
     """Jinja context for review request SMS/email templates."""
+    prize_draw_url = ""
+    prize_draw_title = ""
+    if company_settings and is_prize_draw_enabled(company_settings) and session and order.id:
+        entry = ensure_prize_draw_entry(order, session)
+        if entry:
+            prize_draw_url = build_prize_draw_url(entry.access_token)
+            prize_draw_title = company_settings.review_prize_draw_title or "Monthly prize draw"
     return {
         "order": {
             "order_number": order.order_number or "",
@@ -54,6 +67,8 @@ def build_review_template_context(
             "google_url": (company_settings.review_google_url or "") if company_settings else "",
             "facebook_url": (company_settings.review_facebook_url or "") if company_settings else "",
             "trustpilot_url": (company_settings.review_trustpilot_url or "") if company_settings else "",
+            "prize_draw_url": prize_draw_url,
+            "prize_draw_title": prize_draw_title,
         },
     }
 
@@ -184,6 +199,18 @@ def create_review_reminder(order: Order, session: Session) -> Optional[Reminder]
         days_since = max(0, (datetime.utcnow() - order.installation_completed_at).days)
 
     links_block = _format_review_links_message(settings)
+    prize_draw_note = ""
+    if settings and is_prize_draw_enabled(settings):
+        entry = ensure_prize_draw_entry(order, session)
+        if entry:
+            from app.review_prize_draw_service import build_prize_draw_url
+
+            min_platforms = max(1, int(settings.review_prize_draw_min_platforms or 2))
+            prize_draw_note = (
+                f"\n\nPrize draw: customers who review on {min_platforms}+ platforms can enter "
+                f"{settings.review_prize_draw_title or 'the monthly prize draw'}: "
+                f"{build_prize_draw_url(entry.access_token)}"
+            )
     ref_at, ref_label = resolve_stale_reference_for_order(order)
     reminder = Reminder(
         reminder_type=ReminderType.REQUEST_REVIEW,
@@ -195,7 +222,7 @@ def create_review_reminder(order: Order, session: Session) -> Optional[Reminder]
         message=(
             f"Installation completed for order {order.order_number}. "
             f"Ask {customer_name} for a Google, Facebook, or Trustpilot review.\n\n"
-            f"{links_block}"
+            f"{links_block}{prize_draw_note}"
         ),
         suggested_action=SuggestedAction.REQUEST_REVIEW,
         days_stale=days_since,
@@ -283,7 +310,8 @@ def send_review_request_to_customer(
 
     quote = session.exec(select(Quote).where(Quote.id == order.quote_id)).first()
     lead_id = quote.lead_id if quote else None
-    template_ctx = build_review_template_context(settings, order)
+    ensure_prize_draw_entry(order, session)
+    template_ctx = build_review_template_context(settings, order, session)
     now = datetime.utcnow()
 
     if channel == CustomerOutreachChannel.SMS.value:

@@ -41,7 +41,16 @@ from app.schemas import (
     AccessSheetContextResponse,
     AccessSheetSubmitRequest,
     CustomerHistoryEventType,
+    ReviewPrizePublicContextResponse,
+    ReviewPrizePublicPlatform,
+    ReviewPrizePublicSubmitRequest,
 )
+from app.review_prize_draw_service import (
+    configured_platforms,
+    get_entry_by_token,
+    submit_prize_draw_entry,
+)
+from app.models import ReviewPrizeDrawEntryStatus
 from app.constants import VAT_RATE_DECIMAL, DELIVERY_INSTALLATION_CONTACT_NOTE
 from app.delivery_location import build_delivery_address
 from app.order_audit import record_order_audit_event
@@ -450,6 +459,65 @@ def submit_access_sheet(
     session.commit()
 
     return {"message": "Access sheet submitted successfully"}
+
+
+@router.get("/review-prize/{token}", response_model=ReviewPrizePublicContextResponse)
+def get_review_prize_context(
+    token: str,
+    session: Session = Depends(get_session),
+):
+    """Public endpoint: prize draw form context. No authentication."""
+    entry = get_entry_by_token(session, token)
+    if not entry:
+        raise HTTPException(status_code=404, detail="Prize draw entry not found")
+
+    order = session.get(Order, entry.order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    settings = session.exec(select(CompanySettings).limit(1)).first()
+    customer_name = ""
+    if order.customer_id:
+        customer = session.get(Customer, order.customer_id)
+        if customer:
+            customer_name = customer.name
+
+    platforms = [
+        ReviewPrizePublicPlatform(code=code, label=label)
+        for code, label in configured_platforms(settings)
+    ]
+    status_val = entry.status.value if entry.status else None
+    can_submit = (
+        entry.status == ReviewPrizeDrawEntryStatus.REJECTED
+        or (entry.status == ReviewPrizeDrawEntryStatus.PENDING and not entry.submitted_at)
+    )
+
+    return ReviewPrizePublicContextResponse(
+        customer_name=customer_name,
+        order_number=order.order_number,
+        prize_title=settings.review_prize_draw_title if settings else None,
+        prize_terms=settings.review_prize_draw_terms if settings else None,
+        min_platforms=max(1, int(settings.review_prize_draw_min_platforms or 2)) if settings else 2,
+        platforms=platforms,
+        status=status_val,
+        platforms_claimed=entry.platforms_claimed or [],
+        submitted_at=entry.submitted_at,
+        can_submit=can_submit,
+    )
+
+
+@router.post("/review-prize/{token}")
+def submit_review_prize(
+    token: str,
+    data: ReviewPrizePublicSubmitRequest,
+    session: Session = Depends(get_session),
+):
+    """Public endpoint: submit prize draw entry. No authentication."""
+    entry, err = submit_prize_draw_entry(token, data.platforms, session)
+    if err:
+        raise HTTPException(status_code=400, detail=err)
+    session.commit()
+    return {"message": "Prize draw entry submitted successfully"}
 
 
 @router.get("/pixel")
