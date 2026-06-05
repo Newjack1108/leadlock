@@ -38,6 +38,7 @@ import {
   Bell,
   Info,
   CreditCard,
+  Star,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -134,6 +135,7 @@ const historyIcons: Record<CustomerHistoryEventType, any> = {
   ORDER_XERO_PUSHED: Upload,
   ORDER_PAYMENT_LINK_SENT: CreditCard,
   ORDER_INVOICE_ACTION: FileText,
+  ORDER_REVIEW_REQUEST_SENT: Star,
 };
 
 const historyColors: Record<CustomerHistoryEventType, string> = {
@@ -162,6 +164,7 @@ const historyColors: Record<CustomerHistoryEventType, string> = {
   ORDER_XERO_PUSHED: 'text-blue-600',
   ORDER_PAYMENT_LINK_SENT: 'text-green-600',
   ORDER_INVOICE_ACTION: 'text-blue-600',
+  ORDER_REVIEW_REQUEST_SENT: 'text-teal-600',
 };
 
 export default function CustomerDetailPage() {
