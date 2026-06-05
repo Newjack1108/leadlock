@@ -117,6 +117,13 @@ def _describe_order_flag_changes(changes: list[dict]) -> str:
     return "; ".join(parts)
 
 
+def _find_flag_change(changes: list[dict], field: str) -> bool | None:
+    for change in changes:
+        if change.get("field") == field:
+            return bool(change.get("new"))
+    return None
+
+
 def generate_invoice_number(session: Session) -> str:
     """Generate a unique invoice number like INV-2025-001."""
     year = date.today().year
@@ -407,9 +414,10 @@ async def update_order(
             metadata={"changes": installation_changes},
             created_by_id=current_user.id,
         )
-        if installation_changes.get("installation_completed") is True:
+        completed_change = _find_flag_change(installation_changes, "installation_completed")
+        if completed_change is True:
             on_installation_completed(order, session)
-        elif installation_changes.get("installation_completed") is False:
+        elif completed_change is False:
             on_installation_uncompleted(order, session)
     session.add(order)
     session.commit()

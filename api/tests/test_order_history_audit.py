@@ -201,3 +201,19 @@ def test_order_operational_events_appear_in_customer_history(api_client, sqlite_
     assert "ORDER_INSTALLATION_UPDATED" in event_types
     assert "ORDER_ACCESS_SHEET_SENT" in event_types
     assert "ORDER_ACCESS_SHEET_COMPLETED" in event_types
+
+
+def test_mark_installation_completed_updates_order(api_client, sqlite_engine):
+    _customer_id, quote_id = _seed_accepted_quote(sqlite_engine, "COMPLETE")
+    ensure = api_client.post(f"/api/quotes/{quote_id}/ensure-order", headers=_auth_headers(sqlite_engine))
+    order_id = ensure.json()["order_id"]
+
+    update_response = api_client.patch(
+        f"/api/orders/{order_id}",
+        json={"installation_completed": True},
+        headers=_auth_headers(sqlite_engine),
+    )
+    assert update_response.status_code == 200
+    payload = update_response.json()
+    assert payload["installation_completed"] is True
+    assert payload["installation_completed_at"] is not None
