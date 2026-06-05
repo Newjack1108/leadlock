@@ -450,6 +450,7 @@ def _reminder_to_response(
 ) -> ReminderResponse:
     lead_name = None
     quote_number = None
+    order_number = None
     customer_name = None
     if reminder.lead_id:
         if lead_by_id is not None:
@@ -472,6 +473,12 @@ def _reminder_to_response(
             customer = session.exec(select(Customer).where(Customer.id == reminder.customer_id)).first()
         if customer:
             customer_name = customer.name
+    if reminder.order_id:
+        from app.models import Order
+
+        order = session.exec(select(Order).where(Order.id == reminder.order_id)).first()
+        if order:
+            order_number = order.order_number
 
     au = uid_map.get(reminder.assigned_to_id)
     assigned_to_name = au.full_name if au else None
@@ -492,6 +499,8 @@ def _reminder_to_response(
         reminder_type=reminder.reminder_type,
         lead_id=reminder.lead_id,
         quote_id=reminder.quote_id,
+        order_id=reminder.order_id,
+        order_number=order_number,
         customer_id=reminder.customer_id,
         assigned_to_id=reminder.assigned_to_id,
         priority=eff_pri,

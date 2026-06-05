@@ -17,8 +17,9 @@ import api, {
   importCustomersFromCsv,
   downloadCustomerExport,
   getSmsTemplates,
+  getEmailTemplates,
 } from '@/lib/api';
-import { CompanySettings, InstallationLeadTime, SmsBotMode, SmsTemplate } from '@/lib/types';
+import { CompanySettings, EmailTemplate, InstallationLeadTime, SmsBotMode, SmsTemplate } from '@/lib/types';
 import { toast } from 'sonner';
 
 type WeekdayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
@@ -55,6 +56,8 @@ export default function CompanySettingsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [settings, setSettings] = useState<CompanySettings | null>(null);
   const [smsTemplates, setSmsTemplates] = useState<SmsTemplate[]>([]);
+  const [emailTemplates, setEmailTemplates] = useState<EmailTemplate[]>([]);
+  const [reviewExpanded, setReviewExpanded] = useState(false);
   const [botAvatarMissing, setBotAvatarMissing] = useState(false);
   const [termsExpanded, setTermsExpanded] = useState(false);
   const [smsBotInstructionsExpanded, setSmsBotInstructionsExpanded] = useState(false);
@@ -114,16 +117,24 @@ export default function CompanySettingsPage() {
     duplicate_sms_template_id: '' as string,
     duplicate_sms_cooldown_days: '7',
     auto_close_duplicate_leads: true,
+    review_request_delay_days: '3',
+    review_google_url: '',
+    review_facebook_url: '',
+    review_trustpilot_url: '',
+    review_request_customer_outreach_enabled: false,
+    review_request_sms_template_id: '' as string,
+    review_request_email_template_id: '' as string,
   });
 
   useEffect(() => {
     fetchSettings();
     void (async () => {
       try {
-        const templates = await getSmsTemplates();
-        setSmsTemplates(templates);
+        const [sms, email] = await Promise.all([getSmsTemplates(), getEmailTemplates()]);
+        setSmsTemplates(sms);
+        setEmailTemplates(email);
       } catch {
-        // Non-blocking; duplicate SMS section still usable after templates load on retry
+        // Non-blocking; template sections still usable after templates load on retry
       }
     })();
   }, []);
@@ -202,6 +213,23 @@ export default function CompanySettingsPage() {
             ? String(response.data.duplicate_sms_cooldown_days)
             : '7',
         auto_close_duplicate_leads: response.data.auto_close_duplicate_leads ?? true,
+        review_request_delay_days:
+          response.data.review_request_delay_days != null
+            ? String(response.data.review_request_delay_days)
+            : '3',
+        review_google_url: response.data.review_google_url || '',
+        review_facebook_url: response.data.review_facebook_url || '',
+        review_trustpilot_url: response.data.review_trustpilot_url || '',
+        review_request_customer_outreach_enabled:
+          response.data.review_request_customer_outreach_enabled ?? false,
+        review_request_sms_template_id:
+          response.data.review_request_sms_template_id != null
+            ? String(response.data.review_request_sms_template_id)
+            : '',
+        review_request_email_template_id:
+          response.data.review_request_email_template_id != null
+            ? String(response.data.review_request_email_template_id)
+            : '',
       });
     } catch (error: any) {
       if (error.response?.status === 401) {
@@ -239,6 +267,13 @@ export default function CompanySettingsPage() {
       toast.error('Duplicate SMS cooldown must be 0 or more days');
       return;
     }
+    const reviewDelayVal = formData.review_request_delay_days
+      ? parseInt(formData.review_request_delay_days, 10)
+      : 3;
+    if (Number.isNaN(reviewDelayVal) || reviewDelayVal < 0) {
+      toast.error('Review request delay must be 0 or more days');
+      return;
+    }
 
     try {
       setSaving(true);
@@ -266,6 +301,19 @@ export default function CompanySettingsPage() {
             : parseInt(formData.duplicate_sms_template_id, 10),
         duplicate_sms_cooldown_days: duplicateCooldownVal,
         auto_close_duplicate_leads: formData.auto_close_duplicate_leads,
+        review_request_delay_days: reviewDelayVal,
+        review_google_url: formData.review_google_url.trim() || null,
+        review_facebook_url: formData.review_facebook_url.trim() || null,
+        review_trustpilot_url: formData.review_trustpilot_url.trim() || null,
+        review_request_customer_outreach_enabled: formData.review_request_customer_outreach_enabled,
+        review_request_sms_template_id:
+          formData.review_request_sms_template_id.trim() === ''
+            ? null
+            : parseInt(formData.review_request_sms_template_id, 10),
+        review_request_email_template_id:
+          formData.review_request_email_template_id.trim() === ''
+            ? null
+            : parseInt(formData.review_request_email_template_id, 10),
       };
       if (settings) {
         // Update existing: omit logo_filename so existing value is unchanged
@@ -588,6 +636,162 @@ export default function CompanySettingsPage() {
                   Automatically close duplicate leads (keeps them for source reporting)
                 </Label>
               </div>
+            </div>
+
+            <div className="rounded-lg p-4 bg-teal-50/30 dark:bg-teal-950/20 border-l-4 border-l-teal-200 dark:border-l-teal-800 mt-6 space-y-4">
+              <button
+                type="button"
+                className="flex w-full items-center justify-between text-left"
+                onClick={() => setReviewExpanded((v) => !v)}
+              >
+                <div>
+                  <h3 className="text-lg font-medium">Post-install review requests</h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    After staff mark installation complete, create a staff reminder and optionally send customers
+                    Google, Facebook, and Trustpilot review links.
+                  </p>
+                </div>
+                {reviewExpanded ? <ChevronUp className="h-5 w-5 shrink-0" /> : <ChevronDown className="h-5 w-5 shrink-0" />}
+              </button>
+              {reviewExpanded && (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="review_request_delay_days">Delay after install complete (days)</Label>
+                      <Input
+                        id="review_request_delay_days"
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={formData.review_request_delay_days}
+                        onChange={(e) =>
+                          setFormData({ ...formData, review_request_delay_days: e.target.value })
+                        }
+                        disabled={saving}
+                      />
+                    </div>
+                    <div className="flex items-center space-x-2 pt-8">
+                      <input
+                        type="checkbox"
+                        id="review_request_customer_outreach_enabled"
+                        checked={formData.review_request_customer_outreach_enabled}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            review_request_customer_outreach_enabled: e.target.checked,
+                          })
+                        }
+                        className="rounded"
+                        disabled={saving}
+                      />
+                      <Label htmlFor="review_request_customer_outreach_enabled">
+                        Automatically send review request to customer (SMS preferred, else email)
+                      </Label>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="review_google_url">Google review URL</Label>
+                      <Input
+                        id="review_google_url"
+                        type="url"
+                        value={formData.review_google_url}
+                        onChange={(e) => setFormData({ ...formData, review_google_url: e.target.value })}
+                        disabled={saving}
+                        placeholder="https://..."
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="review_facebook_url">Facebook review URL</Label>
+                      <Input
+                        id="review_facebook_url"
+                        type="url"
+                        value={formData.review_facebook_url}
+                        onChange={(e) => setFormData({ ...formData, review_facebook_url: e.target.value })}
+                        disabled={saving}
+                        placeholder="https://..."
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="review_trustpilot_url">Trustpilot review URL</Label>
+                      <Input
+                        id="review_trustpilot_url"
+                        type="url"
+                        value={formData.review_trustpilot_url}
+                        onChange={(e) => setFormData({ ...formData, review_trustpilot_url: e.target.value })}
+                        disabled={saving}
+                        placeholder="https://..."
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="review_request_sms_template_id">Review request SMS template</Label>
+                      <Select
+                        value={formData.review_request_sms_template_id || 'none'}
+                        onValueChange={(v) =>
+                          setFormData({
+                            ...formData,
+                            review_request_sms_template_id: v === 'none' ? '' : v,
+                          })
+                        }
+                        disabled={saving}
+                      >
+                        <SelectTrigger id="review_request_sms_template_id">
+                          <SelectValue placeholder="Choose template" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
+                          {smsTemplates.map((t) => (
+                            <SelectItem key={t.id} value={String(t.id)}>
+                              {t.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Variables: <code className="text-xs">{'{{ review.google_url }}'}</code>,{' '}
+                        <code className="text-xs">{'{{ review.facebook_url }}'}</code>,{' '}
+                        <code className="text-xs">{'{{ review.trustpilot_url }}'}</code>.{' '}
+                        <Link href="/settings/sms-templates" className="text-primary underline hover:no-underline">
+                          Manage SMS templates
+                        </Link>
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="review_request_email_template_id">Review request email template</Label>
+                      <Select
+                        value={formData.review_request_email_template_id || 'none'}
+                        onValueChange={(v) =>
+                          setFormData({
+                            ...formData,
+                            review_request_email_template_id: v === 'none' ? '' : v,
+                          })
+                        }
+                        disabled={saving}
+                      >
+                        <SelectTrigger id="review_request_email_template_id">
+                          <SelectValue placeholder="Choose template" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
+                          {emailTemplates.map((t) => (
+                            <SelectItem key={t.id} value={String(t.id)}>
+                              {t.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Used when no SMS template is set.{' '}
+                        <Link href="/settings/email-templates" className="text-primary underline hover:no-underline">
+                          Manage email templates
+                        </Link>
+                      </p>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
 
             <div className="rounded-lg p-4 bg-amber-50/30 dark:bg-amber-950/20 border-l-4 border-l-amber-200 dark:border-l-amber-800 mt-6">

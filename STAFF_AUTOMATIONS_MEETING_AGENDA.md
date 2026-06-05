@@ -67,6 +67,7 @@
 | **Reminder rules** | Define *when* stale | Director edits thresholds |
 | **Weekly plan** | List can be generated; **auto-send email/SMS only if enabled on server** | Weekly Plan page — review before send |
 | Quote accepted | Open quote reminders **auto-dismissed** | — |
+| Installation completed | After configurable delay: **REQUEST_REVIEW** staff reminder; optional customer SMS/email with Google/Facebook/Trustpilot links | Company Settings → Post-install review requests |
 
 **Demo path:** Reminders → Generate → show stale lead + suggested action → dismiss or complete.
 
@@ -131,6 +132,7 @@
 | Auto-close duplicates | Company Settings |
 | Email/SMS templates | Profile → templates menus |
 | Weekly plan message templates | Settings → Weekly Plan Templates |
+| Post-install review URLs, delay & templates | Settings → Company → Post-install review requests |
 
 ---
 

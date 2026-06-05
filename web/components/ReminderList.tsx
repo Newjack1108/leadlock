@@ -15,7 +15,7 @@ import {
 import { toast } from 'sonner';
 import { 
   RefreshCw, X, CheckCircle2, Mail, Phone, 
-  FileText, ArrowRight, AlertCircle, MailCheck, AlertTriangle 
+  FileText, ArrowRight, AlertCircle, MailCheck, AlertTriangle, Star
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
@@ -182,6 +182,7 @@ export default function ReminderList({
   };
 
   const getReminderDetailHref = (reminder: Reminder): string | null => {
+    if (reminder.order_id) return `/orders/${reminder.order_id}`;
     if (reminder.customer_id) return `/customers/${reminder.customer_id}`;
     if (reminder.quote_id) return `/quotes/${reminder.quote_id}`;
     if (reminder.lead_id) return `/leads/${reminder.lead_id}`;
@@ -207,6 +208,8 @@ export default function ReminderList({
         return 'text-emerald-700 dark:text-emerald-200 bg-emerald-50 dark:bg-emerald-950/35 border-emerald-200 dark:border-emerald-900/80';
       case ReminderType.MANUAL:
         return 'text-amber-700 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/35 border-amber-200 dark:border-amber-900/80';
+      case ReminderType.REQUEST_REVIEW:
+        return 'text-teal-700 dark:text-teal-200 bg-teal-50 dark:bg-teal-950/35 border-teal-200 dark:border-teal-900/80';
       case ReminderType.QUOTE_STALE:
       case ReminderType.QUOTE_EXPIRING:
       case ReminderType.QUOTE_EXPIRED:
@@ -229,6 +232,8 @@ export default function ReminderList({
         return <FileText className="h-4 w-4" />;
       case SuggestedAction.REVIEW_QUOTE:
         return <FileText className="h-4 w-4" />;
+      case SuggestedAction.REQUEST_REVIEW:
+        return <Star className="h-4 w-4" />;
       case SuggestedAction.MARK_LOST:
         return <X className="h-4 w-4" />;
       default:
@@ -248,6 +253,8 @@ export default function ReminderList({
         return 'Resend Quote';
       case SuggestedAction.REVIEW_QUOTE:
         return 'Review Quote';
+      case SuggestedAction.REQUEST_REVIEW:
+        return 'Request Review';
       case SuggestedAction.MARK_LOST:
         return 'Mark Lost';
       default:
@@ -361,6 +368,9 @@ export default function ReminderList({
                       )}
                       {reminder.quote_number && (
                         <span>Quote: {reminder.quote_number}</span>
+                      )}
+                      {reminder.order_number && (
+                        <span>Order: {reminder.order_number}</span>
                       )}
                       {reminder.customer_name && (
                         <span>Customer: {reminder.customer_name}</span>

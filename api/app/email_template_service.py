@@ -75,6 +75,14 @@ def get_email_template_preview_context(customer: Optional[Customer] = None) -> D
     quote email templates. Sending mail from Compose still uses render_email_template() with
     only customer data unless custom_variables are added later.
     """
+    review_sample = {
+        "order": {"order_number": "ORD-2025-001"},
+        "review": {
+            "google_url": "https://example.com/google-review",
+            "facebook_url": "https://example.com/facebook-review",
+            "trustpilot_url": "https://example.com/trustpilot-review",
+        },
+    }
     if customer:
         cust: Dict[str, str] = _customer_dict_for_template(customer)
     else:
@@ -100,4 +108,5 @@ def get_email_template_preview_context(customer: Optional[Customer] = None) -> D
         'currency_symbol': '£',
         'vat_amount': Decimal('300.00'),
         'total_amount_inc_vat': Decimal('1800.00'),
+        **review_sample,
     }

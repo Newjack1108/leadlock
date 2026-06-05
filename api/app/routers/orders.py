@@ -48,7 +48,15 @@ from app.schemas import (
     CustomerHistoryEventType,
     OrderSendPaymentLinkRequest,
     OrderSendPaymentLinkResponse,
+    OrderSendReviewRequestResponse,
 )
+from app.review_request_service import (
+    on_installation_completed,
+    on_installation_uncompleted,
+    send_review_request_to_customer,
+    create_review_reminder,
+)
+from app.models import Reminder, ReminderType
 from app.models import User
 from app.invoice_pdf_service import generate_deposit_paid_invoice_pdf, generate_paid_in_full_invoice_pdf
 from app.make_xero_service import push_order_invoice_to_make
@@ -218,6 +226,9 @@ def build_order_response(order: Order, order_items: List[OrderItem], session: Se
         paid_in_full=order.paid_in_full,
         installation_booked=order.installation_booked,
         installation_completed=order.installation_completed,
+        installation_completed_at=order.installation_completed_at,
+        review_request_customer_sent_at=order.review_request_customer_sent_at,
+        review_request_customer_channel=order.review_request_customer_channel,
         invoice_number=order.invoice_number,
         xero_invoice_id=order.xero_invoice_id,
         payment_link_url=order.payment_link_url,
@@ -373,6 +384,10 @@ async def update_order(
             metadata={"changes": installation_changes},
             created_by_id=current_user.id,
         )
+        if installation_changes.get("installation_completed") is True:
+            on_installation_completed(order, session)
+        elif installation_changes.get("installation_completed") is False:
+            on_installation_uncompleted(order, session)
     session.add(order)
     session.commit()
     session.refresh(order)
@@ -586,6 +601,56 @@ async def send_order_payment_link(
     return OrderSendPaymentLinkResponse(
         message="Payment link sent successfully",
         channel=channel,
+    )
+
+
+@router.post("/{order_id}/send-review-request", response_model=OrderSendReviewRequestResponse)
+async def send_order_review_request(
+    order_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Send post-install review request to customer immediately and mark staff reminder acted."""
+    order = session.exec(select(Order).where(Order.id == order_id)).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if not order.installation_completed:
+        raise HTTPException(status_code=400, detail="Installation must be marked completed first")
+    if not order.customer_id:
+        raise HTTPException(status_code=400, detail="Order must be associated with a customer")
+
+    create_review_reminder(order, session)
+    success, error = send_review_request_to_customer(
+        order,
+        session,
+        actor_user=current_user,
+        force=True,
+    )
+    if not success:
+        session.rollback()
+        raise HTTPException(status_code=400, detail=error or "Failed to send review request")
+
+    now = datetime.utcnow()
+    open_reminder = session.exec(
+        select(Reminder).where(
+            Reminder.order_id == order.id,
+            Reminder.reminder_type == ReminderType.REQUEST_REVIEW,
+            Reminder.dismissed_at.is_(None),
+            Reminder.acted_upon_at.is_(None),
+        )
+    ).first()
+    if open_reminder:
+        open_reminder.acted_upon_at = now
+        session.add(open_reminder)
+
+    session.commit()
+    session.refresh(order)
+
+    return OrderSendReviewRequestResponse(
+        success=True,
+        channel=order.review_request_customer_channel,
+        staff_reminder_acted=open_reminder is not None,
+        message="Review request sent successfully",
     )
 
 

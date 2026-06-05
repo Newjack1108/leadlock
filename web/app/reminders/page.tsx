@@ -194,6 +194,7 @@ export default function RemindersPage() {
                 <SelectItem value={ReminderType.QUOTE_OPENED_NO_REPLY}>Quote opened, no reply</SelectItem>
                 <SelectItem value={ReminderType.MANUAL}>Manual (customer)</SelectItem>
                 <SelectItem value={ReminderType.USER_TASK}>User tasks</SelectItem>
+                <SelectItem value={ReminderType.REQUEST_REVIEW}>Post-install reviews</SelectItem>
               </SelectContent>
             </Select>
           </div>

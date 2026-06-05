@@ -699,6 +699,13 @@ export interface CompanySettings {
   account_number?: string;
   sort_code?: string;
   require_engagement_proof?: boolean;
+  review_request_delay_days?: number;
+  review_google_url?: string | null;
+  review_facebook_url?: string | null;
+  review_trustpilot_url?: string | null;
+  review_request_customer_outreach_enabled?: boolean;
+  review_request_sms_template_id?: number | null;
+  review_request_email_template_id?: number | null;
   updated_at: string;
 }
 
@@ -1203,6 +1210,9 @@ export interface Order {
   paid_in_full?: boolean;
   installation_booked?: boolean;
   installation_completed?: boolean;
+  installation_completed_at?: string | null;
+  review_request_customer_sent_at?: string | null;
+  review_request_customer_channel?: string | null;
   invoice_number?: string | null;
   xero_invoice_id?: string | null;
   payment_link_url?: string | null;
@@ -1550,6 +1560,7 @@ export enum ReminderType {
   QUOTE_OPENED_NO_REPLY = "QUOTE_OPENED_NO_REPLY",
   MANUAL = "MANUAL",
   USER_TASK = "USER_TASK",
+  REQUEST_REVIEW = "REQUEST_REVIEW",
 }
 
 export enum SuggestedAction {
@@ -1559,6 +1570,7 @@ export enum SuggestedAction {
   REVIEW_QUOTE = "REVIEW_QUOTE",
   CONTACT_CUSTOMER = "CONTACT_CUSTOMER",
   PHONE_CALL = "PHONE_CALL",
+  REQUEST_REVIEW = "REQUEST_REVIEW",
 }
 
 export interface Reminder {
@@ -1566,6 +1578,8 @@ export interface Reminder {
   reminder_type: ReminderType;
   lead_id?: number;
   quote_id?: number;
+  order_id?: number;
+  order_number?: string;
   customer_id?: number;
   assigned_to_id: number;
   priority: ReminderPriority;
@@ -1775,6 +1789,7 @@ export enum CustomerHistoryEventType {
   ORDER_XERO_PUSHED = "ORDER_XERO_PUSHED",
   ORDER_PAYMENT_LINK_SENT = "ORDER_PAYMENT_LINK_SENT",
   ORDER_INVOICE_ACTION = "ORDER_INVOICE_ACTION",
+  ORDER_REVIEW_REQUEST_SENT = "ORDER_REVIEW_REQUEST_SENT",
 }
 
 export interface CustomerHistoryEvent {

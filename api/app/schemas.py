@@ -1395,6 +1395,13 @@ class CompanySettingsCreate(BaseModel):
     account_number: Optional[str] = None
     sort_code: Optional[str] = None
     require_engagement_proof: Optional[bool] = None
+    review_request_delay_days: Optional[int] = 3
+    review_google_url: Optional[str] = None
+    review_facebook_url: Optional[str] = None
+    review_trustpilot_url: Optional[str] = None
+    review_request_customer_outreach_enabled: Optional[bool] = False
+    review_request_sms_template_id: Optional[int] = None
+    review_request_email_template_id: Optional[int] = None
 
 
 class CompanySettingsUpdate(BaseModel):
@@ -1444,6 +1451,13 @@ class CompanySettingsUpdate(BaseModel):
     account_number: Optional[str] = None
     sort_code: Optional[str] = None
     require_engagement_proof: Optional[bool] = None
+    review_request_delay_days: Optional[int] = None
+    review_google_url: Optional[str] = None
+    review_facebook_url: Optional[str] = None
+    review_trustpilot_url: Optional[str] = None
+    review_request_customer_outreach_enabled: Optional[bool] = None
+    review_request_sms_template_id: Optional[int] = None
+    review_request_email_template_id: Optional[int] = None
 
 
 class CompanySettingsResponse(BaseModel):
@@ -1494,6 +1508,13 @@ class CompanySettingsResponse(BaseModel):
     account_number: Optional[str] = None
     sort_code: Optional[str] = None
     require_engagement_proof: Optional[bool] = None
+    review_request_delay_days: int = 3
+    review_google_url: Optional[str] = None
+    review_facebook_url: Optional[str] = None
+    review_trustpilot_url: Optional[str] = None
+    review_request_customer_outreach_enabled: bool = False
+    review_request_sms_template_id: Optional[int] = None
+    review_request_email_template_id: Optional[int] = None
     updated_at: datetime
 
 
@@ -1950,6 +1971,9 @@ class OrderResponse(BaseModel):
     paid_in_full: bool = False
     installation_booked: bool = False
     installation_completed: bool = False
+    installation_completed_at: Optional[datetime] = None
+    review_request_customer_sent_at: Optional[datetime] = None
+    review_request_customer_channel: Optional[str] = None
     invoice_number: Optional[str] = None
     xero_invoice_id: Optional[str] = None
     travel_time_hours_one_way: Optional[Decimal] = None
@@ -2058,11 +2082,20 @@ class DiscountRequestReject(BaseModel):
     rejection_reason: Optional[str] = None
 
 
+class OrderSendReviewRequestResponse(BaseModel):
+    success: bool
+    channel: Optional[str] = None
+    staff_reminder_acted: bool = False
+    message: Optional[str] = None
+
+
 class ReminderResponse(BaseModel):
     id: int
     reminder_type: ReminderType
     lead_id: Optional[int]
     quote_id: Optional[int]
+    order_id: Optional[int] = None
+    order_number: Optional[str] = None
     customer_id: Optional[int]
     assigned_to_id: int
     priority: ReminderPriority
@@ -2347,6 +2380,7 @@ class CustomerHistoryEventType(str, Enum):
     ORDER_XERO_PUSHED = "ORDER_XERO_PUSHED"
     ORDER_PAYMENT_LINK_SENT = "ORDER_PAYMENT_LINK_SENT"
     ORDER_INVOICE_ACTION = "ORDER_INVOICE_ACTION"
+    ORDER_REVIEW_REQUEST_SENT = "ORDER_REVIEW_REQUEST_SENT"
 
 
 class OrderSendPaymentLinkRequest(BaseModel):

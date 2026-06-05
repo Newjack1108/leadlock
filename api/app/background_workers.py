@@ -323,3 +323,34 @@ def start_background_workers() -> None:
             print("Weekly planner worker started", file=__import__("sys").stderr, flush=True)
     except Exception as e:
         print("Weekly planner worker not started:", str(e), file=__import__("sys").stderr, flush=True)
+
+    def poll_review_requests() -> None:
+        from app.review_request_service import run_review_request_cycle
+
+        poll_interval = int(os.getenv("REVIEW_REQUEST_INTERVAL", "300"))
+        while True:
+            try:
+                time.sleep(poll_interval)
+                with Session(engine) as session:
+                    n = run_review_request_cycle(session)
+                    if n:
+                        print(
+                            f"Review request worker processed {n} order(s)",
+                            file=__import__("sys").stderr,
+                            flush=True,
+                        )
+            except Exception as e:
+                print(f"Error in review request worker: {e}", file=__import__("sys").stderr, flush=True)
+                time.sleep(60)
+
+    try:
+        review_thread = threading.Thread(target=poll_review_requests, daemon=True)
+        review_thread.start()
+        poll_s = int(os.getenv("REVIEW_REQUEST_INTERVAL", "300"))
+        print(
+            f"Review request worker started (REVIEW_REQUEST_INTERVAL={poll_s}s)",
+            file=__import__("sys").stderr,
+            flush=True,
+        )
+    except Exception as e:
+        print("Review request worker not started:", str(e), file=__import__("sys").stderr, flush=True)

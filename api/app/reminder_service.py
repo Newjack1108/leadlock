@@ -655,5 +655,9 @@ def generate_reminders(session: Session, user_id: Optional[int] = None) -> int:
         session.add(reminder)
         count += 1
     
+    from app.review_request_service import generate_review_reminders
+
+    count += generate_review_reminders(session)
+
     session.commit()
     return count

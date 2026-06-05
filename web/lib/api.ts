@@ -1191,6 +1191,16 @@ export const pushOrderToXero = async (orderId: number) => {
   return response.data;
 };
 
+export const sendOrderReviewRequest = async (orderId: number) => {
+  const response = await api.post(`/api/orders/${orderId}/send-review-request`);
+  return response.data as {
+    success: boolean;
+    channel?: string | null;
+    staff_reminder_acted?: boolean;
+    message?: string | null;
+  };
+};
+
 export const sendOrderPaymentLink = async (
   orderId: number,
   data: {

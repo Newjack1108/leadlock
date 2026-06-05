@@ -21,8 +21,10 @@ import api, {
   pushOrderToXero,
   sendAccessSheet,
   sendOrderToProduction,
+  sendOrderReviewRequest,
+  getCompanySettings,
 } from '@/lib/api';
-import { Order, OrderItem, Customer } from '@/lib/types';
+import { CompanySettings, Order, OrderItem, Customer } from '@/lib/types';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { formatDateTime } from '@/lib/utils';
@@ -78,6 +80,8 @@ export default function OrderDetailPage() {
   const [pushingXero, setPushingXero] = useState(false);
   const [sendingAccessSheet, setSendingAccessSheet] = useState(false);
   const [sendingToProduction, setSendingToProduction] = useState(false);
+  const [sendingReviewRequest, setSendingReviewRequest] = useState(false);
+  const [companySettings, setCompanySettings] = useState<CompanySettings | null>(null);
   const [notesDraft, setNotesDraft] = useState('');
   const [useAlternateDeliveryAddressDraft, setUseAlternateDeliveryAddressDraft] = useState(false);
   const [deliveryAddressLine1Draft, setDeliveryAddressLine1Draft] = useState('');
@@ -96,7 +100,10 @@ export default function OrderDetailPage() {
   const [deleteLoading, setDeleteLoading] = useState(false);
 
   useEffect(() => {
-    if (orderId) fetchOrder();
+    if (orderId) {
+      void fetchOrder();
+      void getCompanySettings().then(setCompanySettings).catch(() => setCompanySettings(null));
+    }
   }, [orderId]);
 
   useEffect(() => {
@@ -239,6 +246,43 @@ export default function OrderDetailPage() {
       toast.error(error.response?.data?.detail || 'Failed to get access sheet link');
     } finally {
       setSendingAccessSheet(false);
+    }
+  };
+
+  const getReviewRequestStatus = (): string | null => {
+    if (!order?.installation_completed) return null;
+    if (!order.installation_completed_at) {
+      return 'Toggle installation completed again to schedule a review reminder.';
+    }
+    if (order.review_request_customer_sent_at) {
+      const sent = formatDateTime(order.review_request_customer_sent_at);
+      const channel = order.review_request_customer_channel
+        ? ` via ${order.review_request_customer_channel}`
+        : '';
+      return `Customer review request sent${channel} on ${sent}.`;
+    }
+    const delayDays = companySettings?.review_request_delay_days ?? 3;
+    const completedAt = new Date(order.installation_completed_at);
+    const dueAt = new Date(completedAt);
+    dueAt.setDate(dueAt.getDate() + delayDays);
+    const now = new Date();
+    if (now < dueAt) {
+      const daysLeft = Math.ceil((dueAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      return `Review request due in ${daysLeft} day${daysLeft === 1 ? '' : 's'} (staff reminder + optional customer message).`;
+    }
+    return 'Review request is due — check Reminders or send now below.';
+  };
+
+  const handleSendReviewRequest = async () => {
+    try {
+      setSendingReviewRequest(true);
+      const result = await sendOrderReviewRequest(orderId);
+      await fetchOrder();
+      toast.success(result.message || 'Review request sent');
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || 'Failed to send review request');
+    } finally {
+      setSendingReviewRequest(false);
     }
   };
 
@@ -582,6 +626,21 @@ export default function OrderDetailPage() {
                     </Button>
                   ))}
                 </div>
+                {getReviewRequestStatus() && (
+                  <div className="mt-4 rounded-md border bg-muted/40 p-3 space-y-2">
+                    <p className="text-sm text-muted-foreground">{getReviewRequestStatus()}</p>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={handleSendReviewRequest}
+                      disabled={sendingReviewRequest}
+                    >
+                      <Send className="h-4 w-4 mr-1" />
+                      {sendingReviewRequest ? 'Sending…' : 'Send review request now'}
+                    </Button>
+                  </div>
+                )}
                 <div className="mt-4 pt-4 border-t space-y-2">
                   <Label className="block">Delivery location for works order</Label>
                   <div className="flex items-center gap-2">

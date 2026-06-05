@@ -502,6 +502,14 @@ class CompanySettings(SQLModel, table=True):
     account_number: Optional[str] = None
     sort_code: Optional[str] = None
     require_engagement_proof: bool = Field(default=False)  # When True, customers need engagement (SMS/email/WhatsApp/call) before quoting
+    # Post-installation review request settings
+    review_request_delay_days: int = Field(default=3)
+    review_google_url: Optional[str] = None
+    review_facebook_url: Optional[str] = None
+    review_trustpilot_url: Optional[str] = None
+    review_request_customer_outreach_enabled: bool = Field(default=False)
+    review_request_sms_template_id: Optional[int] = Field(default=None, foreign_key="smstemplate.id")
+    review_request_email_template_id: Optional[int] = Field(default=None, foreign_key="emailtemplate.id")
     updated_by_id: int = Field(foreign_key="user.id")
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     
@@ -935,6 +943,9 @@ class Order(SQLModel, table=True):
     paid_in_full: bool = Field(default=False)
     installation_booked: bool = Field(default=False)
     installation_completed: bool = Field(default=False)
+    installation_completed_at: Optional[datetime] = Field(default=None, index=True)
+    review_request_customer_sent_at: Optional[datetime] = None
+    review_request_customer_channel: Optional[str] = None  # SMS | EMAIL
     invoice_number: Optional[str] = Field(default=None, unique=True, index=True)  # e.g. "INV-2025-001"
     xero_invoice_id: Optional[str] = Field(default=None)  # XERO invoice ID after push
     payment_link_url: Optional[str] = Field(default=None)  # External pay-by-link URL (paste or integration)
@@ -1057,6 +1068,7 @@ class ReminderType(str, Enum):
     QUOTE_OPENED_NO_REPLY = "QUOTE_OPENED_NO_REPLY"  # Opened but no reply, phone call
     MANUAL = "MANUAL"  # User-created follow-up (e.g. call back)
     USER_TASK = "USER_TASK"  # User task with due date; may assign to self or others
+    REQUEST_REVIEW = "REQUEST_REVIEW"  # Post-installation review request
 
 
 class SuggestedAction(str, Enum):
@@ -1066,6 +1078,7 @@ class SuggestedAction(str, Enum):
     REVIEW_QUOTE = "REVIEW_QUOTE"
     CONTACT_CUSTOMER = "CONTACT_CUSTOMER"
     PHONE_CALL = "PHONE_CALL"
+    REQUEST_REVIEW = "REQUEST_REVIEW"
 
 
 class Reminder(SQLModel, table=True):
@@ -1073,6 +1086,7 @@ class Reminder(SQLModel, table=True):
     reminder_type: ReminderType
     lead_id: Optional[int] = Field(default=None, foreign_key="lead.id")
     quote_id: Optional[int] = Field(default=None, foreign_key="quote.id")
+    order_id: Optional[int] = Field(default=None, foreign_key="customer_order.id")
     customer_id: Optional[int] = Field(default=None, foreign_key="customer.id")
     assigned_to_id: int = Field(foreign_key="user.id")  # User who should act
     priority: ReminderPriority = Field(default=ReminderPriority.MEDIUM)

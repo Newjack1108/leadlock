@@ -65,6 +65,12 @@ def get_sample_sms_context() -> Dict:
     context = get_sample_customer_data()
     context["user"] = {"name": "Sample User"}
     context["company"] = {"company_name": "Cheshire Stables", "trading_name": "Cheshire Stables"}
+    context["order"] = {"order_number": "ORD-2025-001"}
+    context["review"] = {
+        "google_url": "https://example.com/google-review",
+        "facebook_url": "https://example.com/facebook-review",
+        "trustpilot_url": "https://example.com/trustpilot-review",
+    }
     return context
 
 

@@ -555,6 +555,84 @@ def backfill_default_reminder_rules(session: Session) -> None:
         print(f"Backfilled {len(to_add)} default reminder rules", file=sys.stderr, flush=True)
 
 
+def backfill_review_request_templates(session: Session) -> None:
+    """Seed default post-install review SMS/email templates when none are configured."""
+    import sys
+
+    from sqlmodel import select
+
+    from app.models import CompanySettings, EmailTemplate, SmsTemplate, User, UserRole
+
+    settings = session.exec(select(CompanySettings).limit(1)).first()
+    if not settings:
+        return
+
+    director = session.exec(select(User).where(User.role == UserRole.DIRECTOR).limit(1)).first()
+    if not director:
+        director = session.exec(select(User).limit(1)).first()
+    if not director:
+        return
+
+    sms_body = (
+        "Hi {{ customer.name }}, thank you for choosing "
+        "{{ company.trading_name or company.company_name }}! "
+        "We would love your feedback:\n"
+        "Google: {{ review.google_url }}\n"
+        "Facebook: {{ review.facebook_url }}\n"
+        "Trustpilot: {{ review.trustpilot_url }}"
+    )
+    email_subject = "We would love your feedback"
+    email_body = (
+        "<p>Hi {{ customer.name }},</p>"
+        "<p>Thank you for choosing {{ company.trading_name or company.company_name }}. "
+        "We hope you are delighted with your installation.</p>"
+        "<p>If you have a moment, we would really appreciate a review:</p>"
+        "<ul>"
+        "<li><a href=\"{{ review.google_url }}\">Google review</a></li>"
+        "<li><a href=\"{{ review.facebook_url }}\">Facebook review</a></li>"
+        "<li><a href=\"{{ review.trustpilot_url }}\">Trustpilot review</a></li>"
+        "</ul>"
+        "<p>Thank you again for your business.</p>"
+    )
+
+    changed = False
+    if not settings.review_request_sms_template_id:
+        existing_sms = session.exec(
+            select(SmsTemplate).where(SmsTemplate.name == "Post-Install Review Request")
+        ).first()
+        if not existing_sms:
+            existing_sms = SmsTemplate(
+                name="Post-Install Review Request",
+                body_template=sms_body,
+                created_by_id=director.id,
+            )
+            session.add(existing_sms)
+            session.flush()
+        settings.review_request_sms_template_id = existing_sms.id
+        changed = True
+
+    if not settings.review_request_email_template_id:
+        existing_email = session.exec(
+            select(EmailTemplate).where(EmailTemplate.name == "Post-Install Review Request")
+        ).first()
+        if not existing_email:
+            existing_email = EmailTemplate(
+                name="Post-Install Review Request",
+                subject_template=email_subject,
+                body_template=email_body,
+                created_by_id=director.id,
+            )
+            session.add(existing_email)
+            session.flush()
+        settings.review_request_email_template_id = existing_email.id
+        changed = True
+
+    if changed:
+        session.add(settings)
+        session.commit()
+        print("Backfilled post-install review request templates", file=sys.stderr, flush=True)
+
+
 def create_db_and_tables():
     """Create all tables and migrate existing data."""
     import sys
@@ -1117,6 +1195,29 @@ def create_db_and_tables():
                     error_str = str(e).lower()
                     if "already exists" not in error_str and "duplicate" not in error_str:
                         print(f"Error adding auto_close_duplicate_leads to companysettings: {e}", file=sys.stderr, flush=True)
+            if has_company_settings_table or inspector.has_table("companysettings"):
+                company_columns = [col["name"] for col in inspector.get_columns("companysettings")]
+                review_company_cols = {
+                    "review_request_delay_days": "INTEGER DEFAULT 3 NOT NULL",
+                    "review_google_url": "VARCHAR(2048)",
+                    "review_facebook_url": "VARCHAR(2048)",
+                    "review_trustpilot_url": "VARCHAR(2048)",
+                    "review_request_customer_outreach_enabled": "BOOLEAN DEFAULT FALSE NOT NULL",
+                    "review_request_sms_template_id": "INTEGER REFERENCES smstemplate(id)",
+                    "review_request_email_template_id": "INTEGER REFERENCES emailtemplate(id)",
+                }
+                for col_name, col_type in review_company_cols.items():
+                    if col_name not in company_columns:
+                        try:
+                            with engine.begin() as conn:
+                                conn.execute(
+                                    text(f"ALTER TABLE companysettings ADD COLUMN {col_name} {col_type}")
+                                )
+                            print(f"Added {col_name} to companysettings", file=sys.stderr, flush=True)
+                        except Exception as e:
+                            error_str = str(e).lower()
+                            if "already exists" not in error_str and "duplicate" not in error_str:
+                                print(f"Error adding {col_name} to companysettings: {e}", file=sys.stderr, flush=True)
         
         # Step 2: Migrate existing qualified leads to Customer records
         if has_lead_table and has_customer_table:
@@ -2137,6 +2238,13 @@ def create_db_and_tables():
                 print(f"Error backfilling default reminder rules: {e}", file=sys.stderr, flush=True)
                 import traceback
                 print(traceback.format_exc(), file=sys.stderr, flush=True)
+
+        if has_company_settings_table or inspector.has_table("companysettings"):
+            try:
+                with Session(engine) as session:
+                    backfill_review_request_templates(session)
+            except Exception as e:
+                print(f"Error backfilling review request templates: {e}", file=sys.stderr, flush=True)
         
         # Step 9a: Extend suggestedaction enum with PHONE_CALL if missing (before reminder seeding)
         if has_reminder_rule_table or inspector.has_table("reminderrule"):
@@ -2689,6 +2797,65 @@ def create_db_and_tables():
                     error_str = str(e).lower()
                     if "already exists" not in error_str and "duplicate" not in error_str:
                         print(f"Error adding failure_reason to customeroutreachsend: {e}", file=sys.stderr, flush=True)
+
+        # Post-install review request: order timestamps and reminder.order_id
+        if inspector.has_table("customer_order"):
+            order_columns = [col["name"] for col in inspector.get_columns("customer_order")]
+            for col_name, col_type in (
+                ("installation_completed_at", "TIMESTAMP"),
+                ("review_request_customer_sent_at", "TIMESTAMP"),
+                ("review_request_customer_channel", "VARCHAR(16)"),
+            ):
+                if col_name not in order_columns:
+                    try:
+                        with engine.begin() as conn:
+                            conn.execute(text(f"ALTER TABLE customer_order ADD COLUMN {col_name} {col_type}"))
+                        print(f"Added {col_name} to customer_order", file=sys.stderr, flush=True)
+                    except Exception as e:
+                        error_str = str(e).lower()
+                        if "already exists" not in error_str and "duplicate" not in error_str:
+                            print(f"Warning adding {col_name} to customer_order: {e}", file=sys.stderr, flush=True)
+            try:
+                with engine.begin() as conn:
+                    conn.execute(
+                        text(
+                            "CREATE INDEX IF NOT EXISTS ix_customer_order_installation_completed_at "
+                            "ON customer_order (installation_completed_at)"
+                        )
+                    )
+            except Exception as e:
+                err = str(e).lower()
+                if "already exists" not in err and "duplicate" not in err:
+                    print(f"Warning: ix_customer_order_installation_completed_at: {e}", file=sys.stderr, flush=True)
+
+        if has_reminder_table or inspector.has_table("reminder"):
+            for enum_type, enum_value in (
+                ("remindertype", "REQUEST_REVIEW"),
+                ("suggestedaction", "REQUEST_REVIEW"),
+            ):
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text(f"ALTER TYPE {enum_type} ADD VALUE IF NOT EXISTS '{enum_value}'"))
+                    print(f"Added {enum_type} enum value: {enum_value}", file=sys.stderr, flush=True)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str:
+                        print(f"Warning: could not add {enum_type} value {enum_value}: {e}", file=sys.stderr, flush=True)
+            reminder_columns = [col["name"] for col in inspector.get_columns("reminder")]
+            if "order_id" not in reminder_columns:
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(
+                            text(
+                                "ALTER TABLE reminder ADD COLUMN order_id INTEGER "
+                                "REFERENCES customer_order(id)"
+                            )
+                        )
+                    print("Added order_id to reminder", file=sys.stderr, flush=True)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Warning adding order_id to reminder: {e}", file=sys.stderr, flush=True)
 
         # Facebook advert schema: handled by _ensure_facebook_advert_schema() immediately after create_all.
 
