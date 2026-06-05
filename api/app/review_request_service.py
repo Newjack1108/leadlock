@@ -39,6 +39,7 @@ from app.sms_service import send_sms, normalize_phone, is_unsubscribed_recipient
 from app.sms_template_service import render_sms_template
 from app.system_user_service import get_system_user_id
 from app.stale_reference_service import resolve_stale_reference_for_order
+from app.review_hub_service import build_hub_url_for_order, ensure_review_hub_request
 from app.review_prize_draw_service import (
     build_prize_draw_url,
     ensure_prize_draw_entry,
@@ -52,6 +53,10 @@ def build_review_template_context(
     session: Optional[Session] = None,
 ) -> dict:
     """Jinja context for review request SMS/email templates."""
+    hub_url = ""
+    if session and order.id:
+        hub_url = build_hub_url_for_order(order, session)
+
     prize_draw_url = ""
     prize_draw_title = ""
     if company_settings and is_prize_draw_enabled(company_settings) and session and order.id:
@@ -64,6 +69,7 @@ def build_review_template_context(
             "order_number": order.order_number or "",
         },
         "review": {
+            "hub_url": hub_url,
             "google_url": (company_settings.review_google_url or "") if company_settings else "",
             "facebook_url": (company_settings.review_facebook_url or "") if company_settings else "",
             "trustpilot_url": (company_settings.review_trustpilot_url or "") if company_settings else "",
@@ -102,6 +108,7 @@ def on_installation_completed(order: Order, session: Session) -> None:
     order.installation_completed_at = now
     order.review_request_customer_sent_at = None
     order.review_request_customer_channel = None
+    ensure_review_hub_request(order, session)
     session.add(order)
 
 
@@ -198,19 +205,16 @@ def create_review_reminder(order: Order, session: Session) -> Optional[Reminder]
     if order.installation_completed_at:
         days_since = max(0, (datetime.utcnow() - order.installation_completed_at).days)
 
-    links_block = _format_review_links_message(settings)
-    prize_draw_note = ""
-    if settings and is_prize_draw_enabled(settings):
-        entry = ensure_prize_draw_entry(order, session)
-        if entry:
-            from app.review_prize_draw_service import build_prize_draw_url
-
-            min_platforms = max(1, int(settings.review_prize_draw_min_platforms or 2))
-            prize_draw_note = (
-                f"\n\nPrize draw: customers who review on {min_platforms}+ platforms can enter "
-                f"{settings.review_prize_draw_title or 'the monthly prize draw'}: "
-                f"{build_prize_draw_url(entry.access_token)}"
+    hub_url = build_hub_url_for_order(order, session)
+    if hub_url:
+        links_block = f"Customer review link: {hub_url}"
+        if settings and is_prize_draw_enabled(settings):
+            links_block += (
+                "\n\nThe same page includes the monthly prize draw when the customer has left reviews."
             )
+    else:
+        links_block = _format_review_links_message(settings)
+
     ref_at, ref_label = resolve_stale_reference_for_order(order)
     reminder = Reminder(
         reminder_type=ReminderType.REQUEST_REVIEW,
@@ -222,7 +226,7 @@ def create_review_reminder(order: Order, session: Session) -> Optional[Reminder]
         message=(
             f"Installation completed for order {order.order_number}. "
             f"Ask {customer_name} for a Google, Facebook, or Trustpilot review.\n\n"
-            f"{links_block}{prize_draw_note}"
+            f"{links_block}"
         ),
         suggested_action=SuggestedAction.REQUEST_REVIEW,
         days_stale=days_since,
@@ -234,11 +238,54 @@ def create_review_reminder(order: Order, session: Session) -> Optional[Reminder]
     return reminder
 
 
-def _resolve_outreach_channel(settings: CompanySettings) -> Optional[str]:
-    if settings.review_request_sms_template_id:
+def _normalize_review_channel(channel: Optional[str]) -> Optional[str]:
+    if not channel:
+        return None
+    normalized = channel.strip().lower()
+    if normalized == "sms":
         return CustomerOutreachChannel.SMS.value
-    if settings.review_request_email_template_id:
+    if normalized == "email":
         return CustomerOutreachChannel.EMAIL.value
+    return None
+
+
+def _channel_has_review_template(settings: CompanySettings, channel: str) -> bool:
+    if channel == CustomerOutreachChannel.SMS.value:
+        return bool(settings.review_request_sms_template_id)
+    if channel == CustomerOutreachChannel.EMAIL.value:
+        return bool(settings.review_request_email_template_id)
+    return False
+
+
+def _resolve_outreach_channel(
+    settings: CompanySettings,
+    *,
+    channel: Optional[str] = None,
+    allow_fallback: bool = True,
+) -> Optional[str]:
+    explicit = _normalize_review_channel(channel)
+    if explicit:
+        if _channel_has_review_template(settings, explicit):
+            return explicit
+        return None
+
+    preferred = _normalize_review_channel(getattr(settings, "review_request_outreach_channel", None) or "sms")
+    if not preferred:
+        preferred = CustomerOutreachChannel.SMS.value
+
+    if _channel_has_review_template(settings, preferred):
+        return preferred
+
+    if not allow_fallback:
+        return None
+
+    other = (
+        CustomerOutreachChannel.EMAIL.value
+        if preferred == CustomerOutreachChannel.SMS.value
+        else CustomerOutreachChannel.SMS.value
+    )
+    if _channel_has_review_template(settings, other):
+        return other
     return None
 
 
@@ -273,6 +320,7 @@ def send_review_request_to_customer(
     *,
     actor_user: Optional[User] = None,
     force: bool = False,
+    channel: Optional[str] = None,
 ) -> Tuple[bool, Optional[str]]:
     """
     Send automated review request SMS or email to the customer.
@@ -297,9 +345,18 @@ def send_review_request_to_customer(
     if customer.automated_reminder_outreach_opt_out:
         return False, "Customer opted out of automated reminder messages"
 
-    channel = _resolve_outreach_channel(settings)
-    if not channel:
+    explicit_channel = _normalize_review_channel(channel)
+    resolved_channel = _resolve_outreach_channel(
+        settings,
+        channel=channel,
+        allow_fallback=explicit_channel is None,
+    )
+    if not resolved_channel:
+        if explicit_channel:
+            label = "SMS" if explicit_channel == CustomerOutreachChannel.SMS.value else "email"
+            return False, f"Review request {label} template is not configured"
         return False, "No review request SMS or email template configured"
+    channel = resolved_channel
 
     if _is_within_outreach_quiet_hours(settings):
         return False, "Skipped during outreach quiet hours (23:00-06:00 local company timezone)"

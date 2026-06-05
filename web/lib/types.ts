@@ -704,6 +704,7 @@ export interface CompanySettings {
   review_facebook_url?: string | null;
   review_trustpilot_url?: string | null;
   review_request_customer_outreach_enabled?: boolean;
+  review_request_outreach_channel?: 'sms' | 'email';
   review_request_sms_template_id?: number | null;
   review_request_email_template_id?: number | null;
   review_prize_draw_enabled?: boolean;
@@ -749,6 +750,19 @@ export interface ReviewPrizeDrawWinner {
   picked_at: string;
   picked_by_id: number;
   picked_by_name?: string | null;
+}
+
+export interface ReviewHubPublicContext {
+  company_name: string;
+  customer_name?: string | null;
+  order_number: string;
+  platforms: Array<{ code: string; label: string; url: string }>;
+  prize_draw?: {
+    title: string;
+    terms?: string | null;
+    min_platforms: number;
+    url: string;
+  } | null;
 }
 
 export interface ReviewPrizePublicContext {
@@ -1285,6 +1299,7 @@ export interface Order {
   is_ninox_origin?: boolean;
   items: OrderItem[];
   access_sheet?: AccessSheet | null;
+  review_hub_url?: string | null;
   prize_draw_entry?: PrizeDrawEntry | null;
   sent_to_production_at?: string | null;
   sent_to_production_by_id?: number | null;

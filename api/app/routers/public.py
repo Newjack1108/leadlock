@@ -44,7 +44,11 @@ from app.schemas import (
     ReviewPrizePublicContextResponse,
     ReviewPrizePublicPlatform,
     ReviewPrizePublicSubmitRequest,
+    ReviewHubPublicContextResponse,
+    ReviewHubPublicPlatform,
+    ReviewHubPrizeDrawBlock,
 )
+from app.review_hub_service import get_hub_context
 from app.review_prize_draw_service import (
     configured_platforms,
     get_entry_by_token,
@@ -459,6 +463,38 @@ def submit_access_sheet(
     session.commit()
 
     return {"message": "Access sheet submitted successfully"}
+
+
+@router.get("/review/{token}", response_model=ReviewHubPublicContextResponse)
+def get_review_hub_context(
+    token: str,
+    session: Session = Depends(get_session),
+):
+    """Public endpoint: review hub page context. No authentication."""
+    data, err = get_hub_context(token, session)
+    if err or not data:
+        raise HTTPException(status_code=404, detail=err or "Review link not found")
+
+    prize_draw = None
+    if data.get("prize_draw"):
+        pd = data["prize_draw"]
+        prize_draw = ReviewHubPrizeDrawBlock(
+            title=pd["title"],
+            terms=pd.get("terms"),
+            min_platforms=pd.get("min_platforms", 2),
+            url=pd["url"],
+        )
+
+    return ReviewHubPublicContextResponse(
+        company_name=data["company_name"],
+        customer_name=data.get("customer_name"),
+        order_number=data["order_number"],
+        platforms=[
+            ReviewHubPublicPlatform(code=p["code"], label=p["label"], url=p["url"])
+            for p in data.get("platforms", [])
+        ],
+        prize_draw=prize_draw,
+    )
 
 
 @router.get("/review-prize/{token}", response_model=ReviewPrizePublicContextResponse)

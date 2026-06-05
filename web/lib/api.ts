@@ -1191,8 +1191,11 @@ export const pushOrderToXero = async (orderId: number) => {
   return response.data;
 };
 
-export const sendOrderReviewRequest = async (orderId: number) => {
-  const response = await api.post(`/api/orders/${orderId}/send-review-request`);
+export const sendOrderReviewRequest = async (
+  orderId: number,
+  data?: { channel: 'email' | 'sms' }
+) => {
+  const response = await api.post(`/api/orders/${orderId}/send-review-request`, data ?? { channel: 'sms' });
   return response.data as {
     success: boolean;
     channel?: string | null;
@@ -1341,6 +1344,11 @@ export const submitAccessSheet = async (
     if (v != null && v !== '') body[k] = String(v);
   }
   const response = await api.post(`/api/public/access-sheet/${token}`, body);
+  return response.data;
+};
+
+export const getReviewHubContext = async (token: string) => {
+  const response = await api.get(`/api/public/review/${token}`, { skipAuthRedirect: true });
   return response.data;
 };
 

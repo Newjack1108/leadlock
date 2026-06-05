@@ -508,6 +508,7 @@ class CompanySettings(SQLModel, table=True):
     review_facebook_url: Optional[str] = None
     review_trustpilot_url: Optional[str] = None
     review_request_customer_outreach_enabled: bool = Field(default=False)
+    review_request_outreach_channel: str = Field(default="sms")  # sms | email — default for automated sends
     review_request_sms_template_id: Optional[int] = Field(default=None, foreign_key="smstemplate.id")
     review_request_email_template_id: Optional[int] = Field(default=None, foreign_key="emailtemplate.id")
     review_prize_draw_enabled: bool = Field(default=False)
@@ -971,6 +972,7 @@ class Order(SQLModel, table=True):
     created_by: User = Relationship()
     items: List["OrderItem"] = Relationship(back_populates="order")
     access_sheet_requests: List["AccessSheetRequest"] = Relationship(back_populates="order")
+    review_hub_requests: List["ReviewHubRequest"] = Relationship(back_populates="order")
     review_prize_draw_entries: List["ReviewPrizeDrawEntry"] = Relationship(back_populates="order")
 
 
@@ -1016,6 +1018,16 @@ class ReviewPrizeDrawWinner(SQLModel, table=True):
 
     entry: ReviewPrizeDrawEntry = Relationship()
     picked_by: "User" = Relationship()
+
+
+class ReviewHubRequest(SQLModel, table=True):
+    """Token-based review hub link. One per order; customer opens short URL for platform links."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    order_id: int = Field(foreign_key="customer_order.id", index=True)
+    access_token: str = Field(unique=True, index=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    order: "Order" = Relationship(back_populates="review_hub_requests")
 
 
 class OrderAuditEvent(SQLModel, table=True):

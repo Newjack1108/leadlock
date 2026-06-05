@@ -23,6 +23,7 @@ from app.models import (
 )
 from app.reminder_service import generate_reminders
 from app.review_request_service import (
+    _resolve_outreach_channel,
     create_review_reminder,
     detect_due_review_requests,
     dismiss_open_review_reminders_for_order,
@@ -324,3 +325,123 @@ def test_generate_review_reminders_count(sqlite_engine):
         _seed_completed_order(session, completed_at=datetime.utcnow() - timedelta(days=5))
         count = generate_review_reminders(session)
         assert count == 1
+
+
+def _attach_review_templates(session: Session, settings: CompanySettings) -> None:
+    from app.models import EmailTemplate, SmsTemplate
+
+    user = session.exec(select(User)).first()
+    assert user is not None
+    sms = SmsTemplate(
+        name="Review SMS Both",
+        body_template="SMS {{ review.google_url }}",
+        created_by_id=user.id,
+    )
+    email = EmailTemplate(
+        name="Review Email Both",
+        subject_template="Thanks",
+        body_template="<p>{{ review.google_url }}</p>",
+        created_by_id=user.id,
+    )
+    session.add(sms)
+    session.add(email)
+    session.commit()
+    session.refresh(sms)
+    session.refresh(email)
+    settings.review_request_sms_template_id = sms.id
+    settings.review_request_email_template_id = email.id
+    session.add(settings)
+    session.commit()
+
+
+def test_resolve_outreach_channel_prefers_email_setting(sqlite_engine):
+    with Session(sqlite_engine) as session:
+        settings = _seed_company(session)
+        _attach_review_templates(session, settings)
+        settings.review_request_outreach_channel = "email"
+        session.add(settings)
+        session.commit()
+        session.refresh(settings)
+
+        assert _resolve_outreach_channel(settings) == "EMAIL"
+        assert _resolve_outreach_channel(settings, channel="sms") == "SMS"
+        assert _resolve_outreach_channel(settings, channel="sms", allow_fallback=False) == "SMS"
+
+
+@patch("app.review_request_service._is_within_outreach_quiet_hours", return_value=False)
+@patch("app.review_request_service.is_email_configured", return_value=True)
+@patch(
+    "app.review_request_service.send_email",
+    return_value=(True, "msg-id", None, "<p>Thanks</p>", "Thanks"),
+)
+@patch("app.review_request_service.send_sms", return_value=(True, "SM999", None))
+def test_automated_send_uses_email_when_configured(
+    mock_send_sms, mock_send_email, mock_email_cfg, mock_quiet, sqlite_engine
+):
+    with Session(sqlite_engine) as session:
+        settings = _seed_company(session, outreach_enabled=True)
+        _attach_review_templates(session, settings)
+        settings.review_request_outreach_channel = "email"
+        session.add(settings)
+        session.commit()
+
+        order = _seed_completed_order(session, completed_at=datetime.utcnow() - timedelta(days=5))
+        success, error = send_review_request_to_customer(order, session)
+        assert success is True
+        assert error is None
+        mock_send_email.assert_called_once()
+        mock_send_sms.assert_not_called()
+        assert order.review_request_customer_channel == "EMAIL"
+
+
+@patch("app.review_request_service._is_within_outreach_quiet_hours", return_value=False)
+@patch("app.review_request_service.is_email_configured", return_value=True)
+@patch(
+    "app.review_request_service.send_email",
+    return_value=(True, "msg-id", None, "<p>Thanks</p>", "Thanks"),
+)
+@patch("app.review_request_service.send_sms", return_value=(True, "SM999", None))
+def test_manual_send_explicit_email_overrides_sms_preference(
+    mock_send_sms, mock_send_email, mock_email_cfg, mock_quiet, sqlite_engine
+):
+    with Session(sqlite_engine) as session:
+        settings = _seed_company(session, outreach_enabled=True)
+        _attach_review_templates(session, settings)
+        settings.review_request_outreach_channel = "sms"
+        session.add(settings)
+        session.commit()
+
+        order = _seed_completed_order(session, completed_at=datetime.utcnow() - timedelta(days=5))
+        success, error = send_review_request_to_customer(order, session, force=True, channel="email")
+        assert success is True
+        assert error is None
+        mock_send_email.assert_called_once()
+        mock_send_sms.assert_not_called()
+
+
+@patch("app.review_request_service._is_within_outreach_quiet_hours", return_value=False)
+def test_manual_send_sms_requires_phone(mock_quiet, sqlite_engine):
+    with Session(sqlite_engine) as session:
+        settings = _seed_company(session, outreach_enabled=True)
+        _attach_review_templates(session, settings)
+
+        order = _seed_completed_order(session, completed_at=datetime.utcnow() - timedelta(days=5))
+        customer = session.get(Customer, order.customer_id)
+        assert customer is not None
+        customer.phone = ""
+        session.add(customer)
+        session.commit()
+
+        success, error = send_review_request_to_customer(order, session, force=True, channel="sms")
+        assert success is False
+        assert "phone" in (error or "").lower()
+
+
+def test_manual_send_missing_template_returns_clear_error(sqlite_engine):
+    with Session(sqlite_engine) as session:
+        settings = _seed_company(session, outreach_enabled=True)
+        order = _seed_completed_order(session, completed_at=datetime.utcnow() - timedelta(days=5))
+
+        success, error = send_review_request_to_customer(order, session, force=True, channel="email")
+        assert success is False
+        assert "email template" in (error or "").lower()

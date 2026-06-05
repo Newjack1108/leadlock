@@ -48,6 +48,7 @@ from app.schemas import (
     CustomerHistoryEventType,
     OrderSendPaymentLinkRequest,
     OrderSendPaymentLinkResponse,
+    OrderSendReviewRequestRequest,
     OrderSendReviewRequestResponse,
 )
 from app.review_request_service import (
@@ -146,6 +147,15 @@ def generate_invoice_number(session: Session) -> str:
     return f"INV-{year}-{next_num:03d}"
 
 
+def _build_review_hub_url(order: Order, session: Session) -> str | None:
+    from app.review_hub_service import build_hub_url_for_order
+
+    if not order.installation_completed or not order.id:
+        return None
+    url = build_hub_url_for_order(order, session)
+    return url or None
+
+
 def _build_prize_draw_entry_response(order: Order, session: Session):
     from app.models import CompanySettings
     from app.review_prize_draw_service import (
@@ -230,6 +240,7 @@ def build_order_response(order: Order, order_items: List[OrderItem], session: Se
     is_ninox_origin = lead_source == LeadSource.NINOX or customer_source_system == "Ninox"
 
     access_sheet = _build_access_sheet_response(order.id, session)
+    review_hub_url = _build_review_hub_url(order, session)
     prize_draw_entry = _build_prize_draw_entry_response(order, session)
     sent_at, sent_by_id, sent_by_name = _get_latest_production_send(order.id, session)
 
@@ -283,6 +294,7 @@ def build_order_response(order: Order, order_items: List[OrderItem], session: Se
             for item in order_items
         ],
         access_sheet=access_sheet,
+        review_hub_url=review_hub_url,
         prize_draw_entry=prize_draw_entry,
         sent_to_production_at=sent_at,
         sent_to_production_by_id=sent_by_id,
@@ -638,10 +650,16 @@ async def send_order_payment_link(
 @router.post("/{order_id}/send-review-request", response_model=OrderSendReviewRequestResponse)
 async def send_order_review_request(
     order_id: int,
+    data: Optional[OrderSendReviewRequestRequest] = Body(default=None),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
     """Send post-install review request to customer immediately and mark staff reminder acted."""
+    req = data or OrderSendReviewRequestRequest()
+    channel = (req.channel or "").strip().lower()
+    if channel not in ("email", "sms"):
+        raise HTTPException(status_code=400, detail="channel must be 'email' or 'sms'")
+
     order = session.exec(select(Order).where(Order.id == order_id)).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
@@ -656,6 +674,7 @@ async def send_order_review_request(
         session,
         actor_user=current_user,
         force=True,
+        channel=channel,
     )
     if not success:
         session.rollback()

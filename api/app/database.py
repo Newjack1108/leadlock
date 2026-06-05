@@ -559,13 +559,7 @@ def _default_review_request_sms_body() -> str:
     return (
         "Hi {{ customer.name }}, thank you for choosing "
         "{{ company.trading_name or company.company_name }}! "
-        "We would love your feedback:\n"
-        "Google: {{ review.google_url }}\n"
-        "Facebook: {{ review.facebook_url }}\n"
-        "Trustpilot: {{ review.trustpilot_url }}"
-        "{% if review.prize_draw_url %}\n\n"
-        "Leave reviews on 2+ platforms and enter our monthly prize draw "
-        "({{ review.prize_draw_title }}): {{ review.prize_draw_url }}{% endif %}"
+        "We would love your feedback — leave a review here: {{ review.hub_url }}"
     )
 
 
@@ -584,6 +578,10 @@ def _default_review_request_email_body() -> str:
         "<li><a href=\"{{ review.facebook_url }}\">Facebook review</a></li>"
         "<li><a href=\"{{ review.trustpilot_url }}\">Trustpilot review</a></li>"
         "</ul>"
+        "{% if review.hub_url %}"
+        "<p><a href=\"{{ review.hub_url }}\">View all review options on one page</a> "
+        "(recommended on mobile).</p>"
+        "{% endif %}"
         "{% if review.prize_draw_url %}"
         "<p>Leave reviews on at least two platforms and you can enter our monthly prize draw "
         "(<strong>{{ review.prize_draw_title }}</strong>): "
@@ -597,6 +595,12 @@ def _template_missing_prize_draw(body: str | None) -> bool:
     if not body:
         return True
     return "prize_draw" not in body
+
+
+def _template_missing_hub_url(body: str | None) -> bool:
+    if not body:
+        return True
+    return "hub_url" not in body
 
 
 def backfill_review_request_templates(session: Session) -> None:
@@ -635,7 +639,7 @@ def backfill_review_request_templates(session: Session) -> None:
         session.add(existing_sms)
         session.flush()
         changed = True
-    elif _template_missing_prize_draw(existing_sms.body_template):
+    elif _template_missing_hub_url(existing_sms.body_template):
         existing_sms.body_template = sms_body
         session.add(existing_sms)
         changed = True
@@ -653,7 +657,9 @@ def backfill_review_request_templates(session: Session) -> None:
         session.add(existing_email)
         session.flush()
         changed = True
-    elif _template_missing_prize_draw(existing_email.body_template):
+    elif _template_missing_prize_draw(existing_email.body_template) or _template_missing_hub_url(
+        existing_email.body_template
+    ):
         existing_email.body_template = email_body
         session.add(existing_email)
         changed = True
@@ -663,7 +669,7 @@ def backfill_review_request_templates(session: Session) -> None:
         changed = True
     else:
         linked_sms = session.get(SmsTemplate, settings.review_request_sms_template_id)
-        if linked_sms and linked_sms.id != existing_sms.id and _template_missing_prize_draw(
+        if linked_sms and linked_sms.id != existing_sms.id and _template_missing_hub_url(
             linked_sms.body_template
         ):
             linked_sms.body_template = sms_body
@@ -675,8 +681,9 @@ def backfill_review_request_templates(session: Session) -> None:
         changed = True
     else:
         linked_email = session.get(EmailTemplate, settings.review_request_email_template_id)
-        if linked_email and linked_email.id != existing_email.id and _template_missing_prize_draw(
-            linked_email.body_template
+        if linked_email and linked_email.id != existing_email.id and (
+            _template_missing_prize_draw(linked_email.body_template)
+            or _template_missing_hub_url(linked_email.body_template)
         ):
             linked_email.body_template = email_body
             session.add(linked_email)
@@ -931,6 +938,25 @@ def create_db_and_tables():
                     print("Created reviewprizedrawentry table", file=sys.stderr, flush=True)
             except Exception as e:
                 print(f"Error creating reviewprizedrawentry table: {e}", file=sys.stderr, flush=True)
+
+        has_review_hub_table = inspector.has_table("reviewhubrequest")
+        if has_customer_order_table and not has_review_hub_table:
+            print("Creating reviewhubrequest table...", file=sys.stderr, flush=True)
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text("""
+                        CREATE TABLE IF NOT EXISTS reviewhubrequest (
+                            id SERIAL PRIMARY KEY,
+                            order_id INTEGER NOT NULL REFERENCES customer_order(id),
+                            access_token VARCHAR(255) NOT NULL UNIQUE,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+                        )
+                    """))
+                    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_reviewhubrequest_order_id ON reviewhubrequest (order_id)"))
+                    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_reviewhubrequest_access_token ON reviewhubrequest (access_token)"))
+                    print("Created reviewhubrequest table", file=sys.stderr, flush=True)
+            except Exception as e:
+                print(f"Error creating reviewhubrequest table: {e}", file=sys.stderr, flush=True)
 
         has_prize_draw_winner_table = inspector.has_table("reviewprizedrawwinner")
         if not has_prize_draw_winner_table:
@@ -1306,6 +1332,7 @@ def create_db_and_tables():
                     "review_facebook_url": "VARCHAR(2048)",
                     "review_trustpilot_url": "VARCHAR(2048)",
                     "review_request_customer_outreach_enabled": "BOOLEAN DEFAULT FALSE NOT NULL",
+                    "review_request_outreach_channel": "VARCHAR(8) DEFAULT 'sms' NOT NULL",
                     "review_request_sms_template_id": "INTEGER REFERENCES smstemplate(id)",
                     "review_request_email_template_id": "INTEGER REFERENCES emailtemplate(id)",
                     "review_prize_draw_enabled": "BOOLEAN DEFAULT FALSE NOT NULL",

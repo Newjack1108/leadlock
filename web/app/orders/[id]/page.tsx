@@ -21,7 +21,6 @@ import api, {
   pushOrderToXero,
   sendAccessSheet,
   sendOrderToProduction,
-  sendOrderReviewRequest,
   getCompanySettings,
 } from '@/lib/api';
 import { CompanySettings, Order, OrderItem, Customer } from '@/lib/types';
@@ -38,6 +37,7 @@ import {
 import ComposeEmailDialog from '@/components/ComposeEmailDialog';
 import SendQuoteEmailDialog from '@/components/SendQuoteEmailDialog';
 import SendPaymentLinkDialog from '@/components/SendPaymentLinkDialog';
+import SendReviewRequestDialog from '@/components/SendReviewRequestDialog';
 import NinoxBadge from '@/components/NinoxBadge';
 import FilesCard from '@/components/FilesCard';
 import ReviewRequestSection from '@/components/ReviewRequestSection';
@@ -82,7 +82,7 @@ export default function OrderDetailPage() {
   const [pushingXero, setPushingXero] = useState(false);
   const [sendingAccessSheet, setSendingAccessSheet] = useState(false);
   const [sendingToProduction, setSendingToProduction] = useState(false);
-  const [sendingReviewRequest, setSendingReviewRequest] = useState(false);
+  const [sendReviewRequestOpen, setSendReviewRequestOpen] = useState(false);
   const [companySettings, setCompanySettings] = useState<CompanySettings | null>(null);
   const [notesDraft, setNotesDraft] = useState('');
   const [useAlternateDeliveryAddressDraft, setUseAlternateDeliveryAddressDraft] = useState(false);
@@ -251,17 +251,8 @@ export default function OrderDetailPage() {
     }
   };
 
-  const handleSendReviewRequest = async () => {
-    try {
-      setSendingReviewRequest(true);
-      const result = await sendOrderReviewRequest(orderId);
-      await fetchOrder();
-      toast.success(result.message || 'Review request sent');
-    } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Failed to send review request');
-    } finally {
-      setSendingReviewRequest(false);
-    }
+  const handleSendReviewRequest = () => {
+    setSendReviewRequestOpen(true);
   };
 
   const handleSendToProduction = async () => {
@@ -730,8 +721,8 @@ export default function OrderDetailPage() {
                     installationCompletedAt={order.installation_completed_at}
                     reviewRequestCustomerSentAt={order.review_request_customer_sent_at}
                     reviewRequestCustomerChannel={order.review_request_customer_channel}
+                    reviewHubUrl={order.review_hub_url}
                     onSendReviewRequest={handleSendReviewRequest}
-                    sendingReviewRequest={sendingReviewRequest}
                   />
                   <PrizeDrawStaffPanel
                     entry={order.prize_draw_entry}
@@ -997,6 +988,16 @@ export default function OrderDetailPage() {
           open={sendPaymentLinkOpen}
           onOpenChange={setSendPaymentLinkOpen}
           order={order}
+          customer={customer}
+          onSuccess={fetchOrder}
+        />
+      )}
+      {order && (
+        <SendReviewRequestDialog
+          open={sendReviewRequestOpen}
+          onOpenChange={setSendReviewRequestOpen}
+          orderId={orderId}
+          orderNumber={order.order_number}
           customer={customer}
           onSuccess={fetchOrder}
         />

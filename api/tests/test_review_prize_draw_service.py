@@ -219,8 +219,8 @@ def test_backfill_updates_stale_review_templates(sqlite_engine):
         session.refresh(stale_sms)
         session.refresh(stale_email)
 
-        assert "prize_draw_url" in stale_sms.body_template
-        assert "prize_draw_url" in stale_email.body_template
+        assert "hub_url" in stale_sms.body_template
+        assert "hub_url" in stale_email.body_template
 
 
 def test_template_context_includes_prize_draw_url(sqlite_engine):

@@ -1400,6 +1400,7 @@ class CompanySettingsCreate(BaseModel):
     review_facebook_url: Optional[str] = None
     review_trustpilot_url: Optional[str] = None
     review_request_customer_outreach_enabled: Optional[bool] = False
+    review_request_outreach_channel: Optional[str] = "sms"
     review_request_sms_template_id: Optional[int] = None
     review_request_email_template_id: Optional[int] = None
     review_prize_draw_enabled: Optional[bool] = False
@@ -1460,6 +1461,7 @@ class CompanySettingsUpdate(BaseModel):
     review_facebook_url: Optional[str] = None
     review_trustpilot_url: Optional[str] = None
     review_request_customer_outreach_enabled: Optional[bool] = None
+    review_request_outreach_channel: Optional[str] = None
     review_request_sms_template_id: Optional[int] = None
     review_request_email_template_id: Optional[int] = None
     review_prize_draw_enabled: Optional[bool] = None
@@ -1521,6 +1523,7 @@ class CompanySettingsResponse(BaseModel):
     review_facebook_url: Optional[str] = None
     review_trustpilot_url: Optional[str] = None
     review_request_customer_outreach_enabled: bool = False
+    review_request_outreach_channel: str = "sms"
     review_request_sms_template_id: Optional[int] = None
     review_request_email_template_id: Optional[int] = None
     review_prize_draw_enabled: bool = False
@@ -2012,6 +2015,7 @@ class OrderResponse(BaseModel):
     is_ninox_origin: bool = False
     items: List[OrderItemResponse] = []
     access_sheet: Optional[AccessSheetResponse] = None
+    review_hub_url: Optional[str] = None
     prize_draw_entry: Optional[PrizeDrawEntryResponse] = None
     sent_to_production_at: Optional[datetime] = None
     sent_to_production_by_id: Optional[int] = None
@@ -2103,6 +2107,10 @@ class DiscountRequestResponse(BaseModel):
 
 class DiscountRequestReject(BaseModel):
     rejection_reason: Optional[str] = None
+
+
+class OrderSendReviewRequestRequest(BaseModel):
+    channel: str = "sms"  # "email" | "sms"
 
 
 class OrderSendReviewRequestResponse(BaseModel):
@@ -2478,6 +2486,27 @@ class ReviewPrizePublicContextResponse(BaseModel):
 
 class ReviewPrizePublicSubmitRequest(BaseModel):
     platforms: List[str]
+
+
+class ReviewHubPublicPlatform(BaseModel):
+    code: str
+    label: str
+    url: str
+
+
+class ReviewHubPrizeDrawBlock(BaseModel):
+    title: str
+    terms: Optional[str] = None
+    min_platforms: int = 2
+    url: str
+
+
+class ReviewHubPublicContextResponse(BaseModel):
+    company_name: str
+    customer_name: Optional[str] = None
+    order_number: str
+    platforms: List[ReviewHubPublicPlatform] = []
+    prize_draw: Optional[ReviewHubPrizeDrawBlock] = None
 
 
 class OrderSendPaymentLinkRequest(BaseModel):

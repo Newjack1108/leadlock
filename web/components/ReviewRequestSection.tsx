@@ -17,6 +17,7 @@ type ReviewRequestSectionProps = {
   installationCompletedAt?: string | null;
   reviewRequestCustomerSentAt?: string | null;
   reviewRequestCustomerChannel?: string | null;
+  reviewHubUrl?: string | null;
   onSendReviewRequest?: () => void | Promise<void>;
   sendingReviewRequest?: boolean;
   showSendButton?: boolean;
@@ -29,6 +30,7 @@ export default function ReviewRequestSection({
   installationCompletedAt,
   reviewRequestCustomerSentAt,
   reviewRequestCustomerChannel,
+  reviewHubUrl,
   onSendReviewRequest,
   sendingReviewRequest = false,
   showSendButton = true,
@@ -75,18 +77,39 @@ export default function ReviewRequestSection({
           {status ? <p className="text-sm text-muted-foreground">{status}</p> : null}
           {outreachEnabled ? (
             <p className="text-xs text-muted-foreground">
-              Automated customer outreach is enabled after the delay.
+              Automated customer outreach is enabled after the delay (channel set in Company Settings).
             </p>
           ) : (
             <p className="text-xs text-muted-foreground">
-              Customer outreach is off — use the links below or send manually.
+              Customer outreach is off — use the links below or send manually by email or SMS.
             </p>
           )}
         </div>
       </div>
 
+      {reviewHubUrl ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <Button size="sm" variant="default" asChild className={compact ? 'h-7 text-xs' : ''}>
+            <a href={reviewHubUrl} target="_blank" rel="noopener noreferrer">
+              <ExternalLink className="h-3.5 w-3.5 mr-1" />
+              Open customer review page
+            </a>
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className={compact ? 'h-7 text-xs' : ''}
+            onClick={() => void copyLink(reviewHubUrl, 'Review hub')}
+          >
+            <Copy className="h-3.5 w-3.5 mr-1" />
+            Copy hub link
+          </Button>
+        </div>
+      ) : null}
+
       <div className="space-y-2">
-        <p className={`font-medium ${compact ? 'text-xs' : 'text-sm'}`}>Review links</p>
+        <p className={`font-medium ${compact ? 'text-xs' : 'text-sm'}`}>Direct platform links</p>
         {reviewLinks.length > 0 ? (
           <div className="flex flex-wrap gap-2">
             {reviewLinks.map((link) => (

@@ -12,9 +12,9 @@ import {
   invalidateStaleSummaryCache,
   generateReminders,
   getCompanySettings,
-  sendOrderReviewRequest,
 } from '@/lib/api';
 import ReviewRequestSection from '@/components/ReviewRequestSection';
+import SendReviewRequestDialog from '@/components/SendReviewRequestDialog';
 import { toast } from 'sonner';
 import { 
   RefreshCw, X, CheckCircle2, Mail, Phone, 
@@ -60,7 +60,7 @@ export default function ReminderList({
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [companySettings, setCompanySettings] = useState<CompanySettings | null>(null);
-  const [sendingReviewOrderId, setSendingReviewOrderId] = useState<number | null>(null);
+  const [reviewDialogOrderId, setReviewDialogOrderId] = useState<number | null>(null);
 
   const fetchReminders = async () => {
     try {
@@ -208,24 +208,18 @@ export default function ReminderList({
     }
   };
 
-  const handleSendReviewRequest = async (reminder: Reminder) => {
+  const handleSendReviewRequest = (reminder: Reminder) => {
     if (!reminder.order_id) {
       toast.error('No order linked to this review reminder');
       return;
     }
-    try {
-      setSendingReviewOrderId(reminder.order_id);
-      const result = await sendOrderReviewRequest(reminder.order_id);
-      invalidateStaleSummaryCache();
-      toast.success(result.message || 'Review request sent');
-      await fetchReminders();
-      onReminderAction?.();
-    } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Failed to send review request');
-      console.error('Error sending review request:', error);
-    } finally {
-      setSendingReviewOrderId(null);
-    }
+    setReviewDialogOrderId(reminder.order_id);
+  };
+
+  const handleReviewRequestSent = async () => {
+    invalidateStaleSummaryCache();
+    await fetchReminders();
+    onReminderAction?.();
   };
 
   const getReminderDetailHref = (reminder: Reminder): string | null => {
@@ -421,7 +415,6 @@ export default function ReminderList({
                           reviewRequestCustomerChannel={reminder.review_request_customer_channel}
                           compact
                           showSendButton={!!reminder.order_id && !reminder.review_request_customer_sent_at}
-                          sendingReviewRequest={sendingReviewOrderId === reminder.order_id}
                           onSendReviewRequest={
                             reminder.order_id
                               ? () => handleSendReviewRequest(reminder)
@@ -558,6 +551,16 @@ export default function ReminderList({
           </div>
         )}
       </CardContent>
+      {reviewDialogOrderId ? (
+        <SendReviewRequestDialog
+          open={reviewDialogOrderId !== null}
+          onOpenChange={(open) => {
+            if (!open) setReviewDialogOrderId(null);
+          }}
+          orderId={reviewDialogOrderId}
+          onSuccess={() => void handleReviewRequestSent()}
+        />
+      ) : null}
     </Card>
   );
 }

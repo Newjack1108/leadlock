@@ -122,6 +122,7 @@ export default function CompanySettingsPage() {
     review_facebook_url: '',
     review_trustpilot_url: '',
     review_request_customer_outreach_enabled: false,
+    review_request_outreach_channel: 'sms' as 'sms' | 'email',
     review_request_sms_template_id: '' as string,
     review_request_email_template_id: '' as string,
     review_prize_draw_enabled: false,
@@ -226,6 +227,8 @@ export default function CompanySettingsPage() {
         review_trustpilot_url: response.data.review_trustpilot_url || '',
         review_request_customer_outreach_enabled:
           response.data.review_request_customer_outreach_enabled ?? false,
+        review_request_outreach_channel:
+          response.data.review_request_outreach_channel === 'email' ? 'email' : 'sms',
         review_request_sms_template_id:
           response.data.review_request_sms_template_id != null
             ? String(response.data.review_request_sms_template_id)
@@ -324,6 +327,7 @@ export default function CompanySettingsPage() {
         review_facebook_url: formData.review_facebook_url.trim() || null,
         review_trustpilot_url: formData.review_trustpilot_url.trim() || null,
         review_request_customer_outreach_enabled: formData.review_request_customer_outreach_enabled,
+        review_request_outreach_channel: formData.review_request_outreach_channel,
         review_request_sms_template_id:
           formData.review_request_sms_template_id.trim() === ''
             ? null
@@ -692,24 +696,49 @@ export default function CompanySettingsPage() {
                         disabled={saving}
                       />
                     </div>
-                    <div className="flex items-center space-x-2 pt-8">
-                      <input
-                        type="checkbox"
-                        id="review_request_customer_outreach_enabled"
-                        checked={formData.review_request_customer_outreach_enabled}
-                        onChange={(e) =>
+                    <div className="space-y-2">
+                      <Label htmlFor="review_request_outreach_channel">Automated send channel</Label>
+                      <Select
+                        value={formData.review_request_outreach_channel}
+                        onValueChange={(v) =>
                           setFormData({
                             ...formData,
-                            review_request_customer_outreach_enabled: e.target.checked,
+                            review_request_outreach_channel: v === 'email' ? 'email' : 'sms',
                           })
                         }
-                        className="rounded"
                         disabled={saving}
-                      />
-                      <Label htmlFor="review_request_customer_outreach_enabled">
-                        Automatically send review request to customer (SMS preferred, else email)
-                      </Label>
+                      >
+                        <SelectTrigger id="review_request_outreach_channel">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="sms">SMS (default)</SelectItem>
+                          <SelectItem value="email">Email</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Used when automated outreach runs after the install delay. Falls back to the other channel if
+                        the chosen template is not configured.
+                      </p>
                     </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="review_request_customer_outreach_enabled"
+                      checked={formData.review_request_customer_outreach_enabled}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          review_request_customer_outreach_enabled: e.target.checked,
+                        })
+                      }
+                      className="rounded"
+                      disabled={saving}
+                    />
+                    <Label htmlFor="review_request_customer_outreach_enabled">
+                      Automatically send review request to customer after the delay
+                    </Label>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="space-y-2">
@@ -772,12 +801,11 @@ export default function CompanySettingsPage() {
                         </SelectContent>
                       </Select>
                       <p className="text-xs text-muted-foreground">
-                        Variables: <code className="text-xs">{'{{ review.google_url }}'}</code>,{' '}
+                        Preferred for SMS: <code className="text-xs">{'{{ review.hub_url }}'}</code> (one short link to
+                        the customer review page). Also available:{' '}
+                        <code className="text-xs">{'{{ review.google_url }}'}</code>,{' '}
                         <code className="text-xs">{'{{ review.facebook_url }}'}</code>,{' '}
-                        <code className="text-xs">{'{{ review.trustpilot_url }}'}</code>,{' '}
-                        <code className="text-xs">{'{{ review.prize_draw_url }}'}</code>,{' '}
-                        <code className="text-xs">{'{{ review.prize_draw_title }}'}</code> (when prize draw is
-                        enabled).{' '}
+                        <code className="text-xs">{'{{ review.trustpilot_url }}'}</code>.{' '}
                         <Link href="/settings/sms-templates" className="text-primary underline hover:no-underline">
                           Manage SMS templates
                         </Link>
@@ -808,10 +836,9 @@ export default function CompanySettingsPage() {
                         </SelectContent>
                       </Select>
                       <p className="text-xs text-muted-foreground">
-                        Used when no SMS template is set. Variables include review URLs plus{' '}
-                        <code className="text-xs">{'{{ review.prize_draw_url }}'}</code> and{' '}
-                        <code className="text-xs">{'{{ review.prize_draw_title }}'}</code> when the monthly draw is
-                        enabled.{' '}
+                        Used when no SMS template is set. Variables include{' '}
+                        <code className="text-xs">{'{{ review.hub_url }}'}</code>, individual review URLs, and prize draw
+                        fields when enabled.{' '}
                         <Link href="/settings/email-templates" className="text-primary underline hover:no-underline">
                           Manage email templates
                         </Link>
