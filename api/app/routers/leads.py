@@ -57,6 +57,7 @@ from app.lead_delete import (
 )
 from app.constants import QUOTE_LIST_EXCLUDED_STATUSES, LIST_PAGE_SIZE_DEFAULT, LIST_PAGE_SIZE_MAX
 from app.handover_pdf_service import generate_lead_handover_pdf
+from app.lead_create_utils import lead_create_to_model_fields
 from app.lead_qualify_rules import (
     lead_fields_allow_qualify,
     qualify_fields_error,
@@ -654,7 +655,7 @@ async def create_lead(
     current_user: User = Depends(get_current_user)
 ):
     try:
-        lead = Lead(**lead_data.dict())
+        lead = Lead(**lead_create_to_model_fields(lead_data))
         lead.assigned_to_id = current_user.id
 
         # Closers' in-app creates qualify when source and type are set (for QUALIFIED+ tabs).
@@ -767,7 +768,7 @@ async def update_lead(
 
     lead.archived_at = None
 
-    update_data = lead_data.dict(exclude_unset=True)
+    update_data = lead_data.model_dump(exclude_unset=True)
     if "lead_source" in update_data and not staff_may_set_lead_source(update_data["lead_source"]):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

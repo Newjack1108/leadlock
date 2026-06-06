@@ -8,7 +8,8 @@ DISALLOWED_LEAD_SOURCES_FOR_QUALIFY = frozenset({LeadSource.MANUAL_ENTRY, LeadSo
 STAFF_SELECTABLE_LEAD_SOURCES: tuple[LeadSource, ...] = tuple(
     s
     for s in LeadSource
-    if s not in DISALLOWED_LEAD_SOURCES_FOR_QUALIFY and s != LeadSource.WEBSITE
+    if s not in DISALLOWED_LEAD_SOURCES_FOR_QUALIFY
+    and s not in (LeadSource.WEBSITE, LeadSource.UNKNOWN)
 )
 
 SELECTABLE_LEAD_TYPES: tuple[LeadType, ...] = (

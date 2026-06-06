@@ -6,7 +6,10 @@ const DISALLOWED_SOURCES_FOR_QUALIFY = new Set<LeadSource>([
 ]);
 
 export const STAFF_SELECTABLE_LEAD_SOURCES = Object.values(LeadSource).filter(
-  (s) => s !== LeadSource.WEBSITE && !DISALLOWED_SOURCES_FOR_QUALIFY.has(s)
+  (s) =>
+    s !== LeadSource.WEBSITE &&
+    s !== LeadSource.UNKNOWN &&
+    !DISALLOWED_SOURCES_FOR_QUALIFY.has(s)
 );
 
 export const SELECTABLE_LEAD_TYPES = [

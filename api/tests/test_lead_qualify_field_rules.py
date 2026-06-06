@@ -231,3 +231,56 @@ def test_customer_lead_create_requires_source_and_type(api_client, sqlite_engine
     assert r2.json()["status"] == LeadStatus.NEW.value
     assert r2.json()["lead_source"] == LeadSource.PAST_CUSTOMER.value
     assert r2.json()["lead_type"] == LeadType.STABLES.value
+
+
+def test_director_manual_create_ui_payload(api_client, sqlite_engine):
+    """Matches Create Lead dialog: name, source, type, contact fields."""
+    with Session(sqlite_engine) as session:
+        director = _add_director(session)
+        token = create_access_token(data={"sub": director.email})
+
+    r = api_client.post(
+        "/api/leads",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "name": "Manual Test",
+            "email": "manual@example.com",
+            "wrong_email_address": False,
+            "phone": "+447700900300",
+            "postcode": "CW1 2AB",
+            "description": "Walk-in enquiry",
+            "lead_source": LeadSource.PHONE.value,
+            "lead_type": LeadType.CABINS.value,
+        },
+    )
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert data["status"] == LeadStatus.NEW.value
+    assert data["lead_source"] == LeadSource.PHONE.value
+    assert data["lead_type"] == LeadType.CABINS.value
+    assert data["name"] == "Manual Test"
+
+
+def test_manual_create_with_alias_fields(api_client, sqlite_engine):
+    """Webhook/Make-style aliases must not break in-app create path."""
+    with Session(sqlite_engine) as session:
+        director = _add_director(session)
+        token = create_access_token(data={"sub": director.email})
+
+    r = api_client.post(
+        "/api/leads",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "first_name": "Jane",
+            "last_name": "Smith",
+            "phone_number": "+447700900301",
+            "lead_source": LeadSource.REFERRAL.value,
+            "lead_type": LeadType.STABLES.value,
+        },
+    )
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert data["name"] == "Jane Smith"
+    assert data["phone"] == "+447700900301"
+    assert data["lead_source"] == LeadSource.REFERRAL.value
+    assert data["lead_type"] == LeadType.STABLES.value

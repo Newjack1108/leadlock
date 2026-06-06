@@ -361,7 +361,8 @@ function LeadsPageContent() {
       setNewLead(emptyNewLead());
       await fetchLeads(1);
     } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Failed to create lead');
+      const d = error.response?.data?.detail;
+      toast.error(typeof d === 'object' && d?.message ? d.message : d || 'Failed to create lead');
     } finally {
       setCreating(false);
     }
@@ -695,7 +696,8 @@ function LeadsPageContent() {
             <DialogHeader>
               <DialogTitle>Create New Lead</DialogTitle>
               <DialogDescription>
-                Add a new lead to the system. Name is required.
+                Enter the customer details and choose where the enquiry came from and the product type
+                (Stables, Sheds, or Cabins). Name, lead source, and lead type are required.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">

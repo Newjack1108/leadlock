@@ -44,6 +44,7 @@ from app.schemas import LeadCreate, LeadResponse, ProductImportPayload, ProductI
 from app.auth import get_webhook_api_key, get_product_import_api_key
 from app.routers.settings import get_company_settings
 from app.workflow import check_sla_overdue
+from app.lead_create_utils import lead_create_to_model_fields
 from app.routers.leads import enrich_lead_response, find_or_create_customer
 from app.sms_service import (
     validate_twilio_webhook,
@@ -125,12 +126,7 @@ async def create_lead_webhook(
     Requires X-API-Key header for authentication.
     Finds or creates a Customer when email or phone is present so automated outreach can run.
     """
-    # Build lead dict (exclude alias fields not on Lead model; exclude_none so Lead uses defaults for unset enums)
-    lead_dict = lead_data.model_dump(
-        exclude={"first_name", "last_name", "full_name", "phone_number"},
-        exclude_none=True,
-    )
-    lead = Lead(**lead_dict)
+    lead = Lead(**lead_create_to_model_fields(lead_data))
 
     if lead.email or lead.phone:
         customer = find_or_create_customer(lead, session)
