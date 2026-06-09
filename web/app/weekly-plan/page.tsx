@@ -76,6 +76,10 @@ function isSmsSendBlocked(item: WeeklyPlanItem): boolean {
   return (item.channel || '').toUpperCase() === 'SMS' && hasSmsStop(item);
 }
 
+function isDismissedWeeklyPlanStatus(status: WeeklyPlanItemStatus): boolean {
+  return status === WeeklyPlanItemStatus.COMPLETED || status === WeeklyPlanItemStatus.REJECTED;
+}
+
 function buildMessageDrafts(items: WeeklyPlanItem[]): Record<number, string> {
   const drafts: Record<number, string> = {};
   for (const item of items) {
@@ -218,7 +222,7 @@ export default function WeeklyPlanPage() {
   const filteredItems = useMemo(() => {
     if (!plan?.items) return [];
     return plan.items.filter((item) => {
-      if (statusFilter === 'all' && item.status === WeeklyPlanItemStatus.COMPLETED) return false;
+      if (statusFilter === 'all' && isDismissedWeeklyPlanStatus(item.status)) return false;
       if (ownerFilter !== 'all' && String(item.assigned_to_id || '') !== ownerFilter) return false;
       if (channelFilter !== 'all' && (item.channel || 'NONE') !== channelFilter) return false;
       if (statusFilter !== 'all' && item.status !== statusFilter) return false;
@@ -227,7 +231,8 @@ export default function WeeklyPlanPage() {
     });
   }, [plan, ownerFilter, channelFilter, statusFilter, likelihoodFilter]);
 
-  const isItemSendable = (item: WeeklyPlanItem) => item.status === WeeklyPlanItemStatus.PENDING_REVIEW;
+  const isItemSendable = (item: WeeklyPlanItem) =>
+    item.status === WeeklyPlanItemStatus.PENDING_REVIEW && !isDismissedWeeklyPlanStatus(item.status);
 
   const sendableFilteredItems = useMemo(() => filteredItems.filter(isItemSendable), [filteredItems]);
 
@@ -239,7 +244,7 @@ export default function WeeklyPlanPage() {
 
   const outstandingItemsCount = useMemo(() => {
     if (!plan?.items) return 0;
-    return plan.items.filter((item) => item.status !== WeeklyPlanItemStatus.COMPLETED).length;
+    return plan.items.filter((item) => !isDismissedWeeklyPlanStatus(item.status)).length;
   }, [plan]);
 
   const handleGenerate = async () => {
@@ -421,7 +426,7 @@ export default function WeeklyPlanPage() {
     try {
       setBusyItemId(item.id);
       await updateWeeklyPlanItem(item.id, payload);
-      if (payload.status === WeeklyPlanItemStatus.COMPLETED) {
+      if (payload.status != null && isDismissedWeeklyPlanStatus(payload.status)) {
         setPlan((prev) => {
           if (!prev) return prev;
           return {
@@ -434,9 +439,15 @@ export default function WeeklyPlanPage() {
           delete next[item.id];
           return next;
         });
+        setSelectedItemIds((prev) => prev.filter((id) => id !== item.id));
+        if (plan?.run?.id) {
+          getWeeklyPlanMetrics(plan.run.id)
+            .then(setMetrics)
+            .catch(() => null);
+        }
       }
       toast.success(successMessage);
-      if (payload.status !== WeeklyPlanItemStatus.COMPLETED) {
+      if (payload.status == null || !isDismissedWeeklyPlanStatus(payload.status)) {
         await loadData();
       }
     } catch {
@@ -781,7 +792,12 @@ export default function WeeklyPlanPage() {
                     ) : null}
                     <Button
                       size="sm"
-                      disabled={busyItemId === item.id || !isItemSendable(item) || isSmsSendBlocked(item)}
+                      disabled={
+                        busyItemId === item.id ||
+                        !isItemSendable(item) ||
+                        isSmsSendBlocked(item) ||
+                        isDismissedWeeklyPlanStatus(item.status)
+                      }
                       onClick={() => handleSendItem(item)}
                       title={
                         isSmsSendBlocked(item)
@@ -796,7 +812,7 @@ export default function WeeklyPlanPage() {
                     <Button
                       size="sm"
                       variant="outline"
-                      disabled={busyItemId === item.id}
+                      disabled={busyItemId === item.id || isDismissedWeeklyPlanStatus(item.status)}
                       onClick={() =>
                         patchOutcome(
                           item,
@@ -811,7 +827,7 @@ export default function WeeklyPlanPage() {
                     <Button
                       size="sm"
                       variant="outline"
-                      disabled={busyItemId === item.id}
+                      disabled={busyItemId === item.id || isDismissedWeeklyPlanStatus(item.status)}
                       onClick={() =>
                         patchOutcome(
                           item,
