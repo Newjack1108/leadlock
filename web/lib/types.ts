@@ -719,6 +719,7 @@ export interface CompanySettings {
   review_prize_draw_congratulations_sms_template_id?: number | null;
   review_prize_draw_congratulations_email_template_id?: number | null;
   review_prize_draw_congratulations_banner_url?: string | null;
+  weekly_plan_max_items?: number;
   updated_at: string;
 }
 

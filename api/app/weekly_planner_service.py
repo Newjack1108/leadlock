@@ -53,6 +53,9 @@ from app.stale_reference_service import (
     resolve_stale_reference_for_opportunity,
 )
 
+WEEKLY_PLAN_MIN_PRIORITY_SCORE = Decimal("50")
+WEEKLY_PLAN_DEFAULT_MAX_ITEMS = 100
+
 POSITIVE_BUY_SIGNALS = (
     "ready to order",
     "let's proceed",
@@ -487,24 +490,12 @@ def _reduce_stale_opportunity_entries(
     return reduced + no_customer
 
 
-def _resolved_weekly_plan_targets(
-    session: Session,
-    week_start: date,
+def _collect_weekly_plan_target_ids(
+    rows: list[tuple[Optional[int], Optional[int], Optional[int]]],
 ) -> tuple[set[int], set[int], set[int]]:
-    """Lead/quote/customer IDs closed out (completed or rejected) in prior runs this week."""
     excluded_lead_ids: set[int] = set()
     excluded_quote_ids: set[int] = set()
     excluded_customer_ids: set[int] = set()
-    rows = session.exec(
-        select(WeeklyPlanItem.lead_id, WeeklyPlanItem.quote_id, WeeklyPlanItem.customer_id).where(
-            WeeklyPlanItem.status.in_(
-                [WeeklyPlanItemStatus.COMPLETED, WeeklyPlanItemStatus.REJECTED]
-            ),
-            WeeklyPlanItem.plan_run_id.in_(
-                select(WeeklyPlanRun.id).where(WeeklyPlanRun.week_start == week_start)
-            ),
-        )
-    ).all()
     for lead_id, quote_id, customer_id in rows:
         if lead_id is not None:
             excluded_lead_ids.add(lead_id)
@@ -513,6 +504,45 @@ def _resolved_weekly_plan_targets(
         if customer_id is not None:
             excluded_customer_ids.add(customer_id)
     return excluded_lead_ids, excluded_quote_ids, excluded_customer_ids
+
+
+def _rejected_weekly_plan_targets(session: Session) -> tuple[set[int], set[int], set[int]]:
+    """Lead/quote/customer IDs permanently excluded after staff rejection."""
+    rows = session.exec(
+        select(WeeklyPlanItem.lead_id, WeeklyPlanItem.quote_id, WeeklyPlanItem.customer_id).where(
+            WeeklyPlanItem.status == WeeklyPlanItemStatus.REJECTED
+        )
+    ).all()
+    return _collect_weekly_plan_target_ids(rows)
+
+
+def _completed_weekly_plan_targets(
+    session: Session,
+    week_start: date,
+) -> tuple[set[int], set[int], set[int]]:
+    """Lead/quote/customer IDs completed in prior runs this week."""
+    rows = session.exec(
+        select(WeeklyPlanItem.lead_id, WeeklyPlanItem.quote_id, WeeklyPlanItem.customer_id).where(
+            WeeklyPlanItem.status == WeeklyPlanItemStatus.COMPLETED,
+            WeeklyPlanItem.plan_run_id.in_(
+                select(WeeklyPlanRun.id).where(WeeklyPlanRun.week_start == week_start)
+            ),
+        )
+    ).all()
+    return _collect_weekly_plan_target_ids(rows)
+
+
+def _merge_weekly_plan_exclusions(
+    *exclusions: tuple[set[int], set[int], set[int]],
+) -> tuple[set[int], set[int], set[int]]:
+    lead_ids: set[int] = set()
+    quote_ids: set[int] = set()
+    customer_ids: set[int] = set()
+    for excluded_leads, excluded_quotes, excluded_customers in exclusions:
+        lead_ids |= excluded_leads
+        quote_ids |= excluded_quotes
+        customer_ids |= excluded_customers
+    return lead_ids, quote_ids, customer_ids
 
 
 def _ordered_customer_and_lead_ids(session: Session) -> tuple[set[int], set[int]]:
@@ -554,11 +584,13 @@ def generate_weekly_plan(
     session.add(run)
     session.flush()
 
+    company = session.exec(select(CompanySettings).limit(1)).first()
     plan_items: List[WeeklyPlanItem] = []
     seen_keys: set[tuple[str, int]] = set()
     ordered_customer_ids, ordered_lead_ids = _ordered_customer_and_lead_ids(session)
-    excluded_lead_ids, excluded_quote_ids, excluded_customer_ids = _resolved_weekly_plan_targets(
-        session, week_start
+    excluded_lead_ids, excluded_quote_ids, excluded_customer_ids = _merge_weekly_plan_exclusions(
+        _rejected_weekly_plan_targets(session),
+        _completed_weekly_plan_targets(session, week_start),
     )
 
     for lead, rule, days_stale in detect_stale_leads(session):
@@ -604,6 +636,8 @@ def generate_weekly_plan(
                 reasons=likelihood_reasons,
             )
         final_score = _blend_final_priority(min(Decimal("100"), score), likelihood_score)
+        if final_score < WEEKLY_PLAN_MIN_PRIORITY_SCORE:
+            continue
         lead_ref_at, lead_ref_label = resolve_stale_reference_for_lead(lead, rule, session)
         plan_items.append(
             WeeklyPlanItem(
@@ -691,6 +725,8 @@ def generate_weekly_plan(
                 reasons=likelihood_reasons,
             )
         final_score = _blend_final_priority(min(Decimal("100"), score), likelihood_score)
+        if final_score < WEEKLY_PLAN_MIN_PRIORITY_SCORE:
+            continue
         quote_ref_at, quote_ref_label = resolve_stale_reference_for_quote(quote, rule)
         plan_items.append(
             WeeklyPlanItem(
@@ -775,6 +811,8 @@ def generate_weekly_plan(
                 reasons=likelihood_reasons,
             )
         final_score = _blend_final_priority(min(Decimal("100"), score), likelihood_score)
+        if final_score < WEEKLY_PLAN_MIN_PRIORITY_SCORE:
+            continue
         opp_ref_at, opp_ref_label = resolve_stale_reference_for_opportunity(opp, reason, session)
         plan_items.append(
             WeeklyPlanItem(
@@ -812,6 +850,9 @@ def generate_weekly_plan(
             seen_quote_customer_ids.add(opp.customer_id)
 
     plan_items.sort(key=lambda item: (item.priority_score, item.created_at), reverse=True)
+    max_items = company.weekly_plan_max_items if company else WEEKLY_PLAN_DEFAULT_MAX_ITEMS
+    max_items = max(1, int(max_items))
+    plan_items = plan_items[:max_items]
     for item in plan_items:
         session.add(item)
 

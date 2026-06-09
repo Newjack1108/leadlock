@@ -56,7 +56,7 @@ def _seed_lead_plan_fixture(session: Session) -> tuple[User, Customer, Lead]:
             threshold_minutes=0,
             check_type="LAST_ACTIVITY",
             is_active=True,
-            priority=ReminderPriority.MEDIUM,
+            priority=ReminderPriority.URGENT,
             suggested_action=SuggestedAction.FOLLOW_UP,
         )
     )
@@ -122,7 +122,7 @@ def test_regenerate_same_week_excludes_rejected_quote():
             discount_total=Decimal("0.00"),
             total_amount=Decimal("1200.00"),
             created_by_id=user.id,
-            sent_at=datetime.utcnow() - timedelta(days=5),
+            sent_at=datetime.utcnow() - timedelta(days=14),
         )
         session.add(quote)
         session.add(
@@ -133,7 +133,7 @@ def test_regenerate_same_week_excludes_rejected_quote():
                 threshold_minutes=0,
                 check_type="SENT_DATE",
                 is_active=True,
-                priority=ReminderPriority.MEDIUM,
+                priority=ReminderPriority.URGENT,
                 suggested_action=SuggestedAction.RESEND_QUOTE,
             )
         )
@@ -197,3 +197,43 @@ def test_completed_item_from_prior_week_can_reappear():
         items = session.exec(select(WeeklyPlanItem).where(WeeklyPlanItem.plan_run_id == run.id)).all()
 
         assert lead.id in {it.lead_id for it in items}
+
+
+def test_rejected_item_from_prior_week_stays_excluded():
+    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+    SQLModel.metadata.create_all(engine)
+
+    with Session(engine) as session:
+        user, customer, lead = _seed_lead_plan_fixture(session)
+        prior_week = _week_start_utc() - timedelta(days=7)
+
+        old_run = WeeklyPlanRun(
+            week_start=prior_week,
+            generated_by_id=user.id,
+            scope=WeeklyPlanScope.FULL_PIPELINE,
+            model_version="test",
+            total_items=1,
+        )
+        session.add(old_run)
+        session.commit()
+        session.refresh(old_run)
+
+        session.add(
+            WeeklyPlanItem(
+                plan_run_id=old_run.id,
+                lead_id=lead.id,
+                customer_id=customer.id,
+                assigned_to_id=user.id,
+                recommended_action=SuggestedAction.FOLLOW_UP,
+                channel="EMAIL",
+                status=WeeklyPlanItemStatus.REJECTED,
+                priority_score=Decimal("80"),
+            )
+        )
+        session.commit()
+
+        run = generate_weekly_plan(session, generated_by_id=user.id, auto_execute=False, dry_run=False)
+        items = session.exec(select(WeeklyPlanItem).where(WeeklyPlanItem.plan_run_id == run.id)).all()
+
+        assert lead.id not in {it.lead_id for it in items}
+        assert customer.id not in {it.customer_id for it in items}

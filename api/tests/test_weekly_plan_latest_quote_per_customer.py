@@ -65,7 +65,7 @@ def test_weekly_plan_uses_latest_quote_once_per_customer():
             discount_total=Decimal("0.00"),
             total_amount=Decimal("2000.00"),
             created_by_id=user.id,
-            sent_at=now - timedelta(days=2),
+            sent_at=now - timedelta(days=14),
         )
         session.add(older_quote)
         session.add(latest_quote)
@@ -77,7 +77,7 @@ def test_weekly_plan_uses_latest_quote_once_per_customer():
             threshold_minutes=0,
             check_type="SENT_DATE",
             is_active=True,
-            priority=ReminderPriority.MEDIUM,
+            priority=ReminderPriority.URGENT,
             suggested_action=SuggestedAction.RESEND_QUOTE,
         )
         draft_rule = ReminderRule(
@@ -125,7 +125,7 @@ def test_weekly_plan_skips_opportunity_when_customer_already_has_quote_item():
             discount_total=Decimal("0.00"),
             total_amount=Decimal("1500.00"),
             created_by_id=user.id,
-            sent_at=now - timedelta(days=6),
+            sent_at=now - timedelta(days=14),
             opportunity_stage=OpportunityStage.QUOTE_SENT,
         )
         older_opp_quote = Quote(
@@ -149,7 +149,7 @@ def test_weekly_plan_skips_opportunity_when_customer_already_has_quote_item():
             threshold_minutes=0,
             check_type="SENT_DATE",
             is_active=True,
-            priority=ReminderPriority.MEDIUM,
+            priority=ReminderPriority.URGENT,
             suggested_action=SuggestedAction.RESEND_QUOTE,
         )
         session.add(sent_rule)

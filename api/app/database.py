@@ -1596,6 +1596,7 @@ def create_db_and_tables():
                     "review_prize_draw_congratulations_sms_template_id": "INTEGER REFERENCES smstemplate(id)",
                     "review_prize_draw_congratulations_email_template_id": "INTEGER REFERENCES emailtemplate(id)",
                     "review_prize_draw_congratulations_banner_url": "VARCHAR(2048)",
+                    "weekly_plan_max_items": "INTEGER DEFAULT 100 NOT NULL",
                 }
                 for col_name, col_type in review_company_cols.items():
                     if col_name not in company_columns:

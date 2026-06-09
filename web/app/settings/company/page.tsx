@@ -137,6 +137,7 @@ export default function CompanySettingsPage() {
     review_prize_draw_congratulations_sms_template_id: '' as string,
     review_prize_draw_congratulations_email_template_id: '' as string,
     review_prize_draw_congratulations_banner_url: '',
+    weekly_plan_max_items: '100',
   });
 
   useEffect(() => {
@@ -273,6 +274,10 @@ export default function CompanySettingsPage() {
             : '',
         review_prize_draw_congratulations_banner_url:
           response.data.review_prize_draw_congratulations_banner_url || '',
+        weekly_plan_max_items:
+          response.data.weekly_plan_max_items != null
+            ? String(response.data.weekly_plan_max_items)
+            : '100',
       });
     } catch (error: any) {
       if (error.response?.status === 401) {
@@ -322,6 +327,13 @@ export default function CompanySettingsPage() {
       : 2;
     if (Number.isNaN(prizeMinPlatformsVal) || prizeMinPlatformsVal < 2 || prizeMinPlatformsVal > 3) {
       toast.error('Prize draw minimum platforms must be 2 or 3');
+      return;
+    }
+    const weeklyPlanMaxItemsVal = formData.weekly_plan_max_items
+      ? parseInt(formData.weekly_plan_max_items, 10)
+      : 100;
+    if (Number.isNaN(weeklyPlanMaxItemsVal) || weeklyPlanMaxItemsVal < 1) {
+      toast.error('Weekly plan max items must be 1 or more');
       return;
     }
 
@@ -390,6 +402,7 @@ export default function CompanySettingsPage() {
             : parseInt(formData.review_prize_draw_congratulations_email_template_id, 10),
         review_prize_draw_congratulations_banner_url:
           formData.review_prize_draw_congratulations_banner_url.trim() || null,
+        weekly_plan_max_items: weeklyPlanMaxItemsVal,
       };
       if (settings) {
         // Update existing: omit logo_filename so existing value is unchanged
@@ -636,6 +649,33 @@ export default function CompanySettingsPage() {
               />
             </div>
 
+            </div>
+
+            <div className="rounded-lg p-4 bg-violet-50/30 dark:bg-violet-950/20 border-l-4 border-l-violet-200 dark:border-l-violet-800 mt-6 space-y-4">
+              <div>
+                <h3 className="text-lg font-medium">Weekly plan</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Control how many follow-up items appear when staff generate the weekly plan.
+                </p>
+              </div>
+              <div className="space-y-2 max-w-md">
+                <Label htmlFor="weekly_plan_max_items">Max items per generate</Label>
+                <Input
+                  id="weekly_plan_max_items"
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={formData.weekly_plan_max_items}
+                  onChange={(e) =>
+                    setFormData({ ...formData, weekly_plan_max_items: e.target.value })
+                  }
+                  disabled={saving}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Only the highest-scoring items (score 50+) are included, up to this limit. Rejected
+                  customers stay excluded permanently.
+                </p>
+              </div>
             </div>
 
             <div className="rounded-lg p-4 bg-sky-50/30 dark:bg-sky-950/20 border-l-4 border-l-sky-200 dark:border-l-sky-800 mt-6 space-y-4">
