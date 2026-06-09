@@ -24,6 +24,7 @@ import {
   estimateDeliveryInstall,
 } from '@/lib/api';
 import api from '@/lib/api';
+import { filterQuoteCatalogProducts } from '@/lib/quoteCatalogProducts';
 import {
   Customer,
   Product,
@@ -289,7 +290,7 @@ function EditQuoteContent() {
   const fetchProducts = async () => {
     try {
       const response = await getProducts();
-      setProducts(response.filter((p: Product) => p.is_active && !p.is_extra));
+      setProducts(filterQuoteCatalogProducts(response));
     } catch (error) {
       console.error('Failed to load products');
     }
@@ -898,9 +899,9 @@ function EditQuoteContent() {
                                 </SelectItem>
                               ))}
                             {item.product_id &&
-                              productDetails[item.product_id]?.is_extra &&
-                              !products.some((p) => p.id === item.product_id) && (
-                                <SelectItem key={`extra-line-${item.product_id}`} value={item.product_id.toString()}>
+                              !products.some((p) => p.id === item.product_id) &&
+                              productDetails[item.product_id] && (
+                                <SelectItem key={`catalog-line-${item.product_id}`} value={item.product_id.toString()}>
                                   {productDetails[item.product_id].name} - £
                                   {Number(productDetails[item.product_id].base_price).toFixed(2)}
                                 </SelectItem>

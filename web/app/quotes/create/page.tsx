@@ -29,6 +29,7 @@ import {
   applyQualifiedToQuotedTransition,
 } from '@/lib/api';
 import api from '@/lib/api';
+import { filterQuoteCatalogProducts } from '@/lib/quoteCatalogProducts';
 import {
   buildUpdateDraftPayload,
   quoteItemsToFormItems,
@@ -241,7 +242,7 @@ function CreateQuoteContent() {
     try {
       const response = await getProducts();
       // Only main products in dropdown; extras are added via Optional Extras section per product
-      setProducts(response.filter((p: Product) => p.is_active && !p.is_extra));
+      setProducts(filterQuoteCatalogProducts(response));
     } catch (error) {
       console.error('Failed to load products');
     }
@@ -1042,9 +1043,9 @@ function CreateQuoteContent() {
                               </SelectItem>
                             ))}
                             {item.product_id &&
-                              productDetails[item.product_id]?.is_extra &&
-                              !products.some((p) => p.id === item.product_id) && (
-                                <SelectItem key={`extra-line-${item.product_id}`} value={item.product_id.toString()}>
+                              !products.some((p) => p.id === item.product_id) &&
+                              productDetails[item.product_id] && (
+                                <SelectItem key={`catalog-line-${item.product_id}`} value={item.product_id.toString()}>
                                   {productDetails[item.product_id].name} - £
                                   {Number(productDetails[item.product_id].base_price).toFixed(2)}
                                 </SelectItem>
