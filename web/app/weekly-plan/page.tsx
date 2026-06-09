@@ -77,7 +77,11 @@ function isSmsSendBlocked(item: WeeklyPlanItem): boolean {
 }
 
 function isDismissedWeeklyPlanStatus(status: WeeklyPlanItemStatus): boolean {
-  return status === WeeklyPlanItemStatus.COMPLETED || status === WeeklyPlanItemStatus.REJECTED;
+  return (
+    status === WeeklyPlanItemStatus.COMPLETED ||
+    status === WeeklyPlanItemStatus.REJECTED ||
+    status === WeeklyPlanItemStatus.AUTO_SENT
+  );
 }
 
 function buildMessageDrafts(items: WeeklyPlanItem[]): Record<number, string> {
@@ -247,6 +251,34 @@ export default function WeeklyPlanPage() {
     return plan.items.filter((item) => !isDismissedWeeklyPlanStatus(item.status)).length;
   }, [plan]);
 
+  const refreshPlanMetrics = () => {
+    if (!plan?.run?.id) return;
+    getWeeklyPlanMetrics(plan.run.id)
+      .then(setMetrics)
+      .catch(() => null);
+  };
+
+  const removeItemsFromPlanView = (itemIds: number[]) => {
+    if (itemIds.length === 0) return;
+    const idSet = new Set(itemIds);
+    setPlan((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        items: prev.items.filter((it) => !idSet.has(it.id)),
+      };
+    });
+    setMessageDrafts((prev) => {
+      const next = { ...prev };
+      for (const id of itemIds) {
+        delete next[id];
+      }
+      return next;
+    });
+    setSelectedItemIds((prev) => prev.filter((id) => !idSet.has(id)));
+    refreshPlanMetrics();
+  };
+
   const handleGenerate = async () => {
     try {
       setLoadingRun(true);
@@ -277,7 +309,11 @@ export default function WeeklyPlanPage() {
       await saveDraftsForItems(selectedItemIds);
       const result = await sendWeeklyPlanItemsBulk(selectedItemIds);
       toast.success(result.message);
-      await loadData();
+      if (result.failed === 0 && result.sent > 0) {
+        removeItemsFromPlanView(selectedItemIds);
+      } else {
+        await loadData();
+      }
     } catch (error) {
       toast.error(getApiErrorDetail(error) || 'Failed to send selected items');
     } finally {
@@ -293,10 +329,11 @@ export default function WeeklyPlanPage() {
       if (updated.status === WeeklyPlanItemStatus.AUTO_SENT) {
         const channel = (item.channel || '').toUpperCase();
         toast.success(channel === 'CALL' ? 'Call task logged' : 'Message sent');
+        removeItemsFromPlanView([item.id]);
       } else {
         toast.error(updated.execution_error || 'Failed to send item');
+        await loadData();
       }
-      await loadData();
     } catch (error) {
       toast.error(getApiErrorDetail(error) || 'Failed to send item');
     } finally {
@@ -346,19 +383,7 @@ export default function WeeklyPlanPage() {
         status: WeeklyPlanItemStatus.COMPLETED,
         outcome_result: 'completed_via_compose',
       });
-      setPlan((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          items: prev.items.filter((it) => it.id !== itemId),
-        };
-      });
-      setMessageDrafts((prev) => {
-        const next = { ...prev };
-        delete next[itemId];
-        return next;
-      });
-      setSelectedItemIds((prev) => prev.filter((id) => id !== itemId));
+      removeItemsFromPlanView([itemId]);
       toast.success('Email sent and item marked complete');
     } catch {
       toast.error('Email sent but failed to update weekly plan item');
@@ -397,19 +422,7 @@ export default function WeeklyPlanPage() {
         status: WeeklyPlanItemStatus.COMPLETED,
         outcome_result: 'completed_via_compose_sms',
       });
-      setPlan((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          items: prev.items.filter((it) => it.id !== itemId),
-        };
-      });
-      setMessageDrafts((prev) => {
-        const next = { ...prev };
-        delete next[itemId];
-        return next;
-      });
-      setSelectedItemIds((prev) => prev.filter((id) => id !== itemId));
+      removeItemsFromPlanView([itemId]);
       toast.success('SMS sent and item marked complete');
     } catch {
       toast.error('SMS sent but failed to update weekly plan item');
@@ -427,24 +440,7 @@ export default function WeeklyPlanPage() {
       setBusyItemId(item.id);
       await updateWeeklyPlanItem(item.id, payload);
       if (payload.status != null && isDismissedWeeklyPlanStatus(payload.status)) {
-        setPlan((prev) => {
-          if (!prev) return prev;
-          return {
-            ...prev,
-            items: prev.items.filter((it) => it.id !== item.id),
-          };
-        });
-        setMessageDrafts((prev) => {
-          const next = { ...prev };
-          delete next[item.id];
-          return next;
-        });
-        setSelectedItemIds((prev) => prev.filter((id) => id !== item.id));
-        if (plan?.run?.id) {
-          getWeeklyPlanMetrics(plan.run.id)
-            .then(setMetrics)
-            .catch(() => null);
-        }
+        removeItemsFromPlanView([item.id]);
       }
       toast.success(successMessage);
       if (payload.status == null || !isDismissedWeeklyPlanStatus(payload.status)) {

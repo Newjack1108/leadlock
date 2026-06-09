@@ -91,6 +91,32 @@ def test_regenerate_same_week_excludes_completed_lead():
         assert customer.id not in {it.customer_id for it in items2}
 
 
+def test_regenerate_same_week_excludes_auto_sent_lead():
+    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+    SQLModel.metadata.create_all(engine)
+
+    with Session(engine) as session:
+        user, customer, lead = _seed_lead_plan_fixture(session)
+
+        run1 = generate_weekly_plan(session, generated_by_id=user.id, auto_execute=False, dry_run=False)
+        item = session.exec(
+            select(WeeklyPlanItem).where(
+                WeeklyPlanItem.plan_run_id == run1.id,
+                WeeklyPlanItem.lead_id == lead.id,
+            )
+        ).first()
+        assert item is not None
+        item.status = WeeklyPlanItemStatus.AUTO_SENT
+        session.add(item)
+        session.commit()
+
+        run2 = generate_weekly_plan(session, generated_by_id=user.id, auto_execute=False, dry_run=False)
+        items2 = session.exec(select(WeeklyPlanItem).where(WeeklyPlanItem.plan_run_id == run2.id)).all()
+
+        assert lead.id not in {it.lead_id for it in items2}
+        assert customer.id not in {it.customer_id for it in items2}
+
+
 def test_regenerate_same_week_excludes_rejected_quote():
     engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
     SQLModel.metadata.create_all(engine)

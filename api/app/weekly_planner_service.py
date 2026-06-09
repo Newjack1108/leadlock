@@ -520,10 +520,12 @@ def _completed_weekly_plan_targets(
     session: Session,
     week_start: date,
 ) -> tuple[set[int], set[int], set[int]]:
-    """Lead/quote/customer IDs completed in prior runs this week."""
+    """Lead/quote/customer IDs staff already actioned in prior runs this week."""
     rows = session.exec(
         select(WeeklyPlanItem.lead_id, WeeklyPlanItem.quote_id, WeeklyPlanItem.customer_id).where(
-            WeeklyPlanItem.status == WeeklyPlanItemStatus.COMPLETED,
+            WeeklyPlanItem.status.in_(
+                [WeeklyPlanItemStatus.COMPLETED, WeeklyPlanItemStatus.AUTO_SENT]
+            ),
             WeeklyPlanItem.plan_run_id.in_(
                 select(WeeklyPlanRun.id).where(WeeklyPlanRun.week_start == week_start)
             ),
