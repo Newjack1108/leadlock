@@ -139,6 +139,8 @@ function CreateQuoteContent() {
 
   const [loading, setLoading] = useState(false);
   const [draftQuoteId, setDraftQuoteId] = useState<number | null>(null);
+  /** URL draft_id is authoritative when state resets after router.replace */
+  const activeDraftQuoteId = draftQuoteId ?? draftIdFromUrl;
   const syncedDraftBaselineRef = useRef<string | null>(null);
   const [pageLoading, setPageLoading] = useState(true);
   const [customer, setCustomer] = useState<Customer | null>(null);
@@ -416,6 +418,7 @@ function CreateQuoteContent() {
     if (!postcode || (!deliveryOnly && installHours <= 0)) {
       setDeliveryEstimate(null);
       setDeliveryEstimateError(null);
+      setDeliveryEstimateLoading(false);
       return;
     }
     let cancelled = false;
@@ -608,8 +611,8 @@ function CreateQuoteContent() {
   );
 
   const { saveStatus, flushDraft, markClean, isDirty } = useDraftAutosave({
-    quoteId: draftQuoteId,
-    enabled: !!draftQuoteId && !!customer,
+    quoteId: activeDraftQuoteId,
+    enabled: !!activeDraftQuoteId && !!customer,
     debounceMs: 1500,
     buildPayload: buildDraftPayload,
     formSignature,
@@ -639,7 +642,7 @@ function CreateQuoteContent() {
       return;
     }
 
-    if (draftIdFromUrl != null && draftQuoteId == null) {
+    if (draftIdFromUrl != null && draftQuoteId !== draftIdFromUrl) {
       let cancelled = false;
       (async () => {
         try {
@@ -828,7 +831,7 @@ function CreateQuoteContent() {
 
   const navigateAway = async (path: string) => {
     try {
-      if (draftQuoteId && isDirty()) {
+      if (activeDraftQuoteId && isDirty()) {
         await flushDraft();
       }
     } catch {
@@ -846,7 +849,7 @@ function CreateQuoteContent() {
       return;
     }
 
-    if (!draftQuoteId) {
+    if (!activeDraftQuoteId) {
       toast.error('Quote draft is still initializing. Please wait.');
       return;
     }
@@ -872,7 +875,7 @@ function CreateQuoteContent() {
     setLoading(true);
     try {
       await flushDraft();
-      await applyQualifiedToQuotedTransition(draftQuoteId);
+      await applyQualifiedToQuotedTransition(activeDraftQuoteId);
       if (draftStorageKey) {
         try {
           sessionStorage.removeItem(draftStorageKey);
@@ -882,7 +885,7 @@ function CreateQuoteContent() {
       }
       syncedDraftBaselineRef.current = null;
       toast.success('Quote saved');
-      router.push(`/quotes/${draftQuoteId}`);
+      router.push(`/quotes/${activeDraftQuoteId}`);
     } catch (error: any) {
       const errorMessage = error.response?.data?.detail || error.message || 'Failed to save quote';
       toast.error(errorMessage);
@@ -933,7 +936,9 @@ function CreateQuoteContent() {
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back to Customer
             </Button>
-            {draftQuoteId ? <DraftConfiguratorLink quoteId={draftQuoteId} variant="outline" size="sm" /> : null}
+            {activeDraftQuoteId ? (
+              <DraftConfiguratorLink quoteId={activeDraftQuoteId} variant="outline" size="sm" />
+            ) : null}
           </div>
           <div>
             <h1 className="text-3xl font-semibold">Create New Quote</h1>
@@ -962,7 +967,7 @@ function CreateQuoteContent() {
 
         <form onSubmit={handleSubmit}>
           <div className="space-y-6">
-            <DraftConfiguratorCallout quoteId={draftQuoteId} items={items} />
+            <DraftConfiguratorCallout quoteId={activeDraftQuoteId} items={items} />
 
             {/* Quote Items */}
             <Card>
@@ -1589,7 +1594,7 @@ function CreateQuoteContent() {
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={loading || !draftQuoteId}>
+              <Button type="submit" disabled={loading || !activeDraftQuoteId}>
                 {loading ? 'Saving...' : 'Create Quote'}
               </Button>
             </div>
