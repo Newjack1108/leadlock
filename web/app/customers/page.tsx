@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useLayoutEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Header from '@/components/Header';
 import { Card } from '@/components/ui/card';
@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { Search, ChevronRight, X } from 'lucide-react';
 import CallNotesDialog from '@/components/CallNotesDialog';
 import NinoxBadge from '@/components/NinoxBadge';
+import { parsePageFromSearchParams, saveCustomersListReturnUrl } from '@/lib/customersList';
 
 const CUSTOMERS_PAGE_SIZE = 50;
 
@@ -26,17 +27,36 @@ function CustomersPageContent() {
   const [loading, setLoading] = useState(true);
   const [searchDraft, setSearchDraft] = useState('');
   const [searchApplied, setSearchApplied] = useState('');
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(() => parsePageFromSearchParams(searchParams));
   const [total, setTotal] = useState(0);
   const [fetchState, setFetchState] = useState<'idle' | 'ok' | 'error'>('idle');
   const [fetchErrorDetail, setFetchErrorDetail] = useState<string | null>(null);
   const [dbSummaryCustomers, setDbSummaryCustomers] = useState<number | null>(null);
   const [callNotesOpen, setCallNotesOpen] = useState(false);
   const [callNotesCustomer, setCallNotesCustomer] = useState<{ id: number; name: string; phone: string } | null>(null);
+  const resetPageDepsRef = useRef({ searchApplied, smsOptedOutFilter, hasUnreadFilter });
+
+  useEffect(() => {
+    const urlPage = parsePageFromSearchParams(searchParams);
+    setPage((prev) => (prev === urlPage ? prev : urlPage));
+  }, [searchParams]);
 
   useLayoutEffect(() => {
+    const prev = resetPageDepsRef.current;
+    const depsChanged =
+      prev.searchApplied !== searchApplied ||
+      prev.smsOptedOutFilter !== smsOptedOutFilter ||
+      prev.hasUnreadFilter !== hasUnreadFilter;
+    resetPageDepsRef.current = { searchApplied, smsOptedOutFilter, hasUnreadFilter };
+    if (!depsChanged) return;
+
     setPage(1);
-  }, [searchApplied, smsOptedOutFilter, hasUnreadFilter]);
+    const next = new URLSearchParams(searchParams.toString());
+    if (!next.has('page')) return;
+    next.delete('page');
+    const qs = next.toString();
+    router.replace(qs ? `/customers?${qs}` : '/customers', { scroll: false });
+  }, [searchApplied, smsOptedOutFilter, hasUnreadFilter, router, searchParams]);
 
   const fetchCustomers = useCallback(async () => {
     try {
@@ -103,6 +123,31 @@ function CustomersPageContent() {
     void fetchCustomers();
   }, [fetchCustomers]);
 
+  useEffect(() => {
+    if (loading || total === 0) return;
+    const maxPage = Math.max(1, Math.ceil(total / CUSTOMERS_PAGE_SIZE));
+    if (page <= maxPage) return;
+    setPage(maxPage);
+    const next = new URLSearchParams(searchParams.toString());
+    if (maxPage <= 1) next.delete('page');
+    else next.set('page', String(maxPage));
+    const qs = next.toString();
+    router.replace(qs ? `/customers?${qs}` : '/customers', { scroll: false });
+  }, [loading, total, page, searchParams, router]);
+
+  function syncPageToUrl(newPage: number) {
+    const next = new URLSearchParams(searchParams.toString());
+    if (newPage <= 1) next.delete('page');
+    else next.set('page', String(newPage));
+    const qs = next.toString();
+    router.replace(qs ? `/customers?${qs}` : '/customers', { scroll: false });
+  }
+
+  function navigateToCustomer(customerId: number) {
+    saveCustomersListReturnUrl();
+    router.push(`/customers/${customerId}`);
+  }
+
   function locationText(c: Customer): string {
     if (c.city && c.county) return `${c.city}, ${c.county}`;
     if (c.city) return c.city;
@@ -111,7 +156,11 @@ function CustomersPageContent() {
   }
 
   function goToPage(updater: (p: number) => number) {
-    setPage(updater);
+    setPage((prev) => {
+      const newPage = updater(prev);
+      syncPageToUrl(newPage);
+      return newPage;
+    });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
@@ -157,6 +206,7 @@ function CustomersPageContent() {
               size="sm"
               onClick={() => {
                 const next = new URLSearchParams(searchParams.toString());
+                next.delete('page');
                 if (smsOptedOutFilter) next.delete('sms_opted_out');
                 else next.set('sms_opted_out', '1');
                 const qs = next.toString();
@@ -177,6 +227,7 @@ function CustomersPageContent() {
                 className="h-7 gap-1 px-2"
                 onClick={() => {
                   const next = new URLSearchParams(searchParams.toString());
+                  next.delete('page');
                   next.delete('has_unread');
                   const qs = next.toString();
                   router.push(qs ? `/customers?${qs}` : '/customers');
@@ -198,6 +249,7 @@ function CustomersPageContent() {
                 className="h-7 gap-1 px-2"
                 onClick={() => {
                   const next = new URLSearchParams(searchParams.toString());
+                  next.delete('page');
                   next.delete('sms_opted_out');
                   const qs = next.toString();
                   router.push(qs ? `/customers?${qs}` : '/customers');
@@ -249,7 +301,7 @@ function CustomersPageContent() {
                     <tr
                       key={customer.id}
                       className="border-b last:border-0 hover:bg-muted/30 cursor-pointer transition-colors"
-                      onClick={() => router.push(`/customers/${customer.id}`)}
+                      onClick={() => navigateToCustomer(customer.id)}
                     >
                       <td className="p-3 text-muted-foreground font-mono text-sm">
                         {customer.customer_number}
@@ -302,7 +354,7 @@ function CustomersPageContent() {
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8"
-                          onClick={() => router.push(`/customers/${customer.id}`)}
+                          onClick={() => navigateToCustomer(customer.id)}
                         >
                           <ChevronRight className="h-4 w-4" />
                         </Button>

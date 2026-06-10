@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
+import { getCustomersListReturnUrl } from '@/lib/customersList';
 import Image from 'next/image';
 import Header from '@/components/Header';
 import QuoteLockCard from '@/components/QuoteLockCard';
@@ -498,7 +499,11 @@ export default function CustomerDetailPage() {
       <Header />
       <main className="container mx-auto px-4 sm:px-6 py-8">
         <div className="mb-6">
-          <Button variant="ghost" onClick={() => router.push('/customers')} className="mb-4">
+          <Button
+            variant="ghost"
+            onClick={() => router.push(getCustomersListReturnUrl() || '/customers')}
+            className="mb-4"
+          >
             ← Back to Customers
           </Button>
           <div className="flex items-center gap-2 flex-wrap">
