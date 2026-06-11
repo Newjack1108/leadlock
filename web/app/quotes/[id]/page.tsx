@@ -6,7 +6,7 @@ import Header from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import api, { getQuote, previewQuotePdf, getDiscountRequestsForQuote, getQuoteViewLink, acceptQuote, ensureQuoteOrder, cancelDraftQuote, duplicateQuoteToDraft, deleteDiscountRequest } from '@/lib/api';
+import api, { getQuote, previewQuotePdf, getDiscountRequestsForQuote, getQuoteViewLink, acceptQuote, ensureQuoteOrder, cancelDraftQuote, duplicateQuoteToDraft, deleteDiscountRequest, patchQuote } from '@/lib/api';
 import {
   Quote,
   QuoteItem,
@@ -51,11 +51,13 @@ import {
 import RequestDiscountDialog from '@/components/RequestDiscountDialog';
 import { celebrateQuoteAccept } from '@/lib/celebrate';
 
-const temperatureColors: Record<QuoteTemperature, string> = {
-  HOT: 'bg-red-100 text-red-700',
-  WARM: 'bg-amber-100 text-amber-700',
-  COLD: 'bg-slate-100 text-slate-600',
-};
+function showEditableTemperature(quote: Quote): boolean {
+  if (quote.order_id) return false;
+  if (quote.status === QuoteStatus.ACCEPTED) return false;
+  if (quote.opportunity_stage === OpportunityStage.WON) return false;
+  if (quote.accepted_at) return false;
+  return true;
+}
 
 export default function QuoteDetailPage() {
   const router = useRouter();
@@ -82,6 +84,7 @@ export default function QuoteDetailPage() {
   const [cancelling, setCancelling] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
   const [removingDiscountRequestId, setRemovingDiscountRequestId] = useState<number | null>(null);
+  const [savingTemperature, setSavingTemperature] = useState(false);
 
   useEffect(() => {
     if (quoteId) {
@@ -191,6 +194,31 @@ export default function QuoteDetailPage() {
     }
   };
 
+  const handleTemperatureChange = async (newTemperature: QuoteTemperature) => {
+    if (!quote || newTemperature === quote.temperature) return;
+
+    const payload: Record<string, unknown> = { temperature: newTemperature };
+    if (
+      quote.opportunity_stage &&
+      quote.opportunity_stage !== OpportunityStage.WON &&
+      quote.opportunity_stage !== OpportunityStage.LOST
+    ) {
+      payload.next_action = quote.next_action ?? undefined;
+      payload.next_action_due_date = quote.next_action_due_date ?? undefined;
+    }
+
+    try {
+      setSavingTemperature(true);
+      await patchQuote(quoteId, payload);
+      setQuote({ ...quote, temperature: newTemperature });
+      toast.success('Temperature updated');
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || 'Failed to update temperature');
+    } finally {
+      setSavingTemperature(false);
+    }
+  };
+
   const handleRemoveDiscountRequest = async (requestId: number) => {
     try {
       setRemovingDiscountRequestId(requestId);
@@ -270,10 +298,21 @@ export default function QuoteDetailPage() {
                   Collection
                 </Badge>
               )}
-              {quote.temperature && (
-                <Badge className={`text-sm ${temperatureColors[quote.temperature]}`}>
-                  {quote.temperature}
-                </Badge>
+              {showEditableTemperature(quote) && (
+                <Select
+                  value={quote.temperature || ''}
+                  onValueChange={(v) => void handleTemperatureChange(v as QuoteTemperature)}
+                  disabled={savingTemperature}
+                >
+                  <SelectTrigger className="w-[120px] h-8">
+                    <SelectValue placeholder="Temperature" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={QuoteTemperature.HOT}>Hot</SelectItem>
+                    <SelectItem value={QuoteTemperature.WARM}>Warm</SelectItem>
+                    <SelectItem value={QuoteTemperature.COLD}>Cold</SelectItem>
+                  </SelectContent>
+                </Select>
               )}
               {quote.lead_id && (
                 <Button variant="outline" asChild>
