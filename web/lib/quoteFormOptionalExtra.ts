@@ -28,6 +28,24 @@ export function buildQuoteLevelOptionalExtraLine(extra: Product): QuoteItemCreat
   };
 }
 
+/** Insert an optional-extra child line after parent, shifting stale parent_index values. */
+export function insertOptionalExtraLine(
+  items: QuoteItemCreate[],
+  parentIndex: number,
+  newLine: QuoteItemCreate
+): QuoteItemCreate[] {
+  const insertAt = parentIndex + 1;
+  const shifted = items.map((item) => {
+    const pi = item.parent_index;
+    if (pi != null && pi > parentIndex) {
+      return { ...item, parent_index: pi + 1 };
+    }
+    return item;
+  });
+  shifted.splice(insertAt, 0, { ...newLine, parent_index: parentIndex });
+  return shifted.map((it, i) => ({ ...it, sort_order: i }));
+}
+
 /** 1-based index among root “building” lines only (excludes quote-level optional extras). */
 export function rootBuildingProductNumberAtIndex(
   items: QuoteItemCreate[],

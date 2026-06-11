@@ -56,6 +56,32 @@ def _pdf_table_paragraph(text: str, style: ParagraphStyle) -> Paragraph:
     return Paragraph(escape(text or ""), style)
 
 
+def _append_quote_item_child_rows(
+    table_data: List[List[Any]],
+    quote_items: list,
+    parent_id: int,
+    depth: int,
+    quote: Quote,
+    table_cell_style: ParagraphStyle,
+) -> None:
+    """Append optional-extra child rows (recursive for mis-linked legacy data)."""
+    children = [
+        i for i in quote_items if getattr(i, "parent_quote_item_id", None) == parent_id
+    ]
+    children.sort(key=lambda i: getattr(i, "sort_order", 0) or 0)
+    for child in children:
+        indent = "    " * (depth + 1)
+        table_data.append([
+            _pdf_table_paragraph(indent + "— " + (child.description or ""), table_cell_style),
+            str(child.quantity),
+            format_currency(child.unit_price, quote.currency),
+            format_currency(child.final_line_total, quote.currency),
+        ])
+        _append_quote_item_child_rows(
+            table_data, quote_items, child.id, depth + 1, quote, table_cell_style
+        )
+
+
 def aggregate_quote_discount_lines(session: Session, quote_id: int) -> List[Tuple[str, Decimal]]:
     """Group QuoteDiscount rows by description (template/custom name) for quotation display."""
     statement = select(QuoteDiscount).where(QuoteDiscount.quote_id == quote_id)
@@ -825,15 +851,9 @@ def generate_quote_pdf(
             format_currency(main_item.unit_price, quote.currency),
             format_currency(main_item.final_line_total, quote.currency),
         ])
-        children = [i for i in quote_items if getattr(i, "parent_quote_item_id", None) == main_item.id]
-        children.sort(key=lambda i: getattr(i, "sort_order", 0) or 0)
-        for child in children:
-            table_data.append([
-                _pdf_table_paragraph("    — " + (child.description or ""), table_cell_style),
-                str(child.quantity),
-                format_currency(child.unit_price, quote.currency),
-                format_currency(child.final_line_total, quote.currency),
-            ])
+        _append_quote_item_child_rows(
+            table_data, quote_items, main_item.id, 0, quote, table_cell_style
+        )
     
     # Add totals (label spans cols 0-2, value in col 3). All amounts Ex VAT.
     subtotal_row_index = len(table_data)

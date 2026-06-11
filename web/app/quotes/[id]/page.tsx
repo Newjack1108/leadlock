@@ -479,21 +479,31 @@ export default function QuoteDetailPage() {
                       <tbody>
                         {quote.items && quote.items.length > 0 ? (
                           (() => {
-                            const mainItems = quote.items
-                              .filter((i: QuoteItem) => i.parent_quote_item_id == null)
-                              .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+                            const allItems = quote.items!;
                             const getChildren = (parentId: number) =>
-                              quote.items!
+                              allItems
                                 .filter((i: QuoteItem) => i.parent_quote_item_id === parentId)
                                 .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
-                            return mainItems.flatMap((item: QuoteItem) => {
-                              const children = getChildren(item.id);
+
+                            const renderItemRows = (item: QuoteItem, depth: number): ReactNode[] => {
+                              const isChild = depth > 0;
                               const hasDiscount = item.discount_amount > 0;
                               const rows: ReactNode[] = [
-                                <tr key={item.id} className="border-b">
-                                  <td className="py-2 px-3">
+                                <tr
+                                  key={item.id}
+                                  className={`border-b${isChild ? ' bg-muted/30' : ''}`}
+                                >
+                                  <td
+                                    className={`py-2 px-3${isChild ? ' text-muted-foreground' : ''}`}
+                                    style={
+                                      isChild ? { paddingLeft: `${8 + (depth - 1) * 16}px` } : undefined
+                                    }
+                                  >
+                                    {isChild && (
+                                      <span className="text-muted-foreground/80">— </span>
+                                    )}
                                     {item.description}
-                                    {item.include_in_building_discount === false && (
+                                    {!isChild && item.include_in_building_discount === false && (
                                       <span className="block text-xs text-muted-foreground mt-0.5">
                                         Not included in &apos;building items only&apos; discounts
                                       </span>
@@ -504,8 +514,12 @@ export default function QuoteDetailPage() {
                                       </Badge>
                                     )}
                                   </td>
-                                  <td className="text-right py-2 px-3">{Number(item.quantity).toFixed(2)}</td>
-                                  <td className="text-right py-2 px-3">£{Number(item.unit_price).toFixed(2)}</td>
+                                  <td className="text-right py-2 px-3">
+                                    {Number(item.quantity).toFixed(2)}
+                                  </td>
+                                  <td className="text-right py-2 px-3">
+                                    £{Number(item.unit_price).toFixed(2)}
+                                  </td>
                                   <td className="text-right py-2 px-3">
                                     {hasDiscount ? (
                                       <div>
@@ -517,45 +531,23 @@ export default function QuoteDetailPage() {
                                         </div>
                                       </div>
                                     ) : (
-                                      <span className="font-medium">£{Number(item.line_total).toFixed(2)}</span>
+                                      <span className="font-medium">
+                                        £{Number(item.line_total).toFixed(2)}
+                                      </span>
                                     )}
                                   </td>
                                 </tr>,
                               ];
-                              children.forEach((child: QuoteItem) => {
-                                const childDiscount = child.discount_amount > 0;
-                                rows.push(
-                                  <tr key={child.id} className="border-b bg-muted/30">
-                                    <td className="py-2 px-3 pl-8 text-muted-foreground">
-                                      <span className="text-muted-foreground/80">— </span>
-                                      {child.description}
-                                      {childDiscount && (
-                                        <Badge variant="outline" className="ml-2 text-xs">
-                                          Discounted
-                                        </Badge>
-                                      )}
-                                    </td>
-                                    <td className="text-right py-2 px-3">{Number(child.quantity).toFixed(2)}</td>
-                                    <td className="text-right py-2 px-3">£{Number(child.unit_price).toFixed(2)}</td>
-                                    <td className="text-right py-2 px-3">
-                                      {childDiscount ? (
-                                        <div>
-                                          <div className="text-muted-foreground line-through text-sm">
-                                            £{Number(child.line_total).toFixed(2)}
-                                          </div>
-                                          <div className="font-medium text-destructive">
-                                            £{Number(child.final_line_total).toFixed(2)}
-                                          </div>
-                                        </div>
-                                      ) : (
-                                        <span className="font-medium">£{Number(child.line_total).toFixed(2)}</span>
-                                      )}
-                                    </td>
-                                  </tr>
-                                );
+                              getChildren(item.id).forEach((child) => {
+                                rows.push(...renderItemRows(child, depth + 1));
                               });
                               return rows;
-                            });
+                            };
+
+                            const mainItems = allItems
+                              .filter((i: QuoteItem) => i.parent_quote_item_id == null)
+                              .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+                            return mainItems.flatMap((item: QuoteItem) => renderItemRows(item, 0));
                           })()
                         ) : (
                           <tr>

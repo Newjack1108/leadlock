@@ -43,6 +43,7 @@ import {
   optionalExtraIdSetFromList,
   isRootQuoteLevelOptionalExtraLine,
   buildQuoteLevelOptionalExtraLine,
+  insertOptionalExtraLine,
   rootBuildingProductNumberAtIndex,
 } from '@/lib/quoteFormOptionalExtra';
 import { prefetchProductDetailsForQuoteItems } from '@/lib/prefetchQuoteProductDetails';
@@ -366,9 +367,7 @@ function CreateQuoteContent() {
       sort_order: parentIndex + 1,
       parent_index: parentIndex,
     };
-    const newItems = [...items];
-    newItems.splice(parentIndex + 1, 0, newItem);
-    setItems(newItems.map((it, i) => ({ ...it, sort_order: i })));
+    setItems(insertOptionalExtraLine(items, parentIndex, newItem));
   };
 
   const addQuoteLevelOptionalExtra = (extra: Product) => {
