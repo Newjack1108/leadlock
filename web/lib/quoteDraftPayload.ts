@@ -5,6 +5,7 @@ import type {
   QuoteItemCreate,
   QuoteTemperature,
 } from '@/lib/types';
+import { isValidQuoteLine } from '@/lib/quoteInstallHours';
 
 /** Map API quote lines to create/edit form lines (same as edit page). */
 export function quoteItemsToFormItems(items: QuoteItem[]): QuoteItemCreate[] {
@@ -79,11 +80,7 @@ export type QuoteDraftPayload = {
 };
 
 function isValidLine(item: QuoteItemCreate): boolean {
-  return (
-    item.description.trim().length > 0 &&
-    (item.quantity ?? 0) > 0 &&
-    (item.unit_price ?? 0) >= 0
-  );
+  return isValidQuoteLine(item);
 }
 
 export interface BuildDraftPayloadInput {

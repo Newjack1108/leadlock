@@ -528,7 +528,7 @@ async def create_dealer_quote(
     quote.discount_total = item_discount_total + sum(
         d.discount_amount for d in quote.discounts if d.quote_item_id is None
     )
-    quote.total_amount = max(Decimal("0"), quote.subtotal - quote.discount_total)
+    quote.total_amount = quote.subtotal - quote.discount_total
     total_inc_vat = quote.total_amount * (Decimal("1") + VAT_RATE_DECIMAL)
     commission_pct = Decimal(str(current_user.dealer_commission_pct or 10))
     quote.deposit_amount = (total_inc_vat * commission_pct / Decimal(100)).quantize(Decimal("0.01"))

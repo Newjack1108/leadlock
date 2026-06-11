@@ -1609,6 +1609,17 @@ class QuoteItemCreate(BaseModel):
             raise ValueError("installation_hours must be >= 0")
         return v
 
+    @model_validator(mode="after")
+    def validate_negative_unit_price_scope(self) -> "QuoteItemCreate":
+        if self.unit_price >= 0:
+            return self
+        is_custom_line = self.is_custom or self.product_id is None
+        if not is_custom_line:
+            raise ValueError("unit_price must be >= 0 for catalog product lines")
+        if self.line_type in (QuoteItemLineType.DELIVERY, QuoteItemLineType.INSTALLATION):
+            raise ValueError("unit_price must be >= 0 for delivery and installation lines")
+        return self
+
 
 class QuoteItemResponse(BaseModel):
     id: int

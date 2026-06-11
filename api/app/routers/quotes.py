@@ -723,9 +723,6 @@ def apply_discount_to_quote(
                 # Update item discount (additive with other discounts)
                 item.discount_amount += discount_amount
                 item.final_line_total = item.line_total - item.discount_amount
-                # Ensure final_line_total doesn't go negative
-                if item.final_line_total < 0:
-                    item.final_line_total = Decimal(0)
                 total_discount += discount_amount
                 
                 # Create QuoteDiscount record for this item
@@ -798,8 +795,6 @@ def apply_custom_discount_to_quote(
 
                 item.discount_amount += discount_amount
                 item.final_line_total = item.line_total - item.discount_amount
-                if item.final_line_total < 0:
-                    item.final_line_total = Decimal(0)
                 total_discount += discount_amount
 
                 quote_discount = QuoteDiscount(
@@ -844,8 +839,6 @@ def apply_custom_discount_to_quote(
     quote_level_discount_total = sum(d.discount_amount for d in quote_level_discounts)
     quote.discount_total = item_discount_total + quote_level_discount_total
     quote.total_amount = quote.subtotal - quote.discount_total
-    if quote.total_amount < 0:
-        quote.total_amount = Decimal(0)
     total_inc_vat = quote.total_amount * (Decimal("1") + VAT_RATE_DECIMAL)
     if quote.deposit_amount > total_inc_vat:
         quote.deposit_amount = total_inc_vat
@@ -1185,10 +1178,7 @@ async def create_quote(
         
         quote.discount_total = item_discount_total + quote_level_discount_total
         quote.total_amount = quote.subtotal - quote.discount_total
-        # Ensure total doesn't go negative
-        if quote.total_amount < 0:
-            quote.total_amount = Decimal(0)
-        
+
         # Recalculate deposit and balance (inc VAT)
         total_inc_vat = quote.total_amount * (Decimal("1") + VAT_RATE_DECIMAL)
         if quote_data.deposit_amount is not None:
@@ -2154,8 +2144,6 @@ def _update_draft_quote_impl(
     quote_level_discount_total = sum(d.discount_amount for d in quote_level_discounts)
     quote.discount_total = item_discount_total + quote_level_discount_total
     quote.total_amount = quote.subtotal - quote.discount_total
-    if quote.total_amount < 0:
-        quote.total_amount = Decimal(0)
     total_inc_vat = quote.total_amount * (Decimal("1") + VAT_RATE_DECIMAL)
     # Recalculate deposit and balance (inc VAT) — same as create_quote: after final totals
     if quote_data.deposit_amount is not None:
@@ -2793,9 +2781,7 @@ async def apply_discount_to_quote_endpoint(
     
     quote.discount_total = item_discount_total + quote_level_discount_total
     quote.total_amount = quote.subtotal - quote.discount_total
-    if quote.total_amount < 0:
-        quote.total_amount = Decimal(0)
-    
+
     # Recalculate deposit and balance (inc VAT)
     total_inc_vat = quote.total_amount * (Decimal("1") + VAT_RATE_DECIMAL)
     if quote.deposit_amount > total_inc_vat:

@@ -52,9 +52,16 @@ import {
 } from '@/lib/quoteFormOptionalExtra';
 import { prefetchProductDetailsForQuoteItems } from '@/lib/prefetchQuoteProductDetails';
 import {
+  allowsNegativeUnitPrice,
   calculateTotalQuoteInstallationHours,
+  DELIVERY_INSTALL_LEGACY_DESCRIPTION,
+  DELIVERY_ONLY_DESCRIPTION,
   isCustomQuoteLine,
+  isDeliveryOrInstallItem,
+  isValidQuoteLine,
   lineInstallationHoursPerUnit,
+  parseQuoteLineUnitPrice,
+  quoteLineTotal,
 } from '@/lib/quoteInstallHours';
 import { calculateTotalQuoteDeliveryBoxes } from '@/lib/quoteDeliveryBoxes';
 import { useDraftAutosave } from '@/hooks/useDraftAutosave';
@@ -72,20 +79,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-
-const DELIVERY_LINE_DESCRIPTION = 'Delivery';
-const INSTALLATION_LINE_DESCRIPTION = 'Installation';
-const DELIVERY_INSTALL_LEGACY_DESCRIPTION = 'Delivery & Installation';
-const DELIVERY_ONLY_DESCRIPTION = 'Delivery only';
-
-function isDeliveryOrInstallItem(item: QuoteItemCreate | QuoteItem): boolean {
-  return (
-    item.line_type === 'DELIVERY' ||
-    item.line_type === 'INSTALLATION' ||
-    (item.description === DELIVERY_INSTALL_LEGACY_DESCRIPTION && !!item.is_custom) ||
-    (item.description === DELIVERY_ONLY_DESCRIPTION && !!item.is_custom)
-  );
-}
 
 function hasDeliveryInstallLine(items: QuoteItemCreate[]): boolean {
   return items.some(isDeliveryOrInstallItem);
@@ -512,11 +505,7 @@ function EditQuoteContent() {
   };
 
   const calculateSubtotal = () => {
-    return items.reduce(
-      (sum, item) =>
-        sum + (Number(item.quantity) || 0) * (Math.max(0, Number(item.unit_price)) || 0),
-      0
-    );
+    return items.reduce((sum, item) => sum + quoteLineTotal(item), 0);
   };
 
   const calculateTotalIncVat = () => calculateSubtotal() * 1.2;
@@ -681,9 +670,7 @@ function EditQuoteContent() {
     e?.preventDefault();
     if (!quoteId || !quote) return;
 
-    const validItems = items.filter(
-      (item) => item.description.trim() && (item.quantity ?? 0) > 0 && (item.unit_price ?? 0) >= 0
-    );
+    const validItems = items.filter(isValidQuoteLine);
     if (validItems.length === 0) {
       toast.error('Please add at least one valid quote item');
       return;
@@ -936,13 +923,22 @@ function EditQuoteContent() {
                         <Input
                           type="number"
                           step="0.01"
-                          min="0"
+                          {...(!allowsNegativeUnitPrice(item) ? { min: '0' } : {})}
                           value={item.unit_price}
                           onChange={(e) =>
-                            updateItem(index, 'unit_price', Math.round((parseFloat(e.target.value) || 0) * 100) / 100)
+                            updateItem(
+                              index,
+                              'unit_price',
+                              parseQuoteLineUnitPrice(item, e.target.value)
+                            )
                           }
                           required
                         />
+                        {allowsNegativeUnitPrice(item) && (
+                          <p className="text-xs text-muted-foreground">
+                            Enter a negative amount for a credit (e.g. -100)
+                          </p>
+                        )}
                       </div>
                       {isCustomQuoteLine(item) && !isDeliveryOrInstallItem(item) && (
                         <div className="space-y-2 md:col-span-2">
@@ -966,11 +962,7 @@ function EditQuoteContent() {
                       )}
                     </div>
                     <div className="text-sm text-muted-foreground">
-                      Line Total: £
-                      {(
-                        (Number(item.quantity) || 0) *
-                        (Math.max(0, Number(item.unit_price)) || 0)
-                      ).toFixed(2)}
+                      Line Total: £{quoteLineTotal(item).toFixed(2)}
                     </div>
                     {isCustomQuoteLine(item) &&
                       !isDeliveryOrInstallItem(item) &&

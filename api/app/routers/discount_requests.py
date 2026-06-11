@@ -278,8 +278,6 @@ async def delete_discount_request(
             )
             item.discount_amount = sum(d.discount_amount for d in item_rows)
             item.final_line_total = item.line_total - item.discount_amount
-            if item.final_line_total < 0:
-                item.final_line_total = Decimal(0)
             session.add(item)
 
         item_discount_total = sum(item.discount_amount for item in quote_items)
@@ -294,8 +292,6 @@ async def delete_discount_request(
         quote_level_discount_total = sum(d.discount_amount for d in quote_level_rows)
         quote.discount_total = item_discount_total + quote_level_discount_total
         quote.total_amount = quote.subtotal - quote.discount_total
-        if quote.total_amount < 0:
-            quote.total_amount = Decimal(0)
         total_inc_vat = quote.total_amount * (Decimal("1") + VAT_RATE_DECIMAL)
         if quote.deposit_amount > total_inc_vat:
             quote.deposit_amount = total_inc_vat

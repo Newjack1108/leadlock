@@ -22,6 +22,12 @@ import {
   rootBuildingProductNumberAtIndex,
 } from '@/lib/quoteFormOptionalExtra';
 import { filterQuoteCatalogProducts } from '@/lib/quoteCatalogProducts';
+import {
+  allowsNegativeUnitPrice,
+  isValidQuoteLine,
+  parseQuoteLineUnitPrice,
+  quoteLineTotal,
+} from '@/lib/quoteInstallHours';
 import { Customer, Product, QuoteFulfillmentMethod, QuoteItemCreate } from '@/lib/types';
 import { toast } from 'sonner';
 import { Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
@@ -224,11 +230,7 @@ export default function CreateQuoteDialog({
   };
 
   const calculateSubtotal = () => {
-    return items.reduce(
-      (sum, item) =>
-        sum + (Number(item.quantity) || 0) * (Math.max(0, Number(item.unit_price)) || 0),
-      0
-    );
+    return items.reduce((sum, item) => sum + quoteLineTotal(item), 0);
   };
 
   const calculateTotal = () => {
@@ -258,9 +260,7 @@ export default function CreateQuoteDialog({
     e.preventDefault();
 
     // Validate items
-    const validItems = items.filter(
-      (item) => item.description.trim() && item.quantity > 0 && item.unit_price >= 0
-    );
+    const validItems = items.filter(isValidQuoteLine);
 
     if (validItems.length === 0) {
       toast.error('Please add at least one valid quote item');
@@ -271,7 +271,7 @@ export default function CreateQuoteDialog({
       .map((_, i) => i)
       .filter((i) => {
         const it = items[i];
-        return it.description.trim() && (it.quantity ?? 0) > 0 && (it.unit_price ?? 0) >= 0;
+        return isValidQuoteLine(it);
       });
 
     setLoading(true);
@@ -493,19 +493,26 @@ export default function CreateQuoteDialog({
                       <Input
                         type="number"
                         step="0.01"
-                        min="0"
+                        {...(!allowsNegativeUnitPrice(item) ? { min: '0' } : {})}
                         value={item.unit_price}
-                        onChange={(e) => updateItem(index, 'unit_price', Math.round((parseFloat(e.target.value) || 0) * 100) / 100)}
+                        onChange={(e) =>
+                          updateItem(
+                            index,
+                            'unit_price',
+                            parseQuoteLineUnitPrice(item, e.target.value)
+                          )
+                        }
                         required
                       />
+                      {allowsNegativeUnitPrice(item) && (
+                        <p className="text-xs text-muted-foreground">
+                          Enter a negative amount for a credit (e.g. -100)
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="text-sm text-muted-foreground">
-                    Line Total: £
-                    {(
-                      (Number(item.quantity) || 0) *
-                      (Math.max(0, Number(item.unit_price)) || 0)
-                    ).toFixed(2)}
+                    Line Total: £{quoteLineTotal(item).toFixed(2)}
                   </div>
                   {item.parent_index == null &&
                     !isRootQuoteLevelOptionalExtraLine(item, optionalExtraIds, productDetails) && (
