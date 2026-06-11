@@ -4,7 +4,37 @@ from datetime import datetime
 from sqlmodel import Session, or_, select
 
 from app.constants import TEST_CUSTOMER_EMAIL, TEST_CUSTOMER_NAME, TEST_CUSTOMER_NUMBER
-from app.models import Customer
+from app.models import Customer, Lead, Quote
+
+
+def _backfill_sandbox_test_records(session: Session, customer: Customer) -> None:
+    """Link orphan leads/quotes so sandbox activity is consistently excluded from stats."""
+    identity_match = or_(Lead.email == TEST_CUSTOMER_EMAIL)
+    if customer.phone:
+        identity_match = or_(Lead.email == TEST_CUSTOMER_EMAIL, Lead.phone == customer.phone)
+
+    orphan_leads = session.exec(
+        select(Lead).where(Lead.customer_id.is_(None), identity_match)
+    ).all()
+    for lead in orphan_leads:
+        lead.customer_id = customer.id
+        lead.updated_at = datetime.utcnow()
+        session.add(lead)
+
+    sandbox_lead_ids = select(Lead.id).where(Lead.customer_id == customer.id)
+    orphan_quotes = session.exec(
+        select(Quote).where(
+            Quote.lead_id.in_(sandbox_lead_ids),
+            or_(Quote.customer_id.is_(None), Quote.customer_id != customer.id),
+        )
+    ).all()
+    for quote in orphan_quotes:
+        quote.customer_id = customer.id
+        quote.updated_at = datetime.utcnow()
+        session.add(quote)
+
+    if orphan_leads or orphan_quotes:
+        session.commit()
 
 
 def ensure_test_customer(session: Session) -> Customer:
@@ -41,5 +71,7 @@ def ensure_test_customer(session: Session) -> Customer:
         session.add(customer)
 
     session.commit()
+    session.refresh(customer)
+    _backfill_sandbox_test_records(session, customer)
     session.refresh(customer)
     return customer

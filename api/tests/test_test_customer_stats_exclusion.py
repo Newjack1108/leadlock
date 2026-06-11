@@ -26,6 +26,7 @@ from app.models import (
 )
 from app.reminder_service import detect_stale_leads
 from app.routers.dashboard import get_dashboard_stats
+from app.routers.reports import get_weekly_summary_report
 from app.test_customer_service import ensure_test_customer
 
 
@@ -276,3 +277,174 @@ def test_try_customer_outreach_for_new_lead_skips_test_customer(monkeypatch):
 
     assert sent == 0
     assert calls["n"] == 0
+
+
+def _dashboard_stats(session: Session):
+    return asyncio.run(
+        get_dashboard_stats(
+            session=session,
+            current_user=object(),
+            period=None,
+            start_date=None,
+            end_date=None,
+        )
+    )
+
+
+def test_dashboard_excludes_orphan_lead_linked_via_sandbox_quote():
+    engine = _engine()
+    with Session(engine) as session:
+        user = User(
+            email=f"u-{uuid.uuid4().hex}@example.com",
+            hashed_password="x",
+            full_name="Stats User",
+            role=UserRole.DIRECTOR,
+        )
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+
+        test_customer = ensure_test_customer(session)
+        session.add(
+            Lead(
+                name="Orphan test lead",
+                status=LeadStatus.NEW,
+                customer_id=None,
+                lead_type=LeadType.UNKNOWN,
+                lead_source=LeadSource.MANUAL_ENTRY,
+            )
+        )
+        session.add(
+            Lead(
+                name="Real orphan lead",
+                status=LeadStatus.NEW,
+                customer_id=None,
+                email="real-inbound@example.com",
+                lead_type=LeadType.UNKNOWN,
+                lead_source=LeadSource.MANUAL_ENTRY,
+            )
+        )
+        session.commit()
+
+        orphan_test = session.exec(select(Lead).where(Lead.name == "Orphan test lead")).first()
+        assert orphan_test is not None
+        session.add(
+            Quote(
+                customer_id=test_customer.id,
+                lead_id=orphan_test.id,
+                quote_number="Q-ORPHAN-TEST-001",
+                status=QuoteStatus.SENT,
+                sent_at=datetime.utcnow(),
+                subtotal=Decimal("500"),
+                total_amount=Decimal("500"),
+                created_by_id=user.id,
+                version=1,
+            )
+        )
+        session.commit()
+
+        stats = _dashboard_stats(session)
+
+    assert stats.total_leads == 1
+    assert stats.new_count == 1
+
+
+def test_dashboard_excludes_unlinked_lead_with_test_customer_email():
+    engine = _engine()
+    with Session(engine) as session:
+        ensure_test_customer(session)
+        session.add(
+            Lead(
+                name="Unlinked sandbox email lead",
+                status=LeadStatus.NEW,
+                customer_id=None,
+                email=TEST_CUSTOMER_EMAIL,
+                lead_type=LeadType.UNKNOWN,
+                lead_source=LeadSource.MANUAL_ENTRY,
+            )
+        )
+        session.add(
+            Lead(
+                name="Real inbound lead",
+                status=LeadStatus.NEW,
+                customer_id=None,
+                email="inbound@example.com",
+                lead_type=LeadType.UNKNOWN,
+                lead_source=LeadSource.MANUAL_ENTRY,
+            )
+        )
+        session.commit()
+
+        stats = _dashboard_stats(session)
+
+    assert stats.total_leads == 1
+    assert stats.new_count == 1
+
+
+def test_weekly_summary_matches_dashboard_inbound_exclusion():
+    engine = _engine()
+    with Session(engine) as session:
+        user = User(
+            email=f"u-{uuid.uuid4().hex}@example.com",
+            hashed_password="x",
+            full_name="Stats User",
+            role=UserRole.DIRECTOR,
+        )
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+
+        test_customer = ensure_test_customer(session)
+        session.add(
+            Lead(
+                name="Sandbox linked",
+                status=LeadStatus.NEW,
+                customer_id=test_customer.id,
+                lead_type=LeadType.UNKNOWN,
+                lead_source=LeadSource.MANUAL_ENTRY,
+            )
+        )
+        session.add(
+            Lead(
+                name="Real lead",
+                status=LeadStatus.NEW,
+                customer_id=None,
+                email="counts@example.com",
+                lead_type=LeadType.UNKNOWN,
+                lead_source=LeadSource.MANUAL_ENTRY,
+            )
+        )
+        session.commit()
+
+        stats = _dashboard_stats(session)
+        weekly = asyncio.run(
+            get_weekly_summary_report(session=session, current_user=object())
+        )
+
+    assert stats.total_leads == 1
+    assert weekly.new_count == stats.total_leads
+
+
+def test_ensure_test_customer_backfills_orphan_lead_by_email():
+    engine = _engine()
+    with Session(engine) as session:
+        session.add(
+            Lead(
+                name="Should link to sandbox",
+                status=LeadStatus.NEW,
+                customer_id=None,
+                email=TEST_CUSTOMER_EMAIL,
+                lead_type=LeadType.UNKNOWN,
+                lead_source=LeadSource.MANUAL_ENTRY,
+            )
+        )
+        session.commit()
+
+        customer = ensure_test_customer(session)
+        lead = session.exec(
+            select(Lead).where(Lead.email == TEST_CUSTOMER_EMAIL)
+        ).first()
+
+    assert lead is not None
+    assert lead.customer_id == customer.id
+    assert customer.exclude_from_stats is True
