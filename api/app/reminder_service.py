@@ -15,6 +15,7 @@ from app.stale_reference_service import (
     resolve_stale_reference_for_quote,
     resolve_stale_reference_for_opportunity,
 )
+from app.stats_exclusion import is_stats_excluded_customer_id
 
 
 def get_reminder_cleanup_target(
@@ -211,6 +212,9 @@ def detect_stale_leads(session: Session) -> List[Tuple[Lead, ReminderRule, int]]
         leads = session.exec(lead_statement).all()
         
         for lead in leads:
+            if is_stats_excluded_customer_id(session, lead.customer_id):
+                continue
+
             days_stale = 0
             minutes_stale = 0
 
@@ -272,6 +276,8 @@ def detect_stale_quotes(session: Session) -> List[Tuple[Quote, ReminderRule, int
         
         for quote in quotes:
             if quote_excluded_from_stale_reminders(quote):
+                continue
+            if is_stats_excluded_customer_id(session, quote.customer_id):
                 continue
             days_stale = 0
             
@@ -346,6 +352,9 @@ def detect_stale_opportunities(session: Session) -> List[Tuple[Quote, str, int]]
     opportunities = session.exec(statement).all()
     
     for opp in opportunities:
+        if is_stats_excluded_customer_id(session, opp.customer_id):
+            continue
+
         # Check 1: Overdue next action
         if opp.next_action_due_date and opp.next_action_due_date < now:
             days_overdue = calculate_days_stale(opp.next_action_due_date)

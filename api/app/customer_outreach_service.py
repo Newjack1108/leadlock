@@ -618,7 +618,11 @@ def try_customer_outreach_for_new_lead(session: Session, lead: Lead) -> int:
     Run outreach rules configured with customer_outreach_on_lead_create for this lead's status.
     Called after persisting a new lead (webhook, UI create, Facebook Lead Ads, etc.).
     """
+    from app.stats_exclusion import is_stats_excluded_customer_id
+
     if not lead.id:
+        return 0
+    if is_stats_excluded_customer_id(session, lead.customer_id):
         return 0
     company = session.exec(select(CompanySettings).limit(1)).first()
 

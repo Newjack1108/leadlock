@@ -1425,6 +1425,34 @@ def create_db_and_tables():
                             file=sys.stderr,
                             flush=True,
                         )
+            customer_columns = [col["name"] for col in inspector.get_columns("customer")]
+            if "exclude_from_stats" not in customer_columns:
+                print(
+                    "Adding exclude_from_stats column to customer table...",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(
+                            text(
+                                "ALTER TABLE customer ADD COLUMN exclude_from_stats "
+                                "BOOLEAN DEFAULT FALSE NOT NULL"
+                            )
+                        )
+                    print(
+                        "Added exclude_from_stats column to customer table",
+                        file=sys.stderr,
+                        flush=True,
+                    )
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(
+                            f"Error adding exclude_from_stats to customer: {e}",
+                            file=sys.stderr,
+                            flush=True,
+                        )
         if has_lead_table:
             lead_columns = [col['name'] for col in inspector.get_columns("lead")]
             if "messenger_psid" not in lead_columns:
@@ -3302,6 +3330,14 @@ def create_db_and_tables():
             get_or_create_system_user(session)
     except Exception as e:
         print(f"System user ensure skipped: {e}", file=sys.stderr, flush=True)
+
+    try:
+        with Session(engine) as session:
+            from app.test_customer_service import ensure_test_customer
+
+            ensure_test_customer(session)
+    except Exception as e:
+        print(f"Test customer ensure skipped: {e}", file=sys.stderr, flush=True)
 
     try:
         with Session(engine) as session:

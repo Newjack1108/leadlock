@@ -170,6 +170,8 @@ class Customer(SQLModel, table=True):
     automated_reminder_outreach_opt_out: bool = Field(default=False)
     # Marked when staff know email address is invalid and automated email outreach should be suppressed.
     wrong_email_address: bool = Field(default=False)
+    # Sandbox customer: excluded from dashboard/reports stats and automated reminder/outreach.
+    exclude_from_stats: bool = Field(default=False)
     # After a [BOT_HANDOVER] outbound, suppress auto-replies to inbound received before this UTC time (Twilio retries / clock skew).
     sms_bot_suppress_auto_reply_before_utc: Optional[datetime] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)

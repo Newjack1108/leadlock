@@ -80,6 +80,7 @@ import ComposeEmailDialog from '@/components/ComposeEmailDialog';
 import CallNotesDialog from '@/components/CallNotesDialog';
 import AddManualActivityDialog from '@/components/AddManualActivityDialog';
 import NinoxBadge from '@/components/NinoxBadge';
+import TestCustomerBadge from '@/components/TestCustomerBadge';
 import CustomerCommunicationBarChart from '@/components/CustomerCommunicationBarChart';
 import FilesCard from '@/components/FilesCard';
 import { toast } from 'sonner';
@@ -550,6 +551,7 @@ export default function CustomerDetailPage() {
                 <Pencil className="h-4 w-4" />
               </Button>
             )}
+            {customer.exclude_from_stats && <TestCustomerBadge />}
             {customer.source_system === 'Ninox' && (
               <NinoxBadge />
             )}
@@ -566,6 +568,16 @@ export default function CustomerDetailPage() {
             </Button>
           </div>
         </div>
+
+        {customer.exclude_from_stats && (
+          <div className="mb-4 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+            <Info className="h-4 w-4 shrink-0 mt-0.5" />
+            <p>
+              This is the sandbox customer. Use it to run leads, quotes, and messages without affecting
+              dashboard stats or automated reminder outreach. Manual sends still work.
+            </p>
+          </div>
+        )}
 
         <div className="space-y-6">
             {/* Customer Profile + Contact Methods */}

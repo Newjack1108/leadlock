@@ -14,6 +14,7 @@ import { Search, ChevronRight, X } from 'lucide-react';
 import CallNotesDialog from '@/components/CallNotesDialog';
 import NinoxBadge from '@/components/NinoxBadge';
 import { parsePageFromSearchParams, saveCustomersListReturnUrl } from '@/lib/customersList';
+import TestCustomerBadge from '@/components/TestCustomerBadge';
 
 const CUSTOMERS_PAGE_SIZE = 50;
 
@@ -309,6 +310,9 @@ function CustomersPageContent() {
                       <td className="p-3 font-semibold">
                         <span className="inline-flex items-center gap-1.5">
                           {customer.name}
+                          {customer.exclude_from_stats && (
+                            <TestCustomerBadge className="h-auto px-1.5 py-0.5 text-xs" />
+                          )}
                           {customer.source_system === 'Ninox' && (
                             <NinoxBadge className="h-auto px-1.5 py-0.5 text-xs" />
                           )}

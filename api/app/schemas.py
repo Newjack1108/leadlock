@@ -363,6 +363,7 @@ class CustomerResponse(BaseModel):
     sms_bot_stopped: bool = False
     automated_reminder_outreach_opt_out: bool = False
     wrong_email_address: bool = False
+    exclude_from_stats: bool = False
     created_at: datetime
     updated_at: datetime
     messenger_psid: Optional[str] = None
@@ -389,6 +390,7 @@ def customer_to_response(customer: Customer) -> CustomerResponse:
             getattr(customer, "automated_reminder_outreach_opt_out", False)
         ),
         wrong_email_address=bool(getattr(customer, "wrong_email_address", False)),
+        exclude_from_stats=bool(getattr(customer, "exclude_from_stats", False)),
         created_at=customer.created_at,
         updated_at=customer.updated_at,
         messenger_psid=customer.messenger_psid,

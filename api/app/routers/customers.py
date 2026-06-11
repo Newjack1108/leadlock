@@ -64,6 +64,18 @@ from datetime import datetime
 router = APIRouter(prefix="/api/customers", tags=["customers"])
 
 
+@router.get("/test", response_model=CustomerResponse)
+async def get_test_customer(
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Return the canonical sandbox customer (excluded from stats and automation)."""
+    from app.test_customer_service import ensure_test_customer
+
+    customer = ensure_test_customer(session)
+    return customer_to_response(customer)
+
+
 def _customer_has_unread_exists(user_role: Optional[UserRole] = None):
     """Customer has at least one unread received SMS, Messenger, or email."""
     has_unread = or_(

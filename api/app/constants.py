@@ -48,3 +48,8 @@ QUOTE_BALANCE_BEFORE_COLLECTION_NOTE = (
 
 # Delivery-only: max physical boxes per trailer run
 DELIVERY_ONLY_BOXES_PER_TRIP = 3
+
+# Canonical sandbox customer (seeded on startup; excluded from stats and automation)
+TEST_CUSTOMER_NAME = "LeadLock Test Customer"
+TEST_CUSTOMER_EMAIL = "test-customer@leadlock.internal"
+TEST_CUSTOMER_NUMBER = "CUST-2026-671"
