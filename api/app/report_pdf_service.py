@@ -945,12 +945,11 @@ def generate_weekly_summary_pdf(
     flowables.append(t)
 
     # Summary
-    total_activity = new_count + quoted_count + won_count + lost_count + closed_count
-    if total_activity > 0:
+    if new_count > 0 or won_count > 0 or lost_count > 0:
         flowables.append(Spacer(1, 15))
         win_rate = (won_count / (won_count + lost_count) * 100) if (won_count + lost_count) > 0 else 0
         summary_data = [[
-            f"Total Activity: {total_activity}",
+            f"Leads Received: {new_count}",
             f"Win Rate: {win_rate:.1f}%"
         ]]
         summary_table = Table(summary_data, colWidths=[140, 140])

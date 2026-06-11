@@ -730,7 +730,7 @@ export default function DashboardPage() {
                   <span className="font-medium">Weekly Summary</span>
                 </div>
                 <p className="text-xs text-muted-foreground mb-3">
-                  New, quoted, won, lost this week
+                  Leads received, quoted, won, lost this week
                 </p>
                 <Button
                   variant="outline"

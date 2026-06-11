@@ -9,6 +9,7 @@ from fastapi.responses import Response
 from sqlmodel import Session, select, func
 from app.database import get_session
 from app.auth import get_current_user
+from app.db_utils import scalar_int
 from app.date_ranges import ResolvedDateRange, get_date_range_for_period, resolve_date_range
 from app.models import (
     Lead, LeadStatus, LeadSource, LeadType,
@@ -761,29 +762,37 @@ async def get_weekly_summary_report(
     session: Session = Depends(get_session),
     current_user=Depends(get_current_user),
 ):
-    """New leads, quoted, won, lost for the current week."""
+    """Inbound leads and status breakdown for the current week."""
     start, end = get_date_range_for_period("week")
     date_filter = (Lead.created_at >= start) & (Lead.created_at <= end)
 
-    new_count = session.exec(
-        select(func.count(Lead.id)).where(date_filter, Lead.status == LeadStatus.NEW)
-    ).one()
+    new_count = scalar_int(
+        session.exec(select(func.count(Lead.id)).where(date_filter)).one()
+    )
 
-    quoted_count = session.exec(
-        select(func.count(Lead.id)).where(date_filter, Lead.status == LeadStatus.QUOTED)
-    ).one()
+    quoted_count = scalar_int(
+        session.exec(
+            select(func.count(Lead.id)).where(date_filter, Lead.status == LeadStatus.QUOTED)
+        ).one()
+    )
 
-    won_count = session.exec(
-        select(func.count(Lead.id)).where(date_filter, Lead.status == LeadStatus.WON)
-    ).one()
+    won_count = scalar_int(
+        session.exec(
+            select(func.count(Lead.id)).where(date_filter, Lead.status == LeadStatus.WON)
+        ).one()
+    )
 
-    lost_count = session.exec(
-        select(func.count(Lead.id)).where(date_filter, Lead.status == LeadStatus.LOST)
-    ).one()
+    lost_count = scalar_int(
+        session.exec(
+            select(func.count(Lead.id)).where(date_filter, Lead.status == LeadStatus.LOST)
+        ).one()
+    )
 
-    closed_count = session.exec(
-        select(func.count(Lead.id)).where(date_filter, Lead.status == LeadStatus.CLOSED)
-    ).one()
+    closed_count = scalar_int(
+        session.exec(
+            select(func.count(Lead.id)).where(date_filter, Lead.status == LeadStatus.CLOSED)
+        ).one()
+    )
 
     start_of_week = start - timedelta(days=start.weekday()) if hasattr(start, "weekday") else start
     week_label = f"{start.strftime('%d %b')} - {end.strftime('%d %b %Y')}"
