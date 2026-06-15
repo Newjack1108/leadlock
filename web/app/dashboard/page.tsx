@@ -152,8 +152,8 @@ export default function DashboardPage() {
   const [activeDiscounts, setActiveDiscounts] = useState<DiscountTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [dateFilter, setDateFilter] = useState<DashboardDateFilter>({ mode: 'preset', period: 'all' });
-  const [lastPresetPeriod, setLastPresetPeriod] = useState<DashboardPresetPeriod>('all');
+  const [dateFilter, setDateFilter] = useState<DashboardDateFilter>({ mode: 'preset', period: 'week' });
+  const [lastPresetPeriod, setLastPresetPeriod] = useState<DashboardPresetPeriod>('week');
   const [showCustomEditor, setShowCustomEditor] = useState(false);
   const [customStartDate, setCustomStartDate] = useState(getDaysAgoDateInputValue(6));
   const [customEndDate, setCustomEndDate] = useState(getTodayDateInputValue());
