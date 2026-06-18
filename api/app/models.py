@@ -383,6 +383,35 @@ class ScheduledSms(SQLModel, table=True):
     created_by: "User" = Relationship()
 
 
+class ScheduledEmailStatus(str, Enum):
+    PENDING = "PENDING"
+    SENT = "SENT"
+    CANCELLED = "CANCELLED"
+    FAILED = "FAILED"
+
+
+class ScheduledEmail(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    customer_id: int = Field(foreign_key="customer.id")
+    to_email: str
+    cc: Optional[str] = None
+    bcc: Optional[str] = None
+    subject: str
+    body_html: Optional[str] = None
+    body_text: Optional[str] = None
+    attachments: Optional[str] = None  # JSON array of stored attachment metadata
+    scheduled_at: datetime
+    status: ScheduledEmailStatus = Field(default=ScheduledEmailStatus.PENDING)
+    created_by_id: int = Field(foreign_key="user.id")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    sent_at: Optional[datetime] = None
+    message_id: Optional[str] = None
+    failure_reason: Optional[str] = None
+
+    # Relationships
+    created_by: "User" = Relationship()
+
+
 class StatusHistory(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     lead_id: int = Field(foreign_key="lead.id")

@@ -11,7 +11,7 @@ from app.models import (
     QuoteStatus, QuoteTemperature, DiscountType, DiscountScope, DiscountRequestStatus,
     LeadType, LeadSource, EmailDirection, ReminderPriority, ReminderType,
     SuggestedAction, OpportunityStage, LossCategory, InstallationLeadTime,
-    SmsDirection, ScheduledSmsStatus, MessengerDirection, QuoteItemLineType, QuoteFulfillmentMethod,
+    SmsDirection, ScheduledSmsStatus, ScheduledEmailStatus, MessengerDirection, QuoteItemLineType, QuoteFulfillmentMethod,
     SmsBotMode, DealerDiscountMode,
     CustomerFileKind, WeeklyPlanItemStatus, WeeklyPlanScope,
 )
@@ -528,6 +528,41 @@ class SmsScheduledResponse(BaseModel):
 class SmsScheduledUpdate(BaseModel):
     scheduled_at: Optional[datetime] = None
     status: Optional[ScheduledSmsStatus] = None
+
+
+class EmailScheduledCreate(BaseModel):
+    customer_id: int
+    to_email: str
+    cc: Optional[str] = None
+    bcc: Optional[str] = None
+    subject: str
+    body_html: Optional[str] = None
+    body_text: Optional[str] = None
+    scheduled_at: datetime
+
+
+class EmailScheduledResponse(BaseModel):
+    id: int
+    customer_id: int
+    to_email: str
+    cc: Optional[str] = None
+    bcc: Optional[str] = None
+    subject: str
+    body_html: Optional[str] = None
+    body_text: Optional[str] = None
+    attachments: Optional[str] = None
+    scheduled_at: datetime
+    status: ScheduledEmailStatus
+    created_by_id: int
+    created_at: datetime
+    sent_at: Optional[datetime] = None
+    message_id: Optional[str] = None
+    failure_reason: Optional[str] = None
+
+
+class EmailScheduledUpdate(BaseModel):
+    scheduled_at: Optional[datetime] = None
+    status: Optional[ScheduledEmailStatus] = None
 
 
 class MessagesMarkReadResult(BaseModel):

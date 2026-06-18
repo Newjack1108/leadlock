@@ -23,6 +23,7 @@ from app.models import (
     QuoteItem,
     QuoteStatus,
     Reminder,
+    ScheduledEmail,
     ScheduledSms,
     SmsDirection,
     SmsMessage,
@@ -58,6 +59,7 @@ from app.workflow import check_quote_prerequisites
 from app.quote_delete import delete_quote_cascade
 from app.order_delete import delete_order_cascade
 from app.customer_file_service import delete_customer_file_from_cloudinary
+from app.scheduled_email_service import delete_stored_attachments
 from app.models import CustomerFile
 from datetime import datetime
 
@@ -444,6 +446,11 @@ async def delete_customer(
 
     for ss in session.exec(select(ScheduledSms).where(ScheduledSms.customer_id == customer_id)).all():
         session.delete(ss)
+    session.flush()
+
+    for se in session.exec(select(ScheduledEmail).where(ScheduledEmail.customer_id == customer_id)).all():
+        delete_stored_attachments(se.attachments)
+        session.delete(se)
     session.flush()
 
     order_conditions = [Order.customer_id == customer_id]

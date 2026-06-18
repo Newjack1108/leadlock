@@ -46,6 +46,7 @@ Typical setup:
 
 - **IMAP polling** (if IMAP is configured): thread polls on `IMAP_POLL_INTERVAL` (default 300 seconds). Misconfigured IMAP shows errors in logs but should not crash the app.
 - **Scheduled SMS worker**: sends due `ScheduledSms` rows on `SMS_SCHEDULER_INTERVAL` (default 45 seconds). Requires Twilio env vars for actual sends.
+- **Scheduled email worker**: sends due `ScheduledEmail` rows on `EMAIL_SCHEDULER_INTERVAL` (defaults to `SMS_SCHEDULER_INTERVAL`, 45 seconds). Requires a configured email backend (Graph, Resend, or SMTP). Attachments are stored in Cloudinary until send.
 
 ---
 

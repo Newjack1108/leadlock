@@ -3,13 +3,13 @@ Email router for sending and receiving emails.
 """
 import json
 import os
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, Query
 from sqlmodel import Session, select
 from typing import List, Optional
 from datetime import datetime
 import uuid
 from app.database import get_session
-from app.models import Email, Customer, User, EmailDirection, Activity, ActivityType, EmailTemplate
+from app.models import Email, Customer, User, EmailDirection, Activity, ActivityType, EmailTemplate, ScheduledEmail, ScheduledEmailStatus
 from app.auth import get_current_user
 from app.schemas import (
     EmailCreate,
@@ -20,6 +20,9 @@ from app.schemas import (
     MessagesMarkReadResult,
     MessageIdsMarkUnread,
     MessagesMarkUnreadResult,
+    EmailScheduledCreate,
+    EmailScheduledResponse,
+    EmailScheduledUpdate,
 )
 from app.email_service import (
     send_email,
@@ -29,6 +32,10 @@ from app.email_service import (
     build_activity_email_notes,
 )
 from app.email_template_service import render_email_template
+from app.scheduled_email_service import (
+    delete_stored_attachments,
+    upload_scheduled_email_attachments,
+)
 
 router = APIRouter(prefix="/api/emails", tags=["emails"])
 
@@ -50,6 +57,27 @@ def _sanitize_filename(filename: Optional[str]) -> str:
     if not filename or not filename.strip():
         return "attachment"
     return os.path.basename(filename.strip())
+
+
+def _scheduled_email_to_response(scheduled: ScheduledEmail) -> EmailScheduledResponse:
+    return EmailScheduledResponse(
+        id=scheduled.id,
+        customer_id=scheduled.customer_id,
+        to_email=scheduled.to_email,
+        cc=scheduled.cc,
+        bcc=scheduled.bcc,
+        subject=scheduled.subject,
+        body_html=scheduled.body_html,
+        body_text=scheduled.body_text,
+        attachments=scheduled.attachments,
+        scheduled_at=scheduled.scheduled_at,
+        status=scheduled.status,
+        created_by_id=scheduled.created_by_id,
+        created_at=scheduled.created_at,
+        sent_at=scheduled.sent_at,
+        message_id=scheduled.message_id,
+        failure_reason=scheduled.failure_reason,
+    )
 
 
 def _normalize_upload_files(files: List[UploadFile]) -> List[UploadFile]:
@@ -353,6 +381,109 @@ async def mark_emails_unread(
         session.add(em)
     session.commit()
     return MessagesMarkUnreadResult(unmarked_count=len(to_update))
+
+
+# Scheduled email (must be before /{email_id} so /scheduled is not captured as email_id)
+@router.post("/scheduled", response_model=EmailScheduledResponse)
+async def create_scheduled_email(
+    email_data: str = Form(..., description="JSON string of scheduled email payload"),
+    attachments: List[UploadFile] = File(default=[]),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Schedule an email to be sent later."""
+    try:
+        data = json.loads(email_data)
+        parsed = EmailScheduledCreate.model_validate(data)
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid email_data JSON: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    statement = select(Customer).where(Customer.id == parsed.customer_id)
+    customer = session.exec(statement).first()
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+
+    files_to_process = _normalize_upload_files(attachments)
+    attachments_json = await upload_scheduled_email_attachments(parsed.customer_id, files_to_process)
+
+    scheduled = ScheduledEmail(
+        customer_id=parsed.customer_id,
+        to_email=parsed.to_email,
+        cc=parsed.cc,
+        bcc=parsed.bcc,
+        subject=parsed.subject,
+        body_html=parsed.body_html,
+        body_text=parsed.body_text,
+        attachments=attachments_json,
+        scheduled_at=parsed.scheduled_at,
+        status=ScheduledEmailStatus.PENDING,
+        created_by_id=current_user.id,
+    )
+    session.add(scheduled)
+    session.commit()
+    session.refresh(scheduled)
+    return _scheduled_email_to_response(scheduled)
+
+
+@router.get("/scheduled", response_model=List[EmailScheduledResponse])
+async def list_scheduled_emails(
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+    customer_id: Optional[int] = Query(None),
+    status: Optional[ScheduledEmailStatus] = Query(None),
+):
+    """List scheduled emails; optionally filter by customer_id and status."""
+    statement = select(ScheduledEmail).order_by(ScheduledEmail.scheduled_at)
+    if customer_id is not None:
+        statement = statement.where(ScheduledEmail.customer_id == customer_id)
+    if status is not None:
+        statement = statement.where(ScheduledEmail.status == status)
+    items = list(session.exec(statement).all())
+    return [_scheduled_email_to_response(s) for s in items]
+
+
+@router.patch("/scheduled/{scheduled_id}", response_model=EmailScheduledResponse)
+async def update_scheduled_email(
+    scheduled_id: int,
+    data: EmailScheduledUpdate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Update a scheduled email (e.g. reschedule)."""
+    scheduled = session.get(ScheduledEmail, scheduled_id)
+    if not scheduled:
+        raise HTTPException(status_code=404, detail="Scheduled email not found")
+    if scheduled.status != ScheduledEmailStatus.PENDING:
+        raise HTTPException(status_code=400, detail="Can only update PENDING scheduled emails")
+    if data.scheduled_at is not None:
+        scheduled.scheduled_at = data.scheduled_at
+    if data.status is not None:
+        scheduled.status = data.status
+    session.add(scheduled)
+    session.commit()
+    session.refresh(scheduled)
+    return _scheduled_email_to_response(scheduled)
+
+
+@router.delete("/scheduled/{scheduled_id}")
+async def cancel_scheduled_email(
+    scheduled_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Cancel a scheduled email and remove stored attachments."""
+    scheduled = session.get(ScheduledEmail, scheduled_id)
+    if not scheduled:
+        raise HTTPException(status_code=404, detail="Scheduled email not found")
+    if scheduled.status != ScheduledEmailStatus.PENDING:
+        raise HTTPException(status_code=400, detail="Scheduled email is not PENDING")
+    delete_stored_attachments(scheduled.attachments)
+    scheduled.status = ScheduledEmailStatus.CANCELLED
+    session.add(scheduled)
+    session.commit()
+    return {"ok": True}
 
 
 @router.get("/{email_id}", response_model=EmailResponse)

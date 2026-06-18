@@ -1,4 +1,4 @@
-"""Long-running background jobs (IMAP inbound poll, scheduled SMS, customer outreach).
+"""Long-running background jobs (IMAP inbound poll, scheduled SMS/email, customer outreach).
 
 Used by ``python worker.py`` on the worker service, or embedded in the API when
 ``WORKER_MODE`` is truthy (e.g. local monolith).
@@ -25,17 +25,20 @@ from app.models import (
     Customer,
     Email,
     EmailDirection,
+    ScheduledEmail,
+    ScheduledEmailStatus,
     ScheduledSms,
     ScheduledSmsStatus,
     SmsDirection,
     SmsMessage,
 )
+from app.scheduled_email_service import process_due_scheduled_email
 from app.sms_service import is_unsubscribed_recipient_error, normalize_phone, send_sms
 from app.system_user_service import get_system_user_id
 
 
 def start_background_workers() -> None:
-    """Start IMAP polling, scheduled SMS, and customer outreach daemon threads."""
+    """Start IMAP polling, scheduled SMS/email, and customer outreach daemon threads."""
 
     def poll_imap() -> None:
         """Background task to poll inbox for new emails (Graph or IMAP)."""
@@ -254,6 +257,38 @@ def start_background_workers() -> None:
         print("Scheduled SMS worker started", file=__import__("sys").stderr, flush=True)
     except Exception as e:
         print("SMS worker not started:", str(e), file=__import__("sys").stderr, flush=True)
+
+    def poll_scheduled_emails() -> None:
+        poll_interval = int(os.getenv("EMAIL_SCHEDULER_INTERVAL", os.getenv("SMS_SCHEDULER_INTERVAL", "45")))
+        while True:
+            try:
+                time.sleep(poll_interval)
+                with Session(engine) as session:
+                    due_ids = list(
+                        session.exec(
+                            select(ScheduledEmail.id)
+                            .where(ScheduledEmail.status == ScheduledEmailStatus.PENDING)
+                            .where(ScheduledEmail.scheduled_at <= dt.utcnow())
+                        ).all()
+                    )
+
+                for scheduled_id in due_ids:
+                    with Session(engine) as session:
+                        scheduled = session.get(ScheduledEmail, scheduled_id)
+                        if not scheduled or scheduled.status != ScheduledEmailStatus.PENDING:
+                            continue
+                    with Session(engine) as session:
+                        process_due_scheduled_email(session, scheduled_id)
+            except Exception as e:
+                print(f"Error in scheduled email worker: {e}", file=__import__("sys").stderr, flush=True)
+                time.sleep(60)
+
+    try:
+        email_scheduler_thread = threading.Thread(target=poll_scheduled_emails, daemon=True)
+        email_scheduler_thread.start()
+        print("Scheduled email worker started", file=__import__("sys").stderr, flush=True)
+    except Exception as e:
+        print("Email scheduler not started:", str(e), file=__import__("sys").stderr, flush=True)
 
     def poll_customer_outreach() -> None:
         from app.customer_outreach_service import any_outreach_rules_active, run_customer_outreach_cycle

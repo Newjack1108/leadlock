@@ -15,7 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import EmailBodyEditor from '@/components/EmailBodyEditor';
-import { sendEmail, getEmailTemplates, previewEmailTemplate, previewComposeEmail, getUserEmailSettings } from '@/lib/api';
+import { sendEmail, createScheduledEmail, getEmailTemplates, previewEmailTemplate, previewComposeEmail, getUserEmailSettings } from '@/lib/api';
 import { MAX_ATTACHMENT_BYTES_PER_FILE, MAX_ATTACHMENTS_TOTAL_BYTES } from '@/lib/attachmentLimits';
 import { htmlToPlainText, isHtmlEffectivelyEmpty } from '@/lib/htmlEmail';
 import { Customer, EmailTemplate } from '@/lib/types';
@@ -31,6 +31,7 @@ interface ComposeEmailDialogProps {
   initialAttachments?: File[];
   initialSubject?: string;
   initialBody?: string;
+  mode?: 'send' | 'schedule';
 }
 
 export default function ComposeEmailDialog({
@@ -41,7 +42,9 @@ export default function ComposeEmailDialog({
   initialAttachments,
   initialSubject,
   initialBody,
+  mode = 'send',
 }: ComposeEmailDialogProps) {
+  const isScheduleMode = mode === 'schedule';
   const [loading, setLoading] = useState(false);
   const [templates, setTemplates] = useState<EmailTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | undefined>(undefined);
@@ -65,6 +68,7 @@ export default function ComposeEmailDialog({
     subject: '',
     body: '',
   });
+  const [scheduleDatetime, setScheduleDatetime] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   /** Bumps on each template selection so stale `previewEmailTemplate` responses are ignored. */
   const templatePreviewRequestIdRef = useRef(0);
@@ -95,6 +99,7 @@ export default function ComposeEmailDialog({
       });
       setAttachments(initialAttachments ?? []);
       setSelectedTemplateId(undefined);
+      setScheduleDatetime('');
       setLoading(false);
     }
   }, [open, customer, initialAttachments, initialSubject, initialBody]);
@@ -244,23 +249,43 @@ export default function ComposeEmailDialog({
       return;
     }
 
+    if (isScheduleMode && !scheduleDatetime) {
+      toast.error('Choose a date and time to send');
+      return;
+    }
+
     setLoading(true);
     try {
-      // Signature and disclaimer are appended by the backend for all outgoing emails
-      await sendEmail(
-        {
-          customer_id: customer.id,
-          to_email: formData.to_email,
-          cc: formData.cc || undefined,
-          subject: formData.subject,
-          body_html: formData.body,
-          body_text: htmlToPlainText(formData.body),
-          template_id: selectedTemplateId,
-        },
-        attachments.length > 0 ? attachments : undefined
-      );
-
-      toast.success('Email sent successfully');
+      if (isScheduleMode) {
+        await createScheduledEmail(
+          {
+            customer_id: customer.id,
+            to_email: formData.to_email,
+            cc: formData.cc || undefined,
+            subject: formData.subject,
+            body_html: formData.body,
+            body_text: htmlToPlainText(formData.body),
+            scheduled_at: new Date(scheduleDatetime).toISOString(),
+          },
+          attachments.length > 0 ? attachments : undefined
+        );
+        toast.success('Email scheduled');
+      } else {
+        // Signature and disclaimer are appended by the backend for all outgoing emails
+        await sendEmail(
+          {
+            customer_id: customer.id,
+            to_email: formData.to_email,
+            cc: formData.cc || undefined,
+            subject: formData.subject,
+            body_html: formData.body,
+            body_text: htmlToPlainText(formData.body),
+            template_id: selectedTemplateId,
+          },
+          attachments.length > 0 ? attachments : undefined
+        );
+        toast.success('Email sent successfully');
+      }
       // Reset loading before closing
       setLoading(false);
       onOpenChange(false);
@@ -276,7 +301,7 @@ export default function ComposeEmailDialog({
       }, 100);
     } catch (error: any) {
       const detail = error.response?.data?.detail;
-      let errorMessage = 'Failed to send email';
+      let errorMessage = isScheduleMode ? 'Failed to schedule email' : 'Failed to send email';
       if (typeof detail === 'string') {
         errorMessage = detail;
       } else if (Array.isArray(detail) && detail.length > 0) {
@@ -333,15 +358,18 @@ export default function ComposeEmailDialog({
     loading ||
     !formData.to_email ||
     !formData.subject.trim() ||
-    isHtmlEffectivelyEmpty(formData.body);
+    isHtmlEffectivelyEmpty(formData.body) ||
+    (isScheduleMode && !scheduleDatetime);
 
   const sendDisabledTitle = sendDisabled
     ? loading
-      ? 'Sending…'
+      ? isScheduleMode ? 'Scheduling…' : 'Sending…'
       : !formData.to_email
         ? 'Add a recipient email address'
         : !formData.subject.trim()
           ? 'Add a subject'
+          : isScheduleMode && !scheduleDatetime
+            ? 'Choose when to send'
           : 'Add a message body'
     : undefined;
 
@@ -350,9 +378,13 @@ export default function ComposeEmailDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[min(98vw,1600px)] max-w-[min(98vw,1600px)] sm:max-w-[min(98vw,1600px)] h-[92vh] max-h-[92vh] min-h-[85vh] flex flex-col p-0">
         <DialogHeader className="px-6 pt-6 pb-4 border-b">
-          <DialogTitle className="text-xl">New Message</DialogTitle>
+          <DialogTitle className="text-xl">
+            {isScheduleMode ? 'Schedule Email' : 'New Message'}
+          </DialogTitle>
           <DialogDescription>
-            Send an email to {customer.name}
+            {isScheduleMode
+              ? `Schedule an email to ${customer.name}. It will be sent automatically at the chosen time.`
+              : `Send an email to ${customer.name}`}
           </DialogDescription>
         </DialogHeader>
 
@@ -432,6 +464,22 @@ export default function ComposeEmailDialog({
                 className="col-span-11 h-8"
               />
             </div>
+
+            {isScheduleMode && (
+              <div className="grid grid-cols-12 gap-2 items-center">
+                <Label htmlFor="schedule_at" className="text-xs text-muted-foreground col-span-1">
+                  Send at:
+                </Label>
+                <Input
+                  id="schedule_at"
+                  type="datetime-local"
+                  value={scheduleDatetime}
+                  onChange={(e) => setScheduleDatetime(e.target.value)}
+                  className="col-span-11 h-8"
+                  required
+                />
+              </div>
+            )}
 
             {/* Attachments */}
             <div className="space-y-1">
@@ -598,7 +646,13 @@ export default function ComposeEmailDialog({
                   title={sendDisabledTitle}
                   disabled={sendDisabled}
                 >
-                  {loading ? 'Sending...' : 'Send'}
+                  {loading
+                    ? isScheduleMode
+                      ? 'Scheduling...'
+                      : 'Sending...'
+                    : isScheduleMode
+                      ? 'Schedule'
+                      : 'Send'}
                 </Button>
               </div>
             </div>

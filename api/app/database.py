@@ -3142,6 +3142,30 @@ def create_db_and_tables():
                     if "already exists" not in error_str and "duplicate" not in error_str:
                         print(f"Error adding failure_reason to scheduledsms: {e}", file=sys.stderr, flush=True)
 
+        # Step 13d: Scheduled email table (created by SQLModel.create_all; enum hardening on Postgres)
+        has_scheduledemail_table = inspector.has_table("scheduledemail")
+        if has_scheduledemail_table:
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text("ALTER TYPE scheduledemailstatus ADD VALUE IF NOT EXISTS 'FAILED'"))
+                print("Ensured scheduledemailstatus enum value: FAILED", file=sys.stderr, flush=True)
+            except Exception as e:
+                error_str = str(e).lower()
+                if "already exists" not in error_str and "duplicate" not in error_str:
+                    print(f"Warning: could not ensure scheduledemailstatus value FAILED: {e}", file=sys.stderr, flush=True)
+
+            scheduledemail_columns = [col["name"] for col in inspector.get_columns("scheduledemail")]
+            if "failure_reason" not in scheduledemail_columns:
+                print("Adding failure_reason column to scheduledemail table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE scheduledemail ADD COLUMN failure_reason TEXT"))
+                    print("Added failure_reason column to scheduledemail table", file=sys.stderr, flush=True)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Error adding failure_reason to scheduledemail: {e}", file=sys.stderr, flush=True)
+
         # Step 14: ReminderRule customer outreach + CustomerOutreachSend audit table
         if has_reminder_rule_table:
             outreach_alters = [

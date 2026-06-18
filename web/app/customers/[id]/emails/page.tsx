@@ -6,16 +6,17 @@ import Header from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Mail, ArrowLeft, Reply, Send } from 'lucide-react';
+import { Mail, ArrowLeft, Reply, Send, CalendarClock } from 'lucide-react';
 import {
   getCustomerEmails,
-  sendEmail,
   markCustomerEmailsRead,
   markEmailMessagesUnread,
   dispatchRefreshUnreadCounts,
+  getScheduledEmails,
+  cancelScheduledEmail,
 } from '@/lib/api';
 import { formatDateTime } from '@/lib/utils';
-import { Email, EmailDirection, Customer } from '@/lib/types';
+import { Email, EmailDirection, Customer, EmailScheduled, ScheduledEmailStatus } from '@/lib/types';
 import { toast } from 'sonner';
 import api from '@/lib/api';
 import ComposeEmailDialog from '@/components/ComposeEmailDialog';
@@ -26,10 +27,12 @@ export default function CustomerEmailsPage() {
   const customerId = parseInt(params.id as string);
 
   const [emails, setEmails] = useState<Email[]>([]);
+  const [scheduled, setScheduled] = useState<EmailScheduled[]>([]);
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedThread, setSelectedThread] = useState<string | null>(null);
   const [composeEmailDialogOpen, setComposeEmailDialogOpen] = useState(false);
+  const [scheduleEmailDialogOpen, setScheduleEmailDialogOpen] = useState(false);
   const autoMarkedIdsRef = useRef<Set<number>>(new Set());
   const preserveUnreadRef = useRef(false);
   const [restoreUnreadCount, setRestoreUnreadCount] = useState(0);
@@ -39,14 +42,24 @@ export default function CustomerEmailsPage() {
     if (customerId) {
       fetchCustomer();
       fetchEmails();
+      fetchScheduled();
     }
+  }, [customerId]);
+
+  useEffect(() => {
+    if (!customerId) return;
+    const interval = setInterval(() => {
+      fetchEmails();
+      fetchScheduled();
+    }, 25000);
+    return () => clearInterval(interval);
   }, [customerId]);
 
   const fetchCustomer = async () => {
     try {
       const response = await api.get(`/api/customers/${customerId}`);
       setCustomer(response.data);
-    } catch (error: any) {
+    } catch {
       toast.error('Failed to load customer');
     }
   };
@@ -60,13 +73,28 @@ export default function CustomerEmailsPage() {
         (readRes.marked_ids ?? []).forEach((id) => autoMarkedIdsRef.current.add(id));
         setRestoreUnreadCount(autoMarkedIdsRef.current.size);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error('Failed to load emails');
-      if (error.response?.status === 401) {
-        router.push('/login');
+      if (error && typeof error === 'object' && 'response' in error) {
+        const status = (error as { response?: { status?: number } }).response?.status;
+        if (status === 401) {
+          router.push('/login');
+        }
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchScheduled = async () => {
+    try {
+      const data = await getScheduledEmails({
+        customer_id: customerId,
+        status: ScheduledEmailStatus.PENDING,
+      });
+      setScheduled(data);
+    } catch {
+      // Non-blocking; scheduled list is secondary
     }
   };
 
@@ -92,6 +120,16 @@ export default function CustomerEmailsPage() {
       toast.error(String(msg));
     } finally {
       setKeepingUnread(false);
+    }
+  };
+
+  const handleCancelScheduled = async (id: number) => {
+    try {
+      await cancelScheduledEmail(id);
+      toast.success('Scheduled email cancelled');
+      fetchScheduled();
+    } catch {
+      toast.error('Failed to cancel scheduled email');
     }
   };
 
@@ -158,13 +196,22 @@ export default function CustomerEmailsPage() {
                 </Button>
               )}
               {customer && (
-                <Button
-                  variant="default"
-                  onClick={() => setComposeEmailDialogOpen(true)}
-                >
-                  <Send className="h-4 w-4 mr-2" />
-                  Compose Email
-                </Button>
+                <>
+                  <Button
+                    variant="outline"
+                    onClick={() => setScheduleEmailDialogOpen(true)}
+                  >
+                    <CalendarClock className="h-4 w-4 mr-2" />
+                    Schedule email
+                  </Button>
+                  <Button
+                    variant="default"
+                    onClick={() => setComposeEmailDialogOpen(true)}
+                  >
+                    <Send className="h-4 w-4 mr-2" />
+                    Compose Email
+                  </Button>
+                </>
               )}
             </div>
           </div>
@@ -174,8 +221,8 @@ export default function CustomerEmailsPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Email Threads List */}
-          <div className="lg:col-span-1">
+          {/* Email Threads List + Scheduled */}
+          <div className="lg:col-span-1 space-y-4">
             <Card>
               <CardHeader>
                 <CardTitle>Email Threads</CardTitle>
@@ -202,6 +249,42 @@ export default function CustomerEmailsPage() {
                         <div className="text-xs text-muted-foreground">
                           {new Date(thread.latestDate).toLocaleDateString('en-GB')}
                         </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Scheduled</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {scheduled.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No scheduled emails</p>
+                ) : (
+                  <div className="space-y-2">
+                    {scheduled.map((s) => (
+                      <div
+                        key={s.id}
+                        className="p-3 border rounded-md flex justify-between items-start gap-2"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate">{s.subject}</p>
+                          <p className="text-xs text-muted-foreground truncate">{s.to_email}</p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {formatDateTime(s.scheduled_at)}
+                          </p>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="shrink-0"
+                          onClick={() => handleCancelScheduled(s.id)}
+                        >
+                          Cancel
+                        </Button>
                       </div>
                     ))}
                   </div>
@@ -280,7 +363,6 @@ export default function CustomerEmailsPage() {
                             variant="outline"
                             className="mt-3"
                             onClick={() => {
-                              // TODO: Implement reply functionality
                               toast.info('Reply functionality coming soon');
                             }}
                           >
@@ -305,14 +387,26 @@ export default function CustomerEmailsPage() {
       </main>
 
       {customer && (
-        <ComposeEmailDialog
-          open={composeEmailDialogOpen}
-          onOpenChange={setComposeEmailDialogOpen}
-          customer={customer}
-          onSuccess={() => {
-            fetchEmails();
-          }}
-        />
+        <>
+          <ComposeEmailDialog
+            open={composeEmailDialogOpen}
+            onOpenChange={setComposeEmailDialogOpen}
+            customer={customer}
+            mode="send"
+            onSuccess={() => {
+              fetchEmails();
+            }}
+          />
+          <ComposeEmailDialog
+            open={scheduleEmailDialogOpen}
+            onOpenChange={setScheduleEmailDialogOpen}
+            customer={customer}
+            mode="schedule"
+            onSuccess={() => {
+              fetchScheduled();
+            }}
+          />
+        </>
       )}
     </div>
   );

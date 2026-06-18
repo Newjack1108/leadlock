@@ -986,6 +986,43 @@ export interface SmsScheduledUpdate {
   status?: ScheduledSmsStatus;
 }
 
+export enum ScheduledEmailStatus {
+  PENDING = "PENDING",
+  SENT = "SENT",
+  CANCELLED = "CANCELLED",
+  FAILED = "FAILED",
+}
+
+export interface EmailScheduled {
+  id: number;
+  customer_id: number;
+  to_email: string;
+  cc?: string;
+  bcc?: string;
+  subject: string;
+  body_html?: string;
+  body_text?: string;
+  attachments?: string;
+  scheduled_at: string;
+  status: ScheduledEmailStatus;
+  created_by_id: number;
+  created_at: string;
+  sent_at?: string;
+  message_id?: string;
+  failure_reason?: string;
+}
+
+export interface EmailScheduledCreate {
+  customer_id: number;
+  to_email: string;
+  cc?: string;
+  bcc?: string;
+  subject: string;
+  body_html?: string;
+  body_text?: string;
+  scheduled_at: string;
+}
+
 export interface SmsTemplate {
   id: number;
   name: string;

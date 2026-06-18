@@ -335,6 +335,54 @@ export const cancelScheduledSms = async (id: number) => {
   return response.data;
 };
 
+export const createScheduledEmail = async (
+  emailData: {
+    customer_id: number;
+    to_email: string;
+    cc?: string;
+    bcc?: string;
+    subject: string;
+    body_html?: string;
+    body_text?: string;
+    scheduled_at: string;
+  },
+  attachments?: File[]
+) => {
+  const formData = new FormData();
+  formData.append('email_data', JSON.stringify(emailData));
+  if (attachments?.length) {
+    for (const file of attachments) {
+      formData.append('attachments', file);
+    }
+  }
+  const response = await api.post('/api/emails/scheduled', formData, {
+    timeout: EMAIL_AND_UPLOAD_TIMEOUT_MS,
+    transformRequest: [(data: unknown, headers?: Record<string, unknown>) => {
+      if (data instanceof FormData && headers) delete (headers as Record<string, unknown>)['Content-Type'];
+      return data;
+    }],
+  });
+  return response.data;
+};
+
+export const getScheduledEmails = async (params?: { customer_id?: number; status?: string }) => {
+  const response = await api.get('/api/emails/scheduled', { params });
+  return response.data;
+};
+
+export const updateScheduledEmail = async (
+  id: number,
+  data: { scheduled_at?: string; status?: string }
+) => {
+  const response = await api.patch(`/api/emails/scheduled/${id}`, data);
+  return response.data;
+};
+
+export const cancelScheduledEmail = async (id: number) => {
+  const response = await api.delete(`/api/emails/scheduled/${id}`);
+  return response.data;
+};
+
 // Messenger API functions
 export const sendMessengerMessage = async (data: {
   customer_id: number;

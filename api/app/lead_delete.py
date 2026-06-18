@@ -6,6 +6,7 @@ from sqlalchemy import or_
 from sqlmodel import Session, select
 
 from app.customer_file_service import delete_customer_file_from_cloudinary
+from app.scheduled_email_service import delete_stored_attachments
 from app.models import (
     Activity,
     Customer,
@@ -19,6 +20,7 @@ from app.models import (
     Quote,
     QuoteStatus,
     Reminder,
+    ScheduledEmail,
     ScheduledSms,
     SmsMessage,
     StatusHistory,
@@ -114,6 +116,11 @@ def maybe_delete_orphan_customer_after_spam_lead(
 
     for ss in session.exec(select(ScheduledSms).where(ScheduledSms.customer_id == customer_id)).all():
         session.delete(ss)
+    session.flush()
+
+    for se in session.exec(select(ScheduledEmail).where(ScheduledEmail.customer_id == customer_id)).all():
+        delete_stored_attachments(se.attachments)
+        session.delete(se)
     session.flush()
 
     for cos in session.exec(
