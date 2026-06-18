@@ -643,10 +643,11 @@ export default function CustomerDetailPage() {
                           </Button>
                         )}
                       </div>
-                      <Label className="mt-3 block text-muted-foreground font-normal">
-                        Alternative phone <span className="text-xs">(not used for automations)</span>
+                      <Label className="mt-3 block">
+                        Alternative phone{' '}
+                        <span className="text-xs font-normal text-muted-foreground">(not used for automations)</span>
                       </Label>
-                      <div className="flex gap-2 items-center mt-1">
+                      <div className="flex gap-2 items-center">
                         <Input
                           className="flex-1"
                           value={customer.alternative_phone || ''}
