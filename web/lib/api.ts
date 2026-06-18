@@ -1280,6 +1280,23 @@ export const sendOrderPaymentLink = async (
   return response.data as { message: string; channel: string };
 };
 
+export const sendQuotePaymentLink = async (
+  quoteId: number,
+  data: {
+    channel: 'email' | 'sms';
+    payment_url?: string;
+    to_email?: string;
+    to_phone?: string;
+    subject?: string;
+    body?: string;
+    template_id?: number;
+    save_link_on_quote?: boolean;
+  }
+) => {
+  const response = await api.post(`/api/quotes/${quoteId}/send-payment-link`, data);
+  return response.data as { message: string; channel: string };
+};
+
 /** Send access sheet link for order. Returns URL for staff to copy. Auth required. */
 export const sendAccessSheet = async (orderId: number): Promise<{
   access_sheet_url: string;

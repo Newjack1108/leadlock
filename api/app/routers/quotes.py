@@ -7,6 +7,7 @@ from sqlmodel import Session, select, or_, and_
 from sqlalchemy import func, true, String as SAString, delete, update
 from datetime import datetime
 from typing import Dict, List, Literal, Optional, Tuple
+from html import escape
 from app.database import get_session
 from app.models import (
     Quote,
@@ -45,6 +46,8 @@ from app.models import (
     SmsDirection,
     MessengerMessage,
     MessengerDirection,
+    EmailTemplate,
+    SmsTemplate,
 )
 from app.auth import get_current_user, require_configurator_access
 from app.configurator_service import build_configurator_preview, resolve_quote_customer_postcode
@@ -56,6 +59,7 @@ from app.schemas import (
     QuoteCreate, QuoteUpdate, QuoteDraftUpdate, QuoteResponse, QuoteListResponse, QuoteItemCreate, QuoteItemResponse,
     QuoteEmailSendRequest, QuoteEmailSendResponse, QuoteViewLinkResponse,
     QuoteShareLinkRequest, QuoteShareLinkResponse, QuoteSendSmsRequest, QuoteSendSmsResponse,
+    QuoteSendPaymentLinkRequest, QuoteSendPaymentLinkResponse,
     OpportunityWonRequest, OpportunityLostRequest, OpportunityCloseRequest,
     QuoteDiscountResponse, CustomerHistoryEventType
 )
@@ -75,7 +79,16 @@ from app.routers.emails import (
 )
 from app.sales_document_service import load_sales_document_bytes
 from app.customer_view_links import customer_view_path_segment
-from app.email_service import is_email_configured, build_activity_email_notes
+from app.email_service import is_email_configured, build_activity_email_notes, send_email, _html_to_plain
+from app.email_template_service import render_email_template
+from app.sms_template_service import render_sms_template
+from app.payment_link_service import (
+    validate_payment_url,
+    quote_payment_link_template_context,
+    default_quote_payment_sms_body,
+    default_quote_payment_email_subject,
+    default_quote_payment_email_html,
+)
 from app.sms_service import (
     send_sms,
     normalize_phone,
@@ -589,6 +602,7 @@ def build_quote_list_response(
         customer_replied_since_quote_sent=customer_replied_since_quote_sent,
         inbound_count_since_quote_sent=inbound_count_since_quote_sent,
         displayed_optional_extra_ids=[],
+        payment_link_url=getattr(quote, "payment_link_url", None),
     )
 
 
@@ -707,6 +721,7 @@ def build_quote_response(
         customer_replied_since_quote_sent=customer_replied_since_quote_sent,
         inbound_count_since_quote_sent=inbound_count_since_quote_sent,
         displayed_optional_extra_ids=get_displayed_optional_extra_ids(session, quote.id),
+        payment_link_url=getattr(quote, "payment_link_url", None),
     )
 
 
@@ -935,6 +950,8 @@ def create_order_from_quote(quote: Quote, session: Session, created_by_id: int) 
         fulfillment_method=getattr(quote, "fulfillment_method", QuoteFulfillmentMethod.DELIVERY),
     )
     copy_delivery_location_fields(quote, order)
+    if getattr(quote, "payment_link_url", None) and not order.payment_link_url:
+        order.payment_link_url = quote.payment_link_url
     session.add(order)
     session.flush()
     quote_items = session.exec(
@@ -2388,6 +2405,212 @@ async def post_quote_send_sms(
         view_url=view_url,
         quote_email_id=quote_email.id,
         message="SMS sent successfully",
+    )
+
+
+@router.post("/{quote_id}/send-payment-link", response_model=QuoteSendPaymentLinkResponse)
+async def send_quote_payment_link(
+    quote_id: int,
+    data: Optional[QuoteSendPaymentLinkRequest] = Body(default=None),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Send an external payment URL to the customer by email or SMS."""
+    req = data or QuoteSendPaymentLinkRequest(channel="sms")
+    channel = (req.channel or "").strip().lower()
+    if channel not in ("email", "sms"):
+        raise HTTPException(status_code=400, detail="channel must be 'email' or 'sms'")
+
+    quote = session.exec(select(Quote).where(Quote.id == quote_id)).first()
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    if not quote.customer_id:
+        raise HTTPException(status_code=400, detail="Quote must be associated with a customer")
+
+    customer = session.exec(select(Customer).where(Customer.id == quote.customer_id)).first()
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+
+    raw_url = (req.payment_url or "").strip() or (getattr(quote, "payment_link_url", None) or "").strip()
+    if not raw_url:
+        raise HTTPException(status_code=400, detail="Payment URL is required")
+    try:
+        payment_url = validate_payment_url(raw_url)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    if req.save_link_on_quote:
+        quote.payment_link_url = payment_url
+        session.add(quote)
+
+    company_settings = session.exec(select(CompanySettings).limit(1)).first()
+    template_ctx = quote_payment_link_template_context(quote, payment_url)
+    custom_body = (req.body or "").strip()
+
+    if channel == "sms":
+        to_phone = resolve_sms_to_phone(
+            session,
+            customer,
+            explicit_to=(req.to_phone or "").strip() or None,
+            lead_id=quote.lead_id,
+        )
+        if not to_phone:
+            raise HTTPException(
+                status_code=400,
+                detail="No phone number; set to_phone, add a phone on the customer, or ensure the quote's lead has a phone.",
+            )
+
+        if custom_body:
+            sms_body = custom_body
+        elif req.template_id:
+            template = session.get(SmsTemplate, req.template_id)
+            if not template:
+                raise HTTPException(status_code=404, detail="SMS template not found")
+            sms_body = render_sms_template(
+                template,
+                customer,
+                user=current_user,
+                company_settings=company_settings,
+                extra_context=template_ctx,
+            )
+        else:
+            sms_body = default_quote_payment_sms_body(quote, payment_url)
+
+        success, sid, error = send_sms(to_phone, sms_body)
+        if not success:
+            if is_unsubscribed_recipient_error(error):
+                customer.automated_reminder_outreach_opt_out = True
+                session.add(customer)
+                session.commit()
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "Recipient has unsubscribed from SMS (Twilio 21610). "
+                        "Customer has been opted out from automated reminder outreach."
+                    ),
+                )
+            raise HTTPException(status_code=500, detail=error or "Failed to send SMS")
+
+        from_phone = (os.getenv("TWILIO_PHONE_NUMBER") or "").strip()
+        now = datetime.utcnow()
+        session.add(
+            SmsMessage(
+                customer_id=customer.id,
+                lead_id=quote.lead_id,
+                direction=SmsDirection.SENT,
+                from_phone=from_phone,
+                to_phone=normalize_phone(to_phone),
+                body=sms_body,
+                twilio_sid=sid,
+                sent_at=now,
+                created_by_id=current_user.id,
+            )
+        )
+        session.add(
+            Activity(
+                customer_id=customer.id,
+                activity_type=ActivityType.SMS_SENT,
+                notes=f"Payment link for quote {quote.quote_number} sent by SMS to {to_phone}\n{sms_body}",
+                created_by_id=current_user.id,
+            )
+        )
+    else:
+        to_email = (req.to_email or "").strip() or (customer.email or "").strip()
+        if not to_email:
+            raise HTTPException(status_code=400, detail="Recipient email is required")
+
+        if not is_email_configured(current_user.id):
+            raise HTTPException(status_code=400, detail="Email not configured for your user account")
+
+        subject = (req.subject or "").strip()
+        body_html: Optional[str] = None
+        body_text: Optional[str] = None
+
+        if custom_body:
+            if custom_body.lstrip().startswith("<"):
+                body_html = custom_body
+            else:
+                body_html = "<p>" + escape(custom_body).replace("\n", "<br>\n") + "</p>"
+
+        if req.template_id and not custom_body:
+            template = session.get(EmailTemplate, req.template_id)
+            if not template:
+                raise HTTPException(status_code=404, detail="Email template not found")
+            rendered_subject, rendered_body_html = render_email_template(
+                template, customer, custom_variables=template_ctx
+            )
+            if not subject:
+                subject = rendered_subject
+            if not body_html:
+                body_html = rendered_body_html
+
+        if not subject:
+            subject = default_quote_payment_email_subject(quote)
+        if not body_html:
+            body_html = default_quote_payment_email_html(quote, payment_url)
+        body_text = _html_to_plain(body_html) if body_html else None
+
+        success, message_id, error, sent_html, sent_text = send_email(
+            to_email=to_email,
+            subject=subject,
+            body_html=body_html,
+            body_text=body_text,
+            user_id=current_user.id,
+            customer_number=customer.customer_number,
+        )
+        if not success:
+            raise HTTPException(status_code=500, detail=error or "Failed to send email")
+
+        final_html = sent_html or body_html
+        final_text = sent_text if sent_text is not None else body_text
+        session.add(
+            Email(
+                customer_id=customer.id,
+                message_id=message_id,
+                direction=EmailDirection.SENT,
+                from_email=current_user.email,
+                to_email=to_email,
+                subject=subject,
+                body_html=final_html,
+                body_text=final_text,
+                sent_at=datetime.utcnow(),
+                created_by_id=current_user.id,
+                thread_id=str(uuid.uuid4()),
+            )
+        )
+        session.add(
+            Activity(
+                customer_id=customer.id,
+                activity_type=ActivityType.EMAIL_SENT,
+                notes=build_activity_email_notes(
+                    f"Payment link for quote {quote.quote_number} sent to {to_email}",
+                    subject,
+                    final_text,
+                    final_html,
+                ),
+                created_by_id=current_user.id,
+            )
+        )
+
+    record_order_audit_event(
+        session,
+        event_type=CustomerHistoryEventType.QUOTE_PAYMENT_LINK_SENT.value,
+        title="Payment Link Sent",
+        description=f"Payment link for quote {quote.quote_number} sent by {channel}",
+        customer_id=customer.id,
+        quote_id=quote.id,
+        metadata={
+            "channel": channel,
+            "quote_number": quote.quote_number,
+            "payment_url": payment_url,
+        },
+        created_by_id=current_user.id,
+    )
+    session.commit()
+
+    return QuoteSendPaymentLinkResponse(
+        message="Payment link sent successfully",
+        channel=channel,
     )
 
 

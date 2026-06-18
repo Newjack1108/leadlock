@@ -15,30 +15,47 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { sendOrderPaymentLink, getEmailTemplates, getSmsTemplates, getApiErrorDetail } from '@/lib/api';
-import { Customer, Order, EmailTemplate, SmsTemplate } from '@/lib/types';
+import {
+  sendOrderPaymentLink,
+  sendQuotePaymentLink,
+  getEmailTemplates,
+  getSmsTemplates,
+  getApiErrorDetail,
+} from '@/lib/api';
+import { Customer, Order, Quote, EmailTemplate, SmsTemplate } from '@/lib/types';
 import { toast } from 'sonner';
 import { Mail, MessageSquare, CreditCard } from 'lucide-react';
 
-interface SendPaymentLinkDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  order: Order;
-  customer: Customer;
-  onSuccess?: () => void;
-}
+type SendPaymentLinkDialogProps =
+  | {
+      open: boolean;
+      onOpenChange: (open: boolean) => void;
+      order: Order;
+      quote?: undefined;
+      customer: Customer;
+      onSuccess?: () => void;
+    }
+  | {
+      open: boolean;
+      onOpenChange: (open: boolean) => void;
+      quote: Quote;
+      order?: undefined;
+      customer: Customer;
+      onSuccess?: () => void;
+    };
 
-export default function SendPaymentLinkDialog({
-  open,
-  onOpenChange,
-  order,
-  customer,
-  onSuccess,
-}: SendPaymentLinkDialogProps) {
+export default function SendPaymentLinkDialog(props: SendPaymentLinkDialogProps) {
+  const { open, onOpenChange, customer, onSuccess } = props;
+  const isQuote = props.quote != null;
+  const documentNumber = isQuote ? props.quote.quote_number : props.order.order_number;
+  const paymentLinkUrl = isQuote
+    ? props.quote.payment_link_url
+    : props.order.payment_link_url;
+
   const [channel, setChannel] = useState<'email' | 'sms'>('email');
   const [loading, setLoading] = useState(false);
   const [paymentUrl, setPaymentUrl] = useState('');
-  const [saveLinkOnOrder, setSaveLinkOnOrder] = useState(true);
+  const [saveLink, setSaveLink] = useState(true);
   const [toEmail, setToEmail] = useState('');
   const [toPhone, setToPhone] = useState('');
   const [subject, setSubject] = useState('');
@@ -52,8 +69,8 @@ export default function SendPaymentLinkDialog({
   useEffect(() => {
     if (!open) return;
     setChannel('email');
-    setPaymentUrl(order.payment_link_url?.trim() || '');
-    setSaveLinkOnOrder(true);
+    setPaymentUrl(paymentLinkUrl?.trim() || '');
+    setSaveLink(true);
     setToEmail(customer.email || '');
     setToPhone(customer.phone || '');
     setSubject('');
@@ -76,7 +93,7 @@ export default function SendPaymentLinkDialog({
       }
     };
     void loadTemplates();
-  }, [open, order.payment_link_url, customer.email, customer.phone]);
+  }, [open, paymentLinkUrl, customer.email, customer.phone]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -96,19 +113,28 @@ export default function SendPaymentLinkDialog({
 
     setLoading(true);
     try {
-      await sendOrderPaymentLink(order.id, {
+      const payload = {
         channel,
         payment_url: url,
         to_email: channel === 'email' ? toEmail.trim() : undefined,
         to_phone: channel === 'sms' ? toPhone.trim() || undefined : undefined,
         subject: channel === 'email' ? subject.trim() || undefined : undefined,
         body: body.trim() || undefined,
-        template_id:
-          channel === 'email'
-            ? selectedEmailTemplateId
-            : selectedSmsTemplateId,
-        save_link_on_order: saveLinkOnOrder,
-      });
+        template_id: channel === 'email' ? selectedEmailTemplateId : selectedSmsTemplateId,
+      };
+
+      if (isQuote) {
+        await sendQuotePaymentLink(props.quote.id, {
+          ...payload,
+          save_link_on_quote: saveLink,
+        });
+      } else {
+        await sendOrderPaymentLink(props.order.id, {
+          ...payload,
+          save_link_on_order: saveLink,
+        });
+      }
+
       toast.success(`Payment link sent by ${channel}`);
       onOpenChange(false);
       onSuccess?.();
@@ -119,6 +145,13 @@ export default function SendPaymentLinkDialog({
     }
   };
 
+  const documentLabel = isQuote ? 'quote' : 'order';
+  const rememberLabel = isQuote ? 'Remember link on this quote' : 'Remember link on this order';
+  const numberVar = isQuote ? '{{ quote.quote_number }}' : '{{ order.order_number }}';
+  const defaultSmsPlaceholder = isQuote
+    ? `Leave blank to send: Pay deposit for quote ${documentNumber}: [link]`
+    : `Leave blank to send: Pay online for order ${documentNumber}: [link]`;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -128,8 +161,8 @@ export default function SendPaymentLinkDialog({
             Send payment link
           </DialogTitle>
           <DialogDescription>
-            Paste the pay-by-link URL from your payment provider, then send it to the customer for order{' '}
-            {order.order_number}.
+            Paste the pay-by-link URL from your payment provider, then send it to the customer for{' '}
+            {documentLabel} {documentNumber}.
           </DialogDescription>
         </DialogHeader>
 
@@ -174,12 +207,12 @@ export default function SendPaymentLinkDialog({
             <input
               type="checkbox"
               id="save_payment_link"
-              checked={saveLinkOnOrder}
-              onChange={(e) => setSaveLinkOnOrder(e.target.checked)}
+              checked={saveLink}
+              onChange={(e) => setSaveLink(e.target.checked)}
               className="h-4 w-4 rounded border-gray-300"
             />
             <Label htmlFor="save_payment_link" className="font-normal cursor-pointer">
-              Remember link on this order
+              {rememberLabel}
             </Label>
           </div>
 
@@ -213,7 +246,7 @@ export default function SendPaymentLinkDialog({
                       Email Templates
                     </Link>
                     . Use <code className="text-xs">{'{{ payment_link }}'}</code> and{' '}
-                    <code className="text-xs">{'{{ order.order_number }}'}</code>.
+                    <code className="text-xs">{numberVar}</code>.
                   </p>
                 )}
               </div>
@@ -237,7 +270,7 @@ export default function SendPaymentLinkDialog({
                   id="email_subject"
                   value={subject}
                   onChange={(e) => setSubject(e.target.value)}
-                  placeholder={`Payment for order ${order.order_number}`}
+                  placeholder={`Payment for ${documentLabel} ${documentNumber}`}
                 />
               </div>
 
@@ -281,7 +314,14 @@ export default function SendPaymentLinkDialog({
                     <Link href="/settings/sms-templates" className="text-primary underline hover:no-underline">
                       SMS Templates
                     </Link>
-                    . Use <code className="text-xs">{'{{ payment_link }}'}</code>.
+                    . Use <code className="text-xs">{'{{ payment_link }}'}</code>
+                    {isQuote && (
+                      <>
+                        {' '}
+                        and <code className="text-xs">{'{{ quote.deposit_amount }}'}</code>
+                      </>
+                    )}
+                    .
                   </p>
                 )}
               </div>
@@ -303,7 +343,7 @@ export default function SendPaymentLinkDialog({
                   id="sms_body"
                   value={body}
                   onChange={(e) => setBody(e.target.value)}
-                  placeholder={`Leave blank to send: Pay online for order ${order.order_number}: [link]`}
+                  placeholder={defaultSmsPlaceholder}
                   rows={4}
                 />
               </div>

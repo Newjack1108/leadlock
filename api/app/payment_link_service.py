@@ -2,7 +2,7 @@
 from typing import Dict
 from urllib.parse import urlparse
 
-from app.models import Order
+from app.models import Order, Quote
 
 MAX_PAYMENT_URL_LENGTH = 2048
 
@@ -46,5 +46,33 @@ def default_payment_email_subject(order: Order) -> str:
 def default_payment_email_html(order: Order, payment_url: str) -> str:
     return (
         f"<p>Please pay online for order {order.order_number}:</p>"
+        f'<p><a href="{payment_url}">{payment_url}</a></p>'
+    )
+
+
+def quote_payment_link_template_context(quote: Quote, payment_url: str) -> Dict:
+    """Jinja context for payment-link SMS/email templates on quotes."""
+    return {
+        "payment_link": payment_url,
+        "quote": {
+            "quote_number": quote.quote_number or "",
+            "deposit_amount": str(quote.deposit_amount),
+            "balance_amount": str(quote.balance_amount),
+            "total_amount": str(quote.total_amount),
+        },
+    }
+
+
+def default_quote_payment_sms_body(quote: Quote, payment_url: str) -> str:
+    return f"Pay deposit for quote {quote.quote_number}: {payment_url}"
+
+
+def default_quote_payment_email_subject(quote: Quote) -> str:
+    return f"Payment for quote {quote.quote_number}"
+
+
+def default_quote_payment_email_html(quote: Quote, payment_url: str) -> str:
+    return (
+        f"<p>Please pay your deposit for quote {quote.quote_number}:</p>"
         f'<p><a href="{payment_url}">{payment_url}</a></p>'
     )

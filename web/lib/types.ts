@@ -1465,6 +1465,7 @@ export interface Quote {
   lead_quotes_sent_count?: number | null;
   customer_replied_since_quote_sent?: boolean;
   inbound_count_since_quote_sent?: number;
+  payment_link_url?: string | null;
 }
 
 export interface QuoteListPayload {
@@ -1917,6 +1918,7 @@ export enum CustomerHistoryEventType {
   QUOTE_REJECTED = "QUOTE_REJECTED",
   QUOTE_EXPIRED = "QUOTE_EXPIRED",
   QUOTE_UPDATED = "QUOTE_UPDATED",
+  QUOTE_PAYMENT_LINK_SENT = "QUOTE_PAYMENT_LINK_SENT",
   EMAIL_SENT = "EMAIL_SENT",
   EMAIL_RECEIVED = "EMAIL_RECEIVED",
   CUSTOMER_CREATED = "CUSTOMER_CREATED",

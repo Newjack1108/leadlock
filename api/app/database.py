@@ -3417,6 +3417,17 @@ def create_db_and_tables():
                     error_str = str(col_error).lower()
                     if "already exists" not in error_str and "duplicate" not in error_str:
                         print(f"Warning: Could not add include_specification_sheet column: {col_error}", file=sys.stderr, flush=True)
+            quote_columns = [col["name"] for col in inspector.get_columns("quote")]
+            if "payment_link_url" not in quote_columns:
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(
+                            text("ALTER TABLE quote ADD COLUMN payment_link_url VARCHAR(2048)")
+                        )
+                    print("Added payment_link_url to quote", file=sys.stderr, flush=True)
+                except Exception as e:
+                    if "already exists" not in str(e).lower():
+                        print(f"Warning adding payment_link_url to quote: {e}", file=sys.stderr, flush=True)
 
         if inspector.has_table("customer_order"):
             order_columns = [col["name"] for col in inspector.get_columns("customer_order")]

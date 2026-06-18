@@ -1840,6 +1840,7 @@ class QuoteResponse(BaseModel):
     lead_quotes_sent_count: Optional[int] = None
     customer_replied_since_quote_sent: bool = False
     inbound_count_since_quote_sent: int = 0
+    payment_link_url: Optional[str] = None
 
 
 class QuoteListResponse(BaseModel):
@@ -2507,6 +2508,7 @@ class CustomerHistoryEventType(str, Enum):
     QUOTE_REJECTED = "QUOTE_REJECTED"
     QUOTE_EXPIRED = "QUOTE_EXPIRED"
     QUOTE_UPDATED = "QUOTE_UPDATED"
+    QUOTE_PAYMENT_LINK_SENT = "QUOTE_PAYMENT_LINK_SENT"
     EMAIL_SENT = "EMAIL_SENT"
     EMAIL_RECEIVED = "EMAIL_RECEIVED"
     CUSTOMER_CREATED = "CUSTOMER_CREATED"
@@ -2642,6 +2644,22 @@ class OrderSendPaymentLinkRequest(BaseModel):
 
 
 class OrderSendPaymentLinkResponse(BaseModel):
+    message: str
+    channel: str
+
+
+class QuoteSendPaymentLinkRequest(BaseModel):
+    channel: str = "sms"  # "email" | "sms"
+    payment_url: Optional[str] = None
+    to_email: Optional[str] = None
+    to_phone: Optional[str] = None
+    subject: Optional[str] = None
+    body: Optional[str] = None
+    template_id: Optional[int] = None
+    save_link_on_quote: bool = False
+
+
+class QuoteSendPaymentLinkResponse(BaseModel):
     message: str
     channel: str
 

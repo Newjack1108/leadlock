@@ -24,12 +24,13 @@ import {
   QUOTE_BALANCE_BEFORE_DELIVERY_NOTE,
 } from '@/lib/quoteCopy';
 import SendQuoteEmailDialog from '@/components/SendQuoteEmailDialog';
+import SendPaymentLinkDialog from '@/components/SendPaymentLinkDialog';
 import CallNotesDialog from '@/components/CallNotesDialog';
 import FilesCard from '@/components/FilesCard';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { formatDateTime } from '@/lib/utils';
-import { ArrowLeft, Mail, Eye, Tag, Pencil, ChevronDown, ChevronUp, Send, ExternalLink, CheckCircle, ShoppingBag, XCircle, MinusCircle, FileSearch, Trash2, Copy, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Mail, Eye, Tag, Pencil, ChevronDown, ChevronUp, Send, ExternalLink, CheckCircle, ShoppingBag, XCircle, MinusCircle, FileSearch, Trash2, Copy, AlertTriangle, CreditCard } from 'lucide-react';
 import DraftConfiguratorLink from '@/components/configurator/DraftConfiguratorLink';
 import {
   Dialog,
@@ -68,6 +69,7 @@ export default function QuoteDetailPage() {
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [loading, setLoading] = useState(true);
   const [sendEmailDialogOpen, setSendEmailDialogOpen] = useState(false);
+  const [sendPaymentLinkOpen, setSendPaymentLinkOpen] = useState(false);
   const [termsExpanded, setTermsExpanded] = useState(false);
   const [specSheetExpanded, setSpecSheetExpanded] = useState(false);
   const [discountRequests, setDiscountRequests] = useState<DiscountRequest[]>([]);
@@ -371,6 +373,16 @@ export default function QuoteDetailPage() {
                 <Mail className="h-4 w-4 mr-2" />
                 Send Quote
               </Button>
+              {customer && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setSendPaymentLinkOpen(true)}
+                >
+                  <CreditCard className="h-4 w-4 mr-2" />
+                  Send payment link
+                </Button>
+              )}
               {quote.status === 'SENT' && (
                 <Button
                   variant="outline"
@@ -1087,6 +1099,18 @@ export default function QuoteDetailPage() {
           quoteId={quoteId}
           customer={customer}
           variant={quote.order_id ? 'order' : 'quote'}
+          onSuccess={() => {
+            fetchQuote();
+          }}
+        />
+      )}
+
+      {customer && quote && (
+        <SendPaymentLinkDialog
+          open={sendPaymentLinkOpen}
+          onOpenChange={setSendPaymentLinkOpen}
+          quote={quote}
+          customer={customer}
           onSuccess={() => {
             fetchQuote();
           }}

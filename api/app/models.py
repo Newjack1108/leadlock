@@ -691,6 +691,7 @@ class Quote(SQLModel, table=True):
     dealer_customer_phone: Optional[str] = None
     dealer_customer_address: Optional[str] = None
     dealer_customer_postcode: Optional[str] = None
+    payment_link_url: Optional[str] = Field(default=None)  # External pay-by-link URL (paste or integration)
     revision_hash: Optional[str] = Field(default=None, index=True)
     
     # Relationships

@@ -46,6 +46,10 @@ const EMAIL_TEMPLATE_SNIPPETS: EmailSnippetItem[] = [
   { label: 'Order deposit', insert: '{{ order.deposit_amount }}' },
   { label: 'Order balance', insert: '{{ order.balance_amount }}' },
   { label: 'Order total', insert: '{{ order.total_amount }}' },
+  { label: 'Quote number', insert: '{{ quote.quote_number }}' },
+  { label: 'Quote deposit', insert: '{{ quote.deposit_amount }}' },
+  { label: 'Quote balance', insert: '{{ quote.balance_amount }}' },
+  { label: 'Quote total', insert: '{{ quote.total_amount }}' },
 ];
 
 type BodyEditMode = 'visual' | 'source';
@@ -212,12 +216,16 @@ export default function EmailTemplatesPage() {
             <code className="bg-background px-1 rounded">{'{{ customer.postcode }}'}</code>
           </p>
           <p className="text-sm text-muted-foreground mt-2">
-            <strong>Payment link (order send):</strong>{' '}
+            <strong>Payment link (order or quote send):</strong>{' '}
             <code className="bg-background px-1 rounded">{'{{ payment_link }}'}</code>,{' '}
             <code className="bg-background px-1 rounded">{'{{ order.order_number }}'}</code>,{' '}
             <code className="bg-background px-1 rounded">{'{{ order.deposit_amount }}'}</code>,{' '}
             <code className="bg-background px-1 rounded">{'{{ order.balance_amount }}'}</code>,{' '}
-            <code className="bg-background px-1 rounded">{'{{ order.total_amount }}'}</code>
+            <code className="bg-background px-1 rounded">{'{{ order.total_amount }}'}</code>,{' '}
+            <code className="bg-background px-1 rounded">{'{{ quote.quote_number }}'}</code>,{' '}
+            <code className="bg-background px-1 rounded">{'{{ quote.deposit_amount }}'}</code>,{' '}
+            <code className="bg-background px-1 rounded">{'{{ quote.balance_amount }}'}</code>,{' '}
+            <code className="bg-background px-1 rounded">{'{{ quote.total_amount }}'}</code>
           </p>
         </div>
 
