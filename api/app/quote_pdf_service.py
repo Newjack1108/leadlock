@@ -26,6 +26,7 @@ from app.models import (
     InstallationLeadTime,
     QuoteFulfillmentMethod,
 )
+from app.bank_details_crypto import get_decrypted_bank_details
 from app.constants import (
     VAT_RATE_DECIMAL,
     TRACKING_WEBSITE_BASE_URLS,
@@ -262,14 +263,15 @@ def _make_footer_canvas_drawer(
     if company_settings.vat_number:
         footer_lines.append(f"VAT No: {company_settings.vat_number}")
     bank_parts = []
-    if company_settings.bank_name:
-        bank_parts.append(f"Bank: {company_settings.bank_name}")
-    if company_settings.bank_account_name:
-        bank_parts.append(f"Account Name: {company_settings.bank_account_name}")
-    if company_settings.sort_code:
-        bank_parts.append(f"Sort Code: {company_settings.sort_code}")
-    if company_settings.account_number:
-        bank_parts.append(f"Account: {company_settings.account_number}")
+    bank = get_decrypted_bank_details(company_settings)
+    if bank["bank_name"]:
+        bank_parts.append(f"Bank: {bank['bank_name']}")
+    if bank["bank_account_name"]:
+        bank_parts.append(f"Account Name: {bank['bank_account_name']}")
+    if bank["sort_code"]:
+        bank_parts.append(f"Sort Code: {bank['sort_code']}")
+    if bank["account_number"]:
+        bank_parts.append(f"Account: {bank['account_number']}")
     if bank_parts:
         footer_lines.append("<b>" + " | ".join(bank_parts) + "</b>")
     footer_para = Paragraph("<br/>".join(footer_lines), footer_style) if footer_lines else None

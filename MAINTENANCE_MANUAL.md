@@ -57,6 +57,7 @@ Group by risk so nothing critical is forgotten when rotating keys or cloning an 
 
 - `DATABASE_URL` — Postgres; non-local URLs get `sslmode=require` appended in code when needed.
 - `SECRET_KEY` — JWT signing; **rotating it logs everyone out** (new tokens only).
+- `BANK_DETAILS_ENCRYPTION_KEY` — Fernet key for encrypting company bank account number and sort code at rest. Generate with: `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`. Set in Railway **before** deploying the bank-details encryption release so startup migration can encrypt existing plaintext values. **Do not rotate** without a re-encryption script or stored values become unreadable.
 - `CORS_ORIGINS` — Comma-separated list; **browser calls fail** if the live frontend origin is missing.
 
 ### Frontend ↔ API linking

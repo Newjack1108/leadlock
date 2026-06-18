@@ -1495,6 +1495,11 @@ class CompanySettingsUpdate(BaseModel):
     weekly_plan_max_items: Optional[int] = None
 
 
+class CompanySettingsBankDetailsRevealResponse(BaseModel):
+    account_number: Optional[str] = None
+    sort_code: Optional[str] = None
+
+
 class CompanySettingsResponse(BaseModel):
     id: int
     company_name: str
@@ -1543,6 +1548,8 @@ class CompanySettingsResponse(BaseModel):
     bank_account_name: Optional[str] = None
     account_number: Optional[str] = None
     sort_code: Optional[str] = None
+    account_number_set: bool = False
+    sort_code_set: bool = False
     require_engagement_proof: Optional[bool] = None
     review_request_delay_days: int = 3
     review_google_url: Optional[str] = None

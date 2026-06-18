@@ -4,8 +4,15 @@ from sqlmodel import Session, select
 from app.database import get_session
 from app.models import CompanySettings, User
 from app.auth import get_current_user, require_role
+from app.bank_details_crypto import (
+    build_masked_bank_response,
+    decrypt_bank_value,
+    encrypt_bank_value,
+    prepare_bank_fields_for_save,
+)
 from app.schemas import (
     CompanySettingsCreate, CompanySettingsUpdate, CompanySettingsResponse,
+    CompanySettingsBankDetailsRevealResponse,
     UserEmailSettingsUpdate, UserEmailSettingsResponse
 )
 from app.models import UserRole
@@ -15,6 +22,9 @@ from app.customer_import_export import (
     export_customers_to_csv,
 )
 from datetime import datetime
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -31,6 +41,31 @@ def get_company_settings(session: Session) -> CompanySettings:
 BANK_DETAIL_FIELDS = ("bank_name", "bank_account_name", "account_number", "sort_code")
 
 
+def _company_settings_response(settings: CompanySettings, current_user: User) -> CompanySettingsResponse:
+    data = settings.dict()
+    if current_user.role != UserRole.DIRECTOR:
+        for field in BANK_DETAIL_FIELDS:
+            data.pop(field, None)
+        data["account_number_set"] = False
+        data["sort_code_set"] = False
+        return CompanySettingsResponse(**data)
+
+    masked_account, masked_sort, account_set, sort_set = build_masked_bank_response(settings)
+    data["account_number"] = masked_account
+    data["sort_code"] = masked_sort
+    data["account_number_set"] = account_set
+    data["sort_code_set"] = sort_set
+    return CompanySettingsResponse(**data)
+
+
+def _apply_company_settings_create_data(settings_data: CompanySettingsCreate) -> dict:
+    data = settings_data.dict()
+    for field in ("account_number", "sort_code"):
+        if field in data:
+            data[field] = encrypt_bank_value(data.get(field))
+    return data
+
+
 @router.get("/company", response_model=CompanySettingsResponse)
 async def get_company_settings_endpoint(
     session: Session = Depends(get_session),
@@ -41,12 +76,25 @@ async def get_company_settings_endpoint(
     
     if not settings:
         raise HTTPException(status_code=404, detail="Company settings not found. Please create them first.")
-    
-    data = settings.dict()
-    if current_user.role != UserRole.DIRECTOR:
-        for field in BANK_DETAIL_FIELDS:
-            data.pop(field, None)
-    return CompanySettingsResponse(**data)
+
+    return _company_settings_response(settings, current_user)
+
+
+@router.get("/company/bank-details", response_model=CompanySettingsBankDetailsRevealResponse)
+async def reveal_company_bank_details(
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_role([UserRole.DIRECTOR])),
+):
+    """Return decrypted bank account number and sort code. DIRECTOR only."""
+    settings = get_company_settings(session)
+    if not settings:
+        raise HTTPException(status_code=404, detail="Company settings not found. Please create them first.")
+
+    logger.info("Bank details revealed by user_id=%s", current_user.id)
+    return CompanySettingsBankDetailsRevealResponse(
+        account_number=decrypt_bank_value(settings.account_number),
+        sort_code=decrypt_bank_value(settings.sort_code),
+    )
 
 
 @router.post("/company", response_model=CompanySettingsResponse)
@@ -60,12 +108,15 @@ async def create_company_settings(
     if existing:
         raise HTTPException(status_code=400, detail="Company settings already exist. Use PUT to update.")
     
-    settings = CompanySettings(**settings_data.dict(), updated_by_id=current_user.id)
+    settings = CompanySettings(
+        **_apply_company_settings_create_data(settings_data),
+        updated_by_id=current_user.id,
+    )
     session.add(settings)
     session.commit()
     session.refresh(settings)
-    
-    return CompanySettingsResponse(**settings.dict())
+
+    return _company_settings_response(settings, current_user)
 
 
 @router.put("/company", response_model=CompanySettingsResponse)
@@ -80,17 +131,20 @@ async def update_company_settings(
     if not settings:
         raise HTTPException(status_code=404, detail="Company settings not found. Use POST to create them first.")
     
-    update_data = settings_data.dict(exclude_unset=True)
+    update_data = prepare_bank_fields_for_save(
+        settings_data.dict(exclude_unset=True),
+        settings,
+    )
     for field, value in update_data.items():
         setattr(settings, field, value)
-    
+
     settings.updated_by_id = current_user.id
     settings.updated_at = datetime.utcnow()
     session.add(settings)
     session.commit()
     session.refresh(settings)
-    
-    return CompanySettingsResponse(**settings.dict())
+
+    return _company_settings_response(settings, current_user)
 
 
 @router.get("/user/email", response_model=UserEmailSettingsResponse)

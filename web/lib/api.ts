@@ -853,6 +853,14 @@ export const getCompanySettings = async () => {
   return response.data;
 };
 
+export const revealCompanyBankDetails = async (): Promise<{
+  account_number?: string | null;
+  sort_code?: string | null;
+}> => {
+  const response = await api.get('/api/settings/company/bank-details');
+  return response.data;
+};
+
 export const listFacebookAdverts = async (): Promise<FacebookAdvertProfile[]> => {
   const response = await api.get('/api/settings/facebook-adverts');
   return response.data;

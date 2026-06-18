@@ -121,6 +121,7 @@ The app will be available at `http://localhost:3000`
 
 - `DATABASE_URL`: PostgreSQL connection string
 - `SECRET_KEY`: JWT secret key (use a strong random string in production)
+- `BANK_DETAILS_ENCRYPTION_KEY`: Fernet key for encrypting company bank account number and sort code in the database. Generate with `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`. Required in production for bank detail encryption at rest.
 - `ALGORITHM`: JWT algorithm (default: HS256)
 - `ACCESS_TOKEN_EXPIRE_MINUTES`: Token expiration time (default: 1440 = 24 hours)
 - `WEBHOOK_API_KEY`: Secret API key for webhook authentication (required for Make.com integration)

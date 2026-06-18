@@ -2202,6 +2202,28 @@ def create_db_and_tables():
                         if "already exists" not in error_str and "duplicate" not in error_str:
                             print(f"Error adding {col_name} column: {e}", file=sys.stderr, flush=True)
 
+            # Widen encrypted bank detail columns (Fernet ciphertext exceeds original VARCHAR limits)
+            for col_name, col_sql in [
+                ("account_number", "VARCHAR(255)"),
+                ("sort_code", "VARCHAR(255)"),
+            ]:
+                company_columns = [col['name'] for col in inspector.get_columns("companysettings")]
+                if col_name in company_columns:
+                    try:
+                        with engine.begin() as conn:
+                            conn.execute(
+                                text(f'ALTER TABLE companysettings ALTER COLUMN {col_name} TYPE {col_sql}')
+                            )
+                        print(f"Widened {col_name} column on companysettings table", file=sys.stderr, flush=True)
+                    except Exception as e:
+                        error_str = str(e).lower()
+                        if "already" not in error_str and "duplicate" not in error_str:
+                            print(
+                                f"Note: could not widen {col_name} (may already be correct type): {e}",
+                                file=sys.stderr,
+                                flush=True,
+                            )
+
             # Installation & travel (mileage, overnight, 2-man team) + install quote margin + product import gross margin
             for col_name, col_sql in [
                 ("distance_before_overnight_miles", "NUMERIC(10, 2)"),
@@ -3403,6 +3425,14 @@ def create_db_and_tables():
             ensure_test_customer(session)
     except Exception as e:
         print(f"Test customer ensure skipped: {e}", file=sys.stderr, flush=True)
+
+    try:
+        with Session(engine) as session:
+            from app.bank_details_crypto import encrypt_existing_plaintext_values
+
+            encrypt_existing_plaintext_values(session)
+    except Exception as e:
+        print(f"Bank details encryption migration skipped: {e}", file=sys.stderr, flush=True)
 
     try:
         with Session(engine) as session:

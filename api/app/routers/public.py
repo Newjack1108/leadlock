@@ -13,6 +13,7 @@ from fastapi.responses import Response
 from sqlmodel import Session, select
 
 from app.database import get_session
+from app.bank_details_crypto import get_decrypted_bank_details
 from app.models import (
     QuoteEmail,
     Quote,
@@ -206,6 +207,7 @@ def get_public_quote_view(
             company_settings.logo_url,
             company_settings.logo_filename or "logo1.jpg",
         )
+        bank = get_decrypted_bank_details(company_settings)
         company_display = PublicQuoteCompanyDisplay(
             trading_name=company_settings.trading_name,
             logo_url=logo_url_resolved,
@@ -217,10 +219,10 @@ def get_public_quote_view(
             phone=company_settings.phone,
             email=company_settings.email,
             website=company_settings.website,
-            bank_name=company_settings.bank_name,
-            bank_account_name=company_settings.bank_account_name,
-            sort_code=company_settings.sort_code,
-            account_number=company_settings.account_number,
+            bank_name=bank["bank_name"],
+            bank_account_name=bank["bank_account_name"],
+            sort_code=bank["sort_code"],
+            account_number=bank["account_number"],
         )
 
     return PublicQuoteViewResponse(

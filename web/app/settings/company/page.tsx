@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Save, ChevronDown, ChevronUp, Download, Upload, FileSpreadsheet } from 'lucide-react';
+import { Save, ChevronDown, ChevronUp, Download, Upload, FileSpreadsheet, Eye, EyeOff } from 'lucide-react';
 import ImageUpload from '@/components/ImageUpload';
 import api, {
   downloadCustomerImportExample,
@@ -18,6 +18,7 @@ import api, {
   downloadCustomerExport,
   getSmsTemplates,
   getEmailTemplates,
+  revealCompanyBankDetails,
 } from '@/lib/api';
 import { CompanySettings, EmailTemplate, InstallationLeadTime, SmsBotMode, SmsTemplate } from '@/lib/types';
 import { toast } from 'sonner';
@@ -47,6 +48,9 @@ export default function CompanySettingsPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [bankDetailsRevealed, setBankDetailsRevealed] = useState(false);
+  const [revealingBankDetails, setRevealingBankDetails] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<{
     created: number;
@@ -141,6 +145,18 @@ export default function CompanySettingsPage() {
     review_prize_draw_congratulations_banner_url: '',
     weekly_plan_max_items: '100',
   });
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const response = await api.get('/api/auth/me');
+        setUserRole(response.data.role);
+      } catch {
+        setUserRole(null);
+      }
+    };
+    fetchUser();
+  }, []);
 
   useEffect(() => {
     fetchSettings();
@@ -282,6 +298,7 @@ export default function CompanySettingsPage() {
             ? String(response.data.weekly_plan_max_items)
             : '100',
       });
+      setBankDetailsRevealed(false);
     } catch (error: any) {
       if (error.response?.status === 401) {
         router.push('/login');
@@ -502,6 +519,34 @@ export default function CompanySettingsPage() {
     } finally {
       setImporting(false);
       e.target.value = '';
+    }
+  };
+
+  const isDirector = userRole === 'DIRECTOR';
+
+  const toggleBankDetailsReveal = async () => {
+    if (bankDetailsRevealed) {
+      setFormData((prev) => ({
+        ...prev,
+        account_number: settings?.account_number || '',
+        sort_code: settings?.sort_code || '',
+      }));
+      setBankDetailsRevealed(false);
+      return;
+    }
+    try {
+      setRevealingBankDetails(true);
+      const revealed = await revealCompanyBankDetails();
+      setFormData((prev) => ({
+        ...prev,
+        account_number: revealed.account_number || '',
+        sort_code: revealed.sort_code || '',
+      }));
+      setBankDetailsRevealed(true);
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || 'Failed to reveal bank details');
+    } finally {
+      setRevealingBankDetails(false);
     }
   };
 
@@ -1231,12 +1276,36 @@ export default function CompanySettingsPage() {
               </div>
             </div>
 
+            {isDirector && (
             <div className="rounded-lg p-4 bg-emerald-50/30 dark:bg-emerald-950/20 border-l-4 border-l-emerald-200 dark:border-l-emerald-800 mt-6">
-              <h3 className="text-lg font-medium">Bank details</h3>
-              <p className="text-sm text-muted-foreground">
-                Shown on quote and invoice PDFs for payment instructions.
-              </p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-lg font-medium">Bank details</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Shown on quote and invoice PDFs for customer payment. Account number and sort code are encrypted and masked by default.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={toggleBankDetailsReveal}
+                  disabled={saving || revealingBankDetails}
+                >
+                  {bankDetailsRevealed ? (
+                    <>
+                      <EyeOff className="h-4 w-4 mr-2" />
+                      Hide sensitive details
+                    </>
+                  ) : (
+                    <>
+                      <Eye className="h-4 w-4 mr-2" />
+                      {revealingBankDetails ? 'Loading…' : 'Show sensitive details'}
+                    </>
+                  )}
+                </Button>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                 <div className="space-y-2">
                   <Label htmlFor="bank_name">Bank Name</Label>
                   <Input
@@ -1262,9 +1331,11 @@ export default function CompanySettingsPage() {
                   <Label htmlFor="account_number">Account Number</Label>
                   <Input
                     id="account_number"
+                    type={bankDetailsRevealed ? 'text' : 'password'}
+                    autoComplete="off"
                     value={formData.account_number}
                     onChange={(e) => setFormData({ ...formData, account_number: e.target.value })}
-                    placeholder="e.g. 12345678"
+                    placeholder={settings?.account_number_set ? 'Saved (masked)' : 'e.g. 12345678'}
                     disabled={saving}
                   />
                 </div>
@@ -1272,14 +1343,17 @@ export default function CompanySettingsPage() {
                   <Label htmlFor="sort_code">Sort Code</Label>
                   <Input
                     id="sort_code"
+                    type={bankDetailsRevealed ? 'text' : 'password'}
+                    autoComplete="off"
                     value={formData.sort_code}
                     onChange={(e) => setFormData({ ...formData, sort_code: e.target.value })}
-                    placeholder="e.g. 12-34-56"
+                    placeholder={settings?.sort_code_set ? 'Saved (masked)' : 'e.g. 12-34-56'}
                     disabled={saving}
                   />
                 </div>
               </div>
             </div>
+            )}
 
             <div className="rounded-lg p-4 bg-slate-50/30 dark:bg-slate-950/20 border-l-4 border-l-slate-200 dark:border-l-slate-800 mt-6 space-y-4">
               <h3 className="text-lg font-medium">Contact & branding</h3>

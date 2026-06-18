@@ -701,6 +701,8 @@ export interface CompanySettings {
   bank_account_name?: string;
   account_number?: string;
   sort_code?: string;
+  account_number_set?: boolean;
+  sort_code_set?: boolean;
   require_engagement_proof?: boolean;
   review_request_delay_days?: number;
   review_google_url?: string | null;
