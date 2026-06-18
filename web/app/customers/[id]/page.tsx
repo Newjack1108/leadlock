@@ -212,6 +212,7 @@ export default function CustomerDetailPage() {
   const [selectedQuoteId, setSelectedQuoteId] = useState<number | null>(null);
   const [composeEmailDialogOpen, setComposeEmailDialogOpen] = useState(false);
   const [callNotesDialogOpen, setCallNotesDialogOpen] = useState(false);
+  const [callNotesPhone, setCallNotesPhone] = useState('');
   const [manualActivityDialogOpen, setManualActivityDialogOpen] = useState(false);
   const [expandedActivityNotes, setExpandedActivityNotes] = useState<Record<number, boolean>>({});
   const [historyExpanded, setHistoryExpanded] = useState(false);
@@ -633,7 +634,36 @@ export default function CustomerDetailPage() {
                             size="icon"
                             className="shrink-0"
                             title="Call"
-                            onClick={() => setCallNotesDialogOpen(true)}
+                            onClick={() => {
+                              setCallNotesPhone(customer.phone!);
+                              setCallNotesDialogOpen(true);
+                            }}
+                          >
+                            <Phone className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                      <Label className="mt-3 block text-muted-foreground font-normal">
+                        Alternative phone <span className="text-xs">(not used for automations)</span>
+                      </Label>
+                      <div className="flex gap-2 items-center mt-1">
+                        <Input
+                          className="flex-1"
+                          value={customer.alternative_phone || ''}
+                          onChange={(e) => handleFieldChange('alternative_phone', e.target.value)}
+                          onBlur={(e) => handleUpdateCustomer('alternative_phone', e.target.value)}
+                        />
+                        {customer.alternative_phone && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            className="shrink-0"
+                            title="Call alternative number"
+                            onClick={() => {
+                              setCallNotesPhone(customer.alternative_phone!);
+                              setCallNotesDialogOpen(true);
+                            }}
                           >
                             <Phone className="h-4 w-4" />
                           </Button>
@@ -1349,13 +1379,13 @@ export default function CustomerDetailPage() {
         />
       )}
 
-      {customer && customer.phone && (
+      {customer && callNotesPhone && (
         <CallNotesDialog
           open={callNotesDialogOpen}
           onOpenChange={setCallNotesDialogOpen}
           customerId={customerId}
           customerName={customer.name}
-          phone={customer.phone}
+          phone={callNotesPhone}
           onSuccess={() => {
             fetchHistory();
             fetchActivities();

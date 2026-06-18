@@ -274,6 +274,8 @@ export interface Customer {
   name: string;
   email?: string;
   phone?: string;
+  /** Staff-only; not used for SMS automations or outreach matching. */
+  alternative_phone?: string;
   address_line1?: string;
   address_line2?: string;
   city?: string;

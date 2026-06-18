@@ -157,6 +157,8 @@ class Customer(SQLModel, table=True):
     name: str
     email: Optional[str] = None
     phone: Optional[str] = None
+    # Staff-only secondary number; not used for SMS automations, webhooks, or outreach matching.
+    alternative_phone: Optional[str] = None
     address_line1: Optional[str] = None
     address_line2: Optional[str] = None
     city: Optional[str] = None

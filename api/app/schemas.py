@@ -324,6 +324,7 @@ class CustomerCreate(BaseModel):
     name: str
     email: Optional[str] = None
     phone: Optional[str] = None
+    alternative_phone: Optional[str] = None
     address_line1: Optional[str] = None
     address_line2: Optional[str] = None
     city: Optional[str] = None
@@ -336,6 +337,7 @@ class CustomerUpdate(BaseModel):
     name: Optional[str] = None
     email: Optional[str] = None
     phone: Optional[str] = None
+    alternative_phone: Optional[str] = None
     address_line1: Optional[str] = None
     address_line2: Optional[str] = None
     city: Optional[str] = None
@@ -352,6 +354,7 @@ class CustomerResponse(BaseModel):
     name: str
     email: Optional[str]
     phone: Optional[str]
+    alternative_phone: Optional[str] = None
     address_line1: Optional[str]
     address_line2: Optional[str]
     city: Optional[str]
@@ -377,6 +380,7 @@ def customer_to_response(customer: Customer) -> CustomerResponse:
         name=customer.name,
         email=customer.email,
         phone=customer.phone,
+        alternative_phone=getattr(customer, "alternative_phone", None),
         address_line1=customer.address_line1,
         address_line2=customer.address_line2,
         city=customer.city,

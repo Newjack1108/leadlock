@@ -149,6 +149,7 @@ def get_customers(
                 Customer.name.ilike(search_term),
                 Customer.email.ilike(search_term),
                 Customer.phone.ilike(search_term),
+                Customer.alternative_phone.ilike(search_term),
                 Customer.customer_number.ilike(search_term),
                 Customer.postcode.ilike(search_term),
             )
