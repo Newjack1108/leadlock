@@ -69,6 +69,7 @@ export default function QuoteDetailPage() {
   const [loading, setLoading] = useState(true);
   const [sendEmailDialogOpen, setSendEmailDialogOpen] = useState(false);
   const [termsExpanded, setTermsExpanded] = useState(false);
+  const [specSheetExpanded, setSpecSheetExpanded] = useState(false);
   const [discountRequests, setDiscountRequests] = useState<DiscountRequest[]>([]);
   const [requestDialogOpen, setRequestDialogOpen] = useState(false);
   const [callNotesOpen, setCallNotesOpen] = useState(false);
@@ -797,6 +798,32 @@ export default function QuoteDetailPage() {
                   <CardContent>
                     <div className="whitespace-pre-wrap text-sm">
                       {quote.terms_and_conditions}
+                    </div>
+                  </CardContent>
+                )}
+              </Card>
+            )}
+
+            {/* Specification Sheet */}
+            {quote.specification_sheet && (
+              <Card>
+                <CardHeader
+                  className="cursor-pointer hover:bg-muted/50 transition-colors rounded-t-lg"
+                  onClick={() => setSpecSheetExpanded((prev) => !prev)}
+                >
+                  <div className="flex items-center justify-between">
+                    <CardTitle>Specification Sheet</CardTitle>
+                    {specSheetExpanded ? (
+                      <ChevronUp className="h-5 w-5 text-muted-foreground shrink-0" />
+                    ) : (
+                      <ChevronDown className="h-5 w-5 text-muted-foreground shrink-0" />
+                    )}
+                  </div>
+                </CardHeader>
+                {specSheetExpanded && (
+                  <CardContent>
+                    <div className="whitespace-pre-wrap text-sm">
+                      {quote.specification_sheet}
                     </div>
                   </CardContent>
                 )}

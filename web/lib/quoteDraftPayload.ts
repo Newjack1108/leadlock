@@ -48,6 +48,7 @@ export function isPlaceholderOnlyDraftItems(
 export type QuoteDraftPayload = {
   valid_until?: string;
   terms_and_conditions?: string;
+  specification_sheet?: string;
   notes?: string;
   deposit_amount?: number;
   items: Array<{
@@ -65,6 +66,7 @@ export type QuoteDraftPayload = {
   discount_template_ids?: number[];
   temperature?: QuoteTemperature;
   include_spec_sheets?: boolean;
+  include_specification_sheet?: boolean;
   include_available_optional_extras?: boolean;
   displayed_optional_extra_ids?: number[];
   include_delivery_installation_contact_note?: boolean;
@@ -87,9 +89,11 @@ export interface BuildDraftPayloadInput {
   items: QuoteItemCreate[];
   validUntil: string;
   termsAndConditions: string;
+  specificationSheet: string;
   notes: string;
   temperature: QuoteTemperature | '';
   includeSpecSheets: boolean;
+  includeSpecificationSheet: boolean;
   includeAvailableOptionalExtras: boolean;
   displayedOptionalExtraIds: number[];
   includeDeliveryInstallationContactNote: boolean;
@@ -111,9 +115,11 @@ export function buildUpdateDraftPayload(input: BuildDraftPayloadInput): QuoteDra
     items,
     validUntil,
     termsAndConditions,
+    specificationSheet,
     notes,
     temperature,
     includeSpecSheets,
+    includeSpecificationSheet,
     includeAvailableOptionalExtras,
     displayedOptionalExtraIds,
     includeDeliveryInstallationContactNote,
@@ -195,6 +201,7 @@ export function buildUpdateDraftPayload(input: BuildDraftPayloadInput): QuoteDra
     items: payloadItems,
     discount_template_ids: selectedDiscountIds.length > 0 ? selectedDiscountIds : undefined,
     include_spec_sheets: includeSpecSheets,
+    include_specification_sheet: includeSpecificationSheet,
     include_available_optional_extras: includeAvailableOptionalExtras,
     displayed_optional_extra_ids:
       displayedOptionalExtraIds.length > 0 ? displayedOptionalExtraIds : [],
@@ -215,6 +222,9 @@ export function buildUpdateDraftPayload(input: BuildDraftPayloadInput): QuoteDra
   }
   if (termsAndConditions?.trim()) {
     payload.terms_and_conditions = termsAndConditions.trim();
+  }
+  if (specificationSheet?.trim()) {
+    payload.specification_sheet = specificationSheet.trim();
   }
   if (notes?.trim()) {
     payload.notes = notes.trim();
@@ -246,6 +256,7 @@ export function buildPlaceholderOnlyDraftPayloadFromQuote(quote: Quote): QuoteDr
       },
     ],
     include_spec_sheets: quote.include_spec_sheets,
+    include_specification_sheet: quote.include_specification_sheet,
     include_available_optional_extras: quote.include_available_optional_extras,
     displayed_optional_extra_ids: quote.displayed_optional_extra_ids ?? [],
     include_delivery_installation_contact_note: quote.include_delivery_installation_contact_note,
@@ -265,6 +276,9 @@ export function buildPlaceholderOnlyDraftPayloadFromQuote(quote: Quote): QuoteDr
   }
   if (quote.terms_and_conditions?.trim()) {
     payload.terms_and_conditions = quote.terms_and_conditions.trim();
+  }
+  if (quote.specification_sheet?.trim()) {
+    payload.specification_sheet = quote.specification_sheet.trim();
   }
   if (quote.notes?.trim()) {
     payload.notes = quote.notes.trim();

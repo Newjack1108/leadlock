@@ -87,6 +87,10 @@ from app.available_optional_extras import (
     get_available_optional_extras_for_quote,
     should_show_available_optional_extras_on_quote,
 )
+from app.specification_sheet import (
+    resolve_specification_sheet_text,
+    should_include_specification_sheet,
+)
 from app.quote_displayed_optional_extras import (
     get_displayed_optional_extra_ids,
     sync_quote_displayed_optional_extras,
@@ -157,11 +161,12 @@ def ensure_quote_share_link(
     customer: Customer,
     current_user: User,
     include_available_extras: bool,
+    include_specification_sheet: bool = False,
 ) -> tuple[QuoteEmail, str, bool]:
     """
     Ensure a QuoteEmail row with view_token exists (reuse latest with token).
     If newly created: set quote to SENT, add NOTE activity.
-    If reusing and include_available_extras is True, upgrade the flag on the row.
+    If reusing and include_available_extras or include_specification_sheet is True, upgrade flags on the row.
     Returns (quote_email, view_url, created_new).
     """
     base_url = _frontend_base_url()
@@ -180,8 +185,14 @@ def ensure_quote_share_link(
     quote_email = session.exec(statement).first()
 
     if quote_email and quote_email.view_token:
+        upgraded = False
         if include_available_extras and not getattr(quote_email, "include_available_extras", False):
             quote_email.include_available_extras = True
+            upgraded = True
+        if include_specification_sheet and not getattr(quote_email, "include_specification_sheet", False):
+            quote_email.include_specification_sheet = True
+            upgraded = True
+        if upgraded:
             session.add(quote_email)
             session.commit()
             session.refresh(quote_email)
@@ -202,6 +213,7 @@ def ensure_quote_share_link(
         tracking_id=tracking_id,
         view_token=view_token,
         include_available_extras=include_available_extras,
+        include_specification_sheet=include_specification_sheet,
     )
     session.add(quote_email)
 
@@ -532,6 +544,7 @@ def build_quote_list_response(
         currency=quote.currency,
         valid_until=quote.valid_until,
         terms_and_conditions=quote.terms_and_conditions,
+        specification_sheet=quote.specification_sheet,
         notes=quote.notes,
         created_by_id=quote.created_by_id,
         sent_at=quote.sent_at,
@@ -556,6 +569,7 @@ def build_quote_list_response(
         owner_id=quote.owner_id,
         temperature=quote.temperature,
         include_spec_sheets=getattr(quote, "include_spec_sheets", True),
+        include_specification_sheet=getattr(quote, "include_specification_sheet", False),
         include_available_optional_extras=getattr(quote, "include_available_optional_extras", False),
         include_delivery_installation_contact_note=getattr(
             quote, "include_delivery_installation_contact_note", False
@@ -650,6 +664,7 @@ def build_quote_response(
         currency=quote.currency,
         valid_until=quote.valid_until,
         terms_and_conditions=quote.terms_and_conditions,
+        specification_sheet=quote.specification_sheet,
         notes=quote.notes,
         created_by_id=quote.created_by_id,
         sent_at=quote.sent_at,
@@ -674,6 +689,7 @@ def build_quote_response(
         owner_id=quote.owner_id,
         temperature=quote.temperature,
         include_spec_sheets=getattr(quote, "include_spec_sheets", True),
+        include_specification_sheet=getattr(quote, "include_specification_sheet", False),
         include_available_optional_extras=getattr(quote, "include_available_optional_extras", False),
         include_delivery_installation_contact_note=getattr(quote, "include_delivery_installation_contact_note", False),
         fulfillment_method=getattr(quote, "fulfillment_method", QuoteFulfillmentMethod.DELIVERY),
@@ -913,6 +929,7 @@ def create_order_from_quote(quote: Quote, session: Session, created_by_id: int) 
         balance_amount=quote.balance_amount,
         currency=quote.currency,
         terms_and_conditions=quote.terms_and_conditions,
+        specification_sheet=quote.specification_sheet,
         notes=quote.notes,
         created_by_id=created_by_id,
         fulfillment_method=getattr(quote, "fulfillment_method", QuoteFulfillmentMethod.DELIVERY),
@@ -1056,10 +1073,12 @@ async def create_quote(
             currency="GBP",
             valid_until=quote_data.valid_until,
             terms_and_conditions=quote_data.terms_and_conditions,
+            specification_sheet=getattr(quote_data, "specification_sheet", None),
             notes=quote_data.notes,
             created_by_id=current_user.id,
             temperature=quote_data.temperature,
             include_spec_sheets=getattr(quote_data, "include_spec_sheets", True),
+            include_specification_sheet=getattr(quote_data, "include_specification_sheet", False),
             include_available_optional_extras=getattr(quote_data, "include_available_optional_extras", False),
             include_delivery_installation_contact_note=getattr(quote_data, "include_delivery_installation_contact_note", False),
             fulfillment_method=fulfillment_method,
@@ -1640,12 +1659,14 @@ def _build_duplicate_draft_payload_from_source(source: Quote, session: Session) 
     return QuoteDraftUpdate(
         valid_until=source.valid_until,
         terms_and_conditions=source.terms_and_conditions,
+        specification_sheet=source.specification_sheet,
         notes=source.notes,
         deposit_amount=source.deposit_amount,
         items=item_rows,
         discount_template_ids=template_ids if template_ids else None,
         temperature=source.temperature,
         include_spec_sheets=source.include_spec_sheets,
+        include_specification_sheet=source.include_specification_sheet,
         include_available_optional_extras=source.include_available_optional_extras,
         include_delivery_installation_contact_note=source.include_delivery_installation_contact_note,
         fulfillment_method=getattr(source, "fulfillment_method", QuoteFulfillmentMethod.DELIVERY),
@@ -1780,17 +1801,20 @@ async def apply_quote_configuration(
         draft_payload = QuoteDraftUpdate(
             valid_until=quote.valid_until,
             terms_and_conditions=quote.terms_and_conditions,
+            specification_sheet=quote.specification_sheet,
             notes=quote.notes,
             deposit_amount=quote.deposit_amount,
             items=[],
             temperature=quote.temperature,
             include_spec_sheets=quote.include_spec_sheets,
+            include_specification_sheet=quote.include_specification_sheet,
             include_available_optional_extras=quote.include_available_optional_extras,
             include_delivery_installation_contact_note=quote.include_delivery_installation_contact_note,
             fulfillment_method=getattr(quote, "fulfillment_method", QuoteFulfillmentMethod.DELIVERY),
         )
     draft_payload.items = [_generated_line_to_quote_item(line) for line in preview.items]
     draft_payload.include_spec_sheets = False
+    draft_payload.include_specification_sheet = False
     draft_payload.include_available_optional_extras = False
     if payload.delivery_estimate_inclusion == ConfiguratorDeliveryEstimateInclusion.COLLECTION:
         draft_payload.fulfillment_method = QuoteFulfillmentMethod.COLLECTION
@@ -1848,6 +1872,7 @@ async def duplicate_quote_to_draft(
         loss_category=None,
         owner_id=None,
         include_spec_sheets=source.include_spec_sheets,
+        include_specification_sheet=source.include_specification_sheet,
         include_available_optional_extras=source.include_available_optional_extras,
         include_delivery_installation_contact_note=source.include_delivery_installation_contact_note,
         fulfillment_method=getattr(source, "fulfillment_method", QuoteFulfillmentMethod.DELIVERY),
@@ -2052,12 +2077,16 @@ def _update_draft_quote_impl(
         quote.valid_until = quote_data.valid_until
     if quote_data.terms_and_conditions is not None:
         quote.terms_and_conditions = quote_data.terms_and_conditions
+    if quote_data.specification_sheet is not None:
+        quote.specification_sheet = quote_data.specification_sheet
     if quote_data.notes is not None:
         quote.notes = quote_data.notes
     if quote_data.temperature is not None:
         quote.temperature = quote_data.temperature
     if quote_data.include_spec_sheets is not None:
         quote.include_spec_sheets = quote_data.include_spec_sheets
+    if quote_data.include_specification_sheet is not None:
+        quote.include_specification_sheet = quote_data.include_specification_sheet
     if quote_data.include_available_optional_extras is not None:
         quote.include_available_optional_extras = quote_data.include_available_optional_extras
     if quote_data.include_delivery_installation_contact_note is not None:
@@ -2227,6 +2256,7 @@ async def get_quote_view_link(
         customer,
         current_user,
         include_available_extras=getattr(quote, "include_available_optional_extras", False),
+        include_specification_sheet=getattr(quote, "include_specification_sheet", False),
     )
     return QuoteViewLinkResponse(view_url=view_url)
 
@@ -2255,6 +2285,7 @@ async def post_quote_share_link(
         customer,
         current_user,
         include_available_extras=bool(req.include_available_extras),
+        include_specification_sheet=bool(req.include_specification_sheet),
     )
     _transition_customer_leads_to_quoted_after_send(
         quote.customer_id, session, current_user.id
@@ -2286,6 +2317,7 @@ async def post_quote_send_sms(
         customer,
         current_user,
         include_available_extras=bool(req.include_available_extras),
+        include_specification_sheet=bool(req.include_specification_sheet),
     )
 
     to_phone = resolve_sms_to_phone(
@@ -2547,6 +2579,7 @@ async def send_quote_email_endpoint(
             tracking_id=message_id or f"quote-{quote.id}-{datetime.utcnow().timestamp()}",
             view_token=view_token,
             include_available_extras=getattr(req, "include_available_extras", False) or False,
+            include_specification_sheet=getattr(req, "include_specification_sheet", False) or False,
         )
         session.add(quote_email)
         
@@ -2803,6 +2836,10 @@ async def preview_quote_pdf(
         default=None,
         description="Override quote setting for 'Other Available Options' section. None uses quote.include_available_optional_extras.",
     ),
+    include_specification_sheet: bool | None = Query(
+        default=None,
+        description="Override quote setting for standard specification sheet. None uses quote.include_specification_sheet.",
+    ),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
@@ -2853,10 +2890,24 @@ async def preview_quote_pdf(
             if show_optional_extras
             else None
         )
+        use_specification_sheet = (
+            include_specification_sheet is True
+            or (
+                include_specification_sheet is None
+                and should_include_specification_sheet(quote)
+            )
+        )
+        spec_sheet_text = (
+            resolve_specification_sheet_text(quote, company_settings)
+            if use_specification_sheet
+            else ""
+        )
         pdf_buffer = generate_quote_pdf(
             quote, customer, quote_items, company_settings, session,
             include_spec_sheets=use_spec_sheets,
             available_optional_extras=available_extras,
+            include_specification_sheet=use_specification_sheet and bool(spec_sheet_text),
+            specification_sheet_text=spec_sheet_text or None,
         )
         pdf_content = pdf_buffer.read()
         

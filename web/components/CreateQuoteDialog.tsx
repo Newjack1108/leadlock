@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { createQuote, getProducts, getProduct, getOptionalExtras } from '@/lib/api';
+import { createQuote, getProducts, getProduct, getOptionalExtras, getCompanySettings } from '@/lib/api';
 import {
   optionalExtraIdSetFromList,
   isRootQuoteLevelOptionalExtraLine,
@@ -62,9 +62,11 @@ export default function CreateQuoteDialog({
   ]);
   const [validUntil, setValidUntil] = useState('');
   const [termsAndConditions, setTermsAndConditions] = useState('');
+  const [specificationSheet, setSpecificationSheet] = useState('');
   const [notes, setNotes] = useState('');
   const [depositAmount, setDepositAmount] = useState<number | ''>('');
   const [includeSpecSheets, setIncludeSpecSheets] = useState(false);
+  const [includeSpecificationSheet, setIncludeSpecificationSheet] = useState(false);
   const [includeAvailableOptionalExtras, setIncludeAvailableOptionalExtras] = useState(false);
   const [includeDeliveryInstallationContactNote, setIncludeDeliveryInstallationContactNote] =
     useState(false);
@@ -83,6 +85,7 @@ export default function CreateQuoteDialog({
   const [extraPickerOpen, setExtraPickerOpen] = useState(false);
   const [extraPickerFilter, setExtraPickerFilter] = useState('');
   const [termsExpanded, setTermsExpanded] = useState(false);
+  const [specSheetExpanded, setSpecSheetExpanded] = useState(false);
 
   const optionalExtraIds = useMemo(
     () => optionalExtraIdSetFromList(allOptionalExtras),
@@ -100,6 +103,19 @@ export default function CreateQuoteDialog({
     if (open) {
       fetchProducts();
       fetchOptionalExtras();
+      void (async () => {
+        try {
+          const settings = await getCompanySettings();
+          if (settings?.default_terms_and_conditions) {
+            setTermsAndConditions(settings.default_terms_and_conditions);
+          }
+          if (settings?.default_specification_sheet) {
+            setSpecificationSheet(settings.default_specification_sheet);
+          }
+        } catch {
+          // Non-blocking
+        }
+      })();
       // Set default valid until to 30 days from now
       const date = new Date();
       date.setDate(date.getDate() + 30);
@@ -301,6 +317,9 @@ export default function CreateQuoteDialog({
       if (termsAndConditions && termsAndConditions.trim()) {
         quoteData.terms_and_conditions = termsAndConditions.trim();
       }
+      if (specificationSheet && specificationSheet.trim()) {
+        quoteData.specification_sheet = specificationSheet.trim();
+      }
       if (notes && notes.trim()) {
         quoteData.notes = notes.trim();
       }
@@ -309,6 +328,7 @@ export default function CreateQuoteDialog({
         quoteData.deposit_amount = Number(depositAmount);
       }
       quoteData.include_spec_sheets = includeSpecSheets;
+      quoteData.include_specification_sheet = includeSpecificationSheet;
       quoteData.include_available_optional_extras = includeAvailableOptionalExtras;
       quoteData.displayed_optional_extra_ids =
         displayedOptionalExtraIds.length > 0 ? displayedOptionalExtraIds : [];
@@ -344,6 +364,7 @@ export default function CreateQuoteDialog({
       date.setDate(date.getDate() + 30);
       setValidUntil(date.toISOString().split('T')[0]);
       setTermsAndConditions('');
+      setSpecificationSheet('');
       setNotes('');
       setDepositAmount('');
 
@@ -652,6 +673,40 @@ export default function CreateQuoteDialog({
                     rows={4}
                   />
                 )}
+              </div>
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  className="flex items-center justify-between w-full text-left font-medium leading-none hover:opacity-80"
+                  onClick={() => setSpecSheetExpanded((prev) => !prev)}
+                >
+                  <Label className="cursor-pointer">Specification Sheet</Label>
+                  {specSheetExpanded ? (
+                    <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+                  )}
+                </button>
+                {specSheetExpanded && (
+                  <Textarea
+                    value={specificationSheet}
+                    onChange={(e) => setSpecificationSheet(e.target.value)}
+                    placeholder="Enter specification sheet content..."
+                    rows={4}
+                  />
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="include_specification_sheet_dialog"
+                  checked={includeSpecificationSheet}
+                  onChange={(e) => setIncludeSpecificationSheet(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300"
+                />
+                <Label htmlFor="include_specification_sheet_dialog" className="font-normal cursor-pointer">
+                  Include specification sheet when sending quote
+                </Label>
               </div>
               <div className="flex items-center gap-2">
                 <input

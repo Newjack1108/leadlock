@@ -680,6 +680,7 @@ class QuoteEmailSendRequest(BaseModel):
     bcc: Optional[str] = None
     custom_message: Optional[str] = None  # Optional message appended to template
     include_available_extras: Optional[bool] = False  # Show optional extras section in view/PDF
+    include_specification_sheet: Optional[bool] = False  # Include standard spec sheet in view/PDF
 
 
 class QuoteEmailSendResponse(BaseModel):
@@ -696,6 +697,7 @@ class QuoteViewLinkResponse(BaseModel):
 
 class QuoteShareLinkRequest(BaseModel):
     include_available_extras: Optional[bool] = False
+    include_specification_sheet: Optional[bool] = False
 
 
 class QuoteShareLinkResponse(BaseModel):
@@ -707,6 +709,7 @@ class QuoteSendSmsRequest(BaseModel):
     to_phone: Optional[str] = None  # Defaults to customer phone
     body: Optional[str] = None  # Defaults to a short message with the view link
     include_available_extras: Optional[bool] = False
+    include_specification_sheet: Optional[bool] = False
 
 
 class QuoteSendSmsResponse(BaseModel):
@@ -1368,6 +1371,7 @@ class CompanySettingsCreate(BaseModel):
     logo_url: Optional[str] = None
     footer_logo_url: Optional[str] = None
     default_terms_and_conditions: Optional[str] = None
+    default_specification_sheet: Optional[str] = None
     email_disclaimer: Optional[str] = None
     default_email_signature: Optional[str] = None  # HTML; used for sends without a user_id
     hourly_install_rate: Optional[Decimal] = None
@@ -1438,6 +1442,7 @@ class CompanySettingsUpdate(BaseModel):
     logo_url: Optional[str] = None
     footer_logo_url: Optional[str] = None
     default_terms_and_conditions: Optional[str] = None
+    default_specification_sheet: Optional[str] = None
     email_disclaimer: Optional[str] = None
     default_email_signature: Optional[str] = None
     hourly_install_rate: Optional[Decimal] = None
@@ -1509,6 +1514,7 @@ class CompanySettingsResponse(BaseModel):
     logo_url: Optional[str] = None
     footer_logo_url: Optional[str] = None
     default_terms_and_conditions: Optional[str]
+    default_specification_sheet: Optional[str] = None
     email_disclaimer: Optional[str] = None
     default_email_signature: Optional[str] = None
     hourly_install_rate: Optional[Decimal] = None
@@ -1646,12 +1652,14 @@ class QuoteCreate(BaseModel):
     version: int = 1
     valid_until: Optional[datetime] = None
     terms_and_conditions: Optional[str] = None
+    specification_sheet: Optional[str] = None
     notes: Optional[str] = None
     deposit_amount: Optional[Decimal] = None  # Optional deposit amount inc VAT (defaults to 50% of total inc VAT if not provided)
     items: List[QuoteItemCreate]
     discount_template_ids: Optional[List[int]] = None  # List of discount template IDs to apply
     temperature: Optional[QuoteTemperature] = None
     include_spec_sheets: bool = True  # Include product spec sheets when generating quote PDF
+    include_specification_sheet: bool = False  # Include standard spec sheet when sending quote
     include_available_optional_extras: bool = False  # Show extras not on quote in customer view/PDF
     include_delivery_installation_contact_note: bool = False  # Footer re delivery/install contact
     displayed_optional_extra_ids: Optional[List[int]] = None  # Show on PDF/view only (not line items)
@@ -1672,12 +1680,14 @@ class QuoteDraftUpdate(BaseModel):
     """Update draft quote: items, metadata, and discounts. Only allowed when status is DRAFT."""
     valid_until: Optional[datetime] = None
     terms_and_conditions: Optional[str] = None
+    specification_sheet: Optional[str] = None
     notes: Optional[str] = None
     deposit_amount: Optional[Decimal] = None  # inc VAT
     items: List[QuoteItemCreate]
     discount_template_ids: Optional[List[int]] = None
     temperature: Optional[QuoteTemperature] = None
     include_spec_sheets: Optional[bool] = None  # Include product spec sheets when generating quote PDF
+    include_specification_sheet: Optional[bool] = None  # Include standard spec sheet when sending quote
     include_available_optional_extras: Optional[bool] = None  # Show extras not on quote in customer view/PDF
     include_delivery_installation_contact_note: Optional[bool] = None  # Footer re delivery/install contact
     displayed_optional_extra_ids: Optional[List[int]] = None  # Show on PDF/view only (not line items)
@@ -1696,9 +1706,11 @@ class QuoteUpdate(BaseModel):
     status: Optional["QuoteStatus"] = None
     valid_until: Optional[datetime] = None
     terms_and_conditions: Optional[str] = None
+    specification_sheet: Optional[str] = None
     notes: Optional[str] = None
     deposit_amount: Optional[Decimal] = None  # inc VAT
     include_spec_sheets: Optional[bool] = None  # Include product spec sheets when generating quote PDF
+    include_specification_sheet: Optional[bool] = None  # Include standard spec sheet when sending quote
     include_available_optional_extras: Optional[bool] = None  # Show extras not on quote in customer view/PDF
     include_delivery_installation_contact_note: Optional[bool] = None  # Footer re delivery/install contact
     # Opportunity fields
@@ -1729,6 +1741,7 @@ class QuoteResponse(BaseModel):
     currency: str
     valid_until: Optional[datetime]
     terms_and_conditions: Optional[str]
+    specification_sheet: Optional[str] = None
     notes: Optional[str]
     created_by_id: int
     sent_at: Optional[datetime]
@@ -1755,6 +1768,7 @@ class QuoteResponse(BaseModel):
     owner_id: Optional[int] = None
     temperature: Optional[QuoteTemperature] = None
     include_spec_sheets: bool = True  # Include product spec sheets when generating quote PDF
+    include_specification_sheet: bool = False  # Include standard spec sheet when sending quote
     include_available_optional_extras: bool = False  # Show extras not on quote in customer view/PDF
     include_delivery_installation_contact_note: bool = False  # Footer re delivery/install contact
     displayed_optional_extra_ids: List[int] = []  # Show on PDF/view only (not line items)
@@ -1885,6 +1899,8 @@ class PublicQuoteViewResponse(BaseModel):
     total_amount_inc_vat: Optional[Decimal] = None
     items: List[PublicQuoteViewItemResponse]
     terms_and_conditions: Optional[str] = None
+    specification_sheet: Optional[str] = None
+    show_specification_sheet: bool = False
     company_display: Optional[PublicQuoteCompanyDisplay] = None
     available_optional_extras: Optional[List[AvailableExtraResponse]] = None
     delivery_installation_contact_note: Optional[str] = None  # Full text when quote opts in
@@ -2028,6 +2044,7 @@ class OrderResponse(BaseModel):
     balance_amount: Decimal
     currency: str
     terms_and_conditions: Optional[str] = None
+    specification_sheet: Optional[str] = None
     notes: Optional[str] = None
     created_by_id: int
     created_at: datetime

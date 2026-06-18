@@ -537,6 +537,7 @@ export const sendQuoteEmail = async (
     bcc?: string;
     custom_message?: string;
     include_available_extras?: boolean;
+    include_specification_sheet?: boolean;
   },
   attachments?: File[]
 ) => {
@@ -713,7 +714,7 @@ export const getQuoteViewLink = async (quoteId: number): Promise<{ view_url: str
 /** Ensure a customer view token exists and return the URL (no email or SMS). */
 export const postQuoteShareLink = async (
   quoteId: number,
-  body?: { include_available_extras?: boolean }
+  body?: { include_available_extras?: boolean; include_specification_sheet?: boolean }
 ): Promise<{ view_url: string; quote_email_id: number }> => {
   const response = await api.post(`/api/quotes/${quoteId}/share-link`, body ?? {});
   return response.data;
@@ -722,7 +723,7 @@ export const postQuoteShareLink = async (
 /** Send the customer view link by SMS (Twilio). */
 export const sendQuoteSms = async (
   quoteId: number,
-  data?: { to_phone?: string; body?: string; include_available_extras?: boolean }
+  data?: { to_phone?: string; body?: string; include_available_extras?: boolean; include_specification_sheet?: boolean }
 ): Promise<{ view_url: string; quote_email_id: number; message: string }> => {
   const response = await api.post(`/api/quotes/${quoteId}/send-sms`, data ?? {});
   return response.data;
@@ -903,6 +904,7 @@ export const createQuote = async (quoteData: {
   version?: number;
   valid_until?: string;
   terms_and_conditions?: string;
+  specification_sheet?: string;
   notes?: string;
   deposit_amount?: number;
   /** When true, lead stays QUALIFIED until applyQualifiedToQuotedTransition is called */
@@ -921,6 +923,7 @@ export const createQuote = async (quoteData: {
   discount_template_ids?: number[];
   temperature?: QuoteTemperature;
   include_spec_sheets?: boolean;
+  include_specification_sheet?: boolean;
   include_available_optional_extras?: boolean;
   include_delivery_installation_contact_note?: boolean;
   fulfillment_method?: QuoteFulfillmentMethod;
@@ -1411,6 +1414,7 @@ export const sendReviewPrizeDrawCongratulations = async (
 export const updateDraftQuote = async (quoteId: number, quoteData: {
   valid_until?: string;
   terms_and_conditions?: string;
+  specification_sheet?: string;
   notes?: string;
   deposit_amount?: number;
   items: Array<{
@@ -1427,6 +1431,7 @@ export const updateDraftQuote = async (quoteId: number, quoteData: {
   discount_template_ids?: number[];
   temperature?: QuoteTemperature;
   include_spec_sheets?: boolean;
+  include_specification_sheet?: boolean;
   include_available_optional_extras?: boolean;
   include_delivery_installation_contact_note?: boolean;
   fulfillment_method?: QuoteFulfillmentMethod;
@@ -1477,12 +1482,14 @@ export const downloadLeadHandoverPdf = async (leadId: number, options?: LeadHand
 
 export const previewQuotePdf = async (
   quoteId: number,
-  options?: { includeSpecSheets?: boolean; includeOptionalExtras?: boolean }
+  options?: { includeSpecSheets?: boolean; includeOptionalExtras?: boolean; includeSpecificationSheet?: boolean }
 ) => {
   const params: Record<string, string> = {};
   if (options?.includeSpecSheets === false) params.include_spec_sheets = 'false';
   if (options?.includeOptionalExtras === false) params.include_optional_extras = 'false';
   if (options?.includeOptionalExtras === true) params.include_optional_extras = 'true';
+  if (options?.includeSpecificationSheet === true) params.include_specification_sheet = 'true';
+  if (options?.includeSpecificationSheet === false) params.include_specification_sheet = 'false';
   const response = await api.get(`/api/quotes/${quoteId}/preview-pdf`, {
     responseType: 'blob',
     params,

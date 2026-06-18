@@ -260,6 +260,7 @@ def build_order_response(order: Order, order_items: List[OrderItem], session: Se
         balance_amount=order.balance_amount,
         currency=order.currency,
         terms_and_conditions=order.terms_and_conditions,
+        specification_sheet=order.specification_sheet,
         notes=order.notes,
         created_by_id=order.created_by_id,
         created_at=order.created_at,

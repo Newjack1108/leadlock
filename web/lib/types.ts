@@ -672,6 +672,7 @@ export interface CompanySettings {
   logo_url?: string;
   footer_logo_url?: string;
   default_terms_and_conditions?: string;
+  default_specification_sheet?: string;
   email_disclaimer?: string;
   default_email_signature?: string;
   hourly_install_rate?: number;
@@ -1034,6 +1035,7 @@ export interface QuoteEmailSendRequest {
   bcc?: string;
   custom_message?: string;
   include_available_extras?: boolean;
+  include_specification_sheet?: boolean;
 }
 
 export interface QuoteEmailSendResponse {
@@ -1285,6 +1287,7 @@ export interface Order {
   balance_amount: number;
   currency: string;
   terms_and_conditions?: string | null;
+  specification_sheet?: string | null;
   notes?: string | null;
   created_by_id: number;
   created_at: string;
@@ -1370,6 +1373,7 @@ export interface Quote {
   balance_amount_inc_vat?: number;
   valid_until?: string;
   terms_and_conditions?: string;
+  specification_sheet?: string;
   notes?: string;
   created_by_id: number;
   sent_at?: string;
@@ -1391,6 +1395,7 @@ export interface Quote {
   owner_id?: number;
   temperature?: QuoteTemperature;
   include_spec_sheets?: boolean;
+  include_specification_sheet?: boolean;
   /** Show extras not yet on the quote in customer online view and PDF */
   include_available_optional_extras?: boolean;
   /** Optional extra product IDs shown on PDF/view only (not quote line items) */
@@ -1504,6 +1509,8 @@ export interface PublicQuoteView {
   total_amount_inc_vat?: number;
   items: PublicQuoteViewItem[];
   terms_and_conditions?: string;
+  specification_sheet?: string;
+  show_specification_sheet?: boolean;
   company_display?: PublicQuoteCompanyDisplay;
   available_optional_extras?: AvailableExtraResponse[];
   /** Full message when quote opts in; omitted when disabled */
@@ -1523,11 +1530,14 @@ export interface QuoteCreate {
   version?: number;
   valid_until?: string;
   terms_and_conditions?: string;
+  specification_sheet?: string;
   notes?: string;
   deposit_amount?: number;
   items: QuoteItemCreate[];
   discount_template_ids?: number[];
   temperature?: QuoteTemperature;
+  include_spec_sheets?: boolean;
+  include_specification_sheet?: boolean;
   fulfillment_method?: QuoteFulfillmentMethod;
   use_alternate_delivery_address?: boolean;
   delivery_address_line1?: string;

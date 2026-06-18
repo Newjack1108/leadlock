@@ -582,6 +582,8 @@ def generate_quote_pdf(
     session: Optional[Session] = None,
     include_spec_sheets: bool = True,
     available_optional_extras: Optional[List[Any]] = None,
+    include_specification_sheet: bool = False,
+    specification_sheet_text: Optional[str] = None,
     dealer_profile: Optional[Dict[str, str]] = None,
     trader_logo_url: Optional[str] = None,
     layout: Optional[Any] = None,
@@ -1094,6 +1096,41 @@ def generate_quote_pdf(
             except Exception as e:
                 print(f"Could not append product spec sheets: {e}", file=sys.stderr, flush=True)
 
+    spec_sheet_buffer: Optional[BytesIO] = None
+    resolved_spec_sheet_text = (specification_sheet_text or "").strip()
+    if include_specification_sheet and resolved_spec_sheet_text and company_settings:
+        spec_sheet_buffer = BytesIO()
+        spec_sheet_doc = SimpleDocTemplate(
+            spec_sheet_buffer,
+            pagesize=A4,
+            topMargin=10 * mm,
+            bottomMargin=FOOTER_BOTTOM_MARGIN,
+            leftMargin=15 * mm,
+            rightMargin=15 * mm,
+        )
+        spec_sheet_elements: List[Any] = []
+        spec_sheet_elements.extend(
+            _build_header_flowables(
+                company_settings,
+                logo_path,
+                logo_bytes,
+                normal_style,
+                company_name_style,
+                customer.customer_number,
+                trading_name_override=trading_name_override,
+            )
+        )
+        spec_sheet_elements.append(Paragraph("Specification Sheet:", heading_style))
+        for line in resolved_spec_sheet_text.split("\n"):
+            if line.strip():
+                spec_sheet_elements.append(Paragraph(line.strip(), terms_style))
+        spec_sheet_elements.append(Spacer(1, 8))
+        if footer_drawer:
+            spec_sheet_doc.build(spec_sheet_elements, onFirstPage=footer_drawer, onLaterPages=footer_drawer)
+        else:
+            spec_sheet_doc.build(spec_sheet_elements)
+        spec_sheet_buffer.seek(0)
+
     terms_buffer: Optional[BytesIO] = None
     if terms_text and company_settings:
         terms_buffer = BytesIO()
@@ -1128,13 +1165,15 @@ def generate_quote_pdf(
             terms_doc.build(terms_elements)
         terms_buffer.seek(0)
 
-    if spec_buffer or terms_buffer:
+    if spec_buffer or spec_sheet_buffer or terms_buffer:
         from pypdf import PdfWriter, PdfReader
 
         writer = PdfWriter()
         writer.append(PdfReader(buffer))
         if spec_buffer:
             writer.append(PdfReader(spec_buffer))
+        if spec_sheet_buffer:
+            writer.append(PdfReader(spec_sheet_buffer))
         if terms_buffer:
             writer.append(PdfReader(terms_buffer))
         merged = BytesIO()
@@ -1154,6 +1193,8 @@ def generate_quote_pdf_cached(
     session: Optional[Session] = None,
     include_spec_sheets: bool = True,
     available_optional_extras: Optional[List[Any]] = None,
+    include_specification_sheet: bool = False,
+    specification_sheet_text: Optional[str] = None,
     dealer_profile: Optional[Dict[str, str]] = None,
     trader_logo_url: Optional[str] = None,
 ) -> tuple[bytes, bool]:
@@ -1179,6 +1220,8 @@ def generate_quote_pdf_cached(
         session=session,
         include_spec_sheets=include_spec_sheets,
         available_optional_extras=available_optional_extras,
+        include_specification_sheet=include_specification_sheet,
+        specification_sheet_text=specification_sheet_text,
         dealer_profile=dealer_profile,
         trader_logo_url=trader_logo_url,
     )

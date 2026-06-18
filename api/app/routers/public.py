@@ -31,6 +31,10 @@ from app.available_optional_extras import (
     get_available_optional_extras_for_quote,
     should_show_available_optional_extras_on_quote,
 )
+from app.specification_sheet import (
+    resolve_specification_sheet_text,
+    should_include_specification_sheet,
+)
 from app.configurator_layout_public import build_layout_for_public_view
 from app.schemas import (
     PublicQuoteViewResponse,
@@ -245,6 +249,12 @@ def get_public_quote_view(
             for item in items
         ],
         terms_and_conditions=quote.terms_and_conditions,
+        specification_sheet=(
+            resolve_specification_sheet_text(quote, company_settings)
+            if should_include_specification_sheet(quote, quote_email=quote_email)
+            else None
+        ),
+        show_specification_sheet=should_include_specification_sheet(quote, quote_email=quote_email),
         company_display=company_display,
         available_optional_extras=(
             get_available_optional_extras_for_quote(
@@ -343,6 +353,12 @@ def get_public_quote_pdf(
         show_optional_extras = should_show_available_optional_extras_on_quote(
             quote, quote.id, session, quote_email=quote_email
         )
+        use_specification_sheet = should_include_specification_sheet(quote, quote_email=quote_email)
+        spec_sheet_text = (
+            resolve_specification_sheet_text(quote, company_settings)
+            if use_specification_sheet
+            else ""
+        )
         available_extras = (
             get_available_optional_extras_for_quote(
                 list(quote_items),
@@ -364,6 +380,8 @@ def get_public_quote_pdf(
             session,
             include_spec_sheets=include_spec_sheets,
             available_optional_extras=available_extras,
+            include_specification_sheet=use_specification_sheet and bool(spec_sheet_text),
+            specification_sheet_text=spec_sheet_text or None,
             layout=build_layout_for_public_view(session, quote.id),
         )
         pdf_content = pdf_buffer.read()

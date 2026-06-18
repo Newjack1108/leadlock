@@ -3310,6 +3310,71 @@ def create_db_and_tables():
                         if "already exists" not in error_str and "duplicate" not in error_str:
                             print(f"Warning adding {col_name} to weeklyplanitem: {e}", file=sys.stderr, flush=True)
 
+        # Standard specification sheet (company default + per-quote override + per-send flag)
+        has_company_settings = inspector.has_table("companysettings")
+        if has_company_settings:
+            company_columns = [col["name"] for col in inspector.get_columns("companysettings")]
+            if "default_specification_sheet" not in company_columns:
+                print("Adding default_specification_sheet column to companysettings table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE companysettings ADD COLUMN default_specification_sheet TEXT"))
+                    print("Added default_specification_sheet column to companysettings table", file=sys.stderr, flush=True)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Error adding default_specification_sheet column: {e}", file=sys.stderr, flush=True)
+
+        if has_quote_table:
+            quote_columns = [col["name"] for col in inspector.get_columns("quote")]
+            if "specification_sheet" not in quote_columns:
+                print("Adding specification_sheet column to quote table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE quote ADD COLUMN specification_sheet TEXT"))
+                    print("Added specification_sheet column to quote table", file=sys.stderr, flush=True)
+                except Exception as col_error:
+                    error_str = str(col_error).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Warning: Could not add specification_sheet column: {col_error}", file=sys.stderr, flush=True)
+            quote_columns = [col["name"] for col in inspector.get_columns("quote")]
+            if "include_specification_sheet" not in quote_columns:
+                print("Adding include_specification_sheet column to quote table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE quote ADD COLUMN include_specification_sheet BOOLEAN DEFAULT FALSE"))
+                    print("Added include_specification_sheet column to quote table", file=sys.stderr, flush=True)
+                except Exception as col_error:
+                    error_str = str(col_error).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Warning: Could not add include_specification_sheet column: {col_error}", file=sys.stderr, flush=True)
+
+        if inspector.has_table("customer_order"):
+            order_columns = [col["name"] for col in inspector.get_columns("customer_order")]
+            if "specification_sheet" not in order_columns:
+                print("Adding specification_sheet column to customer_order table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE customer_order ADD COLUMN specification_sheet TEXT"))
+                    print("Added specification_sheet column to customer_order table", file=sys.stderr, flush=True)
+                except Exception as col_error:
+                    error_str = str(col_error).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Warning: Could not add specification_sheet to customer_order: {col_error}", file=sys.stderr, flush=True)
+
+        if inspector.has_table("quoteemail"):
+            quoteemail_columns = [col["name"] for col in inspector.get_columns("quoteemail")]
+            if "include_specification_sheet" not in quoteemail_columns:
+                print("Adding include_specification_sheet column to quoteemail table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE quoteemail ADD COLUMN include_specification_sheet BOOLEAN DEFAULT FALSE"))
+                    print("Added include_specification_sheet column to quoteemail table", file=sys.stderr, flush=True)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Error adding include_specification_sheet to quoteemail: {e}", file=sys.stderr, flush=True)
+
         # Facebook advert schema: handled by _ensure_facebook_advert_schema() immediately after create_all.
 
         # messenger_message table is created by SQLModel.metadata.create_all() when MessengerMessage model is imported

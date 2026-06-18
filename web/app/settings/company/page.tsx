@@ -60,6 +60,7 @@ export default function CompanySettingsPage() {
   const [reviewExpanded, setReviewExpanded] = useState(false);
   const [botAvatarMissing, setBotAvatarMissing] = useState(false);
   const [termsExpanded, setTermsExpanded] = useState(false);
+  const [specSheetExpanded, setSpecSheetExpanded] = useState(false);
   const [smsBotInstructionsExpanded, setSmsBotInstructionsExpanded] = useState(false);
   const defaultBotHours: BotWeekSchedule = {
     mon: { enabled: true, start: '09:00', end: '17:00' },
@@ -89,6 +90,7 @@ export default function CompanySettingsPage() {
     logo_url: '',
     footer_logo_url: '',
     default_terms_and_conditions: '',
+    default_specification_sheet: '',
     email_disclaimer: '',
     default_email_signature: '',
     installation_lead_time_stables: '' as InstallationLeadTime | '',
@@ -184,6 +186,7 @@ export default function CompanySettingsPage() {
         logo_url: response.data.logo_url || '',
         footer_logo_url: response.data.footer_logo_url || '',
         default_terms_and_conditions: response.data.default_terms_and_conditions || '',
+        default_specification_sheet: response.data.default_specification_sheet || '',
         email_disclaimer: response.data.email_disclaimer || '',
         default_email_signature: response.data.default_email_signature || '',
         installation_lead_time_stables:
@@ -1740,6 +1743,40 @@ export default function CompanySettingsPage() {
                   />
                   <p className="text-sm text-muted-foreground">
                     These terms will be automatically pre-filled when creating new quotes. Users can still edit them before submitting.
+                  </p>
+                </>
+              )}
+            </div>
+
+            <div className="rounded-lg p-4 bg-stone-50/30 dark:bg-stone-950/20 border-l-4 border-l-stone-200 dark:border-l-stone-800 mt-6 space-y-2">
+              <h3 className="text-lg font-medium">Specification Sheet</h3>
+              <button
+                type="button"
+                className="flex items-center justify-between w-full text-left font-medium leading-none hover:opacity-80 py-2"
+                onClick={() => setSpecSheetExpanded((prev) => !prev)}
+              >
+                <Label htmlFor="default_specification_sheet" className="cursor-pointer">
+                  Default Specification Sheet
+                </Label>
+                {specSheetExpanded ? (
+                  <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" />
+                ) : (
+                  <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+                )}
+              </button>
+              {specSheetExpanded && (
+                <>
+                  <Textarea
+                    id="default_specification_sheet"
+                    value={formData.default_specification_sheet}
+                    onChange={(e) => setFormData({ ...formData, default_specification_sheet: e.target.value })}
+                    placeholder="Enter default specification sheet content that will be pre-filled when creating quotes..."
+                    rows={12}
+                    disabled={saving}
+                    className="font-mono text-sm"
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    This content will be automatically pre-filled when creating new quotes. Users can still edit it before submitting.
                   </p>
                 </>
               )}

@@ -68,6 +68,7 @@ export default function SendQuoteEmailDialog({
     bcc: '',
     custom_message: '',
     include_available_extras: false,
+    include_specification_sheet: false,
   });
   const [smsPhone, setSmsPhone] = useState(customer.phone || '');
   const [smsBody, setSmsBody] = useState('');
@@ -84,6 +85,7 @@ export default function SendQuoteEmailDialog({
         bcc: '',
         custom_message: '',
         include_available_extras: false,
+        include_specification_sheet: false,
       });
       setSmsPhone(customer.phone || '');
       setSmsBody('');
@@ -113,6 +115,7 @@ export default function SendQuoteEmailDialog({
           setFormData((prev) => ({
             ...prev,
             include_available_extras: q.include_available_optional_extras ?? false,
+            include_specification_sheet: q.include_specification_sheet ?? false,
           }));
         } catch {
           // keep default false
@@ -167,6 +170,7 @@ export default function SendQuoteEmailDialog({
     try {
       const { view_url } = await postQuoteShareLink(quoteId, {
         include_available_extras: formData.include_available_extras ?? false,
+        include_specification_sheet: formData.include_specification_sheet ?? false,
       });
       await navigator.clipboard.writeText(view_url);
       toast.success('Customer view link copied to clipboard');
@@ -212,6 +216,7 @@ export default function SendQuoteEmailDialog({
           ...formData,
           template_id: selectedTemplateId,
           include_available_extras: formData.include_available_extras ?? false,
+          include_specification_sheet: formData.include_specification_sheet ?? false,
         },
         emailAttachments.length ? emailAttachments : undefined
       );
@@ -247,6 +252,7 @@ export default function SendQuoteEmailDialog({
         to_phone: smsPhone.trim() || undefined,
         body: smsBody.trim() || undefined,
         include_available_extras: formData.include_available_extras ?? false,
+        include_specification_sheet: formData.include_specification_sheet ?? false,
       });
       toast.success('SMS sent successfully');
       setSuccessState({ type: 'sms', view_url: response.view_url });
@@ -396,6 +402,21 @@ export default function SendQuoteEmailDialog({
           />
           <Label htmlFor="include_extras_shared" className="font-normal cursor-pointer">
             Show available optional extras in the online view
+          </Label>
+        </div>
+
+        <div className="flex items-center space-x-2 py-2 border-b border-border">
+          <input
+            type="checkbox"
+            id="include_spec_sheet_shared"
+            checked={formData.include_specification_sheet ?? false}
+            onChange={(e) =>
+              setFormData({ ...formData, include_specification_sheet: e.target.checked })
+            }
+            className="h-4 w-4 rounded border-gray-300"
+          />
+          <Label htmlFor="include_spec_sheet_shared" className="font-normal cursor-pointer">
+            Include specification sheet in customer view
           </Label>
         </div>
 

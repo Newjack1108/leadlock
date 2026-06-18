@@ -149,9 +149,11 @@ function CreateQuoteContent() {
   ]);
   const [validUntil, setValidUntil] = useState('');
   const [termsAndConditions, setTermsAndConditions] = useState('');
+  const [specificationSheet, setSpecificationSheet] = useState('');
   const [notes, setNotes] = useState('');
   const [temperature, setTemperature] = useState<QuoteTemperature | ''>(QuoteTemperature.WARM);
   const [includeSpecSheets, setIncludeSpecSheets] = useState(false);
+  const [includeSpecificationSheet, setIncludeSpecificationSheet] = useState(false);
   const [includeAvailableOptionalExtras, setIncludeAvailableOptionalExtras] = useState(false);
   const [includeDeliveryInstallationContactNote, setIncludeDeliveryInstallationContactNote] =
     useState(false);
@@ -174,6 +176,7 @@ function CreateQuoteContent() {
   const [extraPickerOpen, setExtraPickerOpen] = useState(false);
   const [extraPickerFilter, setExtraPickerFilter] = useState('');
   const [termsExpanded, setTermsExpanded] = useState(false);
+  const [specSheetExpanded, setSpecSheetExpanded] = useState(false);
   const [deliveryEstimate, setDeliveryEstimate] = useState<DeliveryInstallEstimateResponse | null>(null);
   const [deliveryEstimateLoading, setDeliveryEstimateLoading] = useState(false);
   const [deliveryEstimateError, setDeliveryEstimateError] = useState<string | null>(null);
@@ -259,6 +262,9 @@ function CreateQuoteContent() {
         setTermsAndConditions(settings.default_terms_and_conditions);
       } else {
         setTermsAndConditions(DEFAULT_TERMS_AND_CONDITIONS);
+      }
+      if (settings?.default_specification_sheet) {
+        setSpecificationSheet(settings.default_specification_sheet);
       }
     } catch (error) {
       // If settings don't exist or error, use hardcoded default
@@ -507,9 +513,11 @@ function CreateQuoteContent() {
         items,
         validUntil,
         termsAndConditions,
+        specificationSheet,
         notes,
         temperature,
         includeSpecSheets,
+        includeSpecificationSheet,
         includeAvailableOptionalExtras,
         displayedOptionalExtraIds,
         includeDeliveryInstallationContactNote,
@@ -529,9 +537,11 @@ function CreateQuoteContent() {
       items,
       validUntil,
       termsAndConditions,
+      specificationSheet,
       notes,
       temperature,
       includeSpecSheets,
+      includeSpecificationSheet,
       includeAvailableOptionalExtras,
       displayedOptionalExtraIds,
       includeDeliveryInstallationContactNote,
@@ -555,9 +565,11 @@ function CreateQuoteContent() {
         items,
         validUntil,
         termsAndConditions,
+        specificationSheet,
         notes,
         temperature,
         includeSpecSheets,
+        includeSpecificationSheet,
         includeAvailableOptionalExtras,
         displayedOptionalExtraIds,
         includeDeliveryInstallationContactNote,
@@ -577,9 +589,11 @@ function CreateQuoteContent() {
       items,
       validUntil,
       termsAndConditions,
+      specificationSheet,
       notes,
       temperature,
       includeSpecSheets,
+      includeSpecificationSheet,
       includeAvailableOptionalExtras,
       displayedOptionalExtraIds,
       includeDeliveryInstallationContactNote,
@@ -671,9 +685,11 @@ function CreateQuoteContent() {
             setValidUntil(d.toISOString().split('T')[0]);
           }
           setTermsAndConditions(q.terms_and_conditions ?? '');
+          setSpecificationSheet(q.specification_sheet ?? '');
           setNotes(q.notes ?? '');
           setTemperature(q.temperature ?? QuoteTemperature.WARM);
           setIncludeSpecSheets(q.include_spec_sheets ?? false);
+          setIncludeSpecificationSheet(q.include_specification_sheet ?? false);
           setIncludeAvailableOptionalExtras(q.include_available_optional_extras ?? false);
           setDisplayedOptionalExtraIds(q.displayed_optional_extra_ids ?? []);
           setIncludeDeliveryInstallationContactNote(
@@ -767,11 +783,13 @@ function CreateQuoteContent() {
           ],
           valid_until: new Date(vu).toISOString(),
           terms_and_conditions: termsAndConditions.trim() || undefined,
+          specification_sheet: specificationSheet.trim() || undefined,
           notes: notes.trim() || undefined,
           deposit_amount: depositAmount !== '' ? Number(depositAmount) : undefined,
           temperature: temperature ? temperature : undefined,
           discount_template_ids: selectedDiscountIds.length > 0 ? selectedDiscountIds : undefined,
           include_spec_sheets: includeSpecSheets,
+          include_specification_sheet: includeSpecificationSheet,
           include_available_optional_extras: includeAvailableOptionalExtras,
           include_delivery_installation_contact_note: includeDeliveryInstallationContactNote,
           fulfillment_method: fulfillmentMethod,
@@ -1522,6 +1540,40 @@ function CreateQuoteContent() {
                       rows={6}
                     />
                   )}
+                </div>
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    className="flex items-center justify-between w-full text-left font-medium leading-none hover:opacity-80"
+                    onClick={() => setSpecSheetExpanded((prev) => !prev)}
+                  >
+                    <Label className="cursor-pointer">Specification Sheet</Label>
+                    {specSheetExpanded ? (
+                      <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+                    )}
+                  </button>
+                  {specSheetExpanded && (
+                    <Textarea
+                      value={specificationSheet}
+                      onChange={(e) => setSpecificationSheet(e.target.value)}
+                      placeholder="Enter specification sheet content..."
+                      rows={6}
+                    />
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="include_specification_sheet"
+                    checked={includeSpecificationSheet}
+                    onChange={(e) => setIncludeSpecificationSheet(e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300"
+                  />
+                  <Label htmlFor="include_specification_sheet" className="font-normal cursor-pointer">
+                    Include specification sheet when sending quote
+                  </Label>
                 </div>
                 <div className="flex items-center gap-2">
                   <input

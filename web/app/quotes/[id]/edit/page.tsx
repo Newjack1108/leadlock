@@ -135,9 +135,11 @@ function EditQuoteContent() {
   const [items, setItems] = useState<QuoteItemCreate[]>([]);
   const [validUntil, setValidUntil] = useState('');
   const [termsAndConditions, setTermsAndConditions] = useState('');
+  const [specificationSheet, setSpecificationSheet] = useState('');
   const [notes, setNotes] = useState('');
   const [temperature, setTemperature] = useState<QuoteTemperature | ''>('');
   const [includeSpecSheets, setIncludeSpecSheets] = useState(false);
+  const [includeSpecificationSheet, setIncludeSpecificationSheet] = useState(false);
   const [includeAvailableOptionalExtras, setIncludeAvailableOptionalExtras] = useState(false);
   const [includeDeliveryInstallationContactNote, setIncludeDeliveryInstallationContactNote] =
     useState(false);
@@ -163,6 +165,7 @@ function EditQuoteContent() {
   const [extraPickerOpen, setExtraPickerOpen] = useState(false);
   const [extraPickerFilter, setExtraPickerFilter] = useState('');
   const [termsExpanded, setTermsExpanded] = useState(false);
+  const [specSheetExpanded, setSpecSheetExpanded] = useState(false);
   const [deliveryEstimate, setDeliveryEstimate] = useState<DeliveryInstallEstimateResponse | null>(null);
   const [deliveryEstimateLoading, setDeliveryEstimateLoading] = useState(false);
   const [deliveryEstimateError, setDeliveryEstimateError] = useState<string | null>(null);
@@ -243,9 +246,11 @@ function EditQuoteContent() {
         quoteData.valid_until ? new Date(quoteData.valid_until).toISOString().split('T')[0] : ''
       );
       setTermsAndConditions(quoteData.terms_and_conditions ?? '');
+      setSpecificationSheet(quoteData.specification_sheet ?? '');
       setNotes(quoteData.notes ?? '');
       setTemperature(quoteData.temperature ?? '');
       setIncludeSpecSheets(quoteData.include_spec_sheets ?? true);
+      setIncludeSpecificationSheet(quoteData.include_specification_sheet ?? false);
       setIncludeAvailableOptionalExtras(quoteData.include_available_optional_extras ?? false);
       setDisplayedOptionalExtraIds(quoteData.displayed_optional_extra_ids ?? []);
       setIncludeDeliveryInstallationContactNote(
@@ -519,9 +524,11 @@ function EditQuoteContent() {
         items,
         validUntil,
         termsAndConditions,
+        specificationSheet,
         notes,
         temperature,
         includeSpecSheets,
+        includeSpecificationSheet,
         includeAvailableOptionalExtras,
         displayedOptionalExtraIds,
         includeDeliveryInstallationContactNote,
@@ -541,9 +548,11 @@ function EditQuoteContent() {
       items,
       validUntil,
       termsAndConditions,
+      specificationSheet,
       notes,
       temperature,
       includeSpecSheets,
+      includeSpecificationSheet,
       includeAvailableOptionalExtras,
       displayedOptionalExtraIds,
       includeDeliveryInstallationContactNote,
@@ -567,9 +576,11 @@ function EditQuoteContent() {
         items,
         validUntil,
         termsAndConditions,
+        specificationSheet,
         notes,
         temperature,
         includeSpecSheets,
+        includeSpecificationSheet,
         includeAvailableOptionalExtras,
         displayedOptionalExtraIds,
         includeDeliveryInstallationContactNote,
@@ -589,9 +600,11 @@ function EditQuoteContent() {
       items,
       validUntil,
       termsAndConditions,
+      specificationSheet,
       notes,
       temperature,
       includeSpecSheets,
+      includeSpecificationSheet,
       includeAvailableOptionalExtras,
       displayedOptionalExtraIds,
       includeDeliveryInstallationContactNote,
@@ -1435,6 +1448,40 @@ function EditQuoteContent() {
                       rows={6}
                     />
                   )}
+                </div>
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    className="flex items-center justify-between w-full text-left font-medium leading-none hover:opacity-80"
+                    onClick={() => setSpecSheetExpanded((prev) => !prev)}
+                  >
+                    <Label className="cursor-pointer">Specification Sheet</Label>
+                    {specSheetExpanded ? (
+                      <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+                    )}
+                  </button>
+                  {specSheetExpanded && (
+                    <Textarea
+                      value={specificationSheet}
+                      onChange={(e) => setSpecificationSheet(e.target.value)}
+                      placeholder="Enter specification sheet content..."
+                      rows={6}
+                    />
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="include_specification_sheet_edit"
+                    checked={includeSpecificationSheet}
+                    onChange={(e) => setIncludeSpecificationSheet(e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300"
+                  />
+                  <Label htmlFor="include_specification_sheet_edit" className="font-normal cursor-pointer">
+                    Include specification sheet when sending quote
+                  </Label>
                 </div>
                 <div className="flex items-center gap-2">
                   <input

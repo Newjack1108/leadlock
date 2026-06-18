@@ -472,6 +472,7 @@ class CompanySettings(SQLModel, table=True):
     logo_url: Optional[str] = None  # Uploaded logo URL (Cloudinary or /static/...); preferred over logo_filename for PDFs
     footer_logo_url: Optional[str] = None  # Separate logo for PDF footer (optional; falls back to logo_url if not set)
     default_terms_and_conditions: Optional[str] = None  # Default terms and conditions for quotes
+    default_specification_sheet: Optional[str] = None  # Default specification sheet for quotes
     email_disclaimer: Optional[str] = None  # Standard disclaimer appended to all outgoing emails (HTML)
     default_email_signature: Optional[str] = None  # Used when sending without a user_id (HTML); per-user signature overrides when user_id is set
     hourly_install_rate: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(10, 2)))  # Hourly rate for installation cost calculation
@@ -618,6 +619,7 @@ class Quote(SQLModel, table=True):
     currency: str = Field(default="GBP")
     valid_until: Optional[datetime] = None
     terms_and_conditions: Optional[str] = None
+    specification_sheet: Optional[str] = None
     notes: Optional[str] = None
     created_by_id: int = Field(foreign_key="user.id")
     sent_at: Optional[datetime] = None
@@ -630,6 +632,7 @@ class Quote(SQLModel, table=True):
 
     temperature: Optional[QuoteTemperature] = Field(default=None)
     include_spec_sheets: bool = Field(default=True)  # Include product spec sheets when generating quote PDF
+    include_specification_sheet: bool = Field(default=False)  # Include standard spec sheet when sending quote
     include_available_optional_extras: bool = Field(default=False)  # Show extras not on quote in customer view/PDF
     include_delivery_installation_contact_note: bool = Field(default=False)  # Footer note re delivery/install contact
     fulfillment_method: QuoteFulfillmentMethod = Field(default=QuoteFulfillmentMethod.DELIVERY)
@@ -768,6 +771,7 @@ class QuoteEmail(SQLModel, table=True):
     view_token: Optional[str] = Field(default=None, unique=True, index=True)  # For public quote view URL
     open_count: int = Field(default=0)  # Number of times view link was opened
     include_available_extras: bool = Field(default=False)  # Show optional extras section in view/PDF
+    include_specification_sheet: bool = Field(default=False)  # Include standard spec sheet in view/PDF
 
     # Relationships
     quote: Quote = Relationship(back_populates="email_sends")
@@ -955,6 +959,7 @@ class Order(SQLModel, table=True):
     balance_amount: Decimal = Field(default=0, sa_column=Column(Numeric(10, 2)))  # inc VAT
     currency: str = Field(default="GBP")
     terms_and_conditions: Optional[str] = None
+    specification_sheet: Optional[str] = None
     notes: Optional[str] = None
     created_by_id: int = Field(foreign_key="user.id")
     created_at: datetime = Field(default_factory=datetime.utcnow)

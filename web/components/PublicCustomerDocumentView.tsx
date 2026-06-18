@@ -23,6 +23,7 @@ export default function PublicCustomerDocumentView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showTerms, setShowTerms] = useState(false);
+  const [showSpecSheet, setShowSpecSheet] = useState(false);
 
   useEffect(() => {
     if (!token) return;
@@ -299,8 +300,37 @@ export default function PublicCustomerDocumentView() {
                 </button>
               </div>
             )}
+
+            {data.show_specification_sheet && data.specification_sheet && (
+              <div className="pt-2 print:hidden">
+                <button
+                  type="button"
+                  className="text-sm text-primary hover:underline"
+                  onClick={() => setShowSpecSheet((prev) => !prev)}
+                >
+                  {showSpecSheet ? 'Hide specification sheet' : 'View specification sheet'}
+                </button>
+              </div>
+            )}
           </CardContent>
         </Card>
+
+        {data.show_specification_sheet && data.specification_sheet && (
+          <div
+            id="specification-sheet"
+            className={`quote-view-print mt-8 ${showSpecSheet ? 'block' : 'hidden print:block'}`}
+            style={{ pageBreakBefore: 'always' }}
+          >
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg">Specification Sheet</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground whitespace-pre-wrap">{data.specification_sheet}</p>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {data.terms_and_conditions && (
           <div
