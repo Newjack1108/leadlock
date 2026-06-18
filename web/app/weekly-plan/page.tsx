@@ -675,7 +675,7 @@ export default function WeeklyPlanPage() {
                       {hasSmsStop(item) ? (
                         <Badge
                           variant="destructive"
-                          title="Customer opted out via STOP — do not send automated SMS"
+                          title="Customer opted out via SMS — do not send automated SMS"
                         >
                           SMS STOP
                         </Badge>
@@ -761,7 +761,7 @@ export default function WeeklyPlanPage() {
                           onClick={() => handleComposeSms(item)}
                           title={
                             hasSmsStop(item)
-                              ? 'Customer opted out via SMS STOP'
+                              ? 'Customer opted out via SMS opt-out'
                               : canComposeSms(item)
                                 ? 'Open SMS composer with suggested message'
                                 : 'Customer has no phone number'
@@ -797,7 +797,7 @@ export default function WeeklyPlanPage() {
                       onClick={() => handleSendItem(item)}
                       title={
                         isSmsSendBlocked(item)
-                          ? 'Customer opted out via SMS STOP'
+                          ? 'Customer opted out via SMS opt-out'
                           : isItemSendable(item)
                             ? 'Send or log this action now'
                             : 'Only pending review items can be sent'

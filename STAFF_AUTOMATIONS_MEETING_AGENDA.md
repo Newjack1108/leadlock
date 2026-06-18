@@ -49,7 +49,7 @@
 | **Scheduled SMS** | Due time reached (~45 sec worker) | Customer SMS — schedule send |
 | **SMS bot (out of hours)** | Customer texts known number | Company Settings: bot mode, hours, instructions |
 | **Inbound email** | Known customer email (~5 min poll) | Customer must exist with that email |
-| **STOP / opt-out** | Keyword or Twilio block | Stops bot + automated reminder messages |
+| **STOP / PAUSE / HOLD / opt-out** | Keyword or Twilio block | Stops bot + automated reminder messages |
 
 **Rules:** No sends **23:00–06:00** (company timezone). Opt-out respected.
 

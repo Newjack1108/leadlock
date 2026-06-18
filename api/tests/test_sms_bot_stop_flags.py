@@ -85,6 +85,34 @@ def test_should_bot_reply_stop_sets_both_flags():
         assert customer.automated_reminder_outreach_opt_out is True
 
 
+def test_should_bot_reply_pause_and_hold_set_both_flags():
+    engine = _engine()
+    with Session(engine) as session:
+        settings = _seed_user_and_settings(session)
+
+        for keyword, body in (
+            ("PAUSE", "PAUSE"),
+            ("HOLD", "HOLD"),
+            ("PAUSE", "Please PAUSE messages"),
+            ("HOLD", "Please HOLD for now"),
+        ):
+            customer = Customer(
+                customer_number=f"CUST-{keyword}-{body.replace(' ', '-')}",
+                name=f"{keyword} Customer",
+                phone=f"+4477009{hash(body) % 100000:05d}",
+            )
+            session.add(customer)
+            session.commit()
+            session.refresh(customer)
+
+            should_reply, reason = should_bot_reply(session, settings, customer, body)
+
+            assert should_reply is False, body
+            assert reason == "opt_out_keyword", body
+            assert customer.sms_bot_stopped is True, body
+            assert customer.automated_reminder_outreach_opt_out is True, body
+
+
 def test_should_bot_reply_non_stop_does_not_force_opt_out():
     engine = _engine()
     with Session(engine) as session:
@@ -149,6 +177,53 @@ def test_backfill_stop_opt_out_customers_is_idempotent():
         assert normal_customer is not None
         assert normal_customer.sms_bot_stopped is False
         assert normal_customer.automated_reminder_outreach_opt_out is False
+
+
+def test_backfill_stop_opt_out_customers_picks_up_pause_and_hold():
+    engine = _engine()
+    with Session(engine) as session:
+        customer_pause = Customer(customer_number="CUST-PAUSE-001", name="Pause Customer", phone="+447700900555")
+        customer_hold = Customer(customer_number="CUST-HOLD-001", name="Hold Customer", phone="+447700900666")
+        session.add(customer_pause)
+        session.add(customer_hold)
+        session.commit()
+        session.refresh(customer_pause)
+        session.refresh(customer_hold)
+
+        session.add(
+            SmsMessage(
+                customer_id=customer_pause.id,
+                direction=SmsDirection.RECEIVED,
+                from_phone="+447700900555",
+                to_phone="+441234567890",
+                body="Please PAUSE messages",
+                received_at=datetime.utcnow(),
+            )
+        )
+        session.add(
+            SmsMessage(
+                customer_id=customer_hold.id,
+                direction=SmsDirection.RECEIVED,
+                from_phone="+447700900666",
+                to_phone="+441234567890",
+                body="HOLD",
+                received_at=datetime.utcnow(),
+            )
+        )
+        session.commit()
+
+        updated = backfill_stop_opt_out_customers(session)
+
+        pause_customer = session.get(Customer, customer_pause.id)
+        hold_customer = session.get(Customer, customer_hold.id)
+
+        assert updated == 2
+        assert pause_customer is not None
+        assert pause_customer.sms_bot_stopped is True
+        assert pause_customer.automated_reminder_outreach_opt_out is True
+        assert hold_customer is not None
+        assert hold_customer.sms_bot_stopped is True
+        assert hold_customer.automated_reminder_outreach_opt_out is True
 
 
 def test_should_bot_reply_thanks_does_not_reopen_conversation():

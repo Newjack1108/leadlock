@@ -424,7 +424,7 @@ export default function CustomerSmsPage() {
                   </div>
                   {isBotStopped && (
                     <p className="text-xs text-muted-foreground">
-                      Auto-replies are off for this customer until you resume. Messages like STOP from
+                      Auto-replies are off for this customer until you resume. Messages like STOP, PAUSE, or HOLD from
                       the customer also stop the bot until resumed.
                     </p>
                   )}

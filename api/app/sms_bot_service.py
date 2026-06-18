@@ -25,7 +25,7 @@ DEFAULT_BUSINESS_HOURS = {
     "sun": {"enabled": False, "start": "09:00", "end": "17:00"},
 }
 
-OPT_OUT_KEYWORDS = {"STOP", "UNSUBSCRIBE", "CANCEL", "END", "QUIT", "STOPALL"}
+OPT_OUT_KEYWORDS = {"STOP", "PAUSE", "HOLD", "UNSUBSCRIBE", "CANCEL", "END", "QUIT", "STOPALL"}
 BOT_HANDOVER_PREFIX = "[BOT_HANDOVER]"
 BOT_HANDOVER_MESSAGE = (
     f"{BOT_HANDOVER_PREFIX} Thanks for your message. "
