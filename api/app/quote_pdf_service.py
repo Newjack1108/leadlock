@@ -1100,54 +1100,77 @@ def generate_quote_pdf(
                 print(f"Could not append product spec sheets: {e}", file=sys.stderr, flush=True)
 
     spec_sheet_buffer: Optional[BytesIO] = None
+    spec_sheet_pdf_buffer: Optional[BytesIO] = None
     resolved_spec_sheet_text = (specification_sheet_text or "").strip()
-    resolved_spec_sheet_image_url = (specification_sheet_image_url or "").strip()
+    resolved_spec_sheet_file_url = (specification_sheet_image_url or "").strip()
     if include_specification_sheet and company_settings and (
-        resolved_spec_sheet_text or resolved_spec_sheet_image_url
+        resolved_spec_sheet_text or resolved_spec_sheet_file_url
     ):
-        spec_sheet_buffer = BytesIO()
-        spec_sheet_doc = SimpleDocTemplate(
-            spec_sheet_buffer,
-            pagesize=A4,
-            topMargin=10 * mm,
-            bottomMargin=FOOTER_BOTTOM_MARGIN,
-            leftMargin=15 * mm,
-            rightMargin=15 * mm,
-        )
-        spec_sheet_elements: List[Any] = []
-        spec_sheet_elements.extend(
-            _build_header_flowables(
-                company_settings,
-                logo_path,
-                logo_bytes,
-                normal_style,
-                company_name_style,
-                customer.customer_number,
-                trading_name_override=trading_name_override,
+        file_is_pdf = False
+        if resolved_spec_sheet_file_url:
+            from app.specification_sheet import (
+                fetch_specification_sheet_file_bytes,
+                is_specification_sheet_pdf_url,
             )
-        )
-        spec_sheet_elements.append(Paragraph("Specification Sheet:", heading_style))
-        if resolved_spec_sheet_image_url:
-            try:
-                from app.product_spec_pdf_service import _fetch_image_from_url
 
-                img_data = _fetch_image_from_url(resolved_spec_sheet_image_url)
-                if img_data:
-                    img_flowable = _image_from_bytes(img_data, width=180 * mm, max_height=240 * mm)
-                    if img_flowable:
-                        spec_sheet_elements.append(img_flowable)
-                        spec_sheet_elements.append(Spacer(1, 8))
-            except Exception as e:
-                print(f"Could not embed specification sheet image: {e}", file=sys.stderr, flush=True)
-        for line in resolved_spec_sheet_text.split("\n"):
-            if line.strip():
-                spec_sheet_elements.append(Paragraph(line.strip(), terms_style))
-        spec_sheet_elements.append(Spacer(1, 8))
-        if footer_drawer:
-            spec_sheet_doc.build(spec_sheet_elements, onFirstPage=footer_drawer, onLaterPages=footer_drawer)
-        else:
-            spec_sheet_doc.build(spec_sheet_elements)
-        spec_sheet_buffer.seek(0)
+            file_bytes = fetch_specification_sheet_file_bytes(resolved_spec_sheet_file_url)
+            file_is_pdf = bool(
+                file_bytes
+                and (
+                    file_bytes.startswith(b"%PDF-")
+                    or is_specification_sheet_pdf_url(resolved_spec_sheet_file_url)
+                )
+            )
+            if file_is_pdf and file_bytes:
+                spec_sheet_pdf_buffer = BytesIO(file_bytes)
+
+        needs_reportlab_page = bool(resolved_spec_sheet_text) or (
+            resolved_spec_sheet_file_url and not file_is_pdf
+        )
+        if needs_reportlab_page:
+            spec_sheet_buffer = BytesIO()
+            spec_sheet_doc = SimpleDocTemplate(
+                spec_sheet_buffer,
+                pagesize=A4,
+                topMargin=10 * mm,
+                bottomMargin=FOOTER_BOTTOM_MARGIN,
+                leftMargin=15 * mm,
+                rightMargin=15 * mm,
+            )
+            spec_sheet_elements: List[Any] = []
+            spec_sheet_elements.extend(
+                _build_header_flowables(
+                    company_settings,
+                    logo_path,
+                    logo_bytes,
+                    normal_style,
+                    company_name_style,
+                    customer.customer_number,
+                    trading_name_override=trading_name_override,
+                )
+            )
+            spec_sheet_elements.append(Paragraph("Specification Sheet:", heading_style))
+            if resolved_spec_sheet_file_url and not file_is_pdf:
+                try:
+                    from app.product_spec_pdf_service import _fetch_image_from_url
+
+                    img_data = _fetch_image_from_url(resolved_spec_sheet_file_url)
+                    if img_data:
+                        img_flowable = _image_from_bytes(img_data, width=180 * mm, max_height=240 * mm)
+                        if img_flowable:
+                            spec_sheet_elements.append(img_flowable)
+                            spec_sheet_elements.append(Spacer(1, 8))
+                except Exception as e:
+                    print(f"Could not embed specification sheet image: {e}", file=sys.stderr, flush=True)
+            for line in resolved_spec_sheet_text.split("\n"):
+                if line.strip():
+                    spec_sheet_elements.append(Paragraph(line.strip(), terms_style))
+            spec_sheet_elements.append(Spacer(1, 8))
+            if footer_drawer:
+                spec_sheet_doc.build(spec_sheet_elements, onFirstPage=footer_drawer, onLaterPages=footer_drawer)
+            else:
+                spec_sheet_doc.build(spec_sheet_elements)
+            spec_sheet_buffer.seek(0)
 
     terms_buffer: Optional[BytesIO] = None
     if terms_text and company_settings:
@@ -1183,13 +1206,15 @@ def generate_quote_pdf(
             terms_doc.build(terms_elements)
         terms_buffer.seek(0)
 
-    if spec_buffer or spec_sheet_buffer or terms_buffer:
+    if spec_buffer or spec_sheet_buffer or spec_sheet_pdf_buffer or terms_buffer:
         from pypdf import PdfWriter, PdfReader
 
         writer = PdfWriter()
         writer.append(PdfReader(buffer))
         if spec_buffer:
             writer.append(PdfReader(spec_buffer))
+        if spec_sheet_pdf_buffer:
+            writer.append(PdfReader(spec_sheet_pdf_buffer))
         if spec_sheet_buffer:
             writer.append(PdfReader(spec_sheet_buffer))
         if terms_buffer:

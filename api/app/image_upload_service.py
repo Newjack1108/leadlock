@@ -128,3 +128,65 @@ async def upload_product_image(file: UploadFile) -> str:
         # Fallback to local storage
         static_dir = Path(__file__).parent.parent / "static" / "products"
         return await upload_image_local(file, static_dir)
+
+
+def _normalize_specification_sheet_content_type(file: UploadFile, contents: bytes) -> str:
+    content_type = (file.content_type or "").lower().strip()
+    if content_type.startswith("image/"):
+        return content_type
+    if content_type == "application/pdf":
+        return content_type
+
+    filename = (file.filename or "").lower()
+    if contents.startswith(b"%PDF-") or filename.endswith(".pdf"):
+        return "application/pdf"
+
+    raise HTTPException(status_code=400, detail="File must be a PDF or image (PNG, JPG, GIF, WebP)")
+
+
+async def upload_specification_sheet_file(file: UploadFile) -> str:
+    """Upload a company specification sheet file (image or PDF)."""
+    contents = await file.read()
+    max_size = 10 * 1024 * 1024
+    if len(contents) > max_size:
+        raise HTTPException(status_code=400, detail="File size must be less than 10MB")
+    if not contents:
+        raise HTTPException(status_code=400, detail="Empty file")
+
+    content_type = _normalize_specification_sheet_content_type(file, contents)
+    is_pdf = content_type == "application/pdf"
+
+    cloud_name = os.getenv("CLOUDINARY_CLOUD_NAME")
+    api_key = os.getenv("CLOUDINARY_API_KEY")
+    api_secret = os.getenv("CLOUDINARY_API_SECRET")
+
+    if cloud_name and api_key and api_secret:
+        if not CLOUDINARY_AVAILABLE:
+            raise HTTPException(status_code=500, detail="Cloudinary is not configured")
+        try:
+            upload_kwargs = {
+                "folder": "company/specification-sheets",
+                "resource_type": "auto",
+                "use_filename": True,
+                "unique_filename": True,
+            }
+            if not is_pdf:
+                upload_kwargs["transformation"] = [
+                    {"width": 1200, "height": 1200, "crop": "limit"},
+                    {"quality": "auto"},
+                ]
+            upload_result = cloudinary.uploader.upload(contents, **upload_kwargs)
+            return upload_result["secure_url"]
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to upload file: {str(e)}")
+
+    static_dir = Path(__file__).parent.parent / "static" / "specification-sheets"
+    static_dir.mkdir(parents=True, exist_ok=True)
+    import uuid
+
+    suffix = ".pdf" if is_pdf else (Path(file.filename).suffix if file.filename else ".jpg")
+    unique_filename = f"{uuid.uuid4()}{suffix}"
+    file_path = static_dir / unique_filename
+    with open(file_path, "wb") as f:
+        f.write(contents)
+    return f"/static/specification-sheets/{unique_filename}"

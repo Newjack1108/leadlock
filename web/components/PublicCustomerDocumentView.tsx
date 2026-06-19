@@ -85,6 +85,9 @@ export default function PublicCustomerDocumentView() {
   const hasSpecificationSheetContent =
     data.show_specification_sheet &&
     Boolean(data.specification_sheet || data.specification_sheet_image_url);
+  const specSheetIsPdf = Boolean(
+    data.specification_sheet_image_url?.toLowerCase().split('?')[0].endsWith('.pdf')
+  );
 
   return (
     <div className="min-h-screen bg-muted/30 py-8 px-4 quote-view-page">
@@ -329,7 +332,14 @@ export default function PublicCustomerDocumentView() {
                 <CardTitle className="text-lg">Specification Sheet</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {data.specification_sheet_image_url && (
+                {data.specification_sheet_image_url && specSheetIsPdf && (
+                  <iframe
+                    src={data.specification_sheet_image_url}
+                    title="Specification sheet"
+                    className="w-full h-[70vh] border rounded"
+                  />
+                )}
+                {data.specification_sheet_image_url && !specSheetIsPdf && (
                   <img
                     src={data.specification_sheet_image_url}
                     alt="Specification sheet"

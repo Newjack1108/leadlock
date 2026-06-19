@@ -27,6 +27,7 @@ from app.quote_pdf_service import generate_quote_pdf
 from app.routers import public as public_router
 from app.specification_sheet import (
     has_specification_sheet_content,
+    is_specification_sheet_pdf_url,
     resolve_specification_sheet_image_url,
     resolve_specification_sheet_text,
     should_include_specification_sheet,
@@ -37,6 +38,18 @@ MINIMAL_PNG = (
     b"\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDATx\x9cc\x00\x01"
     b"\x00\x00\x05\x00\x01\r\n-\xdb\x00\x00\x00\x00IEND\xaeB`\x82"
 )
+
+
+def _minimal_pdf_bytes() -> bytes:
+    from reportlab.lib.pagesizes import A4
+    from reportlab.pdfgen import canvas
+
+    buf = BytesIO()
+    pdf = canvas.Canvas(buf, pagesize=A4)
+    pdf.drawString(72, 720, "Specification sheet PDF")
+    pdf.showPage()
+    pdf.save()
+    return buf.getvalue()
 
 
 def _pdf_text(buffer: BytesIO) -> str:
@@ -167,6 +180,12 @@ def test_resolve_specification_sheet_image_url_from_company_only():
     assert resolve_specification_sheet_image_url(None) == ""
 
 
+def test_is_specification_sheet_pdf_url():
+    assert is_specification_sheet_pdf_url("https://example.com/spec.pdf") is True
+    assert is_specification_sheet_pdf_url("https://example.com/spec.pdf?v=1") is True
+    assert is_specification_sheet_pdf_url("https://example.com/spec.png") is False
+
+
 def test_has_specification_sheet_content_true_when_only_image():
     quote = Quote(specification_sheet=None)
     company = CompanySettings(
@@ -264,6 +283,47 @@ def test_quote_pdf_includes_specification_sheet_image_when_enabled(monkeypatch):
 
     pdf_text = _pdf_text(pdf_buffer)
     assert "Specification Sheet:" in pdf_text
+    reader = PdfReader(pdf_buffer)
+    assert len(reader.pages) >= 2
+
+
+def test_quote_pdf_appends_specification_sheet_pdf_when_enabled(monkeypatch):
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SQLModel.metadata.create_all(engine)
+    _, quote_id = _seed_quote_with_spec_sheet(
+        engine,
+        company_default=None,
+        company_image_url="https://example.com/spec.pdf",
+        include_on_quote=True,
+    )
+
+    monkeypatch.setattr(
+        "app.specification_sheet.fetch_specification_sheet_file_bytes",
+        lambda _url: _minimal_pdf_bytes(),
+    )
+
+    with Session(engine) as session:
+        quote = session.get(Quote, quote_id)
+        customer = session.get(Customer, quote.customer_id)
+        items = list(session.exec(select(QuoteItem).where(QuoteItem.quote_id == quote_id)).all())
+        company_settings = session.exec(select(CompanySettings).limit(1)).first()
+        file_url = resolve_specification_sheet_image_url(company_settings)
+        pdf_buffer = generate_quote_pdf(
+            quote,
+            customer,
+            items,
+            company_settings=company_settings,
+            session=session,
+            include_spec_sheets=False,
+            include_specification_sheet=True,
+            specification_sheet_text=None,
+            specification_sheet_image_url=file_url,
+        )
+
     reader = PdfReader(pdf_buffer)
     assert len(reader.pages) >= 2
 

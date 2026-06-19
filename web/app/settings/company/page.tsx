@@ -12,6 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Save, ChevronDown, ChevronUp, Download, Upload, FileSpreadsheet, Eye, EyeOff } from 'lucide-react';
 import ImageUpload from '@/components/ImageUpload';
+import SpecSheetUpload from '@/components/SpecSheetUpload';
 import api, {
   downloadCustomerImportExample,
   importCustomersFromCsv,
@@ -1859,8 +1860,8 @@ export default function CompanySettingsPage() {
               </button>
               {specSheetExpanded && (
                 <>
-                  <ImageUpload
-                    label="Default specification sheet image (PNG/JPG)"
+                  <SpecSheetUpload
+                    label="Default specification sheet file (PDF or image)"
                     value={formData.default_specification_sheet_url}
                     onChange={handleSpecSheetImageChange}
                     disabled={saving}
@@ -1875,7 +1876,7 @@ export default function CompanySettingsPage() {
                     className="font-mono text-sm"
                   />
                   <p className="text-sm text-muted-foreground">
-                    Upload an image and/or enter text. The image is company-wide and included on quotes when the specification sheet option is enabled. Text is pre-filled when creating quotes and can still be edited per quote.
+                    Upload a PDF or image and/or enter text. The file is company-wide and included on quotes when the specification sheet option is enabled. Text is pre-filled when creating quotes and can still be edited per quote.
                   </p>
                 </>
               )}

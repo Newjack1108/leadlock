@@ -1676,6 +1676,17 @@ export const uploadProductImage = async (file: File) => {
   return response.data.image_url;
 };
 
+export const uploadSpecificationSheetFile = async (file: File) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  const response = await api.post('/api/settings/company/upload-specification-sheet', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+  return response.data.file_url;
+};
+
 export const getOptionalExtras = async () => {
   const response = await api.get('/api/products/optional-extras');
   return response.data;

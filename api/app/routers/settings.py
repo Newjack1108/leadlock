@@ -21,6 +21,7 @@ from app.customer_import_export import (
     import_customers_from_csv,
     export_customers_to_csv,
 )
+from app.image_upload_service import upload_specification_sheet_file
 from datetime import datetime
 import logging
 
@@ -145,6 +146,21 @@ async def update_company_settings(
     session.refresh(settings)
 
     return _company_settings_response(settings, current_user)
+
+
+@router.post("/company/upload-specification-sheet")
+async def upload_company_specification_sheet(
+    file: UploadFile = File(...),
+    current_user: User = Depends(require_role([UserRole.DIRECTOR])),
+):
+    """Upload a company specification sheet file (PDF or image). DIRECTOR only."""
+    try:
+        file_url = await upload_specification_sheet_file(file)
+        return {"file_url": file_url}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to upload specification sheet: {str(e)}")
 
 
 @router.get("/user/email", response_model=UserEmailSettingsResponse)
