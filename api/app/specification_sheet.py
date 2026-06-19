@@ -17,6 +17,21 @@ def should_include_specification_sheet(
     return getattr(quote, "include_specification_sheet", False)
 
 
+def should_include_specification_sheet_for_staff_preview(
+    quote: "Quote",
+    company_settings: Optional["CompanySettings"],
+    query_override: Optional[bool] = None,
+) -> bool:
+    """Staff quote preview/download: honour quote flag or company default file."""
+    if query_override is True:
+        return True
+    if query_override is False:
+        return False
+    if should_include_specification_sheet(quote):
+        return True
+    return bool(resolve_specification_sheet_image_url(company_settings))
+
+
 def resolve_specification_sheet_text(
     quote: "Quote",
     company_settings: Optional["CompanySettings"],
@@ -60,11 +75,42 @@ def _cloudinary_fetch_urls(url: str) -> list[str]:
     urls = [url]
     if "res.cloudinary.com" not in url:
         return urls
+    if "/upload/" in url and "/upload/f_" not in url and "/upload/fl_" not in url:
+        base, remainder = url.split("/upload/", 1)
+        urls.append(f"{base}/upload/f_png/{remainder}")
     if "/image/upload/" in url:
         urls.append(url.replace("/image/upload/", "/raw/upload/", 1))
     elif "/raw/upload/" in url:
         urls.append(url.replace("/raw/upload/", "/image/upload/", 1))
     return list(dict.fromkeys(urls))
+
+
+def fetch_specification_sheet_image_bytes(url: str) -> Optional[bytes]:
+    """Fetch image bytes for embedding in the specification sheet appendix."""
+    JPEG_MAGIC = b"\xff\xd8\xff"
+    PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+    GIF_MAGIC = b"GIF87a"
+    GIF_MAGIC_89 = b"GIF89a"
+    WEBP_MAGIC = b"RIFF"
+
+    data = fetch_specification_sheet_file_bytes(url)
+    if not data or data.startswith(b"%PDF-"):
+        return None
+    if (
+        data.startswith(JPEG_MAGIC)
+        or data.startswith(PNG_MAGIC)
+        or data.startswith(GIF_MAGIC)
+        or data.startswith(GIF_MAGIC_89)
+    ):
+        return data
+    if data.startswith(WEBP_MAGIC):
+        try:
+            from app.quote_pdf_service import _ensure_png_or_jpeg_bytes
+
+            return _ensure_png_or_jpeg_bytes(data)
+        except Exception:
+            return None
+    return data
 
 
 def fetch_specification_sheet_file_bytes(url: str) -> Optional[bytes]:

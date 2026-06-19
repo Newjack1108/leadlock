@@ -32,6 +32,7 @@ from app.specification_sheet import (
     resolve_specification_sheet_image_url,
     resolve_specification_sheet_text,
     should_include_specification_sheet,
+    should_include_specification_sheet_for_staff_preview,
 )
 
 MINIMAL_PNG = (
@@ -160,6 +161,17 @@ def test_should_include_specification_sheet_uses_quote_flag():
     assert should_include_specification_sheet(Quote(include_specification_sheet=False)) is False
 
 
+def test_should_include_specification_sheet_for_staff_preview_uses_company_file():
+    quote = Quote(include_specification_sheet=False)
+    company = CompanySettings(
+        default_specification_sheet_url="https://example.com/spec.png",
+        updated_by_id=1,
+    )
+    assert should_include_specification_sheet_for_staff_preview(quote, company) is True
+    assert should_include_specification_sheet_for_staff_preview(quote, company, False) is False
+    assert should_include_specification_sheet_for_staff_preview(quote, None) is False
+
+
 def test_resolve_specification_sheet_text_quote_override():
     quote = Quote(specification_sheet="Quote override text")
     company = CompanySettings(default_specification_sheet="Company default", updated_by_id=1)
@@ -282,7 +294,7 @@ def test_quote_pdf_includes_specification_sheet_image_when_enabled(monkeypatch):
         return MINIMAL_PNG
 
     monkeypatch.setattr(
-        "app.product_spec_pdf_service._fetch_image_from_url",
+        "app.specification_sheet.fetch_specification_sheet_file_bytes",
         _fake_fetch,
     )
 
@@ -308,6 +320,47 @@ def test_quote_pdf_includes_specification_sheet_image_when_enabled(monkeypatch):
     assert "Specification Sheet:" in pdf_text
     reader = PdfReader(pdf_buffer)
     assert len(reader.pages) >= 2
+
+
+def test_quote_pdf_includes_company_spec_image_on_staff_preview_without_quote_flag(monkeypatch):
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SQLModel.metadata.create_all(engine)
+    _, quote_id = _seed_quote_with_spec_sheet(
+        engine,
+        company_default=None,
+        company_image_url="https://example.com/spec.png",
+        include_on_quote=False,
+    )
+
+    monkeypatch.setattr(
+        "app.specification_sheet.fetch_specification_sheet_file_bytes",
+        lambda _url: MINIMAL_PNG,
+    )
+
+    with Session(engine) as session:
+        quote = session.get(Quote, quote_id)
+        customer = session.get(Customer, quote.customer_id)
+        items = list(session.exec(select(QuoteItem).where(QuoteItem.quote_id == quote_id)).all())
+        company_settings = session.exec(select(CompanySettings).limit(1)).first()
+        assert should_include_specification_sheet_for_staff_preview(quote, company_settings) is True
+        image_url = resolve_specification_sheet_image_url(company_settings)
+        pdf_buffer = generate_quote_pdf(
+            quote,
+            customer,
+            items,
+            company_settings=company_settings,
+            session=session,
+            include_spec_sheets=False,
+            include_specification_sheet=True,
+            specification_sheet_text=None,
+            specification_sheet_image_url=image_url,
+        )
+
+    assert "Specification Sheet:" in _pdf_text(pdf_buffer)
 
 
 def test_quote_pdf_appends_specification_sheet_pdf_when_enabled(monkeypatch):

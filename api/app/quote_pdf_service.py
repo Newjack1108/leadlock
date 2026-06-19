@@ -1180,8 +1180,12 @@ def generate_quote_pdf(
         resolved_spec_sheet_text or resolved_spec_sheet_file_url
     ):
         file_is_pdf = False
+        file_bytes: Optional[bytes] = None
         if resolved_spec_sheet_file_url:
-            from app.specification_sheet import fetch_specification_sheet_file_bytes
+            from app.specification_sheet import (
+                fetch_specification_sheet_file_bytes,
+                fetch_specification_sheet_image_bytes,
+            )
 
             file_bytes = fetch_specification_sheet_file_bytes(resolved_spec_sheet_file_url)
             file_is_pdf = bool(file_bytes and file_bytes.startswith(b"%PDF-"))
@@ -1217,9 +1221,11 @@ def generate_quote_pdf(
                 spec_sheet_elements.append(Paragraph("Specification Sheet:", heading_style))
                 if resolved_spec_sheet_file_url and not file_is_pdf:
                     try:
-                        from app.product_spec_pdf_service import _fetch_image_from_url
-
-                        img_data = _fetch_image_from_url(resolved_spec_sheet_file_url)
+                        img_data = file_bytes
+                        if not img_data:
+                            img_data = fetch_specification_sheet_image_bytes(
+                                resolved_spec_sheet_file_url
+                            )
                         if img_data:
                             img_flowable = _image_from_bytes(img_data, width=180 * mm, max_height=240 * mm)
                             if img_flowable:

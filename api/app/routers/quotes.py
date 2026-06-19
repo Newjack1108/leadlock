@@ -105,6 +105,7 @@ from app.specification_sheet import (
     resolve_specification_sheet_image_url,
     has_specification_sheet_content,
     should_include_specification_sheet,
+    should_include_specification_sheet_for_staff_preview,
 )
 from app.quote_displayed_optional_extras import (
     get_displayed_optional_extra_ids,
@@ -3115,12 +3116,10 @@ async def preview_quote_pdf(
             if show_optional_extras
             else None
         )
-        use_specification_sheet = (
-            include_specification_sheet is True
-            or (
-                include_specification_sheet is None
-                and should_include_specification_sheet(quote)
-            )
+        use_specification_sheet = should_include_specification_sheet_for_staff_preview(
+            quote,
+            company_settings,
+            include_specification_sheet,
         )
         spec_sheet_text = (
             resolve_specification_sheet_text(quote, company_settings)
