@@ -43,6 +43,12 @@ import {
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -278,7 +284,7 @@ export default function QuoteDetailPage() {
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back
           </Button>
-          <div className="flex items-center justify-between">
+          <div className="space-y-3">
             <div>
               <h1 className="text-3xl font-semibold">{quote.quote_number}</h1>
               {customer && (
@@ -295,7 +301,7 @@ export default function QuoteDetailPage() {
                 </p>
               )}
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2">
               <Badge className="text-sm">{quote.status}</Badge>
               {quote.fulfillment_method === 'COLLECTION' && (
                 <Badge variant="secondary" className="text-sm">
@@ -318,14 +324,8 @@ export default function QuoteDetailPage() {
                   </SelectContent>
                 </Select>
               )}
-              {quote.lead_id && (
-                <Button variant="outline" asChild>
-                  <Link href={`/leads/${quote.lead_id}`}>
-                    <FileSearch className="h-4 w-4 mr-2" />
-                    View Enquiry
-                  </Link>
-                </Button>
-              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
               {quote.status === 'DRAFT' && (
                 <>
                   <Button variant="outline" asChild>
@@ -335,24 +335,7 @@ export default function QuoteDetailPage() {
                     </Link>
                   </Button>
                   <DraftConfiguratorLink quoteId={quote.id} variant="outline" />
-                  <Button
-                    variant="destructive"
-                    onClick={() => setCancelDialogOpen(true)}
-                  >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Cancel Draft
-                  </Button>
                 </>
-              )}
-              {quote.status !== 'DRAFT' && (
-                <Button
-                  variant="outline"
-                  onClick={() => void handleDuplicateAsDraft()}
-                  disabled={duplicating}
-                >
-                  <Copy className="h-4 w-4 mr-2" />
-                  {duplicating ? 'Duplicating…' : 'Duplicate as draft'}
-                </Button>
               )}
               <Button
                 variant="outline"
@@ -379,34 +362,6 @@ export default function QuoteDetailPage() {
                 <Mail className="h-4 w-4 mr-2" />
                 Send Quote
               </Button>
-              {customer && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setSendPaymentLinkOpen(true)}
-                >
-                  <CreditCard className="h-4 w-4 mr-2" />
-                  Send payment link
-                </Button>
-              )}
-              {quote.status === 'SENT' && (
-                <Button
-                  variant="outline"
-                  className="border-green-600 text-green-700 hover:bg-green-50 hover:text-green-800 hover:border-green-700"
-                  onClick={async () => {
-                    try {
-                      const { view_url } = await getQuoteViewLink(quoteId);
-                      if (view_url) window.open(view_url, '_blank');
-                      else toast.error('No view link available. Set FRONTEND_BASE_URL (or FRONTEND_URL) on the API.');
-                    } catch {
-                      toast.error('Failed to get view link');
-                    }
-                  }}
-                >
-                  <ExternalLink className="h-4 w-4 mr-2" />
-                  Open customer view
-                </Button>
-              )}
               {!isAccepted && ['DRAFT', 'SENT', 'VIEWED'].includes(quote.status) && (
                 <Button
                   onClick={async () => {
@@ -450,24 +405,79 @@ export default function QuoteDetailPage() {
                   </Link>
                 </Button>
               )}
-              {isClosable && (
-                <>
-                  <Button
-                    variant="destructive"
-                    onClick={() => setLostDialogOpen(true)}
-                  >
-                    <XCircle className="h-4 w-4 mr-2" />
-                    Lose
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button type="button" variant="outline">
+                    More
+                    <ChevronDown className="h-4 w-4 ml-2" />
                   </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => setCloseDialogOpen(true)}
-                  >
-                    <MinusCircle className="h-4 w-4 mr-2" />
-                    Close
-                  </Button>
-                </>
-              )}
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  {quote.lead_id && (
+                    <DropdownMenuItem asChild>
+                      <Link href={`/leads/${quote.lead_id}`}>
+                        <FileSearch className="h-4 w-4 mr-2" />
+                        View Enquiry
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
+                  {quote.status !== 'DRAFT' && (
+                    <DropdownMenuItem
+                      onClick={() => void handleDuplicateAsDraft()}
+                      disabled={duplicating}
+                    >
+                      <Copy className="h-4 w-4 mr-2" />
+                      {duplicating ? 'Duplicating…' : 'Duplicate as draft'}
+                    </DropdownMenuItem>
+                  )}
+                  {customer && (
+                    <DropdownMenuItem onClick={() => setSendPaymentLinkOpen(true)}>
+                      <CreditCard className="h-4 w-4 mr-2" />
+                      Send payment link
+                    </DropdownMenuItem>
+                  )}
+                  {quote.status === 'SENT' && (
+                    <DropdownMenuItem
+                      onClick={async () => {
+                        try {
+                          const { view_url } = await getQuoteViewLink(quoteId);
+                          if (view_url) window.open(view_url, '_blank');
+                          else toast.error('No view link available. Set FRONTEND_BASE_URL (or FRONTEND_URL) on the API.');
+                        } catch {
+                          toast.error('Failed to get view link');
+                        }
+                      }}
+                    >
+                      <ExternalLink className="h-4 w-4 mr-2" />
+                      Open customer view
+                    </DropdownMenuItem>
+                  )}
+                  {quote.status === 'DRAFT' && (
+                    <DropdownMenuItem
+                      onClick={() => setCancelDialogOpen(true)}
+                      className="text-destructive focus:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Cancel Draft
+                    </DropdownMenuItem>
+                  )}
+                  {isClosable && (
+                    <>
+                      <DropdownMenuItem
+                        onClick={() => setLostDialogOpen(true)}
+                        className="text-destructive focus:text-destructive"
+                      >
+                        <XCircle className="h-4 w-4 mr-2" />
+                        Lose
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setCloseDialogOpen(true)}>
+                        <MinusCircle className="h-4 w-4 mr-2" />
+                        Close
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </DropdownMenuContent>
+                </DropdownMenu>
             </div>
           </div>
         </div>
