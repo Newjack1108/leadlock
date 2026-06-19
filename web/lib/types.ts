@@ -1416,6 +1416,9 @@ export interface Quote {
   valid_until?: string;
   terms_and_conditions?: string;
   specification_sheet?: string;
+  resolved_specification_sheet_text?: string;
+  company_specification_sheet_url?: string;
+  has_specification_sheet_content?: boolean;
   notes?: string;
   created_by_id: number;
   sent_at?: string;

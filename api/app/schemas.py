@@ -1791,6 +1791,9 @@ class QuoteResponse(BaseModel):
     valid_until: Optional[datetime]
     terms_and_conditions: Optional[str]
     specification_sheet: Optional[str] = None
+    resolved_specification_sheet_text: Optional[str] = None
+    company_specification_sheet_url: Optional[str] = None
+    has_specification_sheet_content: bool = False
     notes: Optional[str]
     created_by_id: int
     sent_at: Optional[datetime]

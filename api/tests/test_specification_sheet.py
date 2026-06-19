@@ -172,6 +172,15 @@ def test_should_include_specification_sheet_for_staff_preview_uses_company_file(
     assert should_include_specification_sheet_for_staff_preview(quote, None) is False
 
 
+def test_should_include_specification_sheet_for_staff_preview_uses_company_text():
+    quote = Quote(include_specification_sheet=False)
+    company = CompanySettings(
+        default_specification_sheet="Company default text only",
+        updated_by_id=1,
+    )
+    assert should_include_specification_sheet_for_staff_preview(quote, company) is True
+
+
 def test_resolve_specification_sheet_text_quote_override():
     quote = Quote(specification_sheet="Quote override text")
     company = CompanySettings(default_specification_sheet="Company default", updated_by_id=1)
@@ -546,3 +555,55 @@ def test_public_quote_view_hides_spec_sheet_when_not_included():
     assert data["show_specification_sheet"] is False
     assert data["specification_sheet"] is None
     assert data["specification_sheet_image_url"] is None
+
+
+def test_build_quote_response_includes_resolved_company_spec_sheet():
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SQLModel.metadata.create_all(engine)
+    _, quote_id = _seed_quote_with_spec_sheet(
+        engine,
+        company_default="Company default spec content",
+        company_image_url="https://example.com/spec.png",
+        include_on_quote=False,
+    )
+
+    from app.routers.quotes import build_quote_response
+
+    with Session(engine) as session:
+        quote = session.get(Quote, quote_id)
+        items = list(session.exec(select(QuoteItem).where(QuoteItem.quote_id == quote_id)).all())
+        response = build_quote_response(quote, items, session)
+
+    assert response.has_specification_sheet_content is True
+    assert response.company_specification_sheet_url == "https://example.com/spec.png"
+    assert response.resolved_specification_sheet_text == "Company default spec content"
+    assert response.specification_sheet is None
+
+
+def test_build_quote_response_prefers_quote_text_override():
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SQLModel.metadata.create_all(engine)
+    _, quote_id = _seed_quote_with_spec_sheet(
+        engine,
+        quote_sheet="Quote-level override",
+        company_default="Company default spec content",
+        include_on_quote=False,
+    )
+
+    from app.routers.quotes import build_quote_response
+
+    with Session(engine) as session:
+        quote = session.get(Quote, quote_id)
+        items = list(session.exec(select(QuoteItem).where(QuoteItem.quote_id == quote_id)).all())
+        response = build_quote_response(quote, items, session)
+
+    assert response.resolved_specification_sheet_text == "Quote-level override"
+    assert response.specification_sheet == "Quote-level override"

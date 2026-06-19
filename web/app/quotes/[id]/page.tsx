@@ -109,6 +109,7 @@ export default function QuoteDetailPage() {
       setLoading(true);
       const response = await getQuote(quoteId);
       setQuote(response);
+      setSpecSheetExpanded(Boolean(response.has_specification_sheet_content));
       
       // Fetch customer if we have customer_id
       if (response.customer_id) {
@@ -356,8 +357,13 @@ export default function QuoteDetailPage() {
               <Button
                 variant="outline"
                 onClick={async () => {
+                  if (!quote) return;
                   try {
-                    await previewQuotePdf(quoteId);
+                    await previewQuotePdf(quoteId, {
+                      includeSpecificationSheet:
+                        quote.include_specification_sheet ||
+                        Boolean(quote.has_specification_sheet_content),
+                    });
                   } catch (error: any) {
                     toast.error(error.response?.data?.detail || error.message || 'Failed to download PDF');
                   }
@@ -817,7 +823,7 @@ export default function QuoteDetailPage() {
             )}
 
             {/* Specification Sheet */}
-            {quote.specification_sheet && (
+            {quote.has_specification_sheet_content && (
               <Card>
                 <CardHeader
                   className="cursor-pointer hover:bg-muted/50 transition-colors rounded-t-lg"
@@ -833,10 +839,48 @@ export default function QuoteDetailPage() {
                   </div>
                 </CardHeader>
                 {specSheetExpanded && (
-                  <CardContent>
-                    <div className="whitespace-pre-wrap text-sm">
-                      {quote.specification_sheet}
-                    </div>
+                  <CardContent className="space-y-4">
+                    <p className="text-xs text-muted-foreground">
+                      {quote.include_specification_sheet
+                        ? 'Included when sending to customer'
+                        : 'Not included when sending — enable on Edit quote or in Send Quote'}
+                    </p>
+                    {quote.company_specification_sheet_url && (
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium">Company specification sheet</p>
+                        {(() => {
+                          const url = quote.company_specification_sheet_url;
+                          const isPdf =
+                            url.toLowerCase().split('?')[0].endsWith('.pdf') ||
+                            url.includes('/raw/upload/');
+                          if (isPdf) {
+                            return (
+                              <a
+                                href={url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-2 text-sm text-primary hover:underline"
+                              >
+                                <ExternalLink className="h-4 w-4" />
+                                View specification sheet PDF
+                              </a>
+                            );
+                          }
+                          return (
+                            <img
+                              src={url}
+                              alt="Company specification sheet"
+                              className="max-w-full rounded-md border"
+                            />
+                          );
+                        })()}
+                      </div>
+                    )}
+                    {quote.resolved_specification_sheet_text && (
+                      <div className="whitespace-pre-wrap text-sm">
+                        {quote.resolved_specification_sheet_text}
+                      </div>
+                    )}
                   </CardContent>
                 )}
               </Card>

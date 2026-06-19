@@ -526,6 +526,21 @@ def batch_quote_list_lookups(
     )
 
 
+def _resolved_spec_sheet_response_fields(
+    quote: Quote,
+    company_settings: Optional[CompanySettings],
+) -> dict:
+    resolved_text = resolve_specification_sheet_text(quote, company_settings)
+    company_url = resolve_specification_sheet_image_url(company_settings)
+    return {
+        "resolved_specification_sheet_text": resolved_text or None,
+        "company_specification_sheet_url": company_url or None,
+        "has_specification_sheet_content": has_specification_sheet_content(
+            quote, company_settings
+        ),
+    }
+
+
 def build_quote_list_response(
     quote: Quote,
     *,
@@ -538,6 +553,7 @@ def build_quote_list_response(
     lead_quotes_sent_count: Optional[int] = None,
     customer_replied_since_quote_sent: bool = False,
     inbound_count_since_quote_sent: int = 0,
+    company_settings: Optional[CompanySettings] = None,
 ) -> QuoteResponse:
     """Lightweight quote row for GET /api/quotes (no line items, discounts, or per-row DB queries)."""
     vat_amount = quote.total_amount * VAT_RATE_DECIMAL
@@ -561,6 +577,7 @@ def build_quote_list_response(
         valid_until=quote.valid_until,
         terms_and_conditions=quote.terms_and_conditions,
         specification_sheet=quote.specification_sheet,
+        **_resolved_spec_sheet_response_fields(quote, company_settings),
         notes=quote.notes,
         created_by_id=quote.created_by_id,
         sent_at=quote.sent_at,
@@ -663,6 +680,8 @@ def build_quote_response(
         if order:
             order_id = order.id
 
+    company_settings = session.exec(select(CompanySettings).limit(1)).first()
+
     return QuoteResponse(
         id=quote.id,
         customer_id=quote.customer_id,
@@ -682,6 +701,7 @@ def build_quote_response(
         valid_until=quote.valid_until,
         terms_and_conditions=quote.terms_and_conditions,
         specification_sheet=quote.specification_sheet,
+        **_resolved_spec_sheet_response_fields(quote, company_settings),
         notes=quote.notes,
         created_by_id=quote.created_by_id,
         sent_at=quote.sent_at,
@@ -1350,6 +1370,8 @@ async def get_all_quotes(
             last_activity_by_customer,
         ) = batch_quote_list_lookups(session, quote_list)
 
+        company_settings = session.exec(select(CompanySettings).limit(1)).first()
+
         result = []
         for quote in quote_list:
             if quote.id is None:
@@ -1385,6 +1407,7 @@ async def get_all_quotes(
                     lead_quotes_sent_count=lead_n,
                     customer_replied_since_quote_sent=replied,
                     inbound_count_since_quote_sent=inbound_n,
+                    company_settings=company_settings,
                 )
             )
 

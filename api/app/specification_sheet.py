@@ -29,7 +29,7 @@ def should_include_specification_sheet_for_staff_preview(
         return False
     if should_include_specification_sheet(quote):
         return True
-    return bool(resolve_specification_sheet_image_url(company_settings))
+    return has_specification_sheet_content(quote, company_settings)
 
 
 def resolve_specification_sheet_text(
