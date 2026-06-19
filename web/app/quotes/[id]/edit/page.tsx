@@ -250,7 +250,11 @@ function EditQuoteContent() {
       setNotes(quoteData.notes ?? '');
       setTemperature(quoteData.temperature ?? '');
       setIncludeSpecSheets(quoteData.include_spec_sheets ?? true);
-      setIncludeSpecificationSheet(quoteData.include_specification_sheet ?? false);
+      setIncludeSpecificationSheet(
+        quoteData.include_specification_sheet ??
+          quoteData.has_specification_sheet_content ??
+          false
+      );
       setIncludeAvailableOptionalExtras(quoteData.include_available_optional_extras ?? false);
       setDisplayedOptionalExtraIds(quoteData.displayed_optional_extra_ids ?? []);
       setIncludeDeliveryInstallationContactNote(

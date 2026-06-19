@@ -843,7 +843,9 @@ export default function QuoteDetailPage() {
                     <p className="text-xs text-muted-foreground">
                       {quote.include_specification_sheet
                         ? 'Included when sending to customer'
-                        : 'Not included when sending — enable on Edit quote or in Send Quote'}
+                        : quote.status !== 'DRAFT'
+                          ? 'Not on the customer PDF yet — open Send Quote, check “Include specification sheet in customer view”, then resend or copy the customer link.'
+                          : 'Not included when sending — enable on Edit quote or in Send Quote'}
                     </p>
                     {quote.company_specification_sheet_url && (
                       <div className="space-y-2">

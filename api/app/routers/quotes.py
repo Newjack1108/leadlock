@@ -2833,6 +2833,7 @@ async def send_quote_email_endpoint(
         session.add(quote_email)
         
         # Update quote: status to SENT and sent_at
+        quote.include_specification_sheet = bool(req.include_specification_sheet)
         quote.status = QuoteStatus.SENT
         quote.sent_at = datetime.utcnow()
         quote.updated_at = datetime.utcnow()

@@ -266,6 +266,9 @@ function CreateQuoteContent() {
       if (settings?.default_specification_sheet) {
         setSpecificationSheet(settings.default_specification_sheet);
       }
+      if (settings?.default_specification_sheet || settings?.default_specification_sheet_url) {
+        setIncludeSpecificationSheet(true);
+      }
     } catch (error) {
       // If settings don't exist or error, use hardcoded default
       console.error('Failed to load company settings, using default terms');
@@ -689,7 +692,9 @@ function CreateQuoteContent() {
           setNotes(q.notes ?? '');
           setTemperature(q.temperature ?? QuoteTemperature.WARM);
           setIncludeSpecSheets(q.include_spec_sheets ?? false);
-          setIncludeSpecificationSheet(q.include_specification_sheet ?? false);
+          setIncludeSpecificationSheet(
+            q.include_specification_sheet ?? q.has_specification_sheet_content ?? false
+          );
           setIncludeAvailableOptionalExtras(q.include_available_optional_extras ?? false);
           setDisplayedOptionalExtraIds(q.displayed_optional_extra_ids ?? []);
           setIncludeDeliveryInstallationContactNote(

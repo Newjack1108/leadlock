@@ -115,7 +115,8 @@ export default function SendQuoteEmailDialog({
           setFormData((prev) => ({
             ...prev,
             include_available_extras: q.include_available_optional_extras ?? false,
-            include_specification_sheet: q.include_specification_sheet ?? false,
+            include_specification_sheet:
+              q.include_specification_sheet ?? q.has_specification_sheet_content ?? false,
           }));
         } catch {
           // keep default false

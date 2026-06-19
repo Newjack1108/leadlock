@@ -20,6 +20,7 @@ from app.models import (
     QuoteEmail,
     QuoteItem,
     QuoteStatus,
+    QuoteTemplate,
     User,
     UserRole,
 )
@@ -542,7 +543,8 @@ def test_public_quote_view_hides_spec_sheet_when_not_included():
     SQLModel.metadata.create_all(engine)
     token, _ = _seed_quote_with_spec_sheet(
         engine,
-        company_default="Should not appear",
+        company_default=None,
+        company_image_url=None,
         include_on_quote=False,
         include_on_email=False,
     )
@@ -555,6 +557,55 @@ def test_public_quote_view_hides_spec_sheet_when_not_included():
     assert data["show_specification_sheet"] is False
     assert data["specification_sheet"] is None
     assert data["specification_sheet_image_url"] is None
+
+
+def test_public_quote_view_shows_spec_sheet_when_email_flag_set_without_quote_flag():
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SQLModel.metadata.create_all(engine)
+    token, _ = _seed_quote_with_spec_sheet(
+        engine,
+        company_default="Customer spec text",
+        company_image_url="https://example.com/spec.png",
+        include_on_quote=False,
+        include_on_email=True,
+    )
+
+    app = _make_public_app(engine)
+    client = TestClient(app)
+    response = client.get(f"/api/public/quotes/view/{token}")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["show_specification_sheet"] is True
+    assert data["specification_sheet"] == "Customer spec text"
+    assert data["specification_sheet_image_url"] == "https://example.com/spec.png"
+
+
+def test_public_quote_pdf_includes_spec_sheet_when_email_flag_set(monkeypatch):
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SQLModel.metadata.create_all(engine)
+    token, _ = _seed_quote_with_spec_sheet(
+        engine,
+        company_default="Customer PDF spec text",
+        company_image_url=None,
+        include_on_quote=False,
+        include_on_email=True,
+    )
+
+    app = _make_public_app(engine)
+    client = TestClient(app)
+    response = client.get(f"/api/public/quotes/view/{token}/pdf")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
+    pdf_text = _pdf_text(BytesIO(response.content))
+    assert "Customer PDF spec text" in pdf_text
 
 
 def test_build_quote_response_includes_resolved_company_spec_sheet():
@@ -607,3 +658,81 @@ def test_build_quote_response_prefers_quote_text_override():
 
     assert response.resolved_specification_sheet_text == "Quote-level override"
     assert response.specification_sheet == "Quote-level override"
+
+
+def test_send_quote_email_persists_include_specification_sheet_on_quote(monkeypatch):
+    import json
+    from unittest.mock import patch
+
+    from app.auth import create_access_token, get_current_user
+    from app.routers import quotes as quotes_router
+
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SQLModel.metadata.create_all(engine)
+    _, quote_id = _seed_quote_with_spec_sheet(
+        engine,
+        company_default="Company default",
+        include_on_quote=False,
+    )
+
+    with Session(engine) as session:
+        template = session.exec(select(QuoteTemplate)).first()
+        if template is None:
+            user = session.exec(select(User)).first()
+            template = QuoteTemplate(
+                name="Spec send template",
+                email_subject_template="Quote {{ quote.quote_number }}",
+                email_body_template="<p>Hello</p>",
+                created_by_id=user.id,
+            )
+            session.add(template)
+            session.commit()
+            session.refresh(template)
+        template_id = template.id
+        user = session.exec(select(User)).first()
+        user.email = "spec-send@example.com"
+        session.add(user)
+        session.commit()
+
+    def get_session_override():
+        with Session(engine) as session:
+            yield session
+
+    async def get_user_override():
+        with Session(engine) as session:
+            return session.exec(select(User).where(User.email == "spec-send@example.com")).first()
+
+    app = FastAPI()
+    app.include_router(quotes_router.router)
+    app.dependency_overrides[get_session] = get_session_override
+    app.dependency_overrides[get_current_user] = get_user_override
+
+    token = create_access_token(data={"sub": "spec-send@example.com"})
+    headers = {"Authorization": f"Bearer {token}"}
+    email_data = json.dumps(
+        {
+            "template_id": template_id,
+            "to_email": "spec@example.com",
+            "include_specification_sheet": True,
+        }
+    )
+
+    with patch("app.routers.quotes.is_email_configured", return_value=True), patch(
+        "app.routers.quotes.send_quote_email",
+        return_value=(True, "msg-spec", None, None, "Subject", "<p>Body</p>", "Body"),
+    ):
+        client = TestClient(app)
+        response = client.post(
+            f"/api/quotes/{quote_id}/send-email",
+            headers=headers,
+            data={"email_data": email_data},
+        )
+
+    assert response.status_code == 200, response.text
+    with Session(engine) as session:
+        quote = session.get(Quote, quote_id)
+        assert quote.include_specification_sheet is True

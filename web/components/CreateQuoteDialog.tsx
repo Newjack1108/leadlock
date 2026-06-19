@@ -112,6 +112,9 @@ export default function CreateQuoteDialog({
           if (settings?.default_specification_sheet) {
             setSpecificationSheet(settings.default_specification_sheet);
           }
+          if (settings?.default_specification_sheet || settings?.default_specification_sheet_url) {
+            setIncludeSpecificationSheet(true);
+          }
         } catch {
           // Non-blocking
         }
