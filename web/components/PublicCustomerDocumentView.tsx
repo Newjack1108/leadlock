@@ -11,6 +11,7 @@ import type { PublicQuoteView } from '@/lib/types';
 import LayoutDiagram from '@/components/configurator/LayoutDiagram';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { MousePointerClick } from 'lucide-react';
 
 const currencySymbol = (currency: string) => (currency === 'GBP' ? '£' : currency + ' ');
 const formatAmount = (n: number, currency: string) =>
@@ -295,6 +296,19 @@ export default function PublicCustomerDocumentView() {
               </div>
             )}
 
+            {hasSpecificationSheetContent && (
+              <div className="pt-4 print:hidden flex justify-center">
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-2 font-bold text-base text-primary hover:underline"
+                  onClick={() => setShowSpecSheet((prev) => !prev)}
+                >
+                  <MousePointerClick className="h-5 w-5 shrink-0" aria-hidden />
+                  {showSpecSheet ? 'Hide' : 'WHY BUY FROM US?'}
+                </button>
+              </div>
+            )}
+
             {data.terms_and_conditions && (
               <div className="pt-2 print:hidden">
                 <button
@@ -303,18 +317,6 @@ export default function PublicCustomerDocumentView() {
                   onClick={() => setShowTerms((prev) => !prev)}
                 >
                   {showTerms ? 'Hide terms and conditions' : 'View terms and conditions'}
-                </button>
-              </div>
-            )}
-
-            {hasSpecificationSheetContent && (
-              <div className="pt-2 print:hidden">
-                <button
-                  type="button"
-                  className="text-sm text-primary hover:underline"
-                  onClick={() => setShowSpecSheet((prev) => !prev)}
-                >
-                  {showSpecSheet ? 'Hide specification sheet' : 'View specification sheet'}
                 </button>
               </div>
             )}
@@ -329,7 +331,7 @@ export default function PublicCustomerDocumentView() {
           >
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-lg">Specification Sheet</CardTitle>
+                <CardTitle className="text-lg">Why Buy From Us?</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 {data.specification_sheet_image_url && specSheetIsPdf && (
