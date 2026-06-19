@@ -47,8 +47,24 @@ def has_specification_sheet_content(
 
 
 def is_specification_sheet_pdf_url(url: str) -> bool:
+    """Heuristic that a URL likely refers to a PDF (used for fetch fallbacks only)."""
     path = (url or "").strip().lower().split("?")[0]
-    return path.endswith(".pdf")
+    if path.endswith(".pdf"):
+        return True
+    lower = (url or "").strip().lower()
+    return "/raw/upload/" in lower
+
+
+def _cloudinary_fetch_urls(url: str) -> list[str]:
+    url = url.strip()
+    urls = [url]
+    if "res.cloudinary.com" not in url:
+        return urls
+    if "/image/upload/" in url:
+        urls.append(url.replace("/image/upload/", "/raw/upload/", 1))
+    elif "/raw/upload/" in url:
+        urls.append(url.replace("/raw/upload/", "/image/upload/", 1))
+    return list(dict.fromkeys(urls))
 
 
 def fetch_specification_sheet_file_bytes(url: str) -> Optional[bytes]:
@@ -70,13 +86,22 @@ def fetch_specification_sheet_file_bytes(url: str) -> Optional[bytes]:
 
     import urllib.request
 
-    try:
-        req = urllib.request.Request(
-            url,
-            headers={"User-Agent": "LeadLock-API/1.0 (Specification Sheet)"},
-        )
-        with urllib.request.urlopen(req, timeout=20) as response:
-            data = response.read()
-        return data if data else None
-    except Exception:
-        return None
+    likely_pdf = is_specification_sheet_pdf_url(url)
+    urls_to_try = _cloudinary_fetch_urls(url) if "res.cloudinary.com" in url else [url]
+    for fetch_url in urls_to_try:
+        try:
+            req = urllib.request.Request(
+                fetch_url,
+                headers={"User-Agent": "LeadLock-API/1.0 (Specification Sheet)"},
+            )
+            with urllib.request.urlopen(req, timeout=20) as response:
+                data = response.read()
+            if not data:
+                continue
+            if data.startswith(b"%PDF-"):
+                return data
+            if not likely_pdf:
+                return data
+        except Exception:
+            continue
+    return None

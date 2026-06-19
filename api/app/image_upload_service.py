@@ -166,11 +166,13 @@ async def upload_specification_sheet_file(file: UploadFile) -> str:
         try:
             upload_kwargs = {
                 "folder": "company/specification-sheets",
-                "resource_type": "auto",
                 "use_filename": True,
                 "unique_filename": True,
             }
-            if not is_pdf:
+            if is_pdf:
+                upload_kwargs["resource_type"] = "raw"
+            else:
+                upload_kwargs["resource_type"] = "image"
                 upload_kwargs["transformation"] = [
                     {"width": 1200, "height": 1200, "crop": "limit"},
                     {"quality": "auto"},

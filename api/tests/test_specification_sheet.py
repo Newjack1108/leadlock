@@ -26,6 +26,7 @@ from app.models import (
 from app.quote_pdf_service import generate_quote_pdf
 from app.routers import public as public_router
 from app.specification_sheet import (
+    fetch_specification_sheet_file_bytes,
     has_specification_sheet_content,
     is_specification_sheet_pdf_url,
     resolve_specification_sheet_image_url,
@@ -183,7 +184,26 @@ def test_resolve_specification_sheet_image_url_from_company_only():
 def test_is_specification_sheet_pdf_url():
     assert is_specification_sheet_pdf_url("https://example.com/spec.pdf") is True
     assert is_specification_sheet_pdf_url("https://example.com/spec.pdf?v=1") is True
+    assert is_specification_sheet_pdf_url("https://res.cloudinary.com/demo/raw/upload/v1/spec") is True
     assert is_specification_sheet_pdf_url("https://example.com/spec.png") is False
+
+
+def test_fetch_specification_sheet_file_bytes_ignores_non_pdf_when_url_looks_like_pdf(monkeypatch):
+    def _fake_urlopen(req, timeout=20):
+        class _Resp:
+            def read(self):
+                return b"<html>not a pdf</html>"
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+        return _Resp()
+
+    monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
+    assert fetch_specification_sheet_file_bytes("https://example.com/spec.pdf") is None
 
 
 def test_has_specification_sheet_content_true_when_only_image():
@@ -326,6 +346,47 @@ def test_quote_pdf_appends_specification_sheet_pdf_when_enabled(monkeypatch):
 
     reader = PdfReader(pdf_buffer)
     assert len(reader.pages) >= 2
+
+
+def test_quote_pdf_survives_invalid_spec_sheet_pdf_bytes(monkeypatch):
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SQLModel.metadata.create_all(engine)
+    _, quote_id = _seed_quote_with_spec_sheet(
+        engine,
+        company_default=None,
+        company_image_url="https://example.com/spec.pdf",
+        include_on_quote=True,
+    )
+
+    monkeypatch.setattr(
+        "app.specification_sheet.fetch_specification_sheet_file_bytes",
+        lambda _url: b"not-a-valid-pdf",
+    )
+
+    with Session(engine) as session:
+        quote = session.get(Quote, quote_id)
+        customer = session.get(Customer, quote.customer_id)
+        items = list(session.exec(select(QuoteItem).where(QuoteItem.quote_id == quote_id)).all())
+        company_settings = session.exec(select(CompanySettings).limit(1)).first()
+        file_url = resolve_specification_sheet_image_url(company_settings)
+        pdf_buffer = generate_quote_pdf(
+            quote,
+            customer,
+            items,
+            company_settings=company_settings,
+            session=session,
+            include_spec_sheets=False,
+            include_specification_sheet=True,
+            specification_sheet_text=None,
+            specification_sheet_image_url=file_url,
+        )
+
+    reader = PdfReader(pdf_buffer)
+    assert len(reader.pages) >= 1
 
 
 def test_quote_pdf_excludes_specification_sheet_when_disabled():

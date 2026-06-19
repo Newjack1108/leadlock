@@ -1108,19 +1108,10 @@ def generate_quote_pdf(
     ):
         file_is_pdf = False
         if resolved_spec_sheet_file_url:
-            from app.specification_sheet import (
-                fetch_specification_sheet_file_bytes,
-                is_specification_sheet_pdf_url,
-            )
+            from app.specification_sheet import fetch_specification_sheet_file_bytes
 
             file_bytes = fetch_specification_sheet_file_bytes(resolved_spec_sheet_file_url)
-            file_is_pdf = bool(
-                file_bytes
-                and (
-                    file_bytes.startswith(b"%PDF-")
-                    or is_specification_sheet_pdf_url(resolved_spec_sheet_file_url)
-                )
-            )
+            file_is_pdf = bool(file_bytes and file_bytes.startswith(b"%PDF-"))
             if file_is_pdf and file_bytes:
                 spec_sheet_pdf_buffer = BytesIO(file_bytes)
 
@@ -1214,7 +1205,14 @@ def generate_quote_pdf(
         if spec_buffer:
             writer.append(PdfReader(spec_buffer))
         if spec_sheet_pdf_buffer:
-            writer.append(PdfReader(spec_sheet_pdf_buffer))
+            try:
+                writer.append(PdfReader(spec_sheet_pdf_buffer, strict=False))
+            except Exception as e:
+                print(
+                    f"Could not append specification sheet PDF: {e}",
+                    file=sys.stderr,
+                    flush=True,
+                )
         if spec_sheet_buffer:
             writer.append(PdfReader(spec_sheet_buffer))
         if terms_buffer:
