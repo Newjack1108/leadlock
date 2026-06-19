@@ -576,6 +576,79 @@ def _resolve_header_trading_name(
     return company_settings.trading_name if company_settings else None
 
 
+def _merge_quote_pdf_parts(
+    main_buffer: BytesIO,
+    *,
+    spec_buffer: Optional[BytesIO] = None,
+    spec_sheet_pdf_buffer: Optional[BytesIO] = None,
+    spec_sheet_buffer: Optional[BytesIO] = None,
+    terms_buffer: Optional[BytesIO] = None,
+) -> BytesIO:
+    """Merge quote PDF segments, dropping optional parts if merge/write fails."""
+    from pypdf import PdfReader, PdfWriter
+
+    all_segments: list[tuple[str, BytesIO]] = [("quote", main_buffer)]
+    for label, buf in (
+        ("product spec sheets", spec_buffer),
+        ("specification sheet PDF", spec_sheet_pdf_buffer),
+        ("specification sheet", spec_sheet_buffer),
+        ("terms", terms_buffer),
+    ):
+        if buf is not None:
+            all_segments.append((label, buf))
+
+    optional_drop_order = [
+        "specification sheet PDF",
+        "specification sheet",
+        "product spec sheets",
+        "terms",
+    ]
+    excluded: set[str] = set()
+
+    for attempt in range(len(optional_drop_order) + 1):
+        active = [
+            segment
+            for segment in all_segments
+            if segment[0] == "quote" or segment[0] not in excluded
+        ]
+        try:
+            writer = PdfWriter()
+            for label, buf in active:
+                buf.seek(0)
+                reader = PdfReader(buf, strict=False)
+                for page in reader.pages:
+                    writer.add_page(page)
+            out = BytesIO()
+            writer.write(out)
+            out.seek(0)
+            if excluded:
+                skipped = ", ".join(sorted(excluded))
+                print(
+                    f"Quote PDF merge used fallback; skipped: {skipped}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+            return out
+        except Exception as e:
+            if attempt >= len(optional_drop_order):
+                print(
+                    f"Quote PDF merge failed; returning quote only: {e}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                break
+            drop_label = optional_drop_order[attempt]
+            excluded.add(drop_label)
+            print(
+                f"Quote PDF merge failed; retrying without {drop_label}: {e}",
+                file=sys.stderr,
+                flush=True,
+            )
+
+    main_buffer.seek(0)
+    return main_buffer
+
+
 def generate_quote_pdf(
     quote: Quote,
     customer: Customer,
@@ -1119,49 +1192,53 @@ def generate_quote_pdf(
             resolved_spec_sheet_file_url and not file_is_pdf
         )
         if needs_reportlab_page:
-            spec_sheet_buffer = BytesIO()
-            spec_sheet_doc = SimpleDocTemplate(
-                spec_sheet_buffer,
-                pagesize=A4,
-                topMargin=10 * mm,
-                bottomMargin=FOOTER_BOTTOM_MARGIN,
-                leftMargin=15 * mm,
-                rightMargin=15 * mm,
-            )
-            spec_sheet_elements: List[Any] = []
-            spec_sheet_elements.extend(
-                _build_header_flowables(
-                    company_settings,
-                    logo_path,
-                    logo_bytes,
-                    normal_style,
-                    company_name_style,
-                    customer.customer_number,
-                    trading_name_override=trading_name_override,
+            try:
+                spec_sheet_buffer = BytesIO()
+                spec_sheet_doc = SimpleDocTemplate(
+                    spec_sheet_buffer,
+                    pagesize=A4,
+                    topMargin=10 * mm,
+                    bottomMargin=FOOTER_BOTTOM_MARGIN,
+                    leftMargin=15 * mm,
+                    rightMargin=15 * mm,
                 )
-            )
-            spec_sheet_elements.append(Paragraph("Specification Sheet:", heading_style))
-            if resolved_spec_sheet_file_url and not file_is_pdf:
-                try:
-                    from app.product_spec_pdf_service import _fetch_image_from_url
+                spec_sheet_elements: List[Any] = []
+                spec_sheet_elements.extend(
+                    _build_header_flowables(
+                        company_settings,
+                        logo_path,
+                        logo_bytes,
+                        normal_style,
+                        company_name_style,
+                        customer.customer_number,
+                        trading_name_override=trading_name_override,
+                    )
+                )
+                spec_sheet_elements.append(Paragraph("Specification Sheet:", heading_style))
+                if resolved_spec_sheet_file_url and not file_is_pdf:
+                    try:
+                        from app.product_spec_pdf_service import _fetch_image_from_url
 
-                    img_data = _fetch_image_from_url(resolved_spec_sheet_file_url)
-                    if img_data:
-                        img_flowable = _image_from_bytes(img_data, width=180 * mm, max_height=240 * mm)
-                        if img_flowable:
-                            spec_sheet_elements.append(img_flowable)
-                            spec_sheet_elements.append(Spacer(1, 8))
-                except Exception as e:
-                    print(f"Could not embed specification sheet image: {e}", file=sys.stderr, flush=True)
-            for line in resolved_spec_sheet_text.split("\n"):
-                if line.strip():
-                    spec_sheet_elements.append(Paragraph(line.strip(), terms_style))
-            spec_sheet_elements.append(Spacer(1, 8))
-            if footer_drawer:
-                spec_sheet_doc.build(spec_sheet_elements, onFirstPage=footer_drawer, onLaterPages=footer_drawer)
-            else:
-                spec_sheet_doc.build(spec_sheet_elements)
-            spec_sheet_buffer.seek(0)
+                        img_data = _fetch_image_from_url(resolved_spec_sheet_file_url)
+                        if img_data:
+                            img_flowable = _image_from_bytes(img_data, width=180 * mm, max_height=240 * mm)
+                            if img_flowable:
+                                spec_sheet_elements.append(img_flowable)
+                                spec_sheet_elements.append(Spacer(1, 8))
+                    except Exception as e:
+                        print(f"Could not embed specification sheet image: {e}", file=sys.stderr, flush=True)
+                for line in resolved_spec_sheet_text.split("\n"):
+                    if line.strip():
+                        spec_sheet_elements.append(Paragraph(line.strip(), terms_style))
+                spec_sheet_elements.append(Spacer(1, 8))
+                if footer_drawer:
+                    spec_sheet_doc.build(spec_sheet_elements, onFirstPage=footer_drawer, onLaterPages=footer_drawer)
+                else:
+                    spec_sheet_doc.build(spec_sheet_elements)
+                spec_sheet_buffer.seek(0)
+            except Exception as e:
+                print(f"Could not build specification sheet page: {e}", file=sys.stderr, flush=True)
+                spec_sheet_buffer = None
 
     terms_buffer: Optional[BytesIO] = None
     if terms_text and company_settings:
@@ -1198,29 +1275,13 @@ def generate_quote_pdf(
         terms_buffer.seek(0)
 
     if spec_buffer or spec_sheet_buffer or spec_sheet_pdf_buffer or terms_buffer:
-        from pypdf import PdfWriter, PdfReader
-
-        writer = PdfWriter()
-        writer.append(PdfReader(buffer))
-        if spec_buffer:
-            writer.append(PdfReader(spec_buffer))
-        if spec_sheet_pdf_buffer:
-            try:
-                writer.append(PdfReader(spec_sheet_pdf_buffer, strict=False))
-            except Exception as e:
-                print(
-                    f"Could not append specification sheet PDF: {e}",
-                    file=sys.stderr,
-                    flush=True,
-                )
-        if spec_sheet_buffer:
-            writer.append(PdfReader(spec_sheet_buffer))
-        if terms_buffer:
-            writer.append(PdfReader(terms_buffer))
-        merged = BytesIO()
-        writer.write(merged)
-        merged.seek(0)
-        return merged
+        return _merge_quote_pdf_parts(
+            buffer,
+            spec_buffer=spec_buffer,
+            spec_sheet_pdf_buffer=spec_sheet_pdf_buffer,
+            spec_sheet_buffer=spec_sheet_buffer,
+            terms_buffer=terms_buffer,
+        )
 
     return buffer
 

@@ -23,7 +23,7 @@ from app.models import (
     User,
     UserRole,
 )
-from app.quote_pdf_service import generate_quote_pdf
+from app.quote_pdf_service import _merge_quote_pdf_parts, generate_quote_pdf
 from app.routers import public as public_router
 from app.specification_sheet import (
     fetch_specification_sheet_file_bytes,
@@ -189,21 +189,24 @@ def test_is_specification_sheet_pdf_url():
 
 
 def test_fetch_specification_sheet_file_bytes_ignores_non_pdf_when_url_looks_like_pdf(monkeypatch):
-    def _fake_urlopen(req, timeout=20):
-        class _Resp:
-            def read(self):
-                return b"<html>not a pdf</html>"
-
-            def __enter__(self):
-                return self
-
-            def __exit__(self, *args):
-                return False
-
-        return _Resp()
-
-    monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
+    monkeypatch.setattr(
+        "app.specification_sheet._fetch_http_bytes",
+        lambda _url: b"<html>not a pdf</html>",
+    )
     assert fetch_specification_sheet_file_bytes("https://example.com/spec.pdf") is None
+
+
+def test_merge_quote_pdf_parts_falls_back_when_spec_sheet_pdf_invalid():
+    from app.quote_pdf_service import _merge_quote_pdf_parts
+
+    main = BytesIO(_minimal_pdf_bytes())
+    invalid_pdf = BytesIO(b"%PDF-1.4\nthis is not a valid pdf structure")
+    merged = _merge_quote_pdf_parts(
+        main,
+        spec_sheet_pdf_buffer=invalid_pdf,
+    )
+    reader = PdfReader(merged)
+    assert len(reader.pages) >= 1
 
 
 def test_has_specification_sheet_content_true_when_only_image():

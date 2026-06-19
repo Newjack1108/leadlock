@@ -84,24 +84,42 @@ def fetch_specification_sheet_file_bytes(url: str) -> Optional[bytes]:
     if not url.startswith(("http://", "https://")):
         return None
 
-    import urllib.request
-
     likely_pdf = is_specification_sheet_pdf_url(url)
     urls_to_try = _cloudinary_fetch_urls(url) if "res.cloudinary.com" in url else [url]
     for fetch_url in urls_to_try:
-        try:
-            req = urllib.request.Request(
-                fetch_url,
+        data = _fetch_http_bytes(fetch_url)
+        if not data:
+            continue
+        if data.startswith(b"%PDF-"):
+            return data
+        if not likely_pdf:
+            return data
+    return None
+
+
+def _fetch_http_bytes(url: str) -> Optional[bytes]:
+    try:
+        import httpx
+
+        with httpx.Client(timeout=20.0, follow_redirects=True) as client:
+            response = client.get(
+                url,
                 headers={"User-Agent": "LeadLock-API/1.0 (Specification Sheet)"},
             )
-            with urllib.request.urlopen(req, timeout=20) as response:
-                data = response.read()
-            if not data:
-                continue
-            if data.startswith(b"%PDF-"):
-                return data
-            if not likely_pdf:
-                return data
-        except Exception:
-            continue
-    return None
+            response.raise_for_status()
+            return response.content or None
+    except Exception:
+        pass
+
+    import urllib.request
+
+    try:
+        req = urllib.request.Request(
+            url,
+            headers={"User-Agent": "LeadLock-API/1.0 (Specification Sheet)"},
+        )
+        with urllib.request.urlopen(req, timeout=20) as response:
+            data = response.read()
+        return data if data else None
+    except Exception:
+        return None
