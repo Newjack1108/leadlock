@@ -8,6 +8,8 @@ from sqlalchemy import func, true, String as SAString, delete, update
 from datetime import datetime
 from typing import Dict, List, Literal, Optional, Tuple
 from html import escape
+from jinja2 import TemplateError
+from sqlalchemy.exc import ProgrammingError, SQLAlchemyError
 from app.database import get_session
 from app.models import (
     Quote,
@@ -2492,13 +2494,16 @@ async def send_quote_payment_link(
             template = session.get(SmsTemplate, req.template_id)
             if not template:
                 raise HTTPException(status_code=404, detail="SMS template not found")
-            sms_body = render_sms_template(
-                template,
-                customer,
-                user=current_user,
-                company_settings=company_settings,
-                extra_context=template_ctx,
-            )
+            try:
+                sms_body = render_sms_template(
+                    template,
+                    customer,
+                    user=current_user,
+                    company_settings=company_settings,
+                    extra_context=template_ctx,
+                )
+            except TemplateError as e:
+                raise HTTPException(status_code=400, detail=f"SMS template error: {e}")
         else:
             sms_body = default_quote_payment_sms_body(quote, payment_url)
 
@@ -2562,9 +2567,12 @@ async def send_quote_payment_link(
             template = session.get(EmailTemplate, req.template_id)
             if not template:
                 raise HTTPException(status_code=404, detail="Email template not found")
-            rendered_subject, rendered_body_html = render_email_template(
-                template, customer, custom_variables=template_ctx
-            )
+            try:
+                rendered_subject, rendered_body_html = render_email_template(
+                    template, customer, custom_variables=template_ctx
+                )
+            except TemplateError as e:
+                raise HTTPException(status_code=400, detail=f"Email template error: {e}")
             if not subject:
                 subject = rendered_subject
             if not body_html:
@@ -2632,7 +2640,23 @@ async def send_quote_payment_link(
         },
         created_by_id=current_user.id,
     )
-    session.commit()
+    try:
+        session.commit()
+    except ProgrammingError as e:
+        session.rollback()
+        err = str(e).lower()
+        if "payment_link_url" in err:
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "Quote payment link storage is not ready yet. "
+                    "Restart the API or worker service to run database migrations, then try again."
+                ),
+            )
+        raise HTTPException(status_code=500, detail="Database error while sending payment link")
+    except SQLAlchemyError:
+        session.rollback()
+        raise HTTPException(status_code=500, detail="Failed to save payment link send record")
 
     return QuoteSendPaymentLinkResponse(
         message="Payment link sent successfully",

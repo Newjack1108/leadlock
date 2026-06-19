@@ -219,6 +219,12 @@ def _run_database_initialization() -> None:
             file=sys.stderr,
             flush=True,
         )
+        try:
+            from app.database import _ensure_quote_payment_link_url_column
+
+            _ensure_quote_payment_link_url_column(engine)
+        except Exception as e:
+            print(f"Critical quote payment_link_url ensure failed: {e}", file=sys.stderr, flush=True)
         _migrations_complete = True
     else:
         try:

@@ -193,6 +193,26 @@ def _ensure_archive_columns(engine) -> None:
         print(f"Warning: could not ensure archive columns: {e}", file=sys.stderr, flush=True)
 
 
+def _ensure_quote_payment_link_url_column(engine) -> None:
+    """Add payment_link_url to quote before the main migration block (runs on API + worker startup)."""
+    import sys
+
+    try:
+        insp = inspect(engine)
+        if not insp.has_table("quote"):
+            return
+        cols = [c["name"] for c in insp.get_columns("quote")]
+        if "payment_link_url" in cols:
+            return
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE quote ADD COLUMN payment_link_url VARCHAR(2048)"))
+        print("Added payment_link_url to quote table", file=sys.stderr, flush=True)
+    except Exception as e:
+        err = str(e).lower()
+        if "already exists" not in err and "duplicate" not in err:
+            print(f"Warning: could not ensure quote.payment_link_url: {e}", file=sys.stderr, flush=True)
+
+
 def _ensure_list_performance_indexes(engine) -> None:
     """Indexes for customer list ordering and unread-count aggregations (Railway public DB latency)."""
     import sys
@@ -934,6 +954,7 @@ def create_db_and_tables():
     # Critical: run before the big migration try — that block catches broad exceptions and can skip later steps.
     _ensure_facebook_advert_schema(engine)
     _ensure_archive_columns(engine)
+    _ensure_quote_payment_link_url_column(engine)
     _ensure_dealer_portal_schema(engine)
     _ensure_weekly_planner_schema(engine)
     _ensure_weekly_plan_template_schema(engine)

@@ -52,13 +52,21 @@ def default_payment_email_html(order: Order, payment_url: str) -> str:
 
 def quote_payment_link_template_context(quote: Quote, payment_url: str) -> Dict:
     """Jinja context for payment-link SMS/email templates on quotes."""
+    amounts = {
+        "deposit_amount": str(quote.deposit_amount),
+        "balance_amount": str(quote.balance_amount),
+        "total_amount": str(quote.total_amount),
+    }
     return {
         "payment_link": payment_url,
         "quote": {
             "quote_number": quote.quote_number or "",
-            "deposit_amount": str(quote.deposit_amount),
-            "balance_amount": str(quote.balance_amount),
-            "total_amount": str(quote.total_amount),
+            **amounts,
+        },
+        # Reuse order payment templates that reference {{ order.* }} at quote stage.
+        "order": {
+            "order_number": quote.quote_number or "",
+            **amounts,
         },
     }
 
