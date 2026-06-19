@@ -95,6 +95,7 @@ export default function CompanySettingsPage() {
     footer_logo_url: '',
     default_terms_and_conditions: '',
     default_specification_sheet: '',
+    default_specification_sheet_url: '',
     email_disclaimer: '',
     default_email_signature: '',
     installation_lead_time_stables: '' as InstallationLeadTime | '',
@@ -203,6 +204,7 @@ export default function CompanySettingsPage() {
         footer_logo_url: response.data.footer_logo_url || '',
         default_terms_and_conditions: response.data.default_terms_and_conditions || '',
         default_specification_sheet: response.data.default_specification_sheet || '',
+        default_specification_sheet_url: response.data.default_specification_sheet_url || '',
         email_disclaimer: response.data.email_disclaimer || '',
         default_email_signature: response.data.default_email_signature || '',
         installation_lead_time_stables:
@@ -467,6 +469,23 @@ export default function CompanySettingsPage() {
       toast.success(url ? 'Footer logo saved' : 'Footer logo removed');
     } catch (error: any) {
       toast.error(error.response?.data?.detail || 'Failed to save footer logo');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSpecSheetImageChange = async (url: string) => {
+    setFormData((prev) => ({ ...prev, default_specification_sheet_url: url }));
+    if (!settings) return;
+    try {
+      setSaving(true);
+      await api.put('/api/settings/company', { default_specification_sheet_url: url || null });
+      setSettings((prev) =>
+        prev ? { ...prev, default_specification_sheet_url: url || undefined } : null
+      );
+      toast.success(url ? 'Specification sheet image saved' : 'Specification sheet image removed');
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || 'Failed to save specification sheet image');
     } finally {
       setSaving(false);
     }
@@ -1840,6 +1859,12 @@ export default function CompanySettingsPage() {
               </button>
               {specSheetExpanded && (
                 <>
+                  <ImageUpload
+                    label="Default specification sheet image (PNG/JPG)"
+                    value={formData.default_specification_sheet_url}
+                    onChange={handleSpecSheetImageChange}
+                    disabled={saving}
+                  />
                   <Textarea
                     id="default_specification_sheet"
                     value={formData.default_specification_sheet}
@@ -1850,7 +1875,7 @@ export default function CompanySettingsPage() {
                     className="font-mono text-sm"
                   />
                   <p className="text-sm text-muted-foreground">
-                    This content will be automatically pre-filled when creating new quotes. Users can still edit it before submitting.
+                    Upload an image and/or enter text. The image is company-wide and included on quotes when the specification sheet option is enabled. Text is pre-filled when creating quotes and can still be edited per quote.
                   </p>
                 </>
               )}

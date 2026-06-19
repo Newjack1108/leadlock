@@ -27,3 +27,20 @@ def resolve_specification_sheet_text(
     if company_settings is None:
         return ""
     return (getattr(company_settings, "default_specification_sheet", None) or "").strip()
+
+
+def resolve_specification_sheet_image_url(
+    company_settings: Optional["CompanySettings"],
+) -> str:
+    if company_settings is None:
+        return ""
+    return (getattr(company_settings, "default_specification_sheet_url", None) or "").strip()
+
+
+def has_specification_sheet_content(
+    quote: "Quote",
+    company_settings: Optional["CompanySettings"],
+) -> bool:
+    return bool(resolve_specification_sheet_text(quote, company_settings)) or bool(
+        resolve_specification_sheet_image_url(company_settings)
+    )

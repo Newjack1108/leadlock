@@ -3394,6 +3394,17 @@ def create_db_and_tables():
                     if "already exists" not in error_str and "duplicate" not in error_str:
                         print(f"Error adding default_specification_sheet column: {e}", file=sys.stderr, flush=True)
 
+            if "default_specification_sheet_url" not in company_columns:
+                print("Adding default_specification_sheet_url column to companysettings table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE companysettings ADD COLUMN default_specification_sheet_url TEXT"))
+                    print("Added default_specification_sheet_url column to companysettings table", file=sys.stderr, flush=True)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Error adding default_specification_sheet_url column: {e}", file=sys.stderr, flush=True)
+
         if has_quote_table:
             quote_columns = [col["name"] for col in inspector.get_columns("quote")]
             if "specification_sheet" not in quote_columns:

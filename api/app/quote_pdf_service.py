@@ -586,6 +586,7 @@ def generate_quote_pdf(
     available_optional_extras: Optional[List[Any]] = None,
     include_specification_sheet: bool = False,
     specification_sheet_text: Optional[str] = None,
+    specification_sheet_image_url: Optional[str] = None,
     dealer_profile: Optional[Dict[str, str]] = None,
     trader_logo_url: Optional[str] = None,
     layout: Optional[Any] = None,
@@ -1100,7 +1101,10 @@ def generate_quote_pdf(
 
     spec_sheet_buffer: Optional[BytesIO] = None
     resolved_spec_sheet_text = (specification_sheet_text or "").strip()
-    if include_specification_sheet and resolved_spec_sheet_text and company_settings:
+    resolved_spec_sheet_image_url = (specification_sheet_image_url or "").strip()
+    if include_specification_sheet and company_settings and (
+        resolved_spec_sheet_text or resolved_spec_sheet_image_url
+    ):
         spec_sheet_buffer = BytesIO()
         spec_sheet_doc = SimpleDocTemplate(
             spec_sheet_buffer,
@@ -1123,6 +1127,18 @@ def generate_quote_pdf(
             )
         )
         spec_sheet_elements.append(Paragraph("Specification Sheet:", heading_style))
+        if resolved_spec_sheet_image_url:
+            try:
+                from app.product_spec_pdf_service import _fetch_image_from_url
+
+                img_data = _fetch_image_from_url(resolved_spec_sheet_image_url)
+                if img_data:
+                    img_flowable = _image_from_bytes(img_data, width=180 * mm, max_height=240 * mm)
+                    if img_flowable:
+                        spec_sheet_elements.append(img_flowable)
+                        spec_sheet_elements.append(Spacer(1, 8))
+            except Exception as e:
+                print(f"Could not embed specification sheet image: {e}", file=sys.stderr, flush=True)
         for line in resolved_spec_sheet_text.split("\n"):
             if line.strip():
                 spec_sheet_elements.append(Paragraph(line.strip(), terms_style))
@@ -1197,6 +1213,7 @@ def generate_quote_pdf_cached(
     available_optional_extras: Optional[List[Any]] = None,
     include_specification_sheet: bool = False,
     specification_sheet_text: Optional[str] = None,
+    specification_sheet_image_url: Optional[str] = None,
     dealer_profile: Optional[Dict[str, str]] = None,
     trader_logo_url: Optional[str] = None,
 ) -> tuple[bytes, bool]:
@@ -1224,6 +1241,7 @@ def generate_quote_pdf_cached(
         available_optional_extras=available_optional_extras,
         include_specification_sheet=include_specification_sheet,
         specification_sheet_text=specification_sheet_text,
+        specification_sheet_image_url=specification_sheet_image_url,
         dealer_profile=dealer_profile,
         trader_logo_url=trader_logo_url,
     )

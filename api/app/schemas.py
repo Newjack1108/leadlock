@@ -1411,6 +1411,7 @@ class CompanySettingsCreate(BaseModel):
     footer_logo_url: Optional[str] = None
     default_terms_and_conditions: Optional[str] = None
     default_specification_sheet: Optional[str] = None
+    default_specification_sheet_url: Optional[str] = None
     email_disclaimer: Optional[str] = None
     default_email_signature: Optional[str] = None  # HTML; used for sends without a user_id
     hourly_install_rate: Optional[Decimal] = None
@@ -1482,6 +1483,7 @@ class CompanySettingsUpdate(BaseModel):
     footer_logo_url: Optional[str] = None
     default_terms_and_conditions: Optional[str] = None
     default_specification_sheet: Optional[str] = None
+    default_specification_sheet_url: Optional[str] = None
     email_disclaimer: Optional[str] = None
     default_email_signature: Optional[str] = None
     hourly_install_rate: Optional[Decimal] = None
@@ -1559,6 +1561,7 @@ class CompanySettingsResponse(BaseModel):
     footer_logo_url: Optional[str] = None
     default_terms_and_conditions: Optional[str]
     default_specification_sheet: Optional[str] = None
+    default_specification_sheet_url: Optional[str] = None
     email_disclaimer: Optional[str] = None
     default_email_signature: Optional[str] = None
     hourly_install_rate: Optional[Decimal] = None
@@ -1947,6 +1950,7 @@ class PublicQuoteViewResponse(BaseModel):
     items: List[PublicQuoteViewItemResponse]
     terms_and_conditions: Optional[str] = None
     specification_sheet: Optional[str] = None
+    specification_sheet_image_url: Optional[str] = None
     show_specification_sheet: bool = False
     company_display: Optional[PublicQuoteCompanyDisplay] = None
     available_optional_extras: Optional[List[AvailableExtraResponse]] = None

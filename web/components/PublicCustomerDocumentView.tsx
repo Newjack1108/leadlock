@@ -82,6 +82,9 @@ export default function PublicCustomerDocumentView() {
     .filter(Boolean)
     .join(' | ');
   const hasOrder = Boolean(data.order_number);
+  const hasSpecificationSheetContent =
+    data.show_specification_sheet &&
+    Boolean(data.specification_sheet || data.specification_sheet_image_url);
 
   return (
     <div className="min-h-screen bg-muted/30 py-8 px-4 quote-view-page">
@@ -301,7 +304,7 @@ export default function PublicCustomerDocumentView() {
               </div>
             )}
 
-            {data.show_specification_sheet && data.specification_sheet && (
+            {hasSpecificationSheetContent && (
               <div className="pt-2 print:hidden">
                 <button
                   type="button"
@@ -315,7 +318,7 @@ export default function PublicCustomerDocumentView() {
           </CardContent>
         </Card>
 
-        {data.show_specification_sheet && data.specification_sheet && (
+        {hasSpecificationSheetContent && (
           <div
             id="specification-sheet"
             className={`quote-view-print mt-8 ${showSpecSheet ? 'block' : 'hidden print:block'}`}
@@ -325,8 +328,17 @@ export default function PublicCustomerDocumentView() {
               <CardHeader className="pb-2">
                 <CardTitle className="text-lg">Specification Sheet</CardTitle>
               </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground whitespace-pre-wrap">{data.specification_sheet}</p>
+              <CardContent className="space-y-4">
+                {data.specification_sheet_image_url && (
+                  <img
+                    src={data.specification_sheet_image_url}
+                    alt="Specification sheet"
+                    className="max-w-full h-auto"
+                  />
+                )}
+                {data.specification_sheet && (
+                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">{data.specification_sheet}</p>
+                )}
               </CardContent>
             </Card>
           </div>

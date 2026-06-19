@@ -34,6 +34,8 @@ from app.available_optional_extras import (
 )
 from app.specification_sheet import (
     resolve_specification_sheet_text,
+    resolve_specification_sheet_image_url,
+    has_specification_sheet_content,
     should_include_specification_sheet,
 )
 from app.configurator_layout_public import build_layout_for_public_view
@@ -252,8 +254,19 @@ def get_public_quote_view(
         ],
         terms_and_conditions=quote.terms_and_conditions,
         specification_sheet=(
-            resolve_specification_sheet_text(quote, company_settings)
-            if should_include_specification_sheet(quote, quote_email=quote_email)
+            text
+            if (
+                should_include_specification_sheet(quote, quote_email=quote_email)
+                and (text := resolve_specification_sheet_text(quote, company_settings))
+            )
+            else None
+        ),
+        specification_sheet_image_url=(
+            image_url
+            if (
+                should_include_specification_sheet(quote, quote_email=quote_email)
+                and (image_url := resolve_specification_sheet_image_url(company_settings))
+            )
             else None
         ),
         show_specification_sheet=should_include_specification_sheet(quote, quote_email=quote_email),
@@ -361,6 +374,14 @@ def get_public_quote_pdf(
             if use_specification_sheet
             else ""
         )
+        spec_sheet_image_url = (
+            resolve_specification_sheet_image_url(company_settings)
+            if use_specification_sheet
+            else ""
+        )
+        include_spec_sheet = use_specification_sheet and has_specification_sheet_content(
+            quote, company_settings
+        )
         available_extras = (
             get_available_optional_extras_for_quote(
                 list(quote_items),
@@ -382,8 +403,9 @@ def get_public_quote_pdf(
             session,
             include_spec_sheets=include_spec_sheets,
             available_optional_extras=available_extras,
-            include_specification_sheet=use_specification_sheet and bool(spec_sheet_text),
+            include_specification_sheet=include_spec_sheet,
             specification_sheet_text=spec_sheet_text or None,
+            specification_sheet_image_url=spec_sheet_image_url or None,
             layout=build_layout_for_public_view(session, quote.id),
         )
         pdf_content = pdf_buffer.read()

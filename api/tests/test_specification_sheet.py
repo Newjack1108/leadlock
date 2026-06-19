@@ -26,8 +26,16 @@ from app.models import (
 from app.quote_pdf_service import generate_quote_pdf
 from app.routers import public as public_router
 from app.specification_sheet import (
+    has_specification_sheet_content,
+    resolve_specification_sheet_image_url,
     resolve_specification_sheet_text,
     should_include_specification_sheet,
+)
+
+MINIMAL_PNG = (
+    b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
+    b"\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDATx\x9cc\x00\x01"
+    b"\x00\x00\x05\x00\x01\r\n-\xdb\x00\x00\x00\x00IEND\xaeB`\x82"
 )
 
 
@@ -52,6 +60,7 @@ def _seed_quote_with_spec_sheet(
     *,
     quote_sheet: str | None = None,
     company_default: str | None = "Company default spec content",
+    company_image_url: str | None = None,
     include_on_quote: bool = False,
     include_on_email: bool = False,
 ) -> tuple[str, int]:
@@ -76,6 +85,7 @@ def _seed_quote_with_spec_sheet(
         settings = CompanySettings(
             company_name="Spec Test Co",
             default_specification_sheet=company_default,
+            default_specification_sheet_url=company_image_url,
             updated_by_id=user.id,
         )
         quote = Quote(
@@ -148,6 +158,35 @@ def test_resolve_specification_sheet_text_falls_back_to_company_default():
     assert resolve_specification_sheet_text(quote, company) == "Company default"
 
 
+def test_resolve_specification_sheet_image_url_from_company_only():
+    company = CompanySettings(
+        default_specification_sheet_url="https://example.com/spec.png",
+        updated_by_id=1,
+    )
+    assert resolve_specification_sheet_image_url(company) == "https://example.com/spec.png"
+    assert resolve_specification_sheet_image_url(None) == ""
+
+
+def test_has_specification_sheet_content_true_when_only_image():
+    quote = Quote(specification_sheet=None)
+    company = CompanySettings(
+        default_specification_sheet=None,
+        default_specification_sheet_url="https://example.com/spec.png",
+        updated_by_id=1,
+    )
+    assert has_specification_sheet_content(quote, company) is True
+
+
+def test_has_specification_sheet_content_false_when_empty():
+    quote = Quote(specification_sheet=None)
+    company = CompanySettings(
+        default_specification_sheet=None,
+        default_specification_sheet_url=None,
+        updated_by_id=1,
+    )
+    assert has_specification_sheet_content(quote, company) is False
+
+
 def test_quote_pdf_includes_specification_sheet_when_enabled():
     engine = create_engine(
         "sqlite://",
@@ -181,6 +220,52 @@ def test_quote_pdf_includes_specification_sheet_when_enabled():
     pdf_text = _pdf_text(pdf_buffer)
     assert "Specification Sheet:" in pdf_text
     assert "Panel thickness: 18mm" in pdf_text
+
+
+def test_quote_pdf_includes_specification_sheet_image_when_enabled(monkeypatch):
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SQLModel.metadata.create_all(engine)
+    _, quote_id = _seed_quote_with_spec_sheet(
+        engine,
+        company_default=None,
+        company_image_url="https://example.com/spec.png",
+        include_on_quote=True,
+    )
+
+    def _fake_fetch(_url: str):
+        return MINIMAL_PNG
+
+    monkeypatch.setattr(
+        "app.product_spec_pdf_service._fetch_image_from_url",
+        _fake_fetch,
+    )
+
+    with Session(engine) as session:
+        quote = session.get(Quote, quote_id)
+        customer = session.get(Customer, quote.customer_id)
+        items = list(session.exec(select(QuoteItem).where(QuoteItem.quote_id == quote_id)).all())
+        company_settings = session.exec(select(CompanySettings).limit(1)).first()
+        image_url = resolve_specification_sheet_image_url(company_settings)
+        pdf_buffer = generate_quote_pdf(
+            quote,
+            customer,
+            items,
+            company_settings=company_settings,
+            session=session,
+            include_spec_sheets=False,
+            include_specification_sheet=True,
+            specification_sheet_text=None,
+            specification_sheet_image_url=image_url,
+        )
+
+    pdf_text = _pdf_text(pdf_buffer)
+    assert "Specification Sheet:" in pdf_text
+    reader = PdfReader(pdf_buffer)
+    assert len(reader.pages) >= 2
 
 
 def test_quote_pdf_excludes_specification_sheet_when_disabled():
@@ -238,6 +323,30 @@ def test_public_quote_view_returns_spec_sheet_when_send_flag_set():
     assert data["specification_sheet"] == "Public view spec text"
 
 
+def test_public_quote_view_returns_spec_sheet_image_when_send_flag_set():
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SQLModel.metadata.create_all(engine)
+    token, _ = _seed_quote_with_spec_sheet(
+        engine,
+        company_default=None,
+        company_image_url="https://example.com/spec.png",
+        include_on_email=True,
+    )
+
+    app = _make_public_app(engine)
+    client = TestClient(app)
+    response = client.get(f"/api/public/quotes/view/{token}")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["show_specification_sheet"] is True
+    assert data["specification_sheet"] is None
+    assert data["specification_sheet_image_url"] == "https://example.com/spec.png"
+
+
 def test_public_quote_view_hides_spec_sheet_when_not_included():
     engine = create_engine(
         "sqlite://",
@@ -259,3 +368,4 @@ def test_public_quote_view_hides_spec_sheet_when_not_included():
     data = response.json()
     assert data["show_specification_sheet"] is False
     assert data["specification_sheet"] is None
+    assert data["specification_sheet_image_url"] is None

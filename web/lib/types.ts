@@ -675,6 +675,7 @@ export interface CompanySettings {
   footer_logo_url?: string;
   default_terms_and_conditions?: string;
   default_specification_sheet?: string;
+  default_specification_sheet_url?: string;
   email_disclaimer?: string;
   default_email_signature?: string;
   hourly_install_rate?: number;
@@ -1552,6 +1553,7 @@ export interface PublicQuoteView {
   items: PublicQuoteViewItem[];
   terms_and_conditions?: string;
   specification_sheet?: string;
+  specification_sheet_image_url?: string;
   show_specification_sheet?: boolean;
   company_display?: PublicQuoteCompanyDisplay;
   available_optional_extras?: AvailableExtraResponse[];

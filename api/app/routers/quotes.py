@@ -102,6 +102,8 @@ from app.available_optional_extras import (
 )
 from app.specification_sheet import (
     resolve_specification_sheet_text,
+    resolve_specification_sheet_image_url,
+    has_specification_sheet_content,
     should_include_specification_sheet,
 )
 from app.quote_displayed_optional_extras import (
@@ -3125,12 +3127,21 @@ async def preview_quote_pdf(
             if use_specification_sheet
             else ""
         )
+        spec_sheet_image_url = (
+            resolve_specification_sheet_image_url(company_settings)
+            if use_specification_sheet
+            else ""
+        )
+        include_spec_sheet = use_specification_sheet and has_specification_sheet_content(
+            quote, company_settings
+        )
         pdf_buffer = generate_quote_pdf(
             quote, customer, quote_items, company_settings, session,
             include_spec_sheets=use_spec_sheets,
             available_optional_extras=available_extras,
-            include_specification_sheet=use_specification_sheet and bool(spec_sheet_text),
+            include_specification_sheet=include_spec_sheet,
             specification_sheet_text=spec_sheet_text or None,
+            specification_sheet_image_url=spec_sheet_image_url or None,
         )
         pdf_content = pdf_buffer.read()
         
