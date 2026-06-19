@@ -31,7 +31,7 @@ import api, {
 import { DashboardStats, StaleSummary, CompanySettings, UnreadSmsSummary, UnreadMessengerSummary, LeadLocationItem, DiscountTemplate, DashboardCommunicationTotals, FacebookLeadConversionReport, FacebookLeadConversionRow, DashboardPresetPeriod, DateRangeQueryParams } from '@/lib/types';
 import { getInstallationLeadTimeRows, hasAnyInstallationLeadTime } from '@/lib/companyLeadTimeDisplay';
 import { toast } from 'sonner';
-import { TrendingUp, Users, CheckCircle2, Trophy, Bell, ArrowRight, Clock, MessageSquare, FileDown, BarChart3, Target, MessageCircle, Calendar, DoorClosed, LayoutDashboard } from 'lucide-react';
+import { TrendingUp, Users, CheckCircle2, Trophy, Bell, ArrowRight, Clock, MessageSquare, FileDown, BarChart3, Target, MessageCircle, Calendar, DoorClosed, LayoutDashboard, ChevronDown, ChevronUp } from 'lucide-react';
 import StatusPieChart from '@/components/StatusPieChart';
 import LeadsBySourceBarChart from '@/components/LeadsBySourceBarChart';
 
@@ -158,6 +158,7 @@ export default function DashboardPage() {
   const [customStartDate, setCustomStartDate] = useState(getDaysAgoDateInputValue(6));
   const [customEndDate, setCustomEndDate] = useState(getTodayDateInputValue());
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [facebookLeadReportExpanded, setFacebookLeadReportExpanded] = useState(false);
   const activeDateParams = useMemo(() => getDateRangeParams(dateFilter), [dateFilter]);
   const activeRangeLabel = useMemo(() => getActiveRangeLabel(dateFilter), [dateFilter]);
 
@@ -751,19 +752,34 @@ export default function DashboardPage() {
           <Card className="mb-8">
             <CardHeader>
               <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                <div>
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <Target className="h-5 w-5" />
-                    Facebook Lead-to-Order
-                  </CardTitle>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {activeRangeLabel} Facebook lead performance, conversion, revenue, and tagged advert breakdown.
-                  </p>
+                <div
+                  className="flex-1 cursor-pointer select-none rounded-lg transition-colors hover:bg-muted/50 -m-2 p-2"
+                  onClick={() => setFacebookLeadReportExpanded(!facebookLeadReportExpanded)}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <Target className="h-5 w-5" />
+                        Facebook Lead-to-Order
+                      </CardTitle>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {activeRangeLabel} Facebook lead performance, conversion, revenue, and tagged advert breakdown.
+                      </p>
+                    </div>
+                    {facebookLeadReportExpanded ? (
+                      <ChevronUp className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
+                    ) : (
+                      <ChevronDown className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
+                    )}
+                  </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Button
                     size="sm"
-                    onClick={() => downloadFacebookLeadConversionReportPdf(activeDateParams)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      downloadFacebookLeadConversionReportPdf(activeDateParams);
+                    }}
                   >
                     <FileDown className="h-4 w-4 mr-1" />
                     Download PDF
@@ -771,7 +787,10 @@ export default function DashboardPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => downloadFacebookLeadConversionReportCsv(activeDateParams)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      downloadFacebookLeadConversionReportCsv(activeDateParams);
+                    }}
                   >
                     <FileDown className="h-4 w-4 mr-1" />
                     Download CSV
@@ -785,7 +804,7 @@ export default function DashboardPage() {
                   No Facebook leads found for this period.
                 </div>
               ) : (
-                <div className="space-y-6">
+                <div className={facebookLeadReportExpanded ? 'space-y-6' : 'space-y-4'}>
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
                     <div className="rounded-lg border p-4">
                       <p className="text-sm text-muted-foreground">Facebook leads</p>
@@ -814,6 +833,11 @@ export default function DashboardPage() {
                         Avg order {formatCurrency(facebookLeadReport.summary.average_order_value)}
                       </p>
                     </div>
+                  </div>
+
+                  {facebookLeadReportExpanded && (
+                    <>
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                     <div className="rounded-lg border p-4">
                       <p className="text-sm text-muted-foreground">Avg days to convert</p>
                       <p className="mt-1 text-2xl font-semibold">
@@ -966,6 +990,8 @@ export default function DashboardPage() {
                       </table>
                     </div>
                   </div>
+                    </>
+                  )}
                 </div>
               )}
             </CardContent>
