@@ -24,13 +24,22 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Plus, Edit, Trash2, List, LayoutGrid, FileDown } from 'lucide-react';
+import { Plus, Edit, Trash2, List, LayoutGrid, FileDown, ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 import api, { getApiErrorDetail } from '@/lib/api';
 import { Product, ProductCategory, PRODUCT_SUBCATEGORIES, ProductSubcategory } from '@/lib/types';
 import { CONFIGURATOR_EXTRA_BADGE_CLASS } from '@/lib/productBadges';
-import { formatDateTime } from '@/lib/utils';
+import { buildProductFilterQueryString, formatDateTime } from '@/lib/utils';
 import { toast } from 'sonner';
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 const PRODUCT_UNIT_OPTIONS = ['Per Box', 'Unit', 'Set'] as const;
 const SUBCATEGORY_NONE = '__NONE__';
@@ -43,7 +52,7 @@ export default function ProductsPage() {
     ProductCategory.STABLES
   );
   const [extrasFilter, setExtrasFilter] = useState<'ALL' | true | false>(false);
-  const [subcategoryFilter, setSubcategoryFilter] = useState<'ALL' | ProductSubcategory>('ALL');
+  const [selectedSubcategories, setSelectedSubcategories] = useState<ProductSubcategory[]>([]);
   const [viewMode, setViewMode] = useState<'list' | 'tile'>('list');
   const [exportingPdf, setExportingPdf] = useState(false);
   const [tradeOnlyPdf, setTradeOnlyPdf] = useState(false);
@@ -66,25 +75,37 @@ export default function ProductsPage() {
   const isStandardSubcategory = (value: string) =>
     PRODUCT_SUBCATEGORIES.includes(value as ProductSubcategory);
 
+  const buildFilterQuery = () =>
+    buildProductFilterQueryString({
+      is_active: true,
+      category: categoryFilter !== 'ALL' ? categoryFilter : undefined,
+      is_extra: extrasFilter !== 'ALL' ? extrasFilter : undefined,
+      subcategories:
+        selectedSubcategories.length > 0 ? [...selectedSubcategories] : undefined,
+    });
+
+  const subcategoryFilterLabel =
+    selectedSubcategories.length === 0
+      ? 'All subcategories'
+      : selectedSubcategories.length === 1
+        ? selectedSubcategories[0]
+        : `${selectedSubcategories.length} subcategories selected`;
+
+  const toggleSubcategory = (sub: ProductSubcategory, checked: boolean) => {
+    setSelectedSubcategories((prev) =>
+      checked ? [...prev, sub] : prev.filter((s) => s !== sub)
+    );
+  };
+
   useEffect(() => {
     fetchProducts();
-  }, [categoryFilter, extrasFilter, subcategoryFilter]);
+  }, [categoryFilter, extrasFilter, selectedSubcategories]);
 
   const fetchProducts = async () => {
     try {
       setLoading(true);
-      const params: Record<string, string | boolean> = { is_active: true };
-      if (categoryFilter !== 'ALL') {
-        params.category = categoryFilter;
-      }
-      if (extrasFilter !== 'ALL') {
-        params.is_extra = extrasFilter;
-      }
-      if (subcategoryFilter !== 'ALL') {
-        params.subcategory = subcategoryFilter;
-      }
-
-      const response = await api.get('/api/products', { params });
+      const query = buildFilterQuery();
+      const response = await api.get(`/api/products?${query}`);
       setProducts(response.data);
     } catch (error: unknown) {
       if ((error as { response?: { status?: number } })?.response?.status === 401) {
@@ -100,22 +121,16 @@ export default function ProductsPage() {
   const handleExportPriceListPdf = async () => {
     try {
       setExportingPdf(true);
-      const params: Record<string, string | boolean> = { is_active: true };
-      if (categoryFilter !== 'ALL') {
-        params.category = categoryFilter;
-      }
-      if (extrasFilter !== 'ALL') {
-        params.is_extra = extrasFilter;
-      }
-      if (subcategoryFilter !== 'ALL') {
-        params.subcategory = subcategoryFilter;
-      }
-      if (tradeOnlyPdf) {
-        params.trade_only = true;
-      }
+      const query = buildProductFilterQueryString({
+        is_active: true,
+        category: categoryFilter !== 'ALL' ? categoryFilter : undefined,
+        is_extra: extrasFilter !== 'ALL' ? extrasFilter : undefined,
+        subcategories:
+          selectedSubcategories.length > 0 ? [...selectedSubcategories] : undefined,
+        trade_only: tradeOnlyPdf || undefined,
+      });
 
-      const response = await api.get('/api/products/price-list.pdf', {
-        params,
+      const response = await api.get(`/api/products/price-list.pdf?${query}`, {
         responseType: 'blob',
       });
       const blob = new Blob([response.data], { type: 'application/pdf' });
@@ -256,22 +271,44 @@ export default function ProductsPage() {
                 <SelectItem value="true">Extras Only</SelectItem>
               </SelectContent>
             </Select>
-            <Select
-              value={subcategoryFilter}
-              onValueChange={(value) => setSubcategoryFilter(value as 'ALL' | ProductSubcategory)}
-            >
-              <SelectTrigger className="w-full md:w-[200px]">
-                <SelectValue placeholder="Subcategory" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">All Subcategories</SelectItem>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="w-full md:w-[220px] justify-between font-normal">
+                  <span className="truncate">{subcategoryFilterLabel}</span>
+                  <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-[220px]">
+                <DropdownMenuLabel>Subcategories</DropdownMenuLabel>
+                <DropdownMenuItem
+                  onSelect={(e) => {
+                    e.preventDefault();
+                    setSelectedSubcategories([...PRODUCT_SUBCATEGORIES]);
+                  }}
+                >
+                  Select all
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={(e) => {
+                    e.preventDefault();
+                    setSelectedSubcategories([]);
+                  }}
+                >
+                  Clear
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
                 {PRODUCT_SUBCATEGORIES.map((sub) => (
-                  <SelectItem key={sub} value={sub}>
+                  <DropdownMenuCheckboxItem
+                    key={sub}
+                    checked={selectedSubcategories.includes(sub)}
+                    onCheckedChange={(checked) => toggleSubcategory(sub, checked === true)}
+                    onSelect={(e) => e.preventDefault()}
+                  >
                     {sub}
-                  </SelectItem>
+                  </DropdownMenuCheckboxItem>
                 ))}
-              </SelectContent>
-            </Select>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 border rounded-md px-3 py-2 bg-muted/20">
               <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer shrink-0">
                 <input

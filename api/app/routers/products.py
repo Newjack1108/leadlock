@@ -173,7 +173,7 @@ async def get_products(
     category: Optional[ProductCategory] = Query(None),
     is_extra: Optional[bool] = Query(None),
     is_active: Optional[bool] = Query(None),
-    subcategory: Optional[str] = Query(None),
+    subcategory: Optional[List[str]] = Query(None),
     allow_in_configurator: Optional[bool] = Query(None),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
@@ -188,7 +188,7 @@ async def get_products(
         statement = statement.where(Product.is_extra == is_extra)
 
     if subcategory:
-        statement = statement.where(Product.subcategory == subcategory)
+        statement = statement.where(Product.subcategory.in_(subcategory))
 
     if allow_in_configurator is not None:
         statement = statement.where(Product.allow_in_configurator == allow_in_configurator)
@@ -233,7 +233,7 @@ async def export_price_list_pdf(
     category: Optional[ProductCategory] = Query(None),
     is_extra: Optional[bool] = Query(None),
     is_active: Optional[bool] = Query(None),
-    subcategory: Optional[str] = Query(None),
+    subcategory: Optional[List[str]] = Query(None),
     trade_only: bool = Query(
         False,
         description="If true, only products marked for dealer/trade sale are included.",
@@ -254,7 +254,7 @@ async def export_price_list_pdf(
         statement = statement.where(Product.is_extra == is_extra)
 
     if subcategory:
-        statement = statement.where(Product.subcategory == subcategory)
+        statement = statement.where(Product.subcategory.in_(subcategory))
 
     if is_active is None:
         is_active = True
@@ -276,7 +276,10 @@ async def export_price_list_pdf(
     if category:
         summary_parts.append(f"Category: {category.value}")
     if subcategory:
-        summary_parts.append(f"Subcategory: {subcategory}")
+        if len(subcategory) == 1:
+            summary_parts.append(f"Subcategory: {subcategory[0]}")
+        else:
+            summary_parts.append(f"Subcategories: {', '.join(subcategory)}")
     if is_extra is True:
         summary_parts.append("Optional extras only")
     elif is_extra is False:
@@ -298,7 +301,15 @@ async def export_price_list_pdf(
     if category:
         safe_bits.append(category.value)
     if subcategory:
-        safe_bits.append(re.sub(r"[^\w\-]+", "_", subcategory, flags=re.UNICODE)[:40])
+        if len(subcategory) == 1:
+            safe_bits.append(re.sub(r"[^\w\-]+", "_", subcategory[0], flags=re.UNICODE)[:40])
+        else:
+            joined = "_".join(
+                re.sub(r"[^\w\-]+", "_", s, flags=re.UNICODE)[:20] for s in subcategory[:3]
+            )
+            if len(subcategory) > 3:
+                joined += "_etc"
+            safe_bits.append(joined[:60])
     suffix = "_".join(safe_bits) if safe_bits else "all"
     pdf_filename = f"Price_list_{suffix}.pdf"
     pdf_filename = re.sub(r'[<>:"/\\|?*]', "_", pdf_filename)

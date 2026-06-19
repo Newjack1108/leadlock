@@ -57,11 +57,21 @@ def test_price_list_pdf_returns_pdf():
             Product(
                 name="Alpha Stable",
                 category=ProductCategory.STABLES,
-                subcategory="Field",
+                subcategory="Standard",
                 base_price=Decimal("1234.50"),
                 unit="Unit",
                 sku="SKU-A",
                 size="12x12",
+            )
+        )
+        session.add(
+            Product(
+                name="Pent Stable",
+                category=ProductCategory.STABLES,
+                subcategory="Pent",
+                base_price=Decimal("1500.00"),
+                unit="Unit",
+                sku="SKU-P",
             )
         )
         session.add(
@@ -91,3 +101,22 @@ def test_price_list_pdf_returns_pdf():
     assert r2.status_code == 200
     assert r2.headers.get("content-type") == "application/pdf"
     assert len(r2.content) > 500
+
+    r3 = client.get(
+        "/api/products/price-list.pdf",
+        params={"category": "STABLES", "subcategory": ["Standard", "Pent"]},
+    )
+    assert r3.status_code == 200
+    assert r3.headers.get("content-type") == "application/pdf"
+    assert len(r3.content) > 500
+    assert r3.content[:4] == b"%PDF"
+    cd = r3.headers.get("content-disposition", "")
+    assert "Standard" in cd or "Pent" in cd
+
+    r4 = client.get(
+        "/api/products",
+        params={"category": "STABLES", "subcategory": ["Standard", "Pent"], "is_extra": False},
+    )
+    assert r4.status_code == 200
+    names = {p["name"] for p in r4.json()}
+    assert names == {"Alpha Stable", "Pent Stable"}

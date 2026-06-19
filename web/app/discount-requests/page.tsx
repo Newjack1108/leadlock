@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Header from '@/components/Header';
@@ -22,14 +22,91 @@ import {
   deleteDiscountRequest,
 } from '@/lib/api';
 import { DiscountRequest, DiscountType, DiscountScope, DiscountRequestStatus } from '@/lib/types';
+import { formatDateTime } from '@/lib/utils';
 import { toast } from 'sonner';
 import { Check, X, Loader2, FileText, ExternalLink } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import api from '@/lib/api';
 
+type GroupedRequests = {
+  pending: DiscountRequest[];
+  approved: DiscountRequest[];
+  rejected: DiscountRequest[];
+};
+
+const emptyGrouped = (): GroupedRequests => ({
+  pending: [],
+  approved: [],
+  rejected: [],
+});
+
+function groupByStatus(list: DiscountRequest[]): GroupedRequests {
+  return {
+    pending: list.filter((dr) => dr.status === DiscountRequestStatus.PENDING),
+    approved: list.filter((dr) => dr.status === DiscountRequestStatus.APPROVED),
+    rejected: list.filter((dr) => dr.status === DiscountRequestStatus.REJECTED),
+  };
+}
+
+function formatDiscount(dr: DiscountRequest) {
+  const value =
+    dr.discount_type === DiscountType.PERCENTAGE
+      ? `${dr.discount_value}%`
+      : `£${Number(dr.discount_value).toFixed(2)}`;
+  const scope = dr.scope === DiscountScope.QUOTE ? 'entire quote' : 'building items only';
+  return `${value} off ${scope}`;
+}
+
+function formatRespondedAt(iso?: string) {
+  if (!iso) return null;
+  return formatDateTime(iso);
+}
+
+function QuoteLink({ dr }: { dr: DiscountRequest }) {
+  return (
+    <Link
+      href={`/quotes/${dr.quote_id}`}
+      className="font-medium text-primary hover:underline flex items-center gap-1"
+    >
+      <FileText className="h-4 w-4" />
+      {dr.quote_number ?? `Quote #${dr.quote_id}`}
+    </Link>
+  );
+}
+
+function RequestDetails({
+  dr,
+  showRequestedBy,
+}: {
+  dr: DiscountRequest;
+  showRequestedBy?: boolean;
+}) {
+  const respondedAt = formatRespondedAt(dr.responded_at);
+  return (
+    <div className="flex-1 space-y-1">
+      <QuoteLink dr={dr} />
+      <p className="text-sm font-medium">{formatDiscount(dr)}</p>
+      {showRequestedBy && dr.requested_by_name && (
+        <p className="text-sm text-muted-foreground">Requested by {dr.requested_by_name}</p>
+      )}
+      {dr.reason && <p className="text-sm text-muted-foreground">{dr.reason}</p>}
+      {dr.status === DiscountRequestStatus.REJECTED && dr.rejection_reason && (
+        <p className="text-sm text-destructive mt-1">{dr.rejection_reason}</p>
+      )}
+      {respondedAt &&
+        (dr.status === DiscountRequestStatus.APPROVED ||
+          dr.status === DiscountRequestStatus.REJECTED) && (
+          <p className="text-sm text-muted-foreground">
+            {dr.status === DiscountRequestStatus.APPROVED ? 'Approved' : 'Rejected'} {respondedAt}
+          </p>
+        )}
+    </div>
+  );
+}
+
 export default function DiscountRequestsPage() {
   const router = useRouter();
-  const [requests, setRequests] = useState<DiscountRequest[]>([]);
+  const [grouped, setGrouped] = useState<GroupedRequests>(emptyGrouped);
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
@@ -40,21 +117,21 @@ export default function DiscountRequestsPage() {
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const canApprove = userRole === 'DIRECTOR' || userRole === 'SALES_MANAGER';
+  const totalCount =
+    grouped.pending.length + grouped.approved.length + grouped.rejected.length;
 
   const fetchRequests = async () => {
     try {
       setLoading(true);
-      const list = canApprove
-        ? await getDiscountRequests({ status: 'PENDING' })
-        : await getDiscountRequests();
-      setRequests(list);
+      const list = await getDiscountRequests();
+      setGrouped(groupByStatus(list));
     } catch (error: any) {
       if (error.response?.status === 401) {
         router.push('/login');
       } else {
         toast.error('Failed to load discount requests');
       }
-      setRequests([]);
+      setGrouped(emptyGrouped());
     } finally {
       setLoading(false);
     }
@@ -128,14 +205,147 @@ export default function DiscountRequestsPage() {
     }
   };
 
-  const formatDiscount = (dr: DiscountRequest) => {
-    const value =
-      dr.discount_type === DiscountType.PERCENTAGE
-        ? `${dr.discount_value}%`
-        : `£${Number(dr.discount_value).toFixed(2)}`;
-    const scope = dr.scope === DiscountScope.QUOTE ? 'entire quote' : 'building items only';
-    return `${value} off ${scope}`;
-  };
+  const renderEmptySection = (message: string) => (
+    <p className="text-sm text-muted-foreground py-4">{message}</p>
+  );
+
+  const renderSalesSection = (
+    title: string,
+    requests: DiscountRequest[],
+    emptyMessage: string,
+    options: { showRemove: boolean }
+  ) => (
+    <Card className="mb-4">
+      <CardHeader>
+        <CardTitle>
+          {title} ({requests.length})
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {requests.length === 0
+          ? renderEmptySection(emptyMessage)
+          : requests.map((dr) => (
+              <div
+                key={dr.id}
+                className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 border rounded-lg mb-4 last:mb-0"
+              >
+                <RequestDetails dr={dr} />
+                <div className="flex items-center gap-2 shrink-0">
+                  <Badge
+                    variant={
+                      dr.status === DiscountRequestStatus.APPROVED
+                        ? 'default'
+                        : dr.status === DiscountRequestStatus.REJECTED
+                          ? 'destructive'
+                          : 'secondary'
+                    }
+                  >
+                    {dr.status}
+                  </Badge>
+                  {options.showRemove && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={deletingId === dr.id}
+                      onClick={() => handleDelete(dr.id)}
+                    >
+                      {deletingId === dr.id ? 'Removing...' : 'Remove'}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
+      </CardContent>
+    </Card>
+  );
+
+  const renderApproverPendingRow = (dr: DiscountRequest) => (
+    <div
+      key={dr.id}
+      className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 border rounded-lg mb-4 last:mb-0"
+    >
+      <RequestDetails dr={dr} showRequestedBy />
+      <div className="flex items-center gap-2 shrink-0">
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => handleDelete(dr.id)}
+          disabled={deletingId === dr.id || approvingId != null || actionLoading}
+        >
+          {deletingId === dr.id ? 'Removing...' : 'Remove'}
+        </Button>
+        <Button size="sm" onClick={() => handleApprove(dr.id)} disabled={approvingId != null}>
+          {approvingId === dr.id ? (
+            <Loader2 className="h-4 w-4 animate-spin mr-1" />
+          ) : (
+            <Check className="h-4 w-4 mr-1" />
+          )}
+          Approve
+        </Button>
+        <Button
+          size="sm"
+          variant="destructive"
+          onClick={() => openRejectDialog(dr.id)}
+          disabled={actionLoading}
+        >
+          <X className="h-4 w-4 mr-1" />
+          Reject
+        </Button>
+      </div>
+    </div>
+  );
+
+  const renderApproverApprovedRow = (dr: DiscountRequest) => (
+    <div
+      key={dr.id}
+      className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 border rounded-lg mb-4 last:mb-0"
+    >
+      <RequestDetails dr={dr} showRequestedBy />
+      <div className="flex items-center gap-2 shrink-0">
+        <Badge variant="default">APPROVED</Badge>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => handleDelete(dr.id)}
+          disabled={deletingId === dr.id}
+        >
+          {deletingId === dr.id ? 'Removing...' : 'Remove'}
+        </Button>
+      </div>
+    </div>
+  );
+
+  const renderApproverRejectedRow = (dr: DiscountRequest) => (
+    <div
+      key={dr.id}
+      className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 border rounded-lg mb-4 last:mb-0"
+    >
+      <RequestDetails dr={dr} showRequestedBy />
+      <Badge variant="destructive" className="shrink-0">
+        REJECTED
+      </Badge>
+    </div>
+  );
+
+  const renderApproverSection = (
+    title: string,
+    requests: DiscountRequest[],
+    emptyMessage: string,
+    renderRow: (dr: DiscountRequest) => ReactNode
+  ) => (
+    <Card className="mb-4">
+      <CardHeader>
+        <CardTitle>
+          {title} ({requests.length})
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {requests.length === 0
+          ? renderEmptySection(emptyMessage)
+          : requests.map((dr) => renderRow(dr))}
+      </CardContent>
+    </Card>
+  );
 
   if (loading) {
     return (
@@ -177,140 +387,63 @@ export default function DiscountRequestsPage() {
                 </Button>
               </CardContent>
             </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle>Your discount requests</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {requests.length === 0 ? (
-                  <p className="text-sm text-muted-foreground py-4">You have not submitted any discount requests yet.</p>
-                ) : (
-                  <div className="space-y-4">
-                    {requests.map((dr) => (
-                      <div
-                        key={dr.id}
-                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 border rounded-lg"
-                      >
-                        <div className="flex-1 space-y-1">
-                          <Link
-                            href={`/quotes/${dr.quote_id}`}
-                            className="font-medium text-primary hover:underline flex items-center gap-1"
-                          >
-                            <FileText className="h-4 w-4" />
-                            {dr.quote_number ?? `Quote #${dr.quote_id}`}
-                          </Link>
-                          <p className="text-sm font-medium">{formatDiscount(dr)}</p>
-                          {dr.reason && (
-                            <p className="text-sm text-muted-foreground">{dr.reason}</p>
-                          )}
-                          {dr.status === DiscountRequestStatus.REJECTED && dr.rejection_reason && (
-                            <p className="text-sm text-destructive mt-1">{dr.rejection_reason}</p>
-                          )}
-                        </div>
-                        <Badge
-                          variant={
-                            dr.status === DiscountRequestStatus.APPROVED
-                              ? 'default'
-                              : dr.status === DiscountRequestStatus.REJECTED
-                                ? 'destructive'
-                                : 'secondary'
-                          }
-                          className="shrink-0"
-                        >
-                          {dr.status}
-                        </Badge>
-                        {(dr.status === DiscountRequestStatus.PENDING ||
-                          dr.status === DiscountRequestStatus.APPROVED) && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={deletingId === dr.id}
-                            onClick={() => handleDelete(dr.id)}
-                          >
-                            {deletingId === dr.id ? 'Removing...' : 'Remove'}
-                          </Button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
+
+            {totalCount === 0 ? (
+              <Card>
+                <CardContent className="py-8 text-center text-muted-foreground">
+                  You have not submitted any discount requests yet.
+                </CardContent>
+              </Card>
+            ) : (
+              <>
+                {renderSalesSection(
+                  'Your pending requests',
+                  grouped.pending,
+                  'No pending discount requests.',
+                  { showRemove: true }
                 )}
-              </CardContent>
-            </Card>
+                {renderSalesSection(
+                  'Your approved requests',
+                  grouped.approved,
+                  'No approved discount requests.',
+                  { showRemove: true }
+                )}
+                {renderSalesSection(
+                  'Your rejected requests',
+                  grouped.rejected,
+                  'No rejected discount requests.',
+                  { showRemove: false }
+                )}
+              </>
+            )}
           </>
-        ) : requests.length === 0 ? (
+        ) : totalCount === 0 ? (
           <Card>
             <CardContent className="py-8 text-center text-muted-foreground">
-              No pending discount requests.
+              No discount requests yet.
             </CardContent>
           </Card>
         ) : (
-          <Card>
-            <CardHeader>
-              <CardTitle>Pending requests ({requests.length})</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {requests.map((dr) => (
-                  <div
-                    key={dr.id}
-                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 border rounded-lg"
-                  >
-                    <div className="flex-1 space-y-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <Link
-                          href={`/quotes/${dr.quote_id}`}
-                          className="font-medium text-primary hover:underline flex items-center gap-1"
-                        >
-                          <FileText className="h-4 w-4" />
-                          {dr.quote_number ?? `Quote #${dr.quote_id}`}
-                        </Link>
-                      </div>
-                      <p className="text-sm font-medium">{formatDiscount(dr)}</p>
-                      {dr.requested_by_name && (
-                        <p className="text-sm text-muted-foreground">
-                          Requested by {dr.requested_by_name}
-                        </p>
-                      )}
-                      {dr.reason && (
-                        <p className="text-sm text-muted-foreground mt-1">{dr.reason}</p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleDelete(dr.id)}
-                        disabled={deletingId === dr.id || approvingId != null || actionLoading}
-                      >
-                        {deletingId === dr.id ? 'Removing...' : 'Remove'}
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={() => handleApprove(dr.id)}
-                        disabled={approvingId != null}
-                      >
-                        {approvingId === dr.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                        ) : (
-                          <Check className="h-4 w-4 mr-1" />
-                        )}
-                        Approve
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => openRejectDialog(dr.id)}
-                        disabled={actionLoading}
-                      >
-                        <X className="h-4 w-4 mr-1" />
-                        Reject
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+          <>
+            {renderApproverSection(
+              'Pending requests',
+              grouped.pending,
+              'No pending discount requests.',
+              renderApproverPendingRow
+            )}
+            {renderApproverSection(
+              'Approved requests',
+              grouped.approved,
+              'No approved discount requests.',
+              renderApproverApprovedRow
+            )}
+            {renderApproverSection(
+              'Rejected requests',
+              grouped.rejected,
+              'No rejected discount requests.',
+              renderApproverRejectedRow
+            )}
+          </>
         )}
 
         <Dialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>

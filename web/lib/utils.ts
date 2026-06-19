@@ -38,3 +38,30 @@ export function formatHoursMinutes(decHours: number): string {
   if (h === 0) return `${m} min`
   return h === 1 ? `1 hr ${m} min` : `${h} hrs ${m} min`
 }
+
+export type ProductFilterQueryParams = {
+  category?: string
+  is_extra?: boolean
+  is_active?: boolean
+  subcategories?: string[]
+  trade_only?: boolean
+}
+
+/** Build query string for product list / price-list PDF (repeated subcategory keys for FastAPI). */
+export function buildProductFilterQueryString(params: ProductFilterQueryParams): string {
+  const searchParams = new URLSearchParams()
+  searchParams.set('is_active', String(params.is_active ?? true))
+  if (params.category) {
+    searchParams.set('category', params.category)
+  }
+  if (params.is_extra !== undefined) {
+    searchParams.set('is_extra', String(params.is_extra))
+  }
+  for (const sub of params.subcategories ?? []) {
+    searchParams.append('subcategory', sub)
+  }
+  if (params.trade_only) {
+    searchParams.set('trade_only', 'true')
+  }
+  return searchParams.toString()
+}
