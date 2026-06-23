@@ -128,7 +128,9 @@ def _image_from_bytes(
             except (AttributeError, OSError):
                 pass
             path = f.name
-        return Image(path, width=out_w, height=out_h)
+        img = Image(path, width=out_w, height=out_h)
+        img._restrictSize(width, cap)
+        return img
     except Exception as e:
         print(f"PDF _image_from_bytes failed: {e}", file=sys.stderr, flush=True)
         return None
@@ -209,6 +211,32 @@ def _build_header_flowables(
 
 
 FOOTER_BOTTOM_MARGIN = 45 * mm  # Space for footer on every page (logo + text + padding)
+SPEC_SHEET_APPENDIX_SIDE_MARGIN = 15 * mm
+SPEC_SHEET_APPENDIX_TOP_MARGIN = 10 * mm
+SPEC_SHEET_IMAGE_FRAME_BUFFER = 1 * mm
+# ReportLab Frame default padding is 6pt on each side (reduces usable area inside doc.width/height).
+_REPORTLAB_FRAME_PADDING_TOTAL = 12
+
+
+def _appendix_flowable_max_size(
+    *,
+    left_margin: float = SPEC_SHEET_APPENDIX_SIDE_MARGIN,
+    right_margin: float = SPEC_SHEET_APPENDIX_SIDE_MARGIN,
+    top_margin: float = SPEC_SHEET_APPENDIX_TOP_MARGIN,
+    bottom_margin: float = FOOTER_BOTTOM_MARGIN,
+) -> Tuple[float, float]:
+    """Max width/height for a single image on an appendix page (fits ReportLab frame)."""
+    doc = SimpleDocTemplate(
+        BytesIO(),
+        pagesize=A4,
+        topMargin=top_margin,
+        bottomMargin=bottom_margin,
+        leftMargin=left_margin,
+        rightMargin=right_margin,
+    )
+    max_w = doc.width - _REPORTLAB_FRAME_PADDING_TOTAL
+    max_h = doc.height - _REPORTLAB_FRAME_PADDING_TOTAL - SPEC_SHEET_IMAGE_FRAME_BUFFER
+    return max_w, max_h
 
 
 def _resolve_logo_path_for_canvas(
@@ -1227,7 +1255,10 @@ def generate_quote_pdf(
                                 resolved_spec_sheet_file_url
                             )
                         if img_data:
-                            img_flowable = _image_from_bytes(img_data, width=180 * mm, max_height=240 * mm)
+                            max_img_w, max_img_h = _appendix_flowable_max_size()
+                            img_flowable = _image_from_bytes(
+                                img_data, width=max_img_w, max_height=max_img_h
+                            )
                             if img_flowable:
                                 spec_sheet_elements.append(img_flowable)
                                 spec_sheet_elements.append(Spacer(1, 8))

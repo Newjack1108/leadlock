@@ -332,6 +332,66 @@ def test_quote_pdf_includes_specification_sheet_image_when_enabled(monkeypatch):
     assert len(reader.pages) >= 2
 
 
+def test_quote_pdf_spec_sheet_tall_portrait_image_fits_frame(monkeypatch):
+    """Tall company spec images must scale to the appendix page frame (not 240mm cap)."""
+    from PIL import Image as PILImage
+
+    from app.quote_pdf_service import _appendix_flowable_max_size, _image_from_bytes
+
+    tall_buf = BytesIO()
+    PILImage.new("RGB", (1200, 4000), color="white").save(tall_buf, format="PNG")
+    tall_png = tall_buf.getvalue()
+
+    max_w, max_h = _appendix_flowable_max_size()
+    flowable = _image_from_bytes(tall_png, width=max_w, max_height=max_h)
+    assert flowable is not None
+    assert flowable.drawWidth <= max_w + 0.5
+    assert flowable.drawHeight <= max_h + 0.5
+
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SQLModel.metadata.create_all(engine)
+    _, quote_id = _seed_quote_with_spec_sheet(
+        engine,
+        company_default=None,
+        company_image_url="https://example.com/spec-tall.png",
+        include_on_quote=True,
+    )
+
+    monkeypatch.setattr(
+        "app.specification_sheet.fetch_specification_sheet_file_bytes",
+        lambda _url: tall_png,
+    )
+    monkeypatch.setattr(
+        "app.specification_sheet.fetch_specification_sheet_image_bytes",
+        lambda _url: tall_png,
+    )
+
+    with Session(engine) as session:
+        quote = session.get(Quote, quote_id)
+        customer = session.get(Customer, quote.customer_id)
+        items = list(session.exec(select(QuoteItem).where(QuoteItem.quote_id == quote_id)).all())
+        company_settings = session.exec(select(CompanySettings).limit(1)).first()
+        image_url = resolve_specification_sheet_image_url(company_settings)
+        pdf_buffer = generate_quote_pdf(
+            quote,
+            customer,
+            items,
+            company_settings=company_settings,
+            session=session,
+            include_spec_sheets=False,
+            include_specification_sheet=True,
+            specification_sheet_text=None,
+            specification_sheet_image_url=image_url,
+        )
+
+    reader = PdfReader(pdf_buffer)
+    assert len(reader.pages) >= 2
+
+
 def test_quote_pdf_includes_company_spec_image_on_staff_preview_without_quote_flag(monkeypatch):
     engine = create_engine(
         "sqlite://",
