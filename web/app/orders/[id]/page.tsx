@@ -239,7 +239,19 @@ export default function OrderDetailPage() {
     try {
       setSendingAccessSheet(true);
       const result = await sendAccessSheet(orderId);
-      await fetchOrder();
+      setOrder((prev) =>
+        prev
+          ? {
+              ...prev,
+              access_sheet: {
+                access_sheet_url: result.access_sheet_url,
+                completed: false,
+                completed_at: null,
+                answers: null,
+              },
+            }
+          : prev
+      );
       if (result.access_sheet_url) {
         await navigator.clipboard.writeText(result.access_sheet_url);
         toast.success('Access sheet link copied to clipboard');
@@ -258,8 +270,19 @@ export default function OrderDetailPage() {
   const handleSendToProduction = async () => {
     try {
       setSendingToProduction(true);
-      await sendOrderToProduction(orderId);
-      await fetchOrder();
+      const result = await sendOrderToProduction(orderId);
+      setOrder((prev) =>
+        prev
+          ? {
+              ...prev,
+              sent_to_production_at: result.sent_to_production_at ?? prev.sent_to_production_at,
+              sent_to_production_by_id:
+                result.sent_to_production_by_id ?? prev.sent_to_production_by_id,
+              sent_to_production_by_name:
+                result.sent_to_production_by_name ?? prev.sent_to_production_by_name,
+            }
+          : prev
+      );
       toast.success('Order sent to production');
     } catch (error: any) {
       toast.error(error.response?.data?.detail || 'Failed to send to production');

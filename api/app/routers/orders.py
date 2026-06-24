@@ -182,6 +182,129 @@ def _build_prize_draw_entry_response(order: Order, session: Session):
     return PrizeDrawEntryResponse(**data)
 
 
+def _frontend_base_url() -> str:
+    frontend = (os.getenv("FRONTEND_URL") or os.getenv("PUBLIC_FRONTEND_URL") or "").strip()
+    if not frontend or not (frontend.startswith("http://") or frontend.startswith("https://")):
+        return "https://leadlock-frontend-production.up.railway.app"
+    return frontend.rstrip("/")
+
+
+def _batch_latest_access_sheets(
+    session: Session, order_ids: list[int]
+) -> dict[int, AccessSheetRequest]:
+    if not order_ids:
+        return {}
+    rows = session.exec(
+        select(AccessSheetRequest)
+        .where(AccessSheetRequest.order_id.in_(order_ids))
+        .order_by(AccessSheetRequest.order_id, AccessSheetRequest.created_at.desc())
+    ).all()
+    by_order: dict[int, AccessSheetRequest] = {}
+    for row in rows:
+        if row.order_id is not None and row.order_id not in by_order:
+            by_order[row.order_id] = row
+    return by_order
+
+
+def _batch_order_list_lookups(
+    session: Session, orders: list[Order]
+) -> tuple[dict[int, Customer], dict[int, Quote], dict[int, Lead], dict[int, AccessSheetRequest]]:
+    order_ids = [o.id for o in orders if o.id is not None]
+    customer_ids = list({o.customer_id for o in orders if o.customer_id})
+    quote_ids = list({o.quote_id for o in orders if o.quote_id})
+
+    customers_by_id: dict[int, Customer] = {}
+    if customer_ids:
+        for customer in session.exec(select(Customer).where(Customer.id.in_(customer_ids))).all():
+            if customer.id is not None:
+                customers_by_id[customer.id] = customer
+
+    quotes_by_id: dict[int, Quote] = {}
+    lead_ids: set[int] = set()
+    if quote_ids:
+        for quote in session.exec(select(Quote).where(Quote.id.in_(quote_ids))).all():
+            if quote.id is not None:
+                quotes_by_id[quote.id] = quote
+            if quote.lead_id:
+                lead_ids.add(quote.lead_id)
+
+    leads_by_id: dict[int, Lead] = {}
+    if lead_ids:
+        for lead in session.exec(select(Lead).where(Lead.id.in_(lead_ids))).all():
+            if lead.id is not None:
+                leads_by_id[lead.id] = lead
+
+    access_by_order = _batch_latest_access_sheets(session, order_ids)
+    return customers_by_id, quotes_by_id, leads_by_id, access_by_order
+
+
+def build_order_list_response(
+    order: Order,
+    *,
+    customer: Optional[Customer],
+    lead: Optional[Lead],
+    access_req: Optional[AccessSheetRequest],
+    frontend_base: str,
+) -> OrderResponse:
+    """Lightweight order row for GET /api/orders (no line items or per-row DB queries)."""
+    customer_name = customer.name if customer else None
+    lead_type = lead.lead_type if lead else None
+    is_ninox_origin = (
+        (lead is not None and lead.lead_source == LeadSource.NINOX)
+        or (customer is not None and customer.source_system == "Ninox")
+    )
+    access_sheet = None
+    if access_req:
+        access_sheet = AccessSheetResponse(
+            access_sheet_url=f"{frontend_base}/access-sheet/{access_req.access_token}",
+            completed=access_req.completed_at is not None,
+            completed_at=access_req.completed_at,
+            answers=None,
+        )
+    return OrderResponse(
+        id=order.id,
+        quote_id=order.quote_id,
+        customer_id=order.customer_id,
+        customer_name=customer_name,
+        lead_type=lead_type,
+        order_number=order.order_number,
+        subtotal=order.subtotal,
+        discount_total=order.discount_total,
+        total_amount=order.total_amount,
+        deposit_amount=order.deposit_amount,
+        balance_amount=order.balance_amount,
+        currency=order.currency,
+        terms_and_conditions=order.terms_and_conditions,
+        specification_sheet=order.specification_sheet,
+        notes=order.notes,
+        created_by_id=order.created_by_id,
+        created_at=order.created_at,
+        deposit_paid=order.deposit_paid,
+        balance_paid=order.balance_paid,
+        paid_in_full=order.paid_in_full,
+        installation_booked=order.installation_booked,
+        installation_completed=order.installation_completed,
+        installation_completed_at=order.installation_completed_at,
+        review_request_customer_sent_at=order.review_request_customer_sent_at,
+        review_request_customer_channel=order.review_request_customer_channel,
+        invoice_number=order.invoice_number,
+        xero_invoice_id=order.xero_invoice_id,
+        travel_time_hours_one_way=order.travel_time_hours_one_way,
+        fulfillment_method=getattr(order, "fulfillment_method", QuoteFulfillmentMethod.DELIVERY),
+        **delivery_location_response_fields(order),
+        payment_link_url=order.payment_link_url,
+        is_ninox_origin=is_ninox_origin,
+        items=[],
+        access_sheet=access_sheet,
+        review_hub_url=None,
+        is_returning_customer_for_review=False,
+        prize_draw_entry=None,
+        sent_to_production_at=None,
+        sent_to_production_by_id=None,
+        sent_to_production_by_name=None,
+    )
+
+
 def _build_access_sheet_response(order_id: int, session: Session) -> AccessSheetResponse | None:
     """Build AccessSheetResponse from latest AccessSheetRequest for order."""
     req = session.exec(
@@ -193,11 +316,7 @@ def _build_access_sheet_response(order_id: int, session: Session) -> AccessSheet
     if not req:
         return None
 
-    frontend = (os.getenv("FRONTEND_URL") or os.getenv("PUBLIC_FRONTEND_URL") or "").strip()
-    if not frontend or not (frontend.startswith("http://") or frontend.startswith("https://")):
-        frontend = "https://leadlock-frontend-production.up.railway.app"
-    base = frontend.rstrip("/")
-    access_sheet_url = f"{base}/access-sheet/{req.access_token}"
+    access_sheet_url = f"{_frontend_base_url()}/access-sheet/{req.access_token}"
 
     return AccessSheetResponse(
         access_sheet_url=access_sheet_url,
@@ -404,11 +523,27 @@ async def list_orders(
         .offset((page - 1) * page_size)
         .limit(page_size)
     )
-    orders = session.exec(statement).all()
+    orders = list(session.exec(statement).all())
+    customers_by_id, quotes_by_id, leads_by_id, access_by_order = _batch_order_list_lookups(
+        session, orders
+    )
+    frontend_base = _frontend_base_url()
 
     result = []
     for order in orders:
-        result.append(build_order_response(order, [], session))
+        customer = customers_by_id.get(order.customer_id) if order.customer_id else None
+        quote = quotes_by_id.get(order.quote_id) if order.quote_id else None
+        lead = leads_by_id.get(quote.lead_id) if quote and quote.lead_id else None
+        access_req = access_by_order.get(order.id) if order.id else None
+        result.append(
+            build_order_list_response(
+                order,
+                customer=customer,
+                lead=lead,
+                access_req=access_req,
+                frontend_base=frontend_base,
+            )
+        )
 
     return OrderListResponse(items=result, total=total, page=page, page_size=page_size)
 
@@ -978,11 +1113,7 @@ async def send_access_sheet(
             session.add(req)
             session.commit()
 
-    frontend = (os.getenv("FRONTEND_URL") or os.getenv("PUBLIC_FRONTEND_URL") or "").strip()
-    if not frontend or not (frontend.startswith("http://") or frontend.startswith("https://")):
-        frontend = "https://leadlock-frontend-production.up.railway.app"
-    base = frontend.rstrip("/")
-    access_sheet_url = f"{base}/access-sheet/{req.access_token}"
+    access_sheet_url = f"{_frontend_base_url()}/access-sheet/{req.access_token}"
     record_order_audit_event(
         session,
         event_type=CustomerHistoryEventType.ORDER_ACCESS_SHEET_SENT.value,
@@ -1176,7 +1307,15 @@ async def send_to_production(
                 created_by_id=current_user.id,
             )
             session.commit()
-            return {"success": True, "message": "Order sent to production", **data}
+            sent_at, sent_by_id, sent_by_name = _get_latest_production_send(order.id, session)
+            return {
+                "success": True,
+                "message": "Order sent to production",
+                "sent_to_production_at": sent_at,
+                "sent_to_production_by_id": sent_by_id,
+                "sent_to_production_by_name": sent_by_name,
+                **data,
+            }
     except httpx.HTTPStatusError as e:
         detail = "Production app rejected the request"
         try:

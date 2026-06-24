@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useLayoutEffect, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Header from '@/components/Header';
 import { Card, CardContent } from '@/components/ui/card';
@@ -51,12 +51,14 @@ export default function OrdersPage() {
   const router = useRouter();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [statusFilter, setStatusFilter] = useState<OrderStatusFilter>('all');
   const [leadTypeFilter, setLeadTypeFilter] = useState<LeadTypeFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchApplied, setSearchApplied] = useState('');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+  const hasLoadedRef = useRef(false);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -71,7 +73,11 @@ export default function OrdersPage() {
 
   const fetchOrders = useCallback(async () => {
     try {
-      setLoading(true);
+      if (!hasLoadedRef.current) {
+        setLoading(true);
+      } else {
+        setRefreshing(true);
+      }
       const data = await getOrders({
         page,
         page_size: ORDERS_PAGE_SIZE,
@@ -81,24 +87,18 @@ export default function OrdersPage() {
       });
       setOrders(data.items);
       setTotal(data.total);
+      hasLoadedRef.current = true;
     } catch (error: any) {
       toast.error('Failed to load orders');
       if (error.response?.status === 401) router.push('/login');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, [page, statusFilter, leadTypeFilter, searchApplied, router]);
 
   useEffect(() => {
     fetchOrders();
-  }, [fetchOrders]);
-
-  useEffect(() => {
-    const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible') fetchOrders();
-    };
-    document.addEventListener('visibilitychange', onVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
   }, [fetchOrders]);
 
   const filtersActive = hasActiveFilters(statusFilter, leadTypeFilter, searchApplied);
@@ -187,7 +187,7 @@ export default function OrdersPage() {
           </Card>
         ) : (
           <>
-            <Card>
+            <Card className={refreshing ? 'opacity-60 pointer-events-none transition-opacity' : undefined}>
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
@@ -282,7 +282,7 @@ export default function OrdersPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    disabled={page <= 1 || loading}
+                    disabled={page <= 1 || refreshing}
                     onClick={() => setPage((p) => Math.max(1, p - 1))}
                   >
                     Previous
@@ -290,7 +290,7 @@ export default function OrdersPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    disabled={page >= totalPages || loading}
+                    disabled={page >= totalPages || refreshing}
                     onClick={() => setPage((p) => p + 1)}
                   >
                     Next

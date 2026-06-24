@@ -1210,7 +1210,9 @@ export const updateOrder = async (
     delivery_location_notes?: string | null;
   }
 ) => {
-  const response = await api.patch(`/api/orders/${orderId}`, data);
+  const response = await api.patch(`/api/orders/${orderId}`, data, {
+    timeout: EMAIL_AND_UPLOAD_TIMEOUT_MS,
+  });
   return response.data;
 };
 
@@ -1320,8 +1322,16 @@ export const sendAccessSheet = async (orderId: number): Promise<{
 };
 
 /** Send order to production app as work order. Auth required. */
-export const sendOrderToProduction = async (orderId: number): Promise<{ success: boolean; message?: string }> => {
-  const response = await api.post(`/api/orders/${orderId}/send-to-production`);
+export const sendOrderToProduction = async (orderId: number): Promise<{
+  success: boolean;
+  message?: string;
+  sent_to_production_at?: string | null;
+  sent_to_production_by_id?: number | null;
+  sent_to_production_by_name?: string | null;
+}> => {
+  const response = await api.post(`/api/orders/${orderId}/send-to-production`, null, {
+    timeout: 90_000,
+  });
   return response.data;
 };
 
