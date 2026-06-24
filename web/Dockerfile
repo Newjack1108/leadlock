@@ -9,6 +9,10 @@ WORKDIR /app
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
+# Server-side /api rewrite target (may be private http://leadlock.railway.internal:PORT)
+ARG API_PROXY_TARGET
+ENV API_PROXY_TARGET=$API_PROXY_TARGET
+
 COPY package.json package-lock.json* ./
 RUN npm ci
 

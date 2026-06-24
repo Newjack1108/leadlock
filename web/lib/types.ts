@@ -1366,6 +1366,13 @@ export interface Order {
   sent_to_production_by_name?: string | null;
 }
 
+export interface OrderListPayload {
+  items: Order[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
 export enum CustomerFileKind {
   PLAN = "PLAN",
   PHOTO = "PHOTO",

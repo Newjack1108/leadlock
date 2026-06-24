@@ -2134,6 +2134,13 @@ class OrderResponse(BaseModel):
     sent_to_production_by_name: Optional[str] = None
 
 
+class OrderListResponse(BaseModel):
+    items: List[OrderResponse]
+    total: int
+    page: int
+    page_size: int
+
+
 class CustomerFileResponse(BaseModel):
     """File anchored to a customer, optionally scoped to a quote and/or order."""
     id: int

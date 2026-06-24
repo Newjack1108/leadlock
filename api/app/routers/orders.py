@@ -4,10 +4,11 @@ import secrets
 import uuid
 from html import escape
 from datetime import date, datetime
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from fastapi.responses import Response
 from sqlmodel import Session, select
-from typing import List, Optional
+from typing import List, Literal, Optional
+from sqlalchemy import and_, func, or_, true
 import httpx
 from app.database import get_session
 from app.models import (
@@ -20,6 +21,7 @@ from app.models import (
     Product,
     Quote,
     Lead,
+    LeadType,
     LeadSource,
     QuoteFulfillmentMethod,
     Activity,
@@ -39,8 +41,10 @@ from app.delivery_location import (
     has_full_delivery_address,
     sync_delivery_location_from_payload,
 )
+from app.constants import LIST_PAGE_SIZE_DEFAULT, LIST_PAGE_SIZE_MAX
 from app.schemas import (
     OrderResponse,
+    OrderListResponse,
     OrderItemResponse,
     OrderUpdate,
     AccessSheetSendResponse,
@@ -306,21 +310,107 @@ def build_order_response(order: Order, order_items: List[OrderItem], session: Se
     )
 
 
-@router.get("", response_model=List[OrderResponse])
+OrderListStatusFilter = Literal[
+    "new", "deposit_paid", "installation_booked", "installation_completed", "completed", "all"
+]
+
+
+def _order_list_joins():
+    return (
+        select(Order)
+        .outerjoin(Customer, Order.customer_id == Customer.id)
+        .outerjoin(Quote, Order.quote_id == Quote.id)
+        .outerjoin(Lead, Quote.lead_id == Lead.id)
+    )
+
+
+def _order_status_condition(status: OrderListStatusFilter):
+    if status == "new":
+        return and_(
+            Order.deposit_paid == False,  # noqa: E712
+            Order.installation_booked == False,  # noqa: E712
+            Order.installation_completed == False,  # noqa: E712
+        )
+    if status == "deposit_paid":
+        return Order.deposit_paid == True  # noqa: E712
+    if status == "installation_booked":
+        return Order.installation_booked == True  # noqa: E712
+    if status == "installation_completed":
+        return Order.installation_completed == True  # noqa: E712
+    if status == "completed":
+        return or_(Order.paid_in_full == True, Order.balance_paid == True)  # noqa: E712
+    return None
+
+
+@router.get("", response_model=OrderListResponse)
 async def list_orders(
+    search: Optional[str] = Query(None),
+    status: Optional[OrderListStatusFilter] = Query(None),
+    lead_type: Optional[str] = Query(None, alias="lead_type"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(LIST_PAGE_SIZE_DEFAULT, ge=1, le=LIST_PAGE_SIZE_MAX),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    """List all orders (newest first)."""
-    statement = select(Order).order_by(Order.created_at.desc())
+    """Paginated orders (newest first)."""
+    conditions = []
+
+    if status and status != "all":
+        status_condition = _order_status_condition(status)
+        if status_condition is not None:
+            conditions.append(status_condition)
+
+    if lead_type:
+        if lead_type == "unknown":
+            conditions.append(
+                or_(
+                    Lead.id.is_(None),
+                    Lead.lead_type.is_(None),
+                    Lead.lead_type == LeadType.UNKNOWN,
+                )
+            )
+        else:
+            try:
+                conditions.append(Lead.lead_type == LeadType(lead_type))
+            except ValueError:
+                raise HTTPException(status_code=422, detail=f"Invalid lead_type: {lead_type}")
+
+    if search and search.strip():
+        term = f"%{search.strip()}%"
+        conditions.append(
+            or_(
+                Order.order_number.ilike(term),
+                Customer.name.ilike(term),
+            )
+        )
+
+    where_clause = and_(*conditions) if conditions else true()
+
+    count_stmt = (
+        select(func.count(Order.id))
+        .select_from(Order)
+        .outerjoin(Customer, Order.customer_id == Customer.id)
+        .outerjoin(Quote, Order.quote_id == Quote.id)
+        .outerjoin(Lead, Quote.lead_id == Lead.id)
+        .where(where_clause)
+    )
+    _total_row = session.exec(count_stmt).one()
+    total = int(_total_row[0]) if isinstance(_total_row, (tuple, list)) else int(_total_row)
+
+    statement = (
+        _order_list_joins()
+        .where(where_clause)
+        .order_by(Order.created_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
     orders = session.exec(statement).all()
+
     result = []
     for order in orders:
-        items = session.exec(
-            select(OrderItem).where(OrderItem.order_id == order.id).order_by(OrderItem.sort_order)
-        ).all()
-        result.append(build_order_response(order, list(items), session))
-    return result
+        result.append(build_order_response(order, [], session))
+
+    return OrderListResponse(items=result, total=total, page=page, page_size=page_size)
 
 
 @router.get("/{order_id}", response_model=OrderResponse)

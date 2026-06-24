@@ -1,6 +1,11 @@
 import type { NextConfig } from "next";
 
-const apiProxyTarget = process.env.API_PROXY_TARGET || process.env.NEXT_PUBLIC_API_URL || "";
+// Server-side /api rewrites only. Prefer API_PROXY_TARGET (private railway.internal is OK here).
+// Fall back to public URL when proxy target is unset.
+const apiProxyTarget =
+  process.env.API_PROXY_TARGET?.trim() ||
+  process.env.NEXT_PUBLIC_API_URL?.trim() ||
+  "";
 
 const nextConfig: NextConfig = {
   async redirects() {

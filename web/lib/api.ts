@@ -31,6 +31,7 @@ import {
   type QuoteFulfillmentMethod,
   type QuoteStatus,
   type QuoteListPayload,
+  type OrderListPayload,
   type CustomerListPayload,
   type AutomatedReminderCleanupResult,
   type StaleSummary,
@@ -1149,9 +1150,21 @@ export const cancelDraftQuote = async (quoteId: number) => {
   await api.delete(`/api/quotes/${quoteId}`);
 };
 
-export const getOrders = async () => {
-  const response = await api.get('/api/orders');
-  return response.data;
+export const getOrders = async (options?: {
+  page?: number;
+  page_size?: number;
+  search?: string;
+  status?: string;
+  lead_type?: string;
+}) => {
+  const params: Record<string, string | number> = {};
+  if (options?.page != null) params.page = options.page;
+  if (options?.page_size != null) params.page_size = options.page_size;
+  if (options?.search?.trim()) params.search = options.search.trim();
+  if (options?.status && options.status !== 'all') params.status = options.status;
+  if (options?.lead_type && options.lead_type !== 'all') params.lead_type = options.lead_type;
+  const response = await api.get('/api/orders', { params: Object.keys(params).length ? params : undefined });
+  return response.data as OrderListPayload;
 };
 
 export const getCustomerOrders = async (customerId: number) => {

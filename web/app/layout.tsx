@@ -48,12 +48,9 @@ export const viewport: Viewport = {
   colorScheme: "light",
 };
 
+/** Public API URL for browser calls only — never use API_PROXY_TARGET (may be a private railway.internal URL). */
 function getServerApiBaseUrl(): string {
-  const raw =
-    process.env.API_URL ||
-    process.env.API_PROXY_TARGET ||
-    process.env.NEXT_PUBLIC_API_URL ||
-    '';
+  const raw = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || '';
   return raw.trim().replace(/\/+$/, '');
 }
 
