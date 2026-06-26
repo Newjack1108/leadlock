@@ -692,7 +692,7 @@ function LeadsPageContent() {
 
         {/* Create Lead Dialog */}
         <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-          <DialogContent>
+          <DialogContent className="max-h-[90vh] flex flex-col">
             <DialogHeader>
               <DialogTitle>Create New Lead</DialogTitle>
               <DialogDescription>
@@ -700,7 +700,7 @@ function LeadsPageContent() {
                 (Stables, Sheds, or Cabins). Name, lead source, and lead type are required.
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-4 py-4">
+            <div className="space-y-4 py-4 overflow-y-auto flex-1 min-h-0">
               <div className="space-y-2">
                 <Label htmlFor="name">
                   Name <span className="text-destructive">*</span>
