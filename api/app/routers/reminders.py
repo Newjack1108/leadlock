@@ -1,7 +1,9 @@
 """
 API endpoints for reminders and stale item management.
 """
+import logging
 import re
+import time
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, select, and_, or_, func, col
 from sqlalchemy import case
@@ -54,6 +56,7 @@ from app.weekly_planner_service import (
 )
 
 router = APIRouter(prefix="/api/reminders", tags=["reminders"])
+logger = logging.getLogger(__name__)
 
 _LEAD_CHECK_TYPES = frozenset({"LAST_ACTIVITY", "STATUS_DURATION"})
 _QUOTE_CHECK_TYPES = frozenset({
@@ -1035,11 +1038,31 @@ def generate_weekly_plan_endpoint(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    run = generate_weekly_plan(
-        session,
-        generated_by_id=current_user.id,
-        auto_execute=auto_execute,
-        dry_run=dry_run,
+    started = time.monotonic()
+    try:
+        run = generate_weekly_plan(
+            session,
+            generated_by_id=current_user.id,
+            auto_execute=auto_execute,
+            dry_run=dry_run,
+        )
+    except Exception:
+        elapsed_ms = int((time.monotonic() - started) * 1000)
+        logger.exception(
+            "weekly_plan generate failed user_id=%s auto_execute=%s dry_run=%s elapsed_ms=%s",
+            current_user.id,
+            auto_execute,
+            dry_run,
+            elapsed_ms,
+        )
+        raise
+    elapsed_ms = int((time.monotonic() - started) * 1000)
+    logger.info(
+        "weekly_plan generate ok run_id=%s total_items=%s user_id=%s elapsed_ms=%s",
+        run.id,
+        run.total_items,
+        current_user.id,
+        elapsed_ms,
     )
     return _weekly_plan_run_to_response(run)
 

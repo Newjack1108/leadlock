@@ -290,7 +290,14 @@ export default function WeeklyPlanPage() {
       );
       await loadData();
     } catch (error) {
-      toast.error(getApiErrorDetail(error) || 'Failed to generate weekly plan');
+      const detail = getApiErrorDetail(error);
+      if (detail.toLowerCase().includes('timeout')) {
+        toast.error(
+          'Weekly plan generation timed out. The server may still be working — refresh in a minute, or try again.'
+        );
+      } else {
+        toast.error(detail || 'Failed to generate weekly plan');
+      }
     } finally {
       setLoadingRun(false);
     }

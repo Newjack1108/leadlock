@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import os
 import re
+import sys
+import time
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Dict, List, Optional, Tuple
@@ -55,6 +57,22 @@ from app.stale_reference_service import (
 
 WEEKLY_PLAN_MIN_PRIORITY_SCORE = Decimal("50")
 WEEKLY_PLAN_DEFAULT_MAX_ITEMS = 100
+
+
+def _weekly_plan_max_ai_calls() -> int:
+    try:
+        return max(0, int(os.getenv("WEEKLY_PLAN_MAX_AI_CALLS", "20")))
+    except ValueError:
+        return 20
+
+
+class _WeeklyPlanGenerationStats:
+    def __init__(self) -> None:
+        self.candidates = 0
+        self.skipped_heuristic_prescreen = 0
+        self.skipped_score_floor = 0
+        self.ai_calls = 0
+        self.started = time.monotonic()
 
 POSITIVE_BUY_SIGNALS = (
     "ready to order",
@@ -416,6 +434,95 @@ def _blend_final_priority(base_priority_score: Decimal, likelihood_score: Decima
     return max(Decimal("1"), min(Decimal("100"), blended))
 
 
+def _heuristic_blended_score(base_score: Decimal, heuristic_score: Decimal) -> Decimal:
+    return _blend_final_priority(min(Decimal("100"), base_score), heuristic_score)
+
+
+def _resolve_likelihood_for_candidate(
+    *,
+    session: Session,
+    customer_name: str,
+    quote_number: Optional[str],
+    quote: Optional[Quote],
+    days_stale: int,
+    customer_id: Optional[int],
+    base_score: Decimal,
+    action: SuggestedAction,
+    channel: str,
+    stats: _WeeklyPlanGenerationStats,
+    ai_calls_cap: int,
+) -> Optional[
+    Tuple[Decimal, Decimal, Decimal, List[str], str, List[str], Decimal]
+]:
+    """
+    Score a weekly-plan candidate with cheap heuristics first, then optional AI.
+    Returns None when the candidate cannot meet the priority floor.
+    """
+    stats.candidates += 1
+
+    quick_heuristic, _, _ = _heuristic_order_likelihood(
+        quote=quote,
+        days_stale=days_stale,
+        recent_texts=[],
+    )
+    if _heuristic_blended_score(base_score, quick_heuristic) < WEEKLY_PLAN_MIN_PRIORITY_SCORE:
+        stats.skipped_heuristic_prescreen += 1
+        return None
+
+    recent_texts = _collect_customer_recent_text(session, customer_id) if customer_id else []
+    heuristic_score, heuristic_conf, heuristic_reasons = _heuristic_order_likelihood(
+        quote=quote,
+        days_stale=days_stale,
+        recent_texts=recent_texts,
+    )
+    if _heuristic_blended_score(base_score, heuristic_score) < WEEKLY_PLAN_MIN_PRIORITY_SCORE:
+        stats.skipped_heuristic_prescreen += 1
+        return None
+
+    api_key = os.getenv("OPENAI_API_KEY", "").strip()
+    if api_key and recent_texts and stats.ai_calls < ai_calls_cap:
+        stats.ai_calls += 1
+        likelihood_score, likelihood_conf, likelihood_reasons, _source, explanation, next_steps = (
+            _ai_order_likelihood_from_text(
+                customer_name=customer_name,
+                quote_number=quote_number,
+                recent_texts=recent_texts,
+                fallback_score=heuristic_score,
+                fallback_reasons=heuristic_reasons,
+            )
+        )
+    else:
+        likelihood_score = heuristic_score
+        likelihood_conf = heuristic_conf
+        likelihood_reasons = heuristic_reasons
+        explanation = None
+        next_steps = None
+
+    if not explanation or not next_steps:
+        explanation, next_steps = _fallback_narrative(
+            customer_name=customer_name,
+            action=action,
+            channel=channel,
+            likelihood_score=likelihood_score,
+            reasons=likelihood_reasons,
+        )
+
+    final_score = _blend_final_priority(min(Decimal("100"), base_score), likelihood_score)
+    if final_score < WEEKLY_PLAN_MIN_PRIORITY_SCORE:
+        stats.skipped_score_floor += 1
+        return None
+
+    return (
+        likelihood_score,
+        likelihood_conf,
+        heuristic_conf,
+        likelihood_reasons,
+        explanation,
+        next_steps or [],
+        final_score,
+    )
+
+
 def _stale_quote_entry_score(quote: Quote, rule: ReminderRule, days_stale: int) -> Decimal:
     return (
         Decimal("22")
@@ -589,6 +696,8 @@ def generate_weekly_plan(
     company = session.exec(select(CompanySettings).limit(1)).first()
     plan_items: List[WeeklyPlanItem] = []
     seen_keys: set[tuple[str, int]] = set()
+    stats = _WeeklyPlanGenerationStats()
+    ai_calls_cap = _weekly_plan_max_ai_calls()
     ordered_customer_ids, ordered_lead_ids = _ordered_customer_and_lead_ids(session)
     excluded_lead_ids, excluded_quote_ids, excluded_customer_ids = _merge_weekly_plan_exclusions(
         _rejected_weekly_plan_targets(session),
@@ -616,30 +725,22 @@ def generate_weekly_plan(
         channel = "CALL" if action == SuggestedAction.PHONE_CALL else "EMAIL"
         auto_eligible = action in (SuggestedAction.FOLLOW_UP, SuggestedAction.CONTACT_CUSTOMER) and channel == "EMAIL"
         customer_name = lead.name or "there"
-        recent_texts = _collect_customer_recent_text(session, lead.customer_id) if lead.customer_id else []
-        heuristic_score, heuristic_conf, heuristic_reasons = _heuristic_order_likelihood(
-            quote=None,
-            days_stale=days_stale,
-            recent_texts=recent_texts,
-        )
-        likelihood_score, likelihood_conf, likelihood_reasons, _source, explanation, next_steps = _ai_order_likelihood_from_text(
+        scored = _resolve_likelihood_for_candidate(
+            session=session,
             customer_name=customer_name,
             quote_number=None,
-            recent_texts=recent_texts,
-            fallback_score=heuristic_score,
-            fallback_reasons=heuristic_reasons,
+            quote=None,
+            days_stale=days_stale,
+            customer_id=lead.customer_id,
+            base_score=score,
+            action=action,
+            channel=channel,
+            stats=stats,
+            ai_calls_cap=ai_calls_cap,
         )
-        if not explanation or not next_steps:
-            explanation, next_steps = _fallback_narrative(
-                customer_name=customer_name,
-                action=action,
-                channel=channel,
-                likelihood_score=likelihood_score,
-                reasons=likelihood_reasons,
-            )
-        final_score = _blend_final_priority(min(Decimal("100"), score), likelihood_score)
-        if final_score < WEEKLY_PLAN_MIN_PRIORITY_SCORE:
+        if not scored:
             continue
+        likelihood_score, likelihood_conf, heuristic_conf, likelihood_reasons, explanation, next_steps, final_score = scored
         lead_ref_at, lead_ref_label = resolve_stale_reference_for_lead(lead, rule, session)
         plan_items.append(
             WeeklyPlanItem(
@@ -705,30 +806,22 @@ def generate_weekly_plan(
             customer = session.get(Customer, quote.customer_id)
             if customer and customer.name:
                 customer_name = customer.name
-        recent_texts = _collect_customer_recent_text(session, quote.customer_id) if quote.customer_id else []
-        heuristic_score, heuristic_conf, heuristic_reasons = _heuristic_order_likelihood(
-            quote=quote,
-            days_stale=days_stale,
-            recent_texts=recent_texts,
-        )
-        likelihood_score, likelihood_conf, likelihood_reasons, _source, explanation, next_steps = _ai_order_likelihood_from_text(
+        scored = _resolve_likelihood_for_candidate(
+            session=session,
             customer_name=customer_name,
             quote_number=quote.quote_number,
-            recent_texts=recent_texts,
-            fallback_score=heuristic_score,
-            fallback_reasons=heuristic_reasons,
+            quote=quote,
+            days_stale=days_stale,
+            customer_id=quote.customer_id,
+            base_score=score,
+            action=action,
+            channel=channel,
+            stats=stats,
+            ai_calls_cap=ai_calls_cap,
         )
-        if not explanation or not next_steps:
-            explanation, next_steps = _fallback_narrative(
-                customer_name=customer_name,
-                action=action,
-                channel=channel,
-                likelihood_score=likelihood_score,
-                reasons=likelihood_reasons,
-            )
-        final_score = _blend_final_priority(min(Decimal("100"), score), likelihood_score)
-        if final_score < WEEKLY_PLAN_MIN_PRIORITY_SCORE:
+        if not scored:
             continue
+        likelihood_score, likelihood_conf, heuristic_conf, likelihood_reasons, explanation, next_steps, final_score = scored
         quote_ref_at, quote_ref_label = resolve_stale_reference_for_quote(quote, rule)
         plan_items.append(
             WeeklyPlanItem(
@@ -791,30 +884,22 @@ def generate_weekly_plan(
             customer = session.get(Customer, opp.customer_id)
             if customer and customer.name:
                 customer_name = customer.name
-        recent_texts = _collect_customer_recent_text(session, opp.customer_id) if opp.customer_id else []
-        heuristic_score, heuristic_conf, heuristic_reasons = _heuristic_order_likelihood(
-            quote=opp,
-            days_stale=days_overdue,
-            recent_texts=recent_texts,
-        )
-        likelihood_score, likelihood_conf, likelihood_reasons, _source, explanation, next_steps = _ai_order_likelihood_from_text(
+        scored = _resolve_likelihood_for_candidate(
+            session=session,
             customer_name=customer_name,
             quote_number=opp.quote_number,
-            recent_texts=recent_texts,
-            fallback_score=heuristic_score,
-            fallback_reasons=heuristic_reasons,
+            quote=opp,
+            days_stale=days_overdue,
+            customer_id=opp.customer_id,
+            base_score=score,
+            action=action,
+            channel=channel,
+            stats=stats,
+            ai_calls_cap=ai_calls_cap,
         )
-        if not explanation or not next_steps:
-            explanation, next_steps = _fallback_narrative(
-                customer_name=customer_name,
-                action=action,
-                channel=channel,
-                likelihood_score=likelihood_score,
-                reasons=likelihood_reasons,
-            )
-        final_score = _blend_final_priority(min(Decimal("100"), score), likelihood_score)
-        if final_score < WEEKLY_PLAN_MIN_PRIORITY_SCORE:
+        if not scored:
             continue
+        likelihood_score, likelihood_conf, heuristic_conf, likelihood_reasons, explanation, next_steps, final_score = scored
         opp_ref_at, opp_ref_label = resolve_stale_reference_for_opportunity(opp, reason, session)
         plan_items.append(
             WeeklyPlanItem(
@@ -867,6 +952,16 @@ def generate_weekly_plan(
     if auto_execute and not dry_run:
         execute_auto_eligible_items(session, run.id)
         session.refresh(run)
+
+    elapsed_ms = int((time.monotonic() - stats.started) * 1000)
+    print(
+        f"Weekly plan generated run={run.id} candidates={stats.candidates} "
+        f"ai_calls={stats.ai_calls} skipped_prescreen={stats.skipped_heuristic_prescreen} "
+        f"skipped_floor={stats.skipped_score_floor} items={run.total_items} "
+        f"elapsed_ms={elapsed_ms}",
+        file=sys.stderr,
+        flush=True,
+    )
 
     return run
 

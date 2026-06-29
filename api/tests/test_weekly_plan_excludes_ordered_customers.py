@@ -102,7 +102,7 @@ def test_generate_weekly_plan_skips_customers_with_orders():
             threshold_minutes=0,
             check_type="LAST_ACTIVITY",
             is_active=True,
-            priority=ReminderPriority.MEDIUM,
+            priority=ReminderPriority.URGENT,
             suggested_action=SuggestedAction.FOLLOW_UP,
         )
         session.add(rule)
