@@ -1,3 +1,4 @@
+import asyncio
 import json
 from pathlib import Path
 from pydantic import ValidationError
@@ -10,7 +11,7 @@ from typing import Dict, List, Literal, Optional, Tuple
 from html import escape
 from jinja2 import TemplateError
 from sqlalchemy.exc import ProgrammingError, SQLAlchemyError
-from app.database import get_session
+from app.database import engine, get_session
 from app.models import (
     Quote,
     QuoteConfiguration,
@@ -167,6 +168,46 @@ def _transition_customer_leads_to_quoted_after_send(
         current_user_id,
         reason="Automatic transition: Quote sent",
     )
+
+
+def _send_quote_email_blocking(
+    *,
+    quote_id: int,
+    customer_id: int,
+    to_email: str,
+    template_id: int,
+    cc: Optional[str],
+    bcc: Optional[str],
+    custom_message: Optional[str],
+    user_id: int,
+    view_token: str,
+    frontend_base_url: Optional[str],
+    attachments: Optional[List[dict]],
+    bind=None,
+) -> Tuple[bool, Optional[str], Optional[str], None, Optional[str], Optional[str], Optional[str]]:
+    """Run Graph/SMTP send off the event loop (uses its own DB session; not thread-safe with request session)."""
+    db_bind = bind if bind is not None else engine
+    with Session(db_bind) as send_session:
+        quote = send_session.get(Quote, quote_id)
+        if not quote:
+            raise ValueError("Quote not found")
+        customer = send_session.get(Customer, customer_id)
+        if not customer:
+            raise ValueError("Customer not found")
+        return send_quote_email(
+            quote=quote,
+            customer=customer,
+            to_email=to_email,
+            session=send_session,
+            template_id=template_id,
+            cc=cc,
+            bcc=bcc,
+            custom_message=custom_message,
+            user_id=user_id,
+            view_token=view_token,
+            frontend_base_url=frontend_base_url,
+            attachments=attachments,
+        )
 
 
 def _frontend_base_url() -> Optional[str]:
@@ -2796,20 +2837,32 @@ async def send_quote_email_endpoint(
             attachment_list.append({"filename": safe_name, "content": content})
             attachment_metadata.append({"filename": safe_name})
 
-        success, message_id, error, pdf_buffer, email_subject, email_body_html, email_body_text = send_quote_email(
-            quote=quote,
-            customer=customer,
-            to_email=req.to_email,
-            session=session,
-            template_id=req.template_id,
-            cc=req.cc,
-            bcc=req.bcc,
-            custom_message=req.custom_message,
-            user_id=current_user.id,
-            view_token=view_token,
-            frontend_base_url=frontend_base_url,
-            attachments=attachment_list if attachment_list else None,
-        )
+        try:
+            (
+                success,
+                message_id,
+                error,
+                pdf_buffer,
+                email_subject,
+                email_body_html,
+                email_body_text,
+            ) = await asyncio.to_thread(
+                _send_quote_email_blocking,
+                quote_id=quote.id,
+                customer_id=customer.id,
+                to_email=req.to_email,
+                template_id=req.template_id,
+                cc=req.cc,
+                bcc=req.bcc,
+                custom_message=req.custom_message,
+                user_id=current_user.id,
+                view_token=view_token,
+                frontend_base_url=frontend_base_url,
+                attachments=attachment_list if attachment_list else None,
+                bind=session.get_bind(),
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
         
         if not success:
             import sys
