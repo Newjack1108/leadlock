@@ -115,7 +115,6 @@ export default function QuoteDetailPage() {
       setLoading(true);
       const response = await getQuote(quoteId);
       setQuote(response);
-      setSpecSheetExpanded(Boolean(response.has_specification_sheet_content));
       
       // Fetch customer if we have customer_id
       if (response.customer_id) {
