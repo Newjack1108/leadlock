@@ -22,11 +22,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import api, { cancelDraftQuote, getQuotes, previewQuotePdf } from '@/lib/api';
+import api, { cancelDraftQuote, downloadQuotesCsv, getQuotes, previewQuotePdf } from '@/lib/api';
 import { LeadType, Quote, QuoteStatus, QuoteTemperature, OpportunityStage } from '@/lib/types';
 import { toast } from 'sonner';
 import Link from 'next/link';
-import { FileText, Eye, Pencil, List, LayoutGrid, ShoppingCart, SendHorizontal, MessageCircle, MinusCircle, Trash2 } from 'lucide-react';
+import { FileText, Eye, Pencil, List, LayoutGrid, ShoppingCart, SendHorizontal, MessageCircle, MinusCircle, Trash2, FileDown } from 'lucide-react';
 
 const statusColors: Record<QuoteStatus, string> = {
   DRAFT: 'bg-gray-100 text-gray-700',
@@ -191,6 +191,7 @@ function QuotesPageContent() {
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [quotePendingCancel, setQuotePendingCancel] = useState<Quote | null>(null);
   const [cancellingDraft, setCancellingDraft] = useState(false);
+  const [downloadingCsv, setDownloadingCsv] = useState(false);
 
   // Sync filter from URL (back/forward, dashboard links, shared URLs)
   useEffect(() => {
@@ -283,6 +284,26 @@ function QuotesPageContent() {
       setCancellingDraft(false);
     }
   }, [quotePendingCancel, fetchQuotes]);
+
+  const handleDownloadCsv = useCallback(async () => {
+    try {
+      setDownloadingCsv(true);
+      const searchValue = searchApplied.trim() || undefined;
+      await downloadQuotesCsv({
+        status: isConcreteQuoteStatus(statusFilter) ? statusFilter : undefined,
+        lifecycle:
+          statusFilter === 'LIVE' ? 'live' : statusFilter === 'CLOSED' ? 'closed' : undefined,
+        search: searchValue,
+        temperature: temperatureFilter === 'ALL' ? undefined : temperatureFilter,
+        includeArchived: includeArchived || undefined,
+      });
+      toast.success('CSV downloaded');
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || 'Failed to download CSV');
+    } finally {
+      setDownloadingCsv(false);
+    }
+  }, [statusFilter, temperatureFilter, searchApplied, includeArchived]);
 
   // Auto-refresh when user returns to this tab/window
   useEffect(() => {
@@ -413,6 +434,17 @@ function QuotesPageContent() {
               />
               Include archived
             </label>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mb-0.5"
+              disabled={total === 0 || downloadingCsv}
+              title={total === 0 ? 'No quotes to export' : 'Download all matching quotes as CSV'}
+              onClick={handleDownloadCsv}
+            >
+              <FileDown className="h-4 w-4 mr-1" />
+              {downloadingCsv ? 'Downloading…' : 'Download CSV'}
+            </Button>
           </div>
 
         {total === 0 ? (

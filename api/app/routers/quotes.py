@@ -1339,46 +1339,13 @@ async def get_all_quotes(
     Pass lifecycle=live for DRAFT/SENT/VIEWED only, or lifecycle=closed for ACCEPTED/REJECTED/EXPIRED only.
     """
     try:
-        effective_include_archived = include_archived or (bool(search and search.strip()))
-        conditions = []
-
-        if status is not None:
-            if status == QuoteStatus.VIEWED:
-                conditions.append(
-                    or_(
-                        Quote.status == QuoteStatus.VIEWED,
-                        and_(
-                            Quote.status == QuoteStatus.SENT,
-                            Quote.viewed_at.isnot(None),
-                        ),
-                    )
-                )
-            else:
-                conditions.append(Quote.status == status)
-        elif lifecycle == "live":
-            conditions.append(Quote.status.in_(QUOTE_LIVE_STATUSES))
-        elif lifecycle == "closed":
-            conditions.append(Quote.status.in_(QUOTE_CLOSED_STATUSES))
-        else:
-            conditions.append(Quote.status.notin_(QUOTE_LIST_EXCLUDED_STATUSES))
-
-        if not effective_include_archived:
-            conditions.append(Quote.archived_at.is_(None))
-
-        if temperature is not None:
-            conditions.append(Quote.temperature == temperature)
-
-        if search and search.strip():
-            term = f"%{search.strip()}%"
-            conditions.append(
-                or_(
-                    Quote.quote_number.ilike(term),
-                    Customer.name.ilike(term),
-                    func.cast(Lead.lead_type, SAString).ilike(term),
-                )
-            )
-
-        where_clause = and_(*conditions) if conditions else true()
+        where_clause = _quote_list_where_clause(
+            status=status,
+            lifecycle=lifecycle,
+            search=search,
+            temperature=temperature,
+            include_archived=include_archived,
+        )
 
         count_stmt = (
             select(func.count(Quote.id))
@@ -1460,6 +1427,86 @@ async def get_all_quotes(
         error_detail = str(e)
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error fetching quotes: {error_detail}")
+
+
+def _quote_list_where_clause(
+    *,
+    status: Optional[QuoteStatus] = None,
+    lifecycle: Optional[Literal["live", "closed"]] = None,
+    search: Optional[str] = None,
+    temperature: Optional[QuoteTemperature] = None,
+    include_archived: bool = False,
+):
+    """Shared filter logic for GET /api/quotes and GET /api/quotes/export.csv."""
+    effective_include_archived = include_archived or (bool(search and search.strip()))
+    conditions = []
+
+    if status is not None:
+        if status == QuoteStatus.VIEWED:
+            conditions.append(
+                or_(
+                    Quote.status == QuoteStatus.VIEWED,
+                    and_(
+                        Quote.status == QuoteStatus.SENT,
+                        Quote.viewed_at.isnot(None),
+                    ),
+                )
+            )
+        else:
+            conditions.append(Quote.status == status)
+    elif lifecycle == "live":
+        conditions.append(Quote.status.in_(QUOTE_LIVE_STATUSES))
+    elif lifecycle == "closed":
+        conditions.append(Quote.status.in_(QUOTE_CLOSED_STATUSES))
+    else:
+        conditions.append(Quote.status.notin_(QUOTE_LIST_EXCLUDED_STATUSES))
+
+    if not effective_include_archived:
+        conditions.append(Quote.archived_at.is_(None))
+
+    if temperature is not None:
+        conditions.append(Quote.temperature == temperature)
+
+    if search and search.strip():
+        term = f"%{search.strip()}%"
+        conditions.append(
+            or_(
+                Quote.quote_number.ilike(term),
+                Customer.name.ilike(term),
+                func.cast(Lead.lead_type, SAString).ilike(term),
+            )
+        )
+
+    return and_(*conditions) if conditions else true()
+
+
+@router.get("/export.csv")
+async def export_quotes_csv(
+    status: Optional[QuoteStatus] = Query(None),
+    lifecycle: Optional[Literal["live", "closed"]] = Query(None),
+    search: Optional[str] = Query(None),
+    temperature: Optional[QuoteTemperature] = Query(None),
+    include_archived: bool = Query(False, alias="includeArchived"),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Download all quotes matching list filters as CSV (no pagination)."""
+    from app.quote_export import export_quotes_to_csv
+
+    where_clause = _quote_list_where_clause(
+        status=status,
+        lifecycle=lifecycle,
+        search=search,
+        temperature=temperature,
+        include_archived=include_archived,
+    )
+    content = export_quotes_to_csv(session, where_clause)
+    date_str = datetime.utcnow().strftime("%Y-%m-%d")
+    return Response(
+        content=content,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="quotes-export-{date_str}.csv"'},
+    )
 
 
 # Opportunity Management Endpoints (must be before /{quote_id} to avoid route conflicts)

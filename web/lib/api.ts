@@ -1029,6 +1029,35 @@ export const getQuotes = async (options?: {
   return response.data as QuoteListPayload;
 };
 
+export const downloadQuotesCsv = async (options?: {
+  status?: QuoteStatus;
+  lifecycle?: 'live' | 'closed';
+  search?: string;
+  temperature?: QuoteTemperature;
+  includeArchived?: boolean;
+}) => {
+  const params: Record<string, string | boolean> = {};
+  if (options?.status) params.status = options.status;
+  if (options?.lifecycle) params.lifecycle = options.lifecycle;
+  if (options?.search?.trim()) params.search = options.search.trim();
+  if (options?.temperature) params.temperature = options.temperature;
+  if (options?.includeArchived) params.includeArchived = true;
+  const response = await api.get('/api/quotes/export.csv', {
+    responseType: 'blob',
+    params: Object.keys(params).length ? params : undefined,
+  });
+  const dateStr = new Date().toISOString().slice(0, 10);
+  const blob = new Blob([response.data], { type: 'text/csv' });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', `quotes-export-${dateStr}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
+};
+
 export const getQuote = async (quoteId: number) => {
   const response = await api.get(`/api/quotes/${quoteId}`);
   return response.data;
