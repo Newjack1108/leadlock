@@ -361,41 +361,6 @@ export default function QuoteDetailPage() {
                 <Mail className="h-4 w-4 mr-2" />
                 Send Quote
               </Button>
-              {!isAccepted && ['DRAFT', 'SENT', 'VIEWED'].includes(quote.status) && (
-                <Button
-                  onClick={async () => {
-                    try {
-                      setAccepting(true);
-                      const updated = await acceptQuote(quoteId);
-                      void celebrateQuoteAccept();
-                      if (updated?.order_id) {
-                        toast.success('Quote accepted. Order created.');
-                        setTimeout(() => {
-                          router.push(`/orders/${updated.order_id}`);
-                        }, 520);
-                      } else {
-                        await fetchQuote();
-                        toast.success('Quote accepted. Order created.');
-                      }
-                    } catch (error: any) {
-                      const d = error.response?.data?.detail;
-                      const msg =
-                        typeof d === 'string'
-                          ? d
-                          : Array.isArray(d)
-                            ? d.map((x: { msg?: string }) => x?.msg).filter(Boolean).join(' ')
-                            : 'Failed to accept quote';
-                      toast.error(msg || 'Failed to accept quote');
-                    } finally {
-                      setAccepting(false);
-                    }
-                  }}
-                  disabled={accepting}
-                >
-                  <CheckCircle className="h-4 w-4 mr-2" />
-                  Accept quote
-                </Button>
-              )}
               {quote.status === 'ACCEPTED' && quote.order_id && (
                 <Button variant="outline" asChild>
                   <Link href={quote.order_id ? `/orders/${quote.order_id}` : '/orders'}>
@@ -477,6 +442,42 @@ export default function QuoteDetailPage() {
                   )}
                 </DropdownMenuContent>
                 </DropdownMenu>
+              {!isAccepted && ['DRAFT', 'SENT', 'VIEWED'].includes(quote.status) && (
+                <Button
+                  variant="secondary"
+                  onClick={async () => {
+                    try {
+                      setAccepting(true);
+                      const updated = await acceptQuote(quoteId);
+                      void celebrateQuoteAccept();
+                      if (updated?.order_id) {
+                        toast.success('Quote accepted. Order created.');
+                        setTimeout(() => {
+                          router.push(`/orders/${updated.order_id}`);
+                        }, 520);
+                      } else {
+                        await fetchQuote();
+                        toast.success('Quote accepted. Order created.');
+                      }
+                    } catch (error: any) {
+                      const d = error.response?.data?.detail;
+                      const msg =
+                        typeof d === 'string'
+                          ? d
+                          : Array.isArray(d)
+                            ? d.map((x: { msg?: string }) => x?.msg).filter(Boolean).join(' ')
+                            : 'Failed to accept quote';
+                      toast.error(msg || 'Failed to accept quote');
+                    } finally {
+                      setAccepting(false);
+                    }
+                  }}
+                  disabled={accepting}
+                >
+                  <CheckCircle className="h-4 w-4 mr-2" />
+                  Accept quote
+                </Button>
+              )}
             </div>
           </div>
         </div>
