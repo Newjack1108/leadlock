@@ -479,7 +479,7 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
-          <Link href="/leads?status=WON" className="block">
+          <Link href="/quotes?status=ACCEPTED" className="block">
             <Card className="cursor-pointer transition-colors hover:border-primary/50">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Won</CardTitle>
@@ -488,7 +488,7 @@ export default function DashboardPage() {
               <CardContent>
                 <div className="text-2xl font-bold">{stats.won_count}</div>
                 <p className="text-xs text-muted-foreground">
-                  {stats.leads_with_sent_quotes_count} quoted
+                  quotes accepted
                 </p>
               </CardContent>
             </Card>
@@ -499,7 +499,7 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Lead Status</CardTitle>
+              <CardTitle className="text-lg">Pipeline Status</CardTitle>
             </CardHeader>
             <CardContent>
               <StatusPieChart
@@ -606,27 +606,33 @@ export default function DashboardPage() {
               </CardContent>
             </Card>
           </Link>
-          <Link href="/leads?status=WON" className="block">
+          <Link href="/quotes?status=ACCEPTED" className="block">
             <Card className="cursor-pointer transition-colors hover:border-primary/50 h-full">
               <CardHeader>
                 <CardTitle className="text-lg">Won</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-bold">{stats.won_count}</div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  quotes accepted
+                </p>
               </CardContent>
             </Card>
           </Link>
-          <Link href="/leads?status=LOST" className="block">
+          <Link href="/quotes?status=REJECTED" className="block">
             <Card className="cursor-pointer transition-colors hover:border-primary/50 h-full">
               <CardHeader>
                 <CardTitle className="text-lg">Lost</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-bold">{stats.lost_count}</div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  marked lost
+                </p>
               </CardContent>
             </Card>
           </Link>
-          <Link href="/leads?status=CLOSED" className="block">
+          <Link href="/quotes?lifecycle=closed" className="block">
             <Card className="cursor-pointer transition-colors hover:border-primary/50 h-full">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-lg">Closed</CardTitle>
@@ -634,7 +640,7 @@ export default function DashboardPage() {
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-bold">{stats.closed_count}</div>
-                <p className="text-xs text-muted-foreground mt-1">Qualified, no quote</p>
+                <p className="text-xs text-muted-foreground mt-1">quotes closed</p>
               </CardContent>
             </Card>
           </Link>

@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session, select, func, or_
-from sqlalchemy.exc import DataError
 from app.database import get_session
 from app.models import (
     ActivityType,
@@ -80,18 +79,44 @@ async def get_dashboard_stats(
     engaged_count = count_leads(Lead.status.in_([LeadStatus.ENGAGED, LeadStatus.QUALIFIED, LeadStatus.QUOTED, LeadStatus.WON]))
     qualified_count = count_leads(Lead.status.in_([LeadStatus.QUALIFIED, LeadStatus.QUOTED, LeadStatus.WON]))
     quoted_count = count_leads(Lead.status == LeadStatus.QUOTED)
-    won_count = count_leads(Lead.status == LeadStatus.WON)
-    lost_count = count_leads(Lead.status == LeadStatus.LOST)
-    try:
-        closed_count = count_leads(Lead.status == LeadStatus.CLOSED)
-    except DataError as exc:
-        # Temporary compatibility guard for production enum drift.
-        # Some DBs may not yet include CLOSED in leadstatus; treat as 0 until migrated.
-        error_text = str(exc).lower()
-        if "invalid input value for enum leadstatus" in error_text and "closed" in error_text:
-            closed_count = 0
-        else:
-            raise
+
+    # Won / Lost / Closed = quote outcomes in range (same semantics as Pipeline Summary)
+    # Lost = Mark Lost (REJECTED + loss_category); Closed = Close quote (REJECTED, no category)
+    quote_stats_filter = or_(
+        Quote.customer_id.is_(None),
+        quote_counts_toward_stats(),
+    )
+    won_date_expr = func.coalesce(Quote.accepted_at, Quote.created_at)
+    won_stmt = (
+        select(func.count(Quote.id))
+        .where(quote_stats_filter)
+        .where(Quote.status == QuoteStatus.ACCEPTED)
+    )
+    lost_stmt = (
+        select(func.count(Quote.id))
+        .where(quote_stats_filter)
+        .where(Quote.status == QuoteStatus.REJECTED)
+        .where(Quote.loss_category.isnot(None))
+    )
+    closed_stmt = (
+        select(func.count(Quote.id))
+        .where(quote_stats_filter)
+        .where(Quote.status == QuoteStatus.REJECTED)
+        .where(Quote.loss_category.is_(None))
+    )
+    if resolved_range.period != "all":
+        won_stmt = won_stmt.where(won_date_expr >= resolved_range.start).where(
+            won_date_expr <= resolved_range.end
+        )
+        lost_stmt = lost_stmt.where(Quote.updated_at >= resolved_range.start).where(
+            Quote.updated_at <= resolved_range.end
+        )
+        closed_stmt = closed_stmt.where(Quote.updated_at >= resolved_range.start).where(
+            Quote.updated_at <= resolved_range.end
+        )
+    won_count = scalar_int(session.exec(won_stmt).one())
+    lost_count = scalar_int(session.exec(lost_stmt).one())
+    closed_count = scalar_int(session.exec(closed_stmt).one())
 
     # Count quotes sent (Quote records with status beyond DRAFT; one lead can have multiple)
     quotes_sent_stmt = select(func.count(Quote.id)).where(

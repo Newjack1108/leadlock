@@ -14,7 +14,7 @@ from sqlmodel import Session, SQLModel, create_engine
 
 from app.auth import get_current_user
 from app.database import get_session
-from app.models import Lead, LeadStatus, Quote, QuoteStatus, User, UserRole
+from app.models import Lead, LeadStatus, LossCategory, Quote, QuoteStatus, User, UserRole
 from app.routers import reports as reports_router
 
 
@@ -72,6 +72,8 @@ def _add_quote(
     sent_at: datetime | None = None,
     created_at: datetime | None = None,
     updated_at: datetime | None = None,
+    loss_category=None,
+    loss_reason: str | None = None,
 ) -> Quote:
     created = created_at or datetime.utcnow()
     quote = Quote(
@@ -86,6 +88,8 @@ def _add_quote(
         accepted_at=accepted_at,
         created_at=created,
         updated_at=updated_at or created,
+        loss_category=loss_category,
+        loss_reason=loss_reason,
     )
     session.add(quote)
     session.commit()
@@ -163,14 +167,16 @@ def test_weekly_summary_won_lost_from_quotes_not_leads(api_client, sqlite_engine
         lead_alice = Lead(name="Won Alice", status=LeadStatus.QUOTED, created_at=out_of_range)
         lead_bob = Lead(name="Won Bob", status=LeadStatus.NEW, created_at=out_of_range)
         lead_carol = Lead(name="Lost Carol", status=LeadStatus.NEW, created_at=out_of_range)
+        lead_erin = Lead(name="Closed Erin", status=LeadStatus.NEW, created_at=out_of_range)
         lead_dave = Lead(name="Quoted Dave", status=LeadStatus.QUOTED, created_at=in_range)
         session.add(lead_won_status)
         session.add(lead_alice)
         session.add(lead_bob)
         session.add(lead_carol)
+        session.add(lead_erin)
         session.add(lead_dave)
         session.commit()
-        for lead in (lead_won_status, lead_alice, lead_bob, lead_carol, lead_dave):
+        for lead in (lead_won_status, lead_alice, lead_bob, lead_carol, lead_erin, lead_dave):
             session.refresh(lead)
 
         _add_quote(
@@ -217,6 +223,20 @@ def test_weekly_summary_won_lost_from_quotes_not_leads(api_client, sqlite_engine
             created_at=out_of_range,
             sent_at=out_of_range,
             updated_at=in_range,
+            loss_category=LossCategory.PRICE,
+            loss_reason="Too expensive",
+        )
+        # Close quote (no loss_category) — counts as closed, not lost
+        _add_quote(
+            session,
+            user_id=user.id,
+            lead_id=lead_erin.id,
+            quote_number="QT-CLOSED-A",
+            status=QuoteStatus.REJECTED,
+            total_amount=Decimal("700.00"),
+            created_at=out_of_range,
+            sent_at=out_of_range,
+            updated_at=in_range,
         )
         # Rejected outside range — excluded from lost
         _add_quote(
@@ -229,6 +249,8 @@ def test_weekly_summary_won_lost_from_quotes_not_leads(api_client, sqlite_engine
             created_at=out_of_range,
             sent_at=out_of_range,
             updated_at=out_of_range,
+            loss_category=LossCategory.OTHER,
+            loss_reason="Old",
         )
         _add_quote(
             session,
@@ -261,7 +283,8 @@ def test_weekly_summary_won_lost_from_quotes_not_leads(api_client, sqlite_engine
 
     assert data["won_count"] == 2
     assert data["lost_count"] == 1
-    # Avg quote by sent_at in range: 2000 + 1000 + 500 (rejected quote sent out of range; draft excluded)
+    assert data["closed_count"] == 1
+    # Avg quote by sent_at in range: 2000 + 1000 + 500 (rejected quotes sent out of range; draft excluded)
     assert Decimal(str(data["average_quote_value"])) == Decimal("3500") / Decimal("3")
     assert Decimal(str(data["average_won_value"])) == Decimal("1500.00")
 

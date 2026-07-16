@@ -934,7 +934,7 @@ def generate_weekly_summary_pdf(
         ("Quoted", quoted_count),
         ("Won", won_count),
         ("Lost", lost_count),
-        ("Closed (qualified)", closed_count),
+        ("Closed", closed_count),
     ]
     if any(v > 0 for _, v in chart_data):
         chart = _create_bar_chart(chart_data, "Pipeline Activity", width=350, height=180)
@@ -948,7 +948,7 @@ def generate_weekly_summary_pdf(
         ["Quoted", str(quoted_count)],
         ["Won", str(won_count)],
         ["Lost", str(lost_count)],
-        ["Closed (qualified)", str(closed_count)],
+        ["Closed", str(closed_count)],
     ]
 
     t = Table(table_data, colWidths=[180, 100])
@@ -984,15 +984,25 @@ def generate_weekly_summary_pdf(
     flowables.append(Spacer(1, 8))
     won_table_data = [["Name", "Value"]]
     if won_deals:
+        won_total = 0.0
         for deal in won_deals:
+            value = float(deal.get("value", 0) or 0)
+            won_total += value
             won_table_data.append([
                 str(deal.get("name", "")),
-                format_currency(deal.get("value", 0)),
+                format_currency(value),
             ])
+        won_table_data.append(["Total", format_currency(won_total)])
     else:
         won_table_data.append(["No won deals in this period", ""])
     won_table = Table(won_table_data, colWidths=[280, 100])
-    won_table.setStyle(_table_style())
+    won_style = _table_style()
+    if won_deals:
+        last = len(won_table_data) - 1
+        won_style.add("FONTNAME", (0, last), (-1, last), "Helvetica-Bold")
+        won_style.add("BACKGROUND", (0, last), (-1, last), LIGHT_GREEN)
+        won_style.add("TEXTCOLOR", (0, last), (-1, last), DARK_GREEN)
+    won_table.setStyle(won_style)
     flowables.append(won_table)
 
     # Lost deals
@@ -1001,15 +1011,25 @@ def generate_weekly_summary_pdf(
     flowables.append(Spacer(1, 8))
     lost_table_data = [["Name", "Value"]]
     if lost_deals:
+        lost_total = 0.0
         for deal in lost_deals:
+            value = float(deal.get("value", 0) or 0)
+            lost_total += value
             lost_table_data.append([
                 str(deal.get("name", "")),
-                format_currency(deal.get("value", 0)),
+                format_currency(value),
             ])
+        lost_table_data.append(["Total", format_currency(lost_total)])
     else:
         lost_table_data.append(["No lost deals in this period", ""])
     lost_table = Table(lost_table_data, colWidths=[280, 100])
-    lost_table.setStyle(_table_style())
+    lost_style = _table_style()
+    if lost_deals:
+        last = len(lost_table_data) - 1
+        lost_style.add("FONTNAME", (0, last), (-1, last), "Helvetica-Bold")
+        lost_style.add("BACKGROUND", (0, last), (-1, last), LIGHT_GREEN)
+        lost_style.add("TEXTCOLOR", (0, last), (-1, last), DARK_GREEN)
+    lost_table.setStyle(lost_style)
     flowables.append(lost_table)
 
     doc.build(flowables)

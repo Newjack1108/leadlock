@@ -842,7 +842,6 @@ async def get_weekly_summary_report(
 
     new_count = _lead_count()
     quoted_count = _lead_count(Lead.status == LeadStatus.QUOTED)
-    closed_count = _lead_count(Lead.status == LeadStatus.CLOSED)
 
     won_date_expr = func.coalesce(Quote.accepted_at, Quote.created_at)
     avg_quote_date_expr = func.coalesce(Quote.sent_at, Quote.created_at)
@@ -852,10 +851,19 @@ async def get_weekly_summary_report(
         .where(_quote_stats_filter())
         .where(Quote.status == QuoteStatus.ACCEPTED)
     )
+    # Mark Lost: REJECTED with loss_category set
     lost_stmt = (
         select(Quote)
         .where(_quote_stats_filter())
         .where(Quote.status == QuoteStatus.REJECTED)
+        .where(Quote.loss_category.isnot(None))
+    )
+    # Close quote: REJECTED without loss_category (sibling won / no-reply tidy-up)
+    closed_stmt = (
+        select(Quote)
+        .where(_quote_stats_filter())
+        .where(Quote.status == QuoteStatus.REJECTED)
+        .where(Quote.loss_category.is_(None))
     )
     avg_quote_stmt = (
         select(Quote)
@@ -867,12 +875,14 @@ async def get_weekly_summary_report(
         start, end = resolved_range.start, resolved_range.end
         won_stmt = won_stmt.where(won_date_expr >= start).where(won_date_expr <= end)
         lost_stmt = lost_stmt.where(Quote.updated_at >= start).where(Quote.updated_at <= end)
+        closed_stmt = closed_stmt.where(Quote.updated_at >= start).where(Quote.updated_at <= end)
         avg_quote_stmt = avg_quote_stmt.where(avg_quote_date_expr >= start).where(
             avg_quote_date_expr <= end
         )
 
     won_quotes = list(session.exec(won_stmt).all())
     lost_quotes = list(session.exec(lost_stmt).all())
+    closed_quotes = list(session.exec(closed_stmt).all())
     avg_quote_source = list(session.exec(avg_quote_stmt).all())
 
     # Guard against driver-returned aware datetimes slipping past SQL bounds.
@@ -880,12 +890,14 @@ async def get_weekly_summary_report(
         start, end = resolved_range.start, resolved_range.end
         won_quotes = [q for q in won_quotes if _in_range(q.accepted_at or q.created_at, start, end)]
         lost_quotes = [q for q in lost_quotes if _in_range(q.updated_at, start, end)]
+        closed_quotes = [q for q in closed_quotes if _in_range(q.updated_at, start, end)]
         avg_quote_source = [
             q for q in avg_quote_source if _in_range(q.sent_at or q.created_at, start, end)
         ]
 
     won_count = len(won_quotes)
     lost_count = len(lost_quotes)
+    closed_count = len(closed_quotes)
 
     non_draft_amounts = [_decimal_or_zero(q.total_amount) for q in avg_quote_source]
     average_quote_value = (
