@@ -842,6 +842,9 @@ async def get_weekly_summary_report(
 
     new_count = _lead_count()
     quoted_count = _lead_count(Lead.status == LeadStatus.QUOTED)
+    qualified_count = _lead_count(
+        Lead.status.in_([LeadStatus.QUALIFIED, LeadStatus.QUOTED, LeadStatus.WON])
+    )
 
     won_date_expr = func.coalesce(Quote.accepted_at, Quote.created_at)
     avg_quote_date_expr = func.coalesce(Quote.sent_at, Quote.created_at)
@@ -899,9 +902,16 @@ async def get_weekly_summary_report(
     lost_count = len(lost_quotes)
     closed_count = len(closed_quotes)
 
+    quotes_sent_count = len(avg_quote_source)
+    won_among_sent = sum(1 for q in avg_quote_source if q.status == QuoteStatus.ACCEPTED)
+    win_rate = (
+        round(won_among_sent / quotes_sent_count * 100, 1) if quotes_sent_count > 0 else 0.0
+    )
+
     non_draft_amounts = [_decimal_or_zero(q.total_amount) for q in avg_quote_source]
+    total_quote_value = sum(non_draft_amounts) if non_draft_amounts else Decimal("0")
     average_quote_value = (
-        sum(non_draft_amounts) / Decimal(len(non_draft_amounts))
+        total_quote_value / Decimal(len(non_draft_amounts))
         if non_draft_amounts
         else Decimal("0")
     )
@@ -952,10 +962,14 @@ async def get_weekly_summary_report(
         generated_at=datetime.utcnow(),
         new_count=new_count,
         quoted_count=quoted_count,
+        qualified_count=qualified_count,
         won_count=won_count,
         lost_count=lost_count,
         closed_count=closed_count,
+        quotes_sent_count=quotes_sent_count,
+        win_rate=win_rate,
         average_quote_value=average_quote_value,
+        total_quote_value=total_quote_value,
         average_won_value=average_won_value,
         won_deals=won_deals,
         lost_deals=lost_deals,
@@ -984,6 +998,7 @@ async def get_weekly_summary_pdf(
     data["start_date"] = report.start_date.isoformat() if report.start_date else ""
     data["end_date"] = report.end_date.isoformat() if report.end_date else ""
     data["average_quote_value"] = float(report.average_quote_value)
+    data["total_quote_value"] = float(report.total_quote_value)
     data["average_won_value"] = float(report.average_won_value)
     for deal in data.get("won_deals", []):
         deal["value"] = float(deal["value"])

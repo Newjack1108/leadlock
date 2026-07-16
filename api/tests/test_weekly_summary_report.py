@@ -127,6 +127,8 @@ def test_weekly_summary_new_count_is_all_inbound(api_client, sqlite_engine):
 
     assert data["new_count"] == 4
     assert data["quoted_count"] == 1
+    # QUALIFIED + QUOTED + WON among inbound (4 leads: NEW, QUALIFIED, WON, QUOTED)
+    assert data["qualified_count"] == 3
     # Won/lost are quote-based; no quotes seeded here
     assert data["won_count"] == 0
     assert data["lost_count"] == 0
@@ -284,8 +286,13 @@ def test_weekly_summary_won_lost_from_quotes_not_leads(api_client, sqlite_engine
     assert data["won_count"] == 2
     assert data["lost_count"] == 1
     assert data["closed_count"] == 1
+    # Quotes sent in range: WON-A, WON-B, QUOTED (draft + out-of-range rejected excluded)
+    assert data["quotes_sent_count"] == 3
+    # Win rate = accepted among those sent / sent = 2/3
+    assert data["win_rate"] == 66.7
     # Avg quote by sent_at in range: 2000 + 1000 + 500 (rejected quotes sent out of range; draft excluded)
     assert Decimal(str(data["average_quote_value"])) == Decimal("3500") / Decimal("3")
+    assert Decimal(str(data["total_quote_value"])) == Decimal("3500.00")
     assert Decimal(str(data["average_won_value"])) == Decimal("1500.00")
 
     won_names = [d["name"] for d in data["won_deals"]]

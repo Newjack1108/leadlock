@@ -920,10 +920,12 @@ def generate_weekly_summary_pdf(
 
     new_count = data.get("new_count", 0)
     quoted_count = data.get("quoted_count", 0)
+    qualified_count = data.get("qualified_count", 0)
     won_count = data.get("won_count", 0)
     lost_count = data.get("lost_count", 0)
     closed_count = data.get("closed_count", 0)
     average_quote_value = data.get("average_quote_value", 0)
+    total_quote_value = data.get("total_quote_value", 0)
     average_won_value = data.get("average_won_value", 0)
     won_deals = data.get("won_deals") or []
     lost_deals = data.get("lost_deals") or []
@@ -945,6 +947,7 @@ def generate_weekly_summary_pdf(
     table_data = [
         ["Metric", "Count"],
         ["New Leads", str(new_count)],
+        ["Qualified", str(qualified_count)],
         ["Quoted", str(quoted_count)],
         ["Won", str(won_count)],
         ["Lost", str(lost_count)],
@@ -956,16 +959,32 @@ def generate_weekly_summary_pdf(
     flowables.append(t)
 
     # Summary strip
-    if new_count > 0 or won_count > 0 or lost_count > 0 or average_quote_value or average_won_value:
+    if (
+        new_count > 0
+        or qualified_count > 0
+        or won_count > 0
+        or lost_count > 0
+        or average_quote_value
+        or total_quote_value
+        or average_won_value
+    ):
         flowables.append(Spacer(1, 15))
-        win_rate = (won_count / (won_count + lost_count) * 100) if (won_count + lost_count) > 0 else 0
-        summary_data = [[
-            f"Leads Received: {new_count}",
-            f"Win Rate: {win_rate:.1f}%",
-            f"Avg Quote: {format_currency(average_quote_value)}",
-            f"Avg Won: {format_currency(average_won_value)}",
-        ]]
-        summary_table = Table(summary_data, colWidths=[110, 100, 120, 110])
+        win_rate = float(data.get("win_rate", 0) or 0)
+        summary_data = [
+            [
+                f"Leads Received: {new_count}",
+                f"Qualified: {qualified_count}",
+                f"Win Rate: {win_rate:.1f}%",
+                f"Avg Quote: {format_currency(average_quote_value)}",
+            ],
+            [
+                f"Total Quoted: {format_currency(total_quote_value)}",
+                f"Avg Won: {format_currency(average_won_value)}",
+                "",
+                "",
+            ],
+        ]
+        summary_table = Table(summary_data, colWidths=[130, 110, 100, 120])
         summary_table.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, -1), LIGHT_GREEN),
             ("TEXTCOLOR", (0, 0), (-1, -1), DARK_GREEN),
@@ -975,6 +994,7 @@ def generate_weekly_summary_pdf(
             ("TOPPADDING", (0, 0), (-1, -1), 10),
             ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
             ("BOX", (0, 0), (-1, -1), 1, PRIMARY_GREEN),
+            ("SPAN", (2, 1), (-1, 1)),
         ]))
         flowables.append(summary_table)
 

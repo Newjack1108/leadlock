@@ -1121,10 +1121,14 @@ class WeeklyPipelineSummaryReport(BaseModel):
     generated_at: datetime
     new_count: int
     quoted_count: int
+    qualified_count: int = 0
     won_count: int
     lost_count: int
     closed_count: int
+    quotes_sent_count: int = 0
+    win_rate: float = 0.0
     average_quote_value: Decimal = Decimal("0")
+    total_quote_value: Decimal = Decimal("0")
     average_won_value: Decimal = Decimal("0")
     won_deals: List[WeeklySummaryDealItem] = []
     lost_deals: List[WeeklySummaryDealItem] = []
