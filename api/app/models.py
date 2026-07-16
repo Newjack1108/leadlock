@@ -658,6 +658,7 @@ class Quote(SQLModel, table=True):
     viewed_at: Optional[datetime] = None  # First time quote view link was opened
     last_viewed_at: Optional[datetime] = None  # Most recent time quote view link was opened
     accepted_at: Optional[datetime] = None
+    on_hold_at: Optional[datetime] = None  # Set when customer replies HOLD via SMS
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     archived_at: Optional[datetime] = Field(default=None, index=True)

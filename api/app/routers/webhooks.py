@@ -452,6 +452,21 @@ async def twilio_inbound_sms(request: Request, session: Session = Depends(get_se
     print(f"Twilio SMS: stored inbound message for customer_id={customer.id}", file=sys.stderr, flush=True)
     session.commit()
 
+    # Exact HOLD / CLOSE keywords update open quotes; skip SMS bot when handled.
+    try:
+        from app.sms_quote_keyword_service import apply_sms_quote_keyword
+
+        quote_keyword = apply_sms_quote_keyword(session, customer.id, body)
+        if quote_keyword:
+            print(
+                f"Twilio SMS: applied quote keyword={quote_keyword} for customer_id={customer.id}",
+                file=sys.stderr,
+                flush=True,
+            )
+            return Response(content="<Response></Response>", media_type="application/xml")
+    except Exception as e:
+        print(f"Twilio SMS quote keyword error: {e}", file=sys.stderr, flush=True)
+
     # Optional out-of-hours SMS bot reply.
     try:
         settings = get_company_settings(session)

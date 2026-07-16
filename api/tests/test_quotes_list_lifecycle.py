@@ -4,6 +4,7 @@ import os
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 
 import pytest
+from datetime import datetime, timedelta
 from decimal import Decimal
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -128,3 +129,36 @@ def test_quotes_list_default_pipeline_excludes_rejected_expired(api_client, sqli
     data = r.json()
     assert data["total"] == 4
     assert {item["status"] for item in data["items"]} == {"DRAFT", "SENT", "VIEWED", "ACCEPTED"}
+
+
+def test_quotes_list_lifecycle_live_excludes_past_valid_until(api_client, sqlite_engine):
+    with Session(sqlite_engine) as session:
+        user = session.exec(select(User).where(User.email == "quotes-list-lifecycle@example.com")).first()
+        assert user is not None
+        now = datetime.utcnow()
+        for quote_number, valid_until in (
+            ("QT-EXP-PAST", now - timedelta(days=1)),
+            ("QT-EXP-FUTURE", now + timedelta(days=7)),
+            ("QT-EXP-NONE", None),
+        ):
+            session.add(
+                Quote(
+                    quote_number=quote_number,
+                    status=QuoteStatus.SENT,
+                    subtotal=Decimal("10.00"),
+                    total_amount=Decimal("10.00"),
+                    created_by_id=user.id,
+                    valid_until=valid_until,
+                )
+            )
+        session.commit()
+
+    r = api_client.get("/api/quotes", params={"lifecycle": "live"}, headers=_auth_headers(sqlite_engine))
+    assert r.status_code == 200
+    data = r.json()
+    numbers = {item["quote_number"] for item in data["items"]}
+    assert "QT-EXP-PAST" not in numbers
+    assert "QT-EXP-FUTURE" in numbers
+    assert "QT-EXP-NONE" in numbers
+    # Original 3 live fixture quotes (no valid_until) + future + none
+    assert data["total"] == 5

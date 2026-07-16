@@ -213,6 +213,26 @@ def _ensure_quote_payment_link_url_column(engine) -> None:
             print(f"Warning: could not ensure quote.payment_link_url: {e}", file=sys.stderr, flush=True)
 
 
+def _ensure_quote_on_hold_at_column(engine) -> None:
+    """Add on_hold_at to quote (customer SMS HOLD keyword)."""
+    import sys
+
+    try:
+        insp = inspect(engine)
+        if not insp.has_table("quote"):
+            return
+        cols = [c["name"] for c in insp.get_columns("quote")]
+        if "on_hold_at" in cols:
+            return
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE quote ADD COLUMN on_hold_at TIMESTAMP"))
+        print("Added on_hold_at to quote table", file=sys.stderr, flush=True)
+    except Exception as e:
+        err = str(e).lower()
+        if "already exists" not in err and "duplicate" not in err:
+            print(f"Warning: could not ensure quote.on_hold_at: {e}", file=sys.stderr, flush=True)
+
+
 def _ensure_list_performance_indexes(engine) -> None:
     """Indexes for customer list ordering and unread-count aggregations (Railway public DB latency)."""
     import sys
@@ -955,6 +975,7 @@ def create_db_and_tables():
     _ensure_facebook_advert_schema(engine)
     _ensure_archive_columns(engine)
     _ensure_quote_payment_link_url_column(engine)
+    _ensure_quote_on_hold_at_column(engine)
     _ensure_dealer_portal_schema(engine)
     _ensure_weekly_planner_schema(engine)
     _ensure_weekly_plan_template_schema(engine)

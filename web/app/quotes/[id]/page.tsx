@@ -30,7 +30,7 @@ import FilesCard from '@/components/FilesCard';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { formatDateTime } from '@/lib/utils';
-import { ArrowLeft, Mail, Eye, Tag, Pencil, ChevronDown, ChevronUp, Send, ExternalLink, CheckCircle, ShoppingBag, XCircle, MinusCircle, FileSearch, Trash2, Copy, AlertTriangle, CreditCard } from 'lucide-react';
+import { ArrowLeft, Mail, Eye, Tag, Pencil, ChevronDown, ChevronUp, Send, ExternalLink, CheckCircle, ShoppingBag, XCircle, MinusCircle, FileSearch, Trash2, Copy, AlertTriangle, CreditCard, PauseCircle } from 'lucide-react';
 import DraftConfiguratorLink from '@/components/configurator/DraftConfiguratorLink';
 import {
   Dialog,
@@ -302,6 +302,17 @@ export default function QuoteDetailPage() {
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <Badge className="text-sm">{quote.status}</Badge>
+              {quote.on_hold_at &&
+                ['DRAFT', 'SENT', 'VIEWED'].includes(quote.status) && (
+                <Badge
+                  variant="outline"
+                  className="text-sm gap-1 border-orange-200 bg-orange-50 text-orange-950"
+                  title="Customer replied HOLD via SMS."
+                >
+                  <PauseCircle className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                  On Hold
+                </Badge>
+              )}
               {quote.fulfillment_method === 'COLLECTION' && (
                 <Badge variant="secondary" className="text-sm">
                   Collection

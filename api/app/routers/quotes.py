@@ -627,6 +627,7 @@ def build_quote_list_response(
         viewed_at=quote.viewed_at,
         last_viewed_at=quote.last_viewed_at,
         accepted_at=quote.accepted_at,
+        on_hold_at=getattr(quote, "on_hold_at", None),
         created_at=quote.created_at,
         updated_at=quote.updated_at,
         vat_amount=vat_amount,
@@ -751,6 +752,7 @@ def build_quote_response(
         viewed_at=quote.viewed_at,
         last_viewed_at=quote.last_viewed_at,
         accepted_at=quote.accepted_at,
+        on_hold_at=getattr(quote, "on_hold_at", None),
         created_at=quote.created_at,
         updated_at=quote.updated_at,
         vat_amount=vat_amount,
@@ -1336,7 +1338,8 @@ async def get_all_quotes(
 
     Default: excludes REJECTED and EXPIRED (pipeline list).
     Pass status= for a single status (special case: VIEWED includes SENT rows with viewed_at set); lifecycle is ignored.
-    Pass lifecycle=live for DRAFT/SENT/VIEWED only, or lifecycle=closed for ACCEPTED/REJECTED/EXPIRED only.
+    Pass lifecycle=live for DRAFT/SENT/VIEWED only (also excludes quotes with valid_until in the past),
+    or lifecycle=closed for ACCEPTED/REJECTED/EXPIRED only.
     """
     try:
         where_clause = _quote_list_where_clause(
@@ -1456,6 +1459,9 @@ def _quote_list_where_clause(
             conditions.append(Quote.status == status)
     elif lifecycle == "live":
         conditions.append(Quote.status.in_(QUOTE_LIVE_STATUSES))
+        conditions.append(
+            or_(Quote.valid_until.is_(None), Quote.valid_until >= datetime.utcnow())
+        )
     elif lifecycle == "closed":
         conditions.append(Quote.status.in_(QUOTE_CLOSED_STATUSES))
     else:

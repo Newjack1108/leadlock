@@ -1800,6 +1800,7 @@ class QuoteResponse(BaseModel):
     viewed_at: Optional[datetime]  # First viewed at
     last_viewed_at: Optional[datetime] = None  # Last viewed at
     accepted_at: Optional[datetime]
+    on_hold_at: Optional[datetime] = None  # Customer replied HOLD via SMS
     created_at: datetime
     updated_at: datetime
     # Computed VAT (all amounts above are Ex VAT @ 20%)

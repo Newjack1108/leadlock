@@ -26,7 +26,7 @@ import api, { cancelDraftQuote, downloadQuotesCsv, getQuotes, previewQuotePdf } 
 import { LeadType, Quote, QuoteStatus, QuoteTemperature, OpportunityStage } from '@/lib/types';
 import { toast } from 'sonner';
 import Link from 'next/link';
-import { FileText, Eye, Pencil, List, LayoutGrid, ShoppingCart, SendHorizontal, MessageCircle, MinusCircle, Trash2, FileDown } from 'lucide-react';
+import { FileText, Eye, Pencil, List, LayoutGrid, ShoppingCart, SendHorizontal, MessageCircle, MinusCircle, Trash2, FileDown, PauseCircle } from 'lucide-react';
 
 const statusColors: Record<QuoteStatus, string> = {
   DRAFT: 'bg-gray-100 text-gray-700',
@@ -68,11 +68,24 @@ function QuoteListEngagementBadges({ quote }: { quote: Quote }) {
   const viewed = quoteCustomerViewed(quote);
   const replyCount = quote.inbound_count_since_quote_sent ?? 0;
   const replied = quote.customer_replied_since_quote_sent === true || replyCount > 0;
+  const onHold =
+    Boolean(quote.on_hold_at) &&
+    [QuoteStatus.DRAFT, QuoteStatus.SENT, QuoteStatus.VIEWED].includes(quote.status);
 
-  if (!leadCountKnown && !viewed && !replied) return null;
+  if (!leadCountKnown && !viewed && !replied && !onHold) return null;
 
   return (
     <>
+      {onHold && (
+        <Badge
+          variant="outline"
+          className="text-xs gap-1 font-normal border-orange-200 bg-orange-50 text-orange-950 dark:bg-orange-950/30 dark:text-orange-100 dark:border-orange-800"
+          title="Customer replied HOLD via SMS."
+        >
+          <PauseCircle className="h-3 w-3 shrink-0" aria-hidden />
+          On Hold
+        </Badge>
+      )}
       {leadCountKnown && (
         <Badge
           variant="outline"

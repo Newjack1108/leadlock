@@ -1432,6 +1432,8 @@ export interface Quote {
   viewed_at?: string;   // First viewed at
   last_viewed_at?: string;
   accepted_at?: string;
+  /** Set when customer replied HOLD via SMS */
+  on_hold_at?: string | null;
   created_at: string;
   updated_at: string;
   items: QuoteItem[];
