@@ -1441,31 +1441,34 @@ def _quote_list_where_clause(
     include_archived: bool = False,
 ):
     """Shared filter logic for GET /api/quotes and GET /api/quotes/export.csv."""
-    effective_include_archived = include_archived or (bool(search and search.strip()))
+    search_active = bool(search and search.strip())
+    effective_include_archived = include_archived or search_active
     conditions = []
 
-    if status is not None:
-        if status == QuoteStatus.VIEWED:
-            conditions.append(
-                or_(
-                    Quote.status == QuoteStatus.VIEWED,
-                    and_(
-                        Quote.status == QuoteStatus.SENT,
-                        Quote.viewed_at.isnot(None),
-                    ),
+    # When searching, skip status/lifecycle so names match across live and closed quotes.
+    if not search_active:
+        if status is not None:
+            if status == QuoteStatus.VIEWED:
+                conditions.append(
+                    or_(
+                        Quote.status == QuoteStatus.VIEWED,
+                        and_(
+                            Quote.status == QuoteStatus.SENT,
+                            Quote.viewed_at.isnot(None),
+                        ),
+                    )
                 )
+            else:
+                conditions.append(Quote.status == status)
+        elif lifecycle == "live":
+            conditions.append(Quote.status.in_(QUOTE_LIVE_STATUSES))
+            conditions.append(
+                or_(Quote.valid_until.is_(None), Quote.valid_until >= datetime.utcnow())
             )
+        elif lifecycle == "closed":
+            conditions.append(Quote.status.in_(QUOTE_CLOSED_STATUSES))
         else:
-            conditions.append(Quote.status == status)
-    elif lifecycle == "live":
-        conditions.append(Quote.status.in_(QUOTE_LIVE_STATUSES))
-        conditions.append(
-            or_(Quote.valid_until.is_(None), Quote.valid_until >= datetime.utcnow())
-        )
-    elif lifecycle == "closed":
-        conditions.append(Quote.status.in_(QUOTE_CLOSED_STATUSES))
-    else:
-        conditions.append(Quote.status.notin_(QUOTE_LIST_EXCLUDED_STATUSES))
+            conditions.append(Quote.status.notin_(QUOTE_LIST_EXCLUDED_STATUSES))
 
     if not effective_include_archived:
         conditions.append(Quote.archived_at.is_(None))
@@ -1473,12 +1476,14 @@ def _quote_list_where_clause(
     if temperature is not None:
         conditions.append(Quote.temperature == temperature)
 
-    if search and search.strip():
+    if search_active:
         term = f"%{search.strip()}%"
         conditions.append(
             or_(
                 Quote.quote_number.ilike(term),
                 Customer.name.ilike(term),
+                Quote.dealer_customer_name.ilike(term),
+                Lead.name.ilike(term),
                 func.cast(Lead.lead_type, SAString).ilike(term),
             )
         )

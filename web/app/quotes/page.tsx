@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useLayoutEffect, useState, useMemo } from 'react';
+import { Suspense, useCallback, useEffect, useLayoutEffect, useState, useMemo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Header from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -161,6 +161,7 @@ function filterToSearchString(filter: QuotesListFilter): string | null {
 }
 
 const QUOTES_PAGE_SIZE = 50;
+const SEARCH_DEBOUNCE_MS = 300;
 
 type QuotesSortBy = 'last_contacted' | 'created';
 
@@ -194,6 +195,7 @@ function QuotesPageContent() {
   const [temperatureFilter, setTemperatureFilter] = useState<QuoteTemperature | 'ALL'>('ALL');
   const [searchDraft, setSearchDraft] = useState('');
   const [searchApplied, setSearchApplied] = useState('');
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [sortBy, setSortBy] = useState<QuotesSortBy>('last_contacted');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
@@ -211,6 +213,30 @@ function QuotesPageContent() {
     const parsed = parseFilterFromSearchParams(searchParams);
     setStatusFilter((prev) => (prev === parsed ? prev : parsed));
   }, [searchParams]);
+
+  useEffect(() => {
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current);
+    }
+    searchDebounceRef.current = setTimeout(() => {
+      setSearchApplied(searchDraft);
+      searchDebounceRef.current = null;
+    }, SEARCH_DEBOUNCE_MS);
+    return () => {
+      if (searchDebounceRef.current) {
+        clearTimeout(searchDebounceRef.current);
+        searchDebounceRef.current = null;
+      }
+    };
+  }, [searchDraft]);
+
+  const applySearchNow = useCallback(() => {
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current);
+      searchDebounceRef.current = null;
+    }
+    setSearchApplied(searchDraft);
+  }, [searchDraft]);
 
   const onStatusFilterChange = useCallback(
     (v: string) => {
@@ -433,7 +459,7 @@ function QuotesPageContent() {
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   e.preventDefault();
-                  setSearchApplied(searchDraft);
+                  applySearchNow();
                 }
               }}
               className="w-full md:w-[260px]"
