@@ -418,7 +418,13 @@ def test_weekly_summary_matches_dashboard_inbound_exclusion():
 
         stats = _dashboard_stats(session)
         weekly = asyncio.run(
-            get_weekly_summary_report(session=session, current_user=object())
+            get_weekly_summary_report(
+                session=session,
+                current_user=object(),
+                period=None,
+                start_date=None,
+                end_date=None,
+            )
         )
 
     assert stats.total_leads == 1

@@ -2419,20 +2419,23 @@ export const downloadQuoteEngagementReportPdf = async (filter?: DateRangeQueryPa
   window.URL.revokeObjectURL(url);
 };
 
-export const getWeeklySummaryReport = async () => {
-  const response = await api.get('/api/reports/weekly-summary');
+export const getWeeklySummaryReport = async (filter?: DateRangeQueryParams) => {
+  const params = buildDateRangeParams(filter);
+  const response = await api.get('/api/reports/weekly-summary', { params });
   return response.data;
 };
 
-export const downloadWeeklySummaryReportPdf = async () => {
+export const downloadWeeklySummaryReportPdf = async (filter?: DateRangeQueryParams) => {
+  const params = buildDateRangeParams(filter);
   const response = await api.get('/api/reports/weekly-summary/pdf', {
     responseType: 'blob',
+    params,
   });
   const blob = new Blob([response.data], { type: 'application/pdf' });
   const url = window.URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.setAttribute('download', `Weekly_Pipeline_Summary_${new Date().toISOString().slice(0, 10)}.pdf`);
+  link.setAttribute('download', `Pipeline_Summary_${new Date().toISOString().slice(0, 10)}.pdf`);
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);

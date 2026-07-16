@@ -1110,7 +1110,13 @@ class QuoteEngagementReport(BaseModel):
     rejected_count: int
 
 
+class WeeklySummaryDealItem(BaseModel):
+    name: str
+    value: Decimal
+
+
 class WeeklyPipelineSummaryReport(BaseModel):
+    period: Optional[str] = None
     week_label: str
     generated_at: datetime
     new_count: int
@@ -1118,6 +1124,10 @@ class WeeklyPipelineSummaryReport(BaseModel):
     won_count: int
     lost_count: int
     closed_count: int
+    average_quote_value: Decimal = Decimal("0")
+    average_won_value: Decimal = Decimal("0")
+    won_deals: List[WeeklySummaryDealItem] = []
+    lost_deals: List[WeeklySummaryDealItem] = []
     start_date: datetime
     end_date: datetime
 

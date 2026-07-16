@@ -899,16 +899,17 @@ def generate_weekly_summary_pdf(
     company_name: str = "",
     company_settings: Optional[CompanySettings] = None,
 ) -> BytesIO:
-    """Generate PDF for Weekly Pipeline Summary Report with logo and chart."""
+    """Generate PDF for Pipeline Summary Report with logo, chart, and deal lists."""
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=40, leftMargin=40, topMargin=40, bottomMargin=40)
     styles = getSampleStyleSheet()
     normal = styles["Normal"]
+    heading = styles["Heading2"]
 
     _, logo_bytes = _resolve_logo(company_settings)
-    flowables = _build_report_header(company_name, "Weekly Pipeline Summary", logo_bytes)
+    flowables = _build_report_header(company_name, "Pipeline Summary", logo_bytes)
 
-    flowables.append(Paragraph(f"<b>Week:</b> {data.get('week_label', '')}", normal))
+    flowables.append(Paragraph(f"<b>Period:</b> {data.get('week_label', '')}", normal))
     flowables.append(Spacer(1, 15))
 
     new_count = data.get("new_count", 0)
@@ -916,6 +917,10 @@ def generate_weekly_summary_pdf(
     won_count = data.get("won_count", 0)
     lost_count = data.get("lost_count", 0)
     closed_count = data.get("closed_count", 0)
+    average_quote_value = data.get("average_quote_value", 0)
+    average_won_value = data.get("average_won_value", 0)
+    won_deals = data.get("won_deals") or []
+    lost_deals = data.get("lost_deals") or []
 
     # Bar chart
     chart_data = [
@@ -926,7 +931,7 @@ def generate_weekly_summary_pdf(
         ("Closed (qualified)", closed_count),
     ]
     if any(v > 0 for _, v in chart_data):
-        chart = _create_bar_chart(chart_data, "Weekly Pipeline Activity", width=350, height=180)
+        chart = _create_bar_chart(chart_data, "Pipeline Activity", width=350, height=180)
         flowables.append(chart)
         flowables.append(Spacer(1, 15))
 
@@ -944,26 +949,62 @@ def generate_weekly_summary_pdf(
     t.setStyle(_table_style())
     flowables.append(t)
 
-    # Summary
-    if new_count > 0 or won_count > 0 or lost_count > 0:
+    # Summary strip
+    if new_count > 0 or won_count > 0 or lost_count > 0 or average_quote_value or average_won_value:
         flowables.append(Spacer(1, 15))
         win_rate = (won_count / (won_count + lost_count) * 100) if (won_count + lost_count) > 0 else 0
         summary_data = [[
             f"Leads Received: {new_count}",
-            f"Win Rate: {win_rate:.1f}%"
+            f"Win Rate: {win_rate:.1f}%",
+            f"Avg Quote: {format_currency(average_quote_value)}",
+            f"Avg Won: {format_currency(average_won_value)}",
         ]]
-        summary_table = Table(summary_data, colWidths=[140, 140])
+        summary_table = Table(summary_data, colWidths=[110, 100, 120, 110])
         summary_table.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, -1), LIGHT_GREEN),
             ("TEXTCOLOR", (0, 0), (-1, -1), DARK_GREEN),
             ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"),
-            ("FONTSIZE", (0, 0), (-1, -1), 11),
+            ("FONTSIZE", (0, 0), (-1, -1), 9),
             ("ALIGN", (0, 0), (-1, -1), "CENTER"),
             ("TOPPADDING", (0, 0), (-1, -1), 10),
             ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
             ("BOX", (0, 0), (-1, -1), 1, PRIMARY_GREEN),
         ]))
         flowables.append(summary_table)
+
+    # Won deals
+    flowables.append(Spacer(1, 20))
+    flowables.append(Paragraph("Won Deals", heading))
+    flowables.append(Spacer(1, 8))
+    won_table_data = [["Name", "Value"]]
+    if won_deals:
+        for deal in won_deals:
+            won_table_data.append([
+                str(deal.get("name", "")),
+                format_currency(deal.get("value", 0)),
+            ])
+    else:
+        won_table_data.append(["No won deals in this period", ""])
+    won_table = Table(won_table_data, colWidths=[280, 100])
+    won_table.setStyle(_table_style())
+    flowables.append(won_table)
+
+    # Lost deals
+    flowables.append(Spacer(1, 20))
+    flowables.append(Paragraph("Lost Deals", heading))
+    flowables.append(Spacer(1, 8))
+    lost_table_data = [["Name", "Value"]]
+    if lost_deals:
+        for deal in lost_deals:
+            lost_table_data.append([
+                str(deal.get("name", "")),
+                format_currency(deal.get("value", 0)),
+            ])
+    else:
+        lost_table_data.append(["No lost deals in this period", ""])
+    lost_table = Table(lost_table_data, colWidths=[280, 100])
+    lost_table.setStyle(_table_style())
+    flowables.append(lost_table)
 
     doc.build(flowables)
     buffer.seek(0)

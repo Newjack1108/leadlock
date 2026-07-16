@@ -728,15 +728,15 @@ export default function DashboardPage() {
               <div className="flex flex-col p-4 rounded-lg border border-border">
                 <div className="flex items-center gap-2 mb-2">
                   <Calendar className="h-4 w-4 text-primary" />
-                  <span className="font-medium">Weekly Summary</span>
+                  <span className="font-medium">Pipeline Summary</span>
                 </div>
                 <p className="text-xs text-muted-foreground mb-3">
-                  Leads received, quoted, won, lost this week
+                  Inbound leads plus quotes won/lost for {activeRangeLabel}
                 </p>
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => downloadWeeklySummaryReportPdf()}
+                  onClick={() => downloadWeeklySummaryReportPdf(activeDateParams)}
                   className="mt-auto"
                 >
                   <FileDown className="h-4 w-4 mr-1" />
