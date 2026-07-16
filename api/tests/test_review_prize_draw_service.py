@@ -15,6 +15,7 @@ from app.models import (
     Order,
     Quote,
     QuoteStatus,
+    ReviewPrizeDrawEntry,
     ReviewPrizeDrawEntryStatus,
     User,
     UserRole,
@@ -25,6 +26,7 @@ from app.review_prize_draw_service import (
     build_prize_draw_congratulations_context,
     ensure_prize_draw_entry,
     get_winner_for_month,
+    list_entries,
     pick_random_winner,
     reject_entry,
     reset_winner_for_month,
@@ -153,6 +155,91 @@ def test_approve_sets_entry_month(sqlite_engine):
         assert err is None
         assert approved.status == ReviewPrizeDrawEntryStatus.APPROVED
         assert approved.entry_month == datetime.utcnow().strftime("%Y-%m")
+
+
+def test_list_entries_filters_by_submitted_month_not_entry_month(sqlite_engine):
+    with Session(sqlite_engine) as session:
+        settings, order = _seed(session)
+        user = session.get(User, settings.updated_by_id)
+
+        # Minted but not submitted — excluded from submitted_month filter
+        unsubmitted = ensure_prize_draw_entry(order, session)
+        session.commit()
+
+        customer = session.get(Customer, order.customer_id)
+        quote2 = Quote(
+            quote_number="QT-PD-2",
+            customer_id=customer.id,
+            status=QuoteStatus.ACCEPTED,
+            subtotal=1000,
+            discount_total=0,
+            total_amount=1000,
+            currency="GBP",
+            created_by_id=user.id,
+        )
+        session.add(quote2)
+        session.commit()
+        session.refresh(quote2)
+        order2 = Order(
+            quote_id=quote2.id,
+            customer_id=customer.id,
+            order_number="ORD-PD-2",
+            subtotal=1000,
+            discount_total=0,
+            total_amount=1000,
+            currency="GBP",
+            created_by_id=user.id,
+            installation_completed=True,
+            installation_completed_at=datetime.utcnow() - timedelta(days=5),
+        )
+        session.add(order2)
+        session.commit()
+        session.refresh(order2)
+
+        this_month = datetime.utcnow().strftime("%Y-%m")
+        year, mon = map(int, this_month.split("-"))
+        if mon == 1:
+            prev_month = f"{year - 1}-12"
+            prev_submitted = datetime(year - 1, 12, 15)
+        else:
+            prev_month = f"{year}-{mon - 1:02d}"
+            prev_submitted = datetime(year, mon - 1, 15)
+
+        # Submitted previous month, approved into this month's draw pool
+        prev_entry = ensure_prize_draw_entry(order2, session)
+        submit_prize_draw_entry(prev_entry.access_token, ["GOOGLE", "FACEBOOK"], session)
+        session.commit()
+        prev_entry = session.get(ReviewPrizeDrawEntry, prev_entry.id)
+        prev_entry.submitted_at = prev_submitted
+        session.add(prev_entry)
+        session.commit()
+        approve_entry(prev_entry.id, user, session)
+        session.commit()
+        prev_entry = session.get(ReviewPrizeDrawEntry, prev_entry.id)
+        assert prev_entry.entry_month == this_month
+
+        # Unsubmitted must not appear under the current month filter
+        assert list_entries(session, submitted_month=this_month) == []
+
+        # Submit the first order's entry this month (still pending)
+        submit_prize_draw_entry(unsubmitted.access_token, ["GOOGLE", "TRUSTPILOT"], session)
+        session.commit()
+        current_entry = session.get(ReviewPrizeDrawEntry, unsubmitted.id)
+
+        listed = list_entries(session, submitted_month=this_month)
+        listed_ids = {e.id for e in listed}
+        assert current_entry.id in listed_ids
+        assert prev_entry.id not in listed_ids
+
+        listed_prev = list_entries(session, submitted_month=prev_month)
+        assert {e.id for e in listed_prev} == {prev_entry.id}
+
+        pool = list_entries(
+            session,
+            entry_month=this_month,
+            status=ReviewPrizeDrawEntryStatus.APPROVED,
+        )
+        assert {e.id for e in pool} == {prev_entry.id}
 
 
 def test_reject_allows_resubmit(sqlite_engine):

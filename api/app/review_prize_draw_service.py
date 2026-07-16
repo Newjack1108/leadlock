@@ -265,15 +265,42 @@ def reject_entry(
     return entry, None
 
 
+def _month_bounds(month: str) -> Tuple[datetime, datetime]:
+    """Return [start, end) UTC datetimes for a YYYY-MM calendar month."""
+    year_s, mon_s = month.split("-", 1)
+    year, mon = int(year_s), int(mon_s)
+    start = datetime(year, mon, 1)
+    if mon == 12:
+        end = datetime(year + 1, 1, 1)
+    else:
+        end = datetime(year, mon + 1, 1)
+    return start, end
+
+
 def list_entries(
     session: Session,
     *,
-    month: Optional[str] = None,
+    submitted_month: Optional[str] = None,
+    entry_month: Optional[str] = None,
     status: Optional[ReviewPrizeDrawEntryStatus] = None,
 ) -> List[ReviewPrizeDrawEntry]:
+    """List prize draw entries.
+
+    - ``submitted_month`` (YYYY-MM): filter by when the customer entered (submitted_at).
+    - ``entry_month`` (YYYY-MM): filter by draw pool month (set on approval).
+    """
     statement = select(ReviewPrizeDrawEntry).order_by(ReviewPrizeDrawEntry.submitted_at.desc())
-    if month:
-        statement = statement.where(ReviewPrizeDrawEntry.entry_month == month)
+    if submitted_month:
+        start, end = _month_bounds(submitted_month)
+        statement = statement.where(
+            and_(
+                ReviewPrizeDrawEntry.submitted_at.isnot(None),
+                ReviewPrizeDrawEntry.submitted_at >= start,
+                ReviewPrizeDrawEntry.submitted_at < end,
+            )
+        )
+    if entry_month:
+        statement = statement.where(ReviewPrizeDrawEntry.entry_month == entry_month)
     if status:
         statement = statement.where(ReviewPrizeDrawEntry.status == status)
     return list(session.exec(statement).all())

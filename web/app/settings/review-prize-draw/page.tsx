@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import Header from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -62,13 +62,6 @@ export default function ReviewPrizeDrawPage() {
   useEffect(() => {
     void load();
   }, [load]);
-
-  const filteredEntries = useMemo(() => {
-    if (statusFilter === 'APPROVED') {
-      return entries.filter((e) => e.status === 'APPROVED' && e.entry_month === month);
-    }
-    return entries;
-  }, [entries, month, statusFilter]);
 
   const handleApprove = async (id: number) => {
     try {
@@ -165,12 +158,15 @@ export default function ReviewPrizeDrawPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Draw month</CardTitle>
-            <CardDescription>Approved entries count toward the selected month.</CardDescription>
+            <CardTitle>Month</CardTitle>
+            <CardDescription>
+              Entries are listed by the month they were submitted. The winner is drawn from
+              approved entries in this month&apos;s pool.
+            </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-4 items-end">
             <div className="space-y-2">
-              <Label htmlFor="draw-month">Month (YYYY-MM)</Label>
+              <Label htmlFor="draw-month">Month entered (YYYY-MM)</Label>
               <Input
                 id="draw-month"
                 type="month"
@@ -266,16 +262,16 @@ export default function ReviewPrizeDrawPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Entries {loading ? '' : `(${filteredEntries.length})`}</CardTitle>
+            <CardTitle>Entries {loading ? '' : `(${entries.length})`}</CardTitle>
           </CardHeader>
           <CardContent>
             {loading ? (
               <p className="text-muted-foreground text-sm">Loading…</p>
-            ) : filteredEntries.length === 0 ? (
+            ) : entries.length === 0 ? (
               <p className="text-muted-foreground text-sm">No entries match this filter.</p>
             ) : (
               <div className="space-y-3">
-                {filteredEntries.map((entry) => (
+                {entries.map((entry) => (
                   <div key={entry.id} className="border rounded-lg p-4 space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-medium">{entry.customer_name}</span>

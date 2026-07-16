@@ -88,7 +88,7 @@ def _winner_to_response(winner: ReviewPrizeDrawWinner, session: Session) -> Revi
 
 @router.get("/entries", response_model=ReviewPrizeDrawEntriesResponse)
 async def get_prize_draw_entries(
-    month: Optional[str] = Query(None, description="YYYY-MM filter for approved entry_month"),
+    month: Optional[str] = Query(None, description="YYYY-MM filter for month entered (submitted_at)"),
     status: Optional[str] = Query(None, description="PENDING, APPROVED, or REJECTED"),
     session: Session = Depends(get_session),
     current_user: User = Depends(require_role([UserRole.DIRECTOR])),
@@ -99,10 +99,15 @@ async def get_prize_draw_entries(
             status_enum = ReviewPrizeDrawEntryStatus(status.upper())
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid status")
-    filter_month = month if status_enum == ReviewPrizeDrawEntryStatus.APPROVED else None
-    entries = list_entries(session, month=filter_month, status=status_enum)
+    entries = list_entries(session, submitted_month=month, status=status_enum)
     approved_count = (
-        len(list_entries(session, month=month, status=ReviewPrizeDrawEntryStatus.APPROVED))
+        len(
+            list_entries(
+                session,
+                entry_month=month,
+                status=ReviewPrizeDrawEntryStatus.APPROVED,
+            )
+        )
         if month
         else len(list_entries(session, status=ReviewPrizeDrawEntryStatus.APPROVED))
     )
