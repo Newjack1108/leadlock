@@ -738,6 +738,9 @@ export default function DashboardPage() {
                 </div>
                 <p className="text-xs text-muted-foreground mb-3">
                   Inbound leads plus quotes won/lost for {activeRangeLabel}
+                  {!(dateFilter.mode === 'preset' && dateFilter.period === 'all')
+                    ? '. Includes prior period comparison.'
+                    : ''}
                 </p>
                 <Button
                   variant="outline"

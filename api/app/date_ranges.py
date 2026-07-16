@@ -81,3 +81,23 @@ def resolve_date_range(
         end=end,
         is_custom=False,
     )
+
+
+def previous_equal_range(resolved: ResolvedDateRange) -> Optional[ResolvedDateRange]:
+    """Return an equal-length window immediately before ``resolved``.
+
+    Used for Pipeline Summary comparisons (this week vs prior week-to-date,
+    custom range vs auto-shifted prior of the same duration). Returns ``None``
+    for ``all`` (no meaningful prior window).
+    """
+    if resolved.period == "all":
+        return None
+    delta = resolved.end - resolved.start
+    compare_end = resolved.start - timedelta(microseconds=1)
+    compare_start = compare_end - delta
+    return ResolvedDateRange(
+        period="comparison",
+        start=compare_start,
+        end=compare_end,
+        is_custom=resolved.is_custom,
+    )

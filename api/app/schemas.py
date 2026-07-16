@@ -1115,6 +1115,24 @@ class WeeklySummaryDealItem(BaseModel):
     value: Decimal
 
 
+class WeeklyPipelinePeriodMetrics(BaseModel):
+    """Counts and money metrics for one Pipeline Summary date window."""
+    label: str
+    start_date: datetime
+    end_date: datetime
+    new_count: int = 0
+    quoted_count: int = 0
+    qualified_count: int = 0
+    won_count: int = 0
+    lost_count: int = 0
+    closed_count: int = 0
+    quotes_sent_count: int = 0
+    win_rate: float = 0.0
+    average_quote_value: Decimal = Decimal("0")
+    total_quote_value: Decimal = Decimal("0")
+    average_won_value: Decimal = Decimal("0")
+
+
 class WeeklyPipelineSummaryReport(BaseModel):
     period: Optional[str] = None
     week_label: str
@@ -1134,6 +1152,7 @@ class WeeklyPipelineSummaryReport(BaseModel):
     lost_deals: List[WeeklySummaryDealItem] = []
     start_date: datetime
     end_date: datetime
+    comparison: Optional[WeeklyPipelinePeriodMetrics] = None
 
 
 class UnreadSmsMessageItem(BaseModel):

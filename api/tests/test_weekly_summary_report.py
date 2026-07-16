@@ -338,3 +338,121 @@ def test_weekly_summary_pdf_period_label_follows_query_params(api_client, sqlite
     assert "01 May" in may["week_label"]
     assert june["period"] == "custom"
     assert may["period"] == "custom"
+
+
+def test_previous_equal_range_custom_shift():
+    from app.date_ranges import ResolvedDateRange, previous_equal_range
+
+    primary = ResolvedDateRange(
+        period="custom",
+        start=datetime(2026, 6, 8, 0, 0, 0),
+        end=datetime(2026, 6, 11, 23, 59, 59, 999999),
+        is_custom=True,
+    )
+    prior = previous_equal_range(primary)
+    assert prior is not None
+    assert prior.period == "comparison"
+    assert prior.end == datetime(2026, 6, 7, 23, 59, 59, 999999)
+    assert (prior.end - prior.start) == (primary.end - primary.start)
+
+
+def test_previous_equal_range_all_returns_none():
+    from app.date_ranges import ResolvedDateRange, previous_equal_range
+
+    assert (
+        previous_equal_range(
+            ResolvedDateRange(
+                period="all",
+                start=datetime(1970, 1, 1),
+                end=datetime(2026, 6, 11),
+            )
+        )
+        is None
+    )
+
+
+def test_weekly_summary_comparison_custom_isolates_periods(api_client, sqlite_engine):
+    with Session(sqlite_engine) as session:
+        _seed_inbound_leads(session)
+        # Extra lead only in the auto-shifted prior window (before 8 Jun)
+        session.add(Lead(name="Prior Only", status=LeadStatus.NEW, created_at=datetime(2026, 6, 5, 12, 0, 0)))
+        session.commit()
+
+    response = api_client.get(
+        "/api/reports/weekly-summary",
+        params={"start_date": "2026-06-08", "end_date": "2026-06-11", "compare": True},
+    )
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["new_count"] == 4
+    assert data["comparison"] is not None
+    assert data["comparison"]["new_count"] == 2  # Old NEW (Jun 5 from seed) + Prior Only
+    assert data["comparison"]["start_date"].startswith("2026-06-04")
+    assert data["comparison"]["end_date"].startswith("2026-06-07")
+
+
+def test_weekly_summary_comparison_week_equal_length(api_client, sqlite_engine, monkeypatch):
+    week_end = datetime(2026, 6, 11, 12, 0, 0)
+
+    class FixedDatetime(datetime):
+        @classmethod
+        def utcnow(cls):
+            return week_end
+
+    monkeypatch.setattr("app.date_ranges.datetime", FixedDatetime)
+
+    with Session(sqlite_engine) as session:
+        _seed_inbound_leads(session)
+
+    response = api_client.get("/api/reports/weekly-summary", params={"period": "week", "compare": True})
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["period"] == "week"
+    assert data["new_count"] == 4
+    assert data["comparison"] is not None
+    # Primary Mon 8 Jun 00:00 → Thu 11 Jun 12:00; prior is equal length ending just before
+    start = datetime.fromisoformat(data["start_date"])
+    end = datetime.fromisoformat(data["end_date"])
+    cmp_start = datetime.fromisoformat(data["comparison"]["start_date"])
+    cmp_end = datetime.fromisoformat(data["comparison"]["end_date"])
+    assert (cmp_end - cmp_start) == (end - start)
+    assert cmp_end < start
+    assert data["comparison"]["new_count"] == 1  # Old NEW from last_week seed
+
+
+def test_weekly_summary_period_all_has_no_comparison(api_client, sqlite_engine):
+    with Session(sqlite_engine) as session:
+        _seed_inbound_leads(session)
+
+    response = api_client.get("/api/reports/weekly-summary", params={"period": "all", "compare": True})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["period"] == "all"
+    assert data["comparison"] is None
+
+
+def test_weekly_summary_compare_false_skips_comparison(api_client, sqlite_engine):
+    with Session(sqlite_engine) as session:
+        _seed_inbound_leads(session)
+
+    response = api_client.get(
+        "/api/reports/weekly-summary",
+        params={"start_date": "2026-06-08", "end_date": "2026-06-11", "compare": False},
+    )
+    assert response.status_code == 200
+    assert response.json()["comparison"] is None
+
+
+def test_weekly_summary_pdf_with_compare(api_client, sqlite_engine):
+    with Session(sqlite_engine) as session:
+        _seed_inbound_leads(session)
+
+    response = api_client.get(
+        "/api/reports/weekly-summary/pdf",
+        params={"start_date": "2026-06-08", "end_date": "2026-06-11", "compare": True},
+    )
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
+    assert response.content[:4] == b"%PDF"

@@ -2420,13 +2420,13 @@ export const downloadQuoteEngagementReportPdf = async (filter?: DateRangeQueryPa
 };
 
 export const getWeeklySummaryReport = async (filter?: DateRangeQueryParams) => {
-  const params = buildDateRangeParams(filter);
+  const params = { ...buildDateRangeParams(filter), compare: true };
   const response = await api.get('/api/reports/weekly-summary', { params });
   return response.data;
 };
 
 export const downloadWeeklySummaryReportPdf = async (filter?: DateRangeQueryParams) => {
-  const params = buildDateRangeParams(filter);
+  const params = { ...buildDateRangeParams(filter), compare: true };
   const response = await api.get('/api/reports/weekly-summary/pdf', {
     responseType: 'blob',
     params,

@@ -27,6 +27,9 @@ PRIMARY_GREEN = colors.HexColor("#16a34a")  # Green-600
 LIGHT_GREEN = colors.HexColor("#dcfce7")    # Green-100
 DARK_GREEN = colors.HexColor("#166534")     # Green-800
 ACCENT_GREEN = colors.HexColor("#22c55e")   # Green-500
+COMPARISON_BLUE = colors.HexColor("#2563eb")  # Blue-600
+LIGHT_COMPARISON = colors.HexColor("#dbeafe")  # Blue-100
+DARK_COMPARISON = colors.HexColor("#1e40af")  # Blue-800
 
 # Chart color palette (greens and complementary)
 CHART_COLORS = [
@@ -299,6 +302,93 @@ def _create_bar_chart(data: List[Tuple[str, float]], title: str = "", width: int
                           textAnchor='middle', fontSize=10, fillColor=DARK_GREEN))
 
     return drawing
+
+
+def _create_comparison_bar_chart(
+    labels: List[str],
+    current_values: List[float],
+    prior_values: List[float],
+    title: str = "",
+    width: int = 400,
+    height: int = 210,
+) -> Drawing:
+    """Grouped vertical bars for current (green) vs prior (blue) periods."""
+    drawing = Drawing(width, height)
+
+    chart = VerticalBarChart()
+    chart.x = 50
+    chart.y = 45
+    chart.width = width - 80
+    chart.height = height - 80
+    chart.data = [current_values, prior_values]
+    chart.categoryAxis.categoryNames = [label[:12] for label in labels]
+    chart.categoryAxis.labels.angle = 30
+    chart.categoryAxis.labels.boxAnchor = "ne"
+    chart.categoryAxis.labels.fontSize = 8
+    chart.valueAxis.valueMin = 0
+    chart.valueAxis.labels.fontSize = 8
+    chart.groupSpacing = 8
+    chart.barSpacing = 1
+    chart.bars[0].fillColor = PRIMARY_GREEN
+    chart.bars[0].strokeColor = DARK_GREEN
+    chart.bars[0].strokeWidth = 0.5
+    chart.bars[1].fillColor = COMPARISON_BLUE
+    chart.bars[1].strokeColor = DARK_COMPARISON
+    chart.bars[1].strokeWidth = 0.5
+
+    drawing.add(chart)
+
+    if title:
+        drawing.add(
+            String(
+                width / 2,
+                height - 10,
+                title,
+                textAnchor="middle",
+                fontSize=10,
+                fillColor=DARK_GREEN,
+            )
+        )
+
+    legend = Legend()
+    legend.x = width / 2 - 60
+    legend.y = 8
+    legend.dx = 8
+    legend.dy = 8
+    legend.fontName = "Helvetica"
+    legend.fontSize = 8
+    legend.boxAnchor = "w"
+    legend.columnMaximum = 1
+    legend.strokeWidth = 0
+    legend.deltax = 90
+    legend.deltay = 0
+    legend.dxTextSpace = 4
+    legend.alignment = "right"
+    legend.colorNamePairs = [
+        (PRIMARY_GREEN, "Current"),
+        (COMPARISON_BLUE, "Prior"),
+    ]
+    drawing.add(legend)
+
+    return drawing
+
+
+def _format_change(current: float, prior: float, *, as_percent: bool = False) -> str:
+    delta = current - prior
+    if as_percent:
+        sign = "+" if delta > 0 else ""
+        return f"{sign}{delta:.1f}%"
+    if isinstance(delta, float) and not delta.is_integer():
+        sign = "+" if delta > 0 else ""
+        return f"{sign}{delta:.1f}"
+    sign = "+" if delta > 0 else ""
+    return f"{sign}{int(delta) if float(delta).is_integer() else delta}"
+
+
+def _format_currency_change(current: float, prior: float) -> str:
+    delta = float(current or 0) - float(prior or 0)
+    sign = "+" if delta > 0 else ""
+    return f"{sign}{format_currency(delta)}"
 
 
 def _create_horizontal_bar_chart(data: List[Tuple[str, float]], title: str = "", width: int = 450, height: int = 200) -> Drawing:
@@ -909,13 +999,13 @@ def generate_weekly_summary_pdf(
     _, logo_bytes = _resolve_logo(company_settings)
     flowables = _build_report_header(company_name, "Pipeline Summary", logo_bytes)
 
-    flowables.append(
-        Paragraph(
-            f"<b>Period:</b> {data.get('week_label', '')}"
-            + (f" ({data.get('period')})" if data.get("period") else ""),
-            normal,
-        )
-    )
+    comparison = data.get("comparison")
+    period_line = f"<b>Period:</b> {data.get('week_label', '')}"
+    if data.get("period"):
+        period_line += f" ({data.get('period')})"
+    if comparison and comparison.get("label"):
+        period_line += f"<br/><b>vs Prior:</b> {comparison.get('label')}"
+    flowables.append(Paragraph(period_line, normal))
     flowables.append(Spacer(1, 15))
 
     new_count = data.get("new_count", 0)
@@ -930,36 +1020,92 @@ def generate_weekly_summary_pdf(
     won_deals = data.get("won_deals") or []
     lost_deals = data.get("lost_deals") or []
 
-    # Bar chart
-    chart_data = [
-        ("New", new_count),
-        ("Quoted", quoted_count),
-        ("Won", won_count),
-        ("Lost", lost_count),
-        ("Closed", closed_count),
-    ]
-    if any(v > 0 for _, v in chart_data):
-        chart = _create_bar_chart(chart_data, "Pipeline Activity", width=350, height=180)
-        flowables.append(chart)
-        flowables.append(Spacer(1, 15))
+    current_chart = [new_count, quoted_count, won_count, lost_count, closed_count]
+    chart_labels = ["New", "Quoted", "Won", "Lost", "Closed"]
+    if comparison:
+        prior_chart = [
+            comparison.get("new_count", 0),
+            comparison.get("quoted_count", 0),
+            comparison.get("won_count", 0),
+            comparison.get("lost_count", 0),
+            comparison.get("closed_count", 0),
+        ]
+        if any(v > 0 for v in current_chart + prior_chart):
+            chart = _create_comparison_bar_chart(
+                chart_labels,
+                [float(v) for v in current_chart],
+                [float(v) for v in prior_chart],
+                "Pipeline Activity",
+                width=380,
+                height=210,
+            )
+            flowables.append(chart)
+            flowables.append(Spacer(1, 15))
+    else:
+        chart_data = list(zip(chart_labels, current_chart))
+        if any(v > 0 for _, v in chart_data):
+            chart = _create_bar_chart(chart_data, "Pipeline Activity", width=350, height=180)
+            flowables.append(chart)
+            flowables.append(Spacer(1, 15))
 
-    # Table
-    table_data = [
-        ["Metric", "Count"],
-        ["New Leads", str(new_count)],
-        ["Qualified", str(qualified_count)],
-        ["Quoted", str(quoted_count)],
-        ["Won", str(won_count)],
-        ["Lost", str(lost_count)],
-        ["Closed", str(closed_count)],
-    ]
+    # Metrics table
+    if comparison:
+        prior_new = comparison.get("new_count", 0)
+        prior_qualified = comparison.get("qualified_count", 0)
+        prior_quoted = comparison.get("quoted_count", 0)
+        prior_won = comparison.get("won_count", 0)
+        prior_lost = comparison.get("lost_count", 0)
+        prior_closed = comparison.get("closed_count", 0)
+        table_data = [
+            ["Metric", "Current", "Prior", "Change"],
+            ["New Leads", str(new_count), str(prior_new), _format_change(new_count, prior_new)],
+            [
+                "Qualified",
+                str(qualified_count),
+                str(prior_qualified),
+                _format_change(qualified_count, prior_qualified),
+            ],
+            [
+                "Quoted",
+                str(quoted_count),
+                str(prior_quoted),
+                _format_change(quoted_count, prior_quoted),
+            ],
+            ["Won", str(won_count), str(prior_won), _format_change(won_count, prior_won)],
+            ["Lost", str(lost_count), str(prior_lost), _format_change(lost_count, prior_lost)],
+            [
+                "Closed",
+                str(closed_count),
+                str(prior_closed),
+                _format_change(closed_count, prior_closed),
+            ],
+        ]
+        t = Table(table_data, colWidths=[120, 80, 80, 80])
+    else:
+        table_data = [
+            ["Metric", "Count"],
+            ["New Leads", str(new_count)],
+            ["Qualified", str(qualified_count)],
+            ["Quoted", str(quoted_count)],
+            ["Won", str(won_count)],
+            ["Lost", str(lost_count)],
+            ["Closed", str(closed_count)],
+        ]
+        t = Table(table_data, colWidths=[180, 100])
 
-    t = Table(table_data, colWidths=[180, 100])
     t.setStyle(_table_style())
     flowables.append(t)
 
     # Summary strip
-    if (
+    win_rate = float(data.get("win_rate", 0) or 0)
+    prior_win_rate = float((comparison or {}).get("win_rate", 0) or 0) if comparison else 0.0
+    prior_avg_quote = (comparison or {}).get("average_quote_value", 0) if comparison else 0
+    prior_total_quote = (comparison or {}).get("total_quote_value", 0) if comparison else 0
+    prior_avg_won = (comparison or {}).get("average_won_value", 0) if comparison else 0
+    prior_qualified = (comparison or {}).get("qualified_count", 0) if comparison else 0
+    prior_new = (comparison or {}).get("new_count", 0) if comparison else 0
+
+    show_summary = (
         new_count > 0
         or qualified_count > 0
         or won_count > 0
@@ -967,35 +1113,85 @@ def generate_weekly_summary_pdf(
         or average_quote_value
         or total_quote_value
         or average_won_value
-    ):
+        or (comparison and (
+            prior_new
+            or prior_qualified
+            or prior_avg_quote
+            or prior_total_quote
+            or prior_avg_won
+        ))
+    )
+    if show_summary:
         flowables.append(Spacer(1, 15))
-        win_rate = float(data.get("win_rate", 0) or 0)
-        summary_data = [
-            [
-                f"Leads Received: {new_count}",
-                f"Qualified: {qualified_count}",
-                f"Win Rate: {win_rate:.1f}%",
-                f"Avg Quote: {format_currency(average_quote_value)}",
-            ],
-            [
-                f"Total Quoted: {format_currency(total_quote_value)}",
-                f"Avg Won: {format_currency(average_won_value)}",
-                "",
-                "",
-            ],
-        ]
-        summary_table = Table(summary_data, colWidths=[130, 110, 100, 120])
-        summary_table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, -1), LIGHT_GREEN),
-            ("TEXTCOLOR", (0, 0), (-1, -1), DARK_GREEN),
-            ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"),
-            ("FONTSIZE", (0, 0), (-1, -1), 9),
-            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-            ("TOPPADDING", (0, 0), (-1, -1), 10),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
-            ("BOX", (0, 0), (-1, -1), 1, PRIMARY_GREEN),
-            ("SPAN", (2, 1), (-1, 1)),
-        ]))
+        if comparison:
+            summary_data = [
+                [
+                    f"Current — Leads: {new_count}",
+                    f"Qualified: {qualified_count}",
+                    f"Win Rate: {win_rate:.1f}%",
+                    f"Avg Quote: {format_currency(average_quote_value)}",
+                ],
+                [
+                    f"Total Quoted: {format_currency(total_quote_value)}",
+                    f"Avg Won: {format_currency(average_won_value)}",
+                    "",
+                    "",
+                ],
+                [
+                    f"Prior — Leads: {prior_new}",
+                    f"Qualified: {prior_qualified}",
+                    f"Win Rate: {prior_win_rate:.1f}%",
+                    f"Avg Quote: {format_currency(prior_avg_quote)}",
+                ],
+                [
+                    f"Total Quoted: {format_currency(prior_total_quote)}",
+                    f"Avg Won: {format_currency(prior_avg_won)}",
+                    f"Δ Win Rate: {_format_change(win_rate, prior_win_rate, as_percent=True)}",
+                    f"Δ Quoted: {_format_currency_change(total_quote_value, prior_total_quote)}",
+                ],
+            ]
+            summary_table = Table(summary_data, colWidths=[130, 110, 110, 120])
+            summary_table.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 1), LIGHT_GREEN),
+                ("TEXTCOLOR", (0, 0), (-1, 1), DARK_GREEN),
+                ("BACKGROUND", (0, 2), (-1, 3), LIGHT_COMPARISON),
+                ("TEXTCOLOR", (0, 2), (-1, 3), DARK_COMPARISON),
+                ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, -1), 8),
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("TOPPADDING", (0, 0), (-1, -1), 8),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                ("BOX", (0, 0), (-1, -1), 1, PRIMARY_GREEN),
+                ("LINEABOVE", (0, 2), (-1, 2), 1, COMPARISON_BLUE),
+                ("SPAN", (2, 1), (-1, 1)),
+            ]))
+        else:
+            summary_data = [
+                [
+                    f"Leads Received: {new_count}",
+                    f"Qualified: {qualified_count}",
+                    f"Win Rate: {win_rate:.1f}%",
+                    f"Avg Quote: {format_currency(average_quote_value)}",
+                ],
+                [
+                    f"Total Quoted: {format_currency(total_quote_value)}",
+                    f"Avg Won: {format_currency(average_won_value)}",
+                    "",
+                    "",
+                ],
+            ]
+            summary_table = Table(summary_data, colWidths=[130, 110, 100, 120])
+            summary_table.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, -1), LIGHT_GREEN),
+                ("TEXTCOLOR", (0, 0), (-1, -1), DARK_GREEN),
+                ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, -1), 9),
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("TOPPADDING", (0, 0), (-1, -1), 10),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+                ("BOX", (0, 0), (-1, -1), 1, PRIMARY_GREEN),
+                ("SPAN", (2, 1), (-1, 1)),
+            ]))
         flowables.append(summary_table)
 
     # Won deals
