@@ -1744,6 +1744,7 @@ export interface Reminder {
   created_at: string;
   dismissed_at?: string;
   acted_upon_at?: string;
+  resolution_notes?: string | null;
   lead_name?: string;
   quote_number?: string;
   customer_name?: string;

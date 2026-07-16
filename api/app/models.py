@@ -1224,6 +1224,7 @@ class Reminder(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     dismissed_at: Optional[datetime] = None
     acted_upon_at: Optional[datetime] = None
+    resolution_notes: Optional[str] = None  # Note when dismissed or marked done
     
     # Relationships (two FKs to User — must specify foreign_keys each)
     lead: Optional["Lead"] = Relationship()

@@ -530,6 +530,7 @@ def _reminder_to_response(
         created_at=reminder.created_at,
         dismissed_at=reminder.dismissed_at,
         acted_upon_at=reminder.acted_upon_at,
+        resolution_notes=reminder.resolution_notes,
         lead_name=lead_name,
         quote_number=quote_number,
         customer_name=customer_name,
@@ -829,7 +830,19 @@ async def dismiss_reminder(
     if not reminder:
         raise HTTPException(status_code=404, detail="Reminder not found")
 
+    note = (request.reason or "").strip()
+    if reminder.reminder_type == ReminderType.USER_TASK and not note:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "TASK_NOTE_REQUIRED",
+                "message": "A note is required to dismiss this task.",
+            },
+        )
+
     reminder.dismissed_at = datetime.utcnow()
+    if note:
+        reminder.resolution_notes = note
     session.add(reminder)
     session.commit()
     
@@ -849,7 +862,19 @@ async def act_on_reminder(
     if not reminder:
         raise HTTPException(status_code=404, detail="Reminder not found")
 
+    note = (request.notes or "").strip()
+    if reminder.reminder_type == ReminderType.USER_TASK and not note:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "TASK_NOTE_REQUIRED",
+                "message": "A note is required to complete this task.",
+            },
+        )
+
     reminder.acted_upon_at = datetime.utcnow()
+    if note:
+        reminder.resolution_notes = note
     session.add(reminder)
     session.commit()
     

@@ -4,6 +4,16 @@ import { useState, useEffect, type KeyboardEvent } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { CompanySettings, Reminder, ReminderPriority, SuggestedAction, ReminderType } from '@/lib/types';
 import {
   getReminders,
@@ -27,6 +37,15 @@ function doneClearTimestampMs(r: Reminder): number {
   const acted = r.acted_upon_at ? new Date(r.acted_upon_at).getTime() : 0;
   const dismissed = r.dismissed_at ? new Date(r.dismissed_at).getTime() : 0;
   return Math.max(acted, dismissed);
+}
+
+type TaskNoteAction = 'dismiss' | 'act';
+
+interface PendingTaskNote {
+  reminderId: number;
+  action: TaskNoteAction;
+  actionTaken?: SuggestedAction;
+  title: string;
 }
 
 interface ReminderListProps {
@@ -61,6 +80,9 @@ export default function ReminderList({
   const [generating, setGenerating] = useState(false);
   const [companySettings, setCompanySettings] = useState<CompanySettings | null>(null);
   const [reviewDialogOrderId, setReviewDialogOrderId] = useState<number | null>(null);
+  const [pendingTaskNote, setPendingTaskNote] = useState<PendingTaskNote | null>(null);
+  const [taskNote, setTaskNote] = useState('');
+  const [taskNoteSubmitting, setTaskNoteSubmitting] = useState(false);
 
   const fetchReminders = async () => {
     try {
@@ -141,9 +163,9 @@ export default function ReminderList({
     return `${r.days_stale} days stale`;
   };
 
-  const handleDismiss = async (reminderId: number) => {
+  const handleDismiss = async (reminderId: number, reason?: string) => {
     try {
-      await dismissReminder(reminderId);
+      await dismissReminder(reminderId, reason);
       invalidateStaleSummaryCache();
       toast.success('Reminder dismissed');
       fetchReminders();
@@ -151,12 +173,13 @@ export default function ReminderList({
     } catch (error: any) {
       toast.error('Failed to dismiss reminder');
       console.error('Error dismissing reminder:', error);
+      throw error;
     }
   };
 
-  const handleAct = async (reminderId: number, action: SuggestedAction) => {
+  const handleAct = async (reminderId: number, action: SuggestedAction, notes?: string) => {
     try {
-      await actOnReminder(reminderId, action);
+      await actOnReminder(reminderId, action, notes);
       invalidateStaleSummaryCache();
       toast.success('Reminder marked as acted upon');
       fetchReminders();
@@ -164,7 +187,72 @@ export default function ReminderList({
     } catch (error: any) {
       toast.error('Failed to mark reminder as acted upon');
       console.error('Error acting on reminder:', error);
+      throw error;
     }
+  };
+
+  const openTaskNoteDialog = (
+    reminder: Reminder,
+    action: TaskNoteAction,
+    actionTaken?: SuggestedAction,
+  ) => {
+    setPendingTaskNote({
+      reminderId: reminder.id,
+      action,
+      actionTaken,
+      title: reminder.title,
+    });
+    setTaskNote('');
+  };
+
+  const closeTaskNoteDialog = (open: boolean) => {
+    if (!open) {
+      setPendingTaskNote(null);
+      setTaskNote('');
+      setTaskNoteSubmitting(false);
+    }
+  };
+
+  const submitTaskNote = async () => {
+    if (!pendingTaskNote) return;
+    const note = taskNote.trim();
+    if (!note) {
+      toast.error('A note is required');
+      return;
+    }
+    try {
+      setTaskNoteSubmitting(true);
+      if (pendingTaskNote.action === 'dismiss') {
+        await handleDismiss(pendingTaskNote.reminderId, note);
+      } else {
+        await handleAct(
+          pendingTaskNote.reminderId,
+          pendingTaskNote.actionTaken ?? SuggestedAction.FOLLOW_UP,
+          note,
+        );
+      }
+      closeTaskNoteDialog(false);
+    } catch {
+      // Error toast already shown
+    } finally {
+      setTaskNoteSubmitting(false);
+    }
+  };
+
+  const requestDismiss = (reminder: Reminder) => {
+    if (reminder.reminder_type === ReminderType.USER_TASK) {
+      openTaskNoteDialog(reminder, 'dismiss');
+      return;
+    }
+    void handleDismiss(reminder.id);
+  };
+
+  const requestAct = (reminder: Reminder, action: SuggestedAction) => {
+    if (reminder.reminder_type === ReminderType.USER_TASK) {
+      openTaskNoteDialog(reminder, 'act', action);
+      return;
+    }
+    void handleAct(reminder.id, action);
   };
 
   const handleGenerate = async () => {
@@ -461,6 +549,11 @@ export default function ReminderList({
                           Dismissed on {new Date(reminder.dismissed_at).toLocaleDateString('en-GB')}
                         </span>
                       )}
+                      {isDoneMode && reminder.resolution_notes && (
+                        <span className="block w-full text-foreground/80">
+                          Note: {reminder.resolution_notes}
+                        </span>
+                      )}
                     </div>
                   </div>
                   {(reminder.auto_outreach_status === 'SENT' || reminder.auto_outreach_status === 'FAILED') && (
@@ -511,8 +604,12 @@ export default function ReminderList({
                         handleQuickAction(reminder, reminder.suggested_action);
                         return;
                       }
+                      if (reminder.reminder_type === ReminderType.USER_TASK) {
+                        requestAct(reminder, reminder.suggested_action);
+                        return;
+                      }
                       handleQuickAction(reminder, reminder.suggested_action);
-                      handleAct(reminder.id, reminder.suggested_action);
+                      requestAct(reminder, reminder.suggested_action);
                     }}
                   >
                     {getActionIcon(reminder.suggested_action)}
@@ -524,7 +621,7 @@ export default function ReminderList({
                     size="sm"
                     variant="outline"
                     className={compact ? 'h-7 text-xs' : ''}
-                    onClick={() => handleDismiss(reminder.id)}
+                    onClick={() => requestDismiss(reminder)}
                   >
                     <X className="h-4 w-4 mr-2" />
                     Dismiss
@@ -533,7 +630,7 @@ export default function ReminderList({
                     size="sm"
                     variant="ghost"
                     className={compact ? 'h-7 text-xs' : ''}
-                    onClick={() => handleAct(reminder.id, reminder.suggested_action)}
+                    onClick={() => requestAct(reminder, reminder.suggested_action)}
                   >
                     <CheckCircle2 className="h-4 w-4 mr-2" />
                     Mark Done
@@ -566,6 +663,49 @@ export default function ReminderList({
           onSuccess={() => void handleReviewRequestSent()}
         />
       ) : null}
+      <Dialog open={pendingTaskNote !== null} onOpenChange={closeTaskNoteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {pendingTaskNote?.action === 'dismiss' ? 'Dismiss task' : 'Complete task'}
+            </DialogTitle>
+            <DialogDescription>
+              Add a note before{' '}
+              {pendingTaskNote?.action === 'dismiss' ? 'dismissing' : 'completing'}{' '}
+              {pendingTaskNote?.title ? `“${pendingTaskNote.title}”` : 'this task'}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="task-resolution-note">Note (required)</Label>
+            <Textarea
+              id="task-resolution-note"
+              value={taskNote}
+              onChange={(e) => setTaskNote(e.target.value)}
+              placeholder="What happened with this task?"
+              rows={4}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => closeTaskNoteDialog(false)}
+              disabled={taskNoteSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => void submitTaskNote()}
+              disabled={taskNoteSubmitting || !taskNote.trim()}
+            >
+              {taskNoteSubmitting
+                ? 'Saving…'
+                : pendingTaskNote?.action === 'dismiss'
+                  ? 'Dismiss'
+                  : 'Mark Done'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
