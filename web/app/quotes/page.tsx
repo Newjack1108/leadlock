@@ -207,6 +207,8 @@ function QuotesPageContent() {
   const [quotePendingCancel, setQuotePendingCancel] = useState<Quote | null>(null);
   const [cancellingDraft, setCancellingDraft] = useState(false);
   const [downloadingCsv, setDownloadingCsv] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const hasLoadedRef = useRef(false);
 
   // Sync filter from URL (back/forward, dashboard links, shared URLs)
   useEffect(() => {
@@ -254,7 +256,11 @@ function QuotesPageContent() {
 
   const fetchQuotes = useCallback(async () => {
     try {
-      setLoading(true);
+      if (!hasLoadedRef.current) {
+        setLoading(true);
+      } else {
+        setRefreshing(true);
+      }
       const searchValue = searchApplied.trim() || undefined;
       const data = await getQuotes({
         status: isConcreteQuoteStatus(statusFilter) ? statusFilter : undefined,
@@ -268,6 +274,7 @@ function QuotesPageContent() {
       });
       setQuotes(data.items);
       setTotal(data.total);
+      hasLoadedRef.current = true;
     } catch (error: any) {
       toast.error('Failed to load quotes');
       if (error.response?.status === 401) {
@@ -275,6 +282,7 @@ function QuotesPageContent() {
       }
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, [statusFilter, temperatureFilter, searchApplied, page, includeArchived, router]);
 
@@ -375,7 +383,7 @@ function QuotesPageContent() {
 
   const totalPages = Math.max(1, Math.ceil(total / QUOTES_PAGE_SIZE));
 
-  if (loading) {
+  if (loading && !hasLoadedRef.current) {
     return (
       <div className="min-h-screen">
         <Header />
@@ -487,7 +495,7 @@ function QuotesPageContent() {
           </div>
 
         {total === 0 ? (
-          <Card>
+          <Card className={refreshing ? 'opacity-60 transition-opacity' : undefined}>
             <CardContent className="p-6">
               <div className="text-center text-muted-foreground py-12">
                 <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
@@ -496,7 +504,7 @@ function QuotesPageContent() {
             </CardContent>
           </Card>
         ) : viewMode === 'list' ? (
-          <Card>
+          <Card className={refreshing ? 'opacity-60 transition-opacity' : undefined}>
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
@@ -643,7 +651,7 @@ function QuotesPageContent() {
             </div>
           </Card>
         ) : (
-          <div className="space-y-4">
+          <div className={`space-y-4${refreshing ? ' opacity-60 transition-opacity' : ''}`}>
             {filteredQuotes.map((quote) => (
               <Card
                 key={quote.id}
@@ -784,7 +792,7 @@ function QuotesPageContent() {
               <Button
                 variant="outline"
                 size="sm"
-                disabled={page <= 1}
+                disabled={page <= 1 || refreshing}
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
               >
                 Previous
@@ -792,7 +800,7 @@ function QuotesPageContent() {
               <Button
                 variant="outline"
                 size="sm"
-                disabled={page >= totalPages}
+                disabled={page >= totalPages || refreshing}
                 onClick={() => setPage((p) => p + 1)}
               >
                 Next
