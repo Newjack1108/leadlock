@@ -2435,7 +2435,17 @@ export const downloadWeeklySummaryReportPdf = async (filter?: DateRangeQueryPara
   const url = window.URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.setAttribute('download', `Pipeline_Summary_${new Date().toISOString().slice(0, 10)}.pdf`);
+  const disposition = response.headers['content-disposition'] as string | undefined;
+  let filename = 'Pipeline_Summary.pdf';
+  if (disposition) {
+    const match = /filename="?([^"]+)"?/.exec(disposition);
+    if (match?.[1]) filename = match[1];
+  } else if (params.start_date && params.end_date) {
+    filename = `Pipeline_Summary_${params.start_date}_to_${params.end_date}.pdf`;
+  } else if (params.period) {
+    filename = `Pipeline_Summary_${params.period}.pdf`;
+  }
+  link.setAttribute('download', filename);
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);

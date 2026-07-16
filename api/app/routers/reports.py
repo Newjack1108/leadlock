@@ -6,6 +6,7 @@ import io
 from collections import defaultdict
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
+from sqlalchemy import or_
 from sqlmodel import Session, select, func
 from app.database import get_session
 from app.auth import get_current_user
@@ -775,6 +776,23 @@ async def get_quote_engagement_pdf(
 
 # --- Weekly Pipeline Summary Report ---
 
+def _as_naive_utc(value: Optional[datetime]) -> Optional[datetime]:
+    """Normalize DB datetimes so range compares never mix aware/naive values."""
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value
+    from datetime import timezone
+    return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+
+def _in_range(value: Optional[datetime], start: datetime, end: datetime) -> bool:
+    normalized = _as_naive_utc(value)
+    if normalized is None:
+        return False
+    return start <= normalized <= end
+
+
 def _quote_display_name(
     quote: Quote,
     customers_by_id: dict[int, Customer],
@@ -787,10 +805,12 @@ def _quote_display_name(
     return quote.quote_number
 
 
-def _in_range(value: Optional[datetime], start: datetime, end: datetime) -> bool:
-    if value is None:
-        return False
-    return start <= value <= end
+def _quote_stats_filter():
+    """Include unlinked quotes; exclude sandbox-customer quotes only."""
+    return or_(
+        Quote.customer_id.is_(None),
+        quote_counts_toward_stats(),
+    )
 
 
 @router.get("/weekly-summary", response_model=WeeklyPipelineSummaryReport)
@@ -824,32 +844,44 @@ async def get_weekly_summary_report(
     quoted_count = _lead_count(Lead.status == LeadStatus.QUOTED)
     closed_count = _lead_count(Lead.status == LeadStatus.CLOSED)
 
-    quotes = list(
-        session.exec(select(Quote).where(quote_counts_toward_stats())).all()
+    won_date_expr = func.coalesce(Quote.accepted_at, Quote.created_at)
+    avg_quote_date_expr = func.coalesce(Quote.sent_at, Quote.created_at)
+
+    won_stmt = (
+        select(Quote)
+        .where(_quote_stats_filter())
+        .where(Quote.status == QuoteStatus.ACCEPTED)
+    )
+    lost_stmt = (
+        select(Quote)
+        .where(_quote_stats_filter())
+        .where(Quote.status == QuoteStatus.REJECTED)
+    )
+    avg_quote_stmt = (
+        select(Quote)
+        .where(_quote_stats_filter())
+        .where(Quote.status != QuoteStatus.DRAFT)
     )
 
-    if resolved_range.period == "all":
-        won_quotes = [q for q in quotes if q.status == QuoteStatus.ACCEPTED]
-        lost_quotes = [q for q in quotes if q.status == QuoteStatus.REJECTED]
-        avg_quote_source = [q for q in quotes if q.status != QuoteStatus.DRAFT]
-    else:
+    if resolved_range.period != "all":
         start, end = resolved_range.start, resolved_range.end
-        won_quotes = [
-            q
-            for q in quotes
-            if q.status == QuoteStatus.ACCEPTED
-            and _in_range(q.accepted_at or q.created_at, start, end)
-        ]
-        lost_quotes = [
-            q
-            for q in quotes
-            if q.status == QuoteStatus.REJECTED and _in_range(q.updated_at, start, end)
-        ]
+        won_stmt = won_stmt.where(won_date_expr >= start).where(won_date_expr <= end)
+        lost_stmt = lost_stmt.where(Quote.updated_at >= start).where(Quote.updated_at <= end)
+        avg_quote_stmt = avg_quote_stmt.where(avg_quote_date_expr >= start).where(
+            avg_quote_date_expr <= end
+        )
+
+    won_quotes = list(session.exec(won_stmt).all())
+    lost_quotes = list(session.exec(lost_stmt).all())
+    avg_quote_source = list(session.exec(avg_quote_stmt).all())
+
+    # Guard against driver-returned aware datetimes slipping past SQL bounds.
+    if resolved_range.period != "all":
+        start, end = resolved_range.start, resolved_range.end
+        won_quotes = [q for q in won_quotes if _in_range(q.accepted_at or q.created_at, start, end)]
+        lost_quotes = [q for q in lost_quotes if _in_range(q.updated_at, start, end)]
         avg_quote_source = [
-            q
-            for q in quotes
-            if q.status != QuoteStatus.DRAFT
-            and _in_range(q.sent_at or q.created_at, start, end)
+            q for q in avg_quote_source if _in_range(q.sent_at or q.created_at, start, end)
         ]
 
     won_count = len(won_quotes)
@@ -949,7 +981,13 @@ async def get_weekly_summary_pdf(
     company_name = (company_settings.trading_name or company_settings.company_name or "LeadLock") if company_settings else "LeadLock"
     buffer = generate_weekly_summary_pdf(data, company_name, company_settings=company_settings)
     pdf_content = buffer.read()
-    fn = f"Pipeline_Summary_{datetime.utcnow().strftime('%Y-%m-%d')}.pdf"
+    if report.period == "custom":
+        fn = (
+            f"Pipeline_Summary_{report.start_date.strftime('%Y-%m-%d')}"
+            f"_to_{report.end_date.strftime('%Y-%m-%d')}.pdf"
+        )
+    else:
+        fn = f"Pipeline_Summary_{report.period}_{report.end_date.strftime('%Y-%m-%d')}.pdf"
     return Response(
         content=pdf_content,
         media_type="application/pdf",

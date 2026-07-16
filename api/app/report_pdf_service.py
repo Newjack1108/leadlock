@@ -909,7 +909,13 @@ def generate_weekly_summary_pdf(
     _, logo_bytes = _resolve_logo(company_settings)
     flowables = _build_report_header(company_name, "Pipeline Summary", logo_bytes)
 
-    flowables.append(Paragraph(f"<b>Period:</b> {data.get('week_label', '')}", normal))
+    flowables.append(
+        Paragraph(
+            f"<b>Period:</b> {data.get('week_label', '')}"
+            + (f" ({data.get('period')})" if data.get("period") else ""),
+            normal,
+        )
+    )
     flowables.append(Spacer(1, 15))
 
     new_count = data.get("new_count", 0)

@@ -286,3 +286,25 @@ def test_weekly_summary_pdf_accepts_date_range(api_client, sqlite_engine):
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/pdf"
     assert "Pipeline_Summary_" in response.headers.get("content-disposition", "")
+    assert "2026-06-08_to_2026-06-11" in response.headers.get("content-disposition", "")
+
+
+def test_weekly_summary_pdf_period_label_follows_query_params(api_client, sqlite_engine):
+    with Session(sqlite_engine) as session:
+        _seed_inbound_leads(session)
+
+    june = api_client.get(
+        "/api/reports/weekly-summary",
+        params={"start_date": "2026-06-08", "end_date": "2026-06-11"},
+    ).json()
+    may = api_client.get(
+        "/api/reports/weekly-summary",
+        params={"start_date": "2026-05-01", "end_date": "2026-05-31"},
+    ).json()
+
+    assert june["new_count"] == 4
+    assert may["new_count"] == 0
+    assert "08 Jun" in june["week_label"]
+    assert "01 May" in may["week_label"]
+    assert june["period"] == "custom"
+    assert may["period"] == "custom"
