@@ -2420,13 +2420,17 @@ export const downloadQuoteEngagementReportPdf = async (filter?: DateRangeQueryPa
 };
 
 export const getWeeklySummaryReport = async (filter?: DateRangeQueryParams) => {
-  const params = { ...buildDateRangeParams(filter), compare: true };
+  const params: Record<string, string | boolean> = {
+    ...buildDateRangeParams(filter),
+    compare: true,
+  };
   const response = await api.get('/api/reports/weekly-summary', { params });
   return response.data;
 };
 
 export const downloadWeeklySummaryReportPdf = async (filter?: DateRangeQueryParams) => {
-  const params = { ...buildDateRangeParams(filter), compare: true };
+  const rangeParams = buildDateRangeParams(filter);
+  const params: Record<string, string | boolean> = { ...rangeParams, compare: true };
   const response = await api.get('/api/reports/weekly-summary/pdf', {
     responseType: 'blob',
     params,
@@ -2440,10 +2444,10 @@ export const downloadWeeklySummaryReportPdf = async (filter?: DateRangeQueryPara
   if (disposition) {
     const match = /filename="?([^"]+)"?/.exec(disposition);
     if (match?.[1]) filename = match[1];
-  } else if (params.start_date && params.end_date) {
-    filename = `Pipeline_Summary_${params.start_date}_to_${params.end_date}.pdf`;
-  } else if (params.period) {
-    filename = `Pipeline_Summary_${params.period}.pdf`;
+  } else if (rangeParams.start_date && rangeParams.end_date) {
+    filename = `Pipeline_Summary_${rangeParams.start_date}_to_${rangeParams.end_date}.pdf`;
+  } else if (rangeParams.period) {
+    filename = `Pipeline_Summary_${rangeParams.period}.pdf`;
   }
   link.setAttribute('download', filename);
   document.body.appendChild(link);
