@@ -477,6 +477,14 @@ def _ensure_sales_document_storage_schema(engine) -> None:
         print(f"Warning: could not ensure sales document storage schema: {e}", file=sys.stderr, flush=True)
 
 
+# Pre-qualify leads must not generate stale reminders for sales.
+PRE_QUALIFY_STALE_RULE_NAMES = (
+    "NEW_LEAD_STALE",
+    "CONTACT_ATTEMPTED_STALE",
+    "ENGAGED_STALE",
+)
+
+
 def backfill_default_reminder_rules(session: Session) -> None:
     """Insert any canonical default ReminderRule rows missing by rule_name (fixes partial legacy seeds).
 
@@ -496,36 +504,6 @@ def backfill_default_reminder_rules(session: Session) -> None:
     existing = set(session.exec(select(ReminderRule.rule_name)).all())
     suppressed = set(session.exec(select(DeletedReminderRuleName.rule_name)).all())
     default_rules = [
-        ReminderRule(
-            rule_name="NEW_LEAD_STALE",
-            entity_type="LEAD",
-            status="NEW",
-            threshold_minutes=4320,
-            check_type="LAST_ACTIVITY",
-            is_active=True,
-            priority=ReminderPriority.HIGH,
-            suggested_action=SuggestedAction.FOLLOW_UP,
-        ),
-        ReminderRule(
-            rule_name="CONTACT_ATTEMPTED_STALE",
-            entity_type="LEAD",
-            status="CONTACT_ATTEMPTED",
-            threshold_minutes=7200,
-            check_type="LAST_ACTIVITY",
-            is_active=True,
-            priority=ReminderPriority.HIGH,
-            suggested_action=SuggestedAction.FOLLOW_UP,
-        ),
-        ReminderRule(
-            rule_name="ENGAGED_STALE",
-            entity_type="LEAD",
-            status="ENGAGED",
-            threshold_minutes=10080,
-            check_type="LAST_ACTIVITY",
-            is_active=True,
-            priority=ReminderPriority.MEDIUM,
-            suggested_action=SuggestedAction.FOLLOW_UP,
-        ),
         ReminderRule(
             rule_name="QUALIFIED_STALE",
             entity_type="LEAD",
@@ -593,6 +571,73 @@ def backfill_default_reminder_rules(session: Session) -> None:
     if to_add:
         session.commit()
         print(f"Backfilled {len(to_add)} default reminder rules", file=sys.stderr, flush=True)
+
+
+def cleanup_pre_qualify_stale_reminders(session: Session) -> None:
+    """Remove pre-qualify stale rules, suppress reseed, and dismiss open LEAD_STALE for those leads."""
+    import sys
+    from datetime import datetime
+
+    from sqlmodel import and_, select
+
+    from app.lead_delete import PRE_QUALIFY_SPAM_STATUSES
+    from app.models import (
+        CustomerOutreachSend,
+        DeletedReminderRuleName,
+        Lead,
+        Reminder,
+        ReminderRule,
+        ReminderType,
+    )
+
+    changed = False
+
+    for rule_name in PRE_QUALIFY_STALE_RULE_NAMES:
+        rule = session.exec(
+            select(ReminderRule).where(ReminderRule.rule_name == rule_name)
+        ).first()
+        if rule:
+            sends = session.exec(
+                select(CustomerOutreachSend).where(
+                    CustomerOutreachSend.reminder_rule_id == rule.id
+                )
+            ).all()
+            for send in sends:
+                session.delete(send)
+            session.delete(rule)
+            changed = True
+
+        if not session.get(DeletedReminderRuleName, rule_name):
+            session.add(DeletedReminderRuleName(rule_name=rule_name))
+            changed = True
+
+    open_stale = session.exec(
+        select(Reminder)
+        .join(Lead, Lead.id == Reminder.lead_id)
+        .where(
+            and_(
+                Reminder.reminder_type == ReminderType.LEAD_STALE,
+                Reminder.dismissed_at.is_(None),
+                Reminder.acted_upon_at.is_(None),
+                Lead.status.in_(tuple(PRE_QUALIFY_SPAM_STATUSES)),
+            )
+        )
+    ).all()
+    now = datetime.utcnow()
+    for reminder in open_stale:
+        reminder.dismissed_at = now
+        reminder.resolution_notes = "Auto-dismissed: stale reminders no longer apply before qualification"
+        session.add(reminder)
+        changed = True
+
+    if changed:
+        session.commit()
+        print(
+            f"Cleaned up pre-qualify stale reminders "
+            f"(dismissed {len(open_stale)} open LEAD_STALE)",
+            file=sys.stderr,
+            flush=True,
+        )
 
 
 def _default_review_request_sms_body() -> str:
@@ -2741,6 +2786,7 @@ def create_db_and_tables():
             try:
                 with Session(engine) as session:
                     backfill_default_reminder_rules(session)
+                    cleanup_pre_qualify_stale_reminders(session)
             except Exception as e:
                 print(f"Error backfilling default reminder rules: {e}", file=sys.stderr, flush=True)
                 import traceback

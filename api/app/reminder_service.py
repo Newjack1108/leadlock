@@ -16,6 +16,7 @@ from app.stale_reference_service import (
     resolve_stale_reference_for_opportunity,
 )
 from app.stats_exclusion import is_stats_excluded_customer_id
+from app.lead_delete import PRE_QUALIFY_SPAM_STATUSES
 
 
 def get_reminder_cleanup_target(
@@ -205,6 +206,9 @@ def detect_stale_leads(session: Session) -> List[Tuple[Lead, ReminderRule, int]]
         if rule.status:
             try:
                 lead_status = LeadStatus(rule.status)
+                # Pre-qualify leads should not generate stale reminders for sales.
+                if lead_status in PRE_QUALIFY_SPAM_STATUSES:
+                    continue
                 lead_statement = select(Lead).where(Lead.status == lead_status)
             except ValueError:
                 continue
@@ -212,6 +216,8 @@ def detect_stale_leads(session: Session) -> List[Tuple[Lead, ReminderRule, int]]
         leads = session.exec(lead_statement).all()
         
         for lead in leads:
+            if lead.status in PRE_QUALIFY_SPAM_STATUSES:
+                continue
             if is_stats_excluded_customer_id(session, lead.customer_id):
                 continue
 

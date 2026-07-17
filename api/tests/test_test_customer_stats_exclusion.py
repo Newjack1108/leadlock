@@ -171,7 +171,7 @@ def test_detect_stale_leads_skips_test_customer():
             ReminderRule(
                 rule_name=f"TEST_STALE_{uuid.uuid4().hex[:8]}",
                 entity_type="LEAD",
-                status="NEW",
+                status="QUALIFIED",
                 threshold_minutes=60,
                 check_type="STATUS_DURATION",
                 is_active=True,
@@ -182,7 +182,7 @@ def test_detect_stale_leads_skips_test_customer():
         session.add(
             Lead(
                 name="Test stale",
-                status=LeadStatus.NEW,
+                status=LeadStatus.QUALIFIED,
                 customer_id=test_customer.id,
                 lead_type=LeadType.UNKNOWN,
                 lead_source=LeadSource.MANUAL_ENTRY,
@@ -192,7 +192,7 @@ def test_detect_stale_leads_skips_test_customer():
         session.add(
             Lead(
                 name="Real stale",
-                status=LeadStatus.NEW,
+                status=LeadStatus.QUALIFIED,
                 customer_id=normal.id,
                 lead_type=LeadType.UNKNOWN,
                 lead_source=LeadSource.MANUAL_ENTRY,
