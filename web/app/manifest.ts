@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "LeadLock - Cheshire Stables Sales Control",
+    name: "Cheshire Stables (CSGB Group)",
     short_name: "LeadLock",
     description: "Premium lead management for Cheshire Stables",
     start_url: "/",

@@ -1328,6 +1328,7 @@ async def get_all_quotes(
     lifecycle: Optional[Literal["live", "closed"]] = Query(None),
     search: Optional[str] = Query(None),
     temperature: Optional[QuoteTemperature] = Query(None),
+    on_hold: Optional[bool] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(LIST_PAGE_SIZE_DEFAULT, ge=1, le=LIST_PAGE_SIZE_MAX),
     include_archived: bool = Query(False, alias="includeArchived"),
@@ -1340,6 +1341,7 @@ async def get_all_quotes(
     Pass status= for a single status (special case: VIEWED includes SENT rows with viewed_at set); lifecycle is ignored.
     Pass lifecycle=live for DRAFT/SENT/VIEWED only (also excludes quotes with valid_until in the past),
     or lifecycle=closed for ACCEPTED/REJECTED/EXPIRED only.
+    Pass on_hold=true to only include quotes with on_hold_at set (customer replied HOLD).
     """
     try:
         where_clause = _quote_list_where_clause(
@@ -1347,6 +1349,7 @@ async def get_all_quotes(
             lifecycle=lifecycle,
             search=search,
             temperature=temperature,
+            on_hold=on_hold,
             include_archived=include_archived,
         )
 
@@ -1438,6 +1441,7 @@ def _quote_list_where_clause(
     lifecycle: Optional[Literal["live", "closed"]] = None,
     search: Optional[str] = None,
     temperature: Optional[QuoteTemperature] = None,
+    on_hold: Optional[bool] = None,
     include_archived: bool = False,
 ):
     """Shared filter logic for GET /api/quotes and GET /api/quotes/export.csv."""
@@ -1476,6 +1480,9 @@ def _quote_list_where_clause(
     if temperature is not None:
         conditions.append(Quote.temperature == temperature)
 
+    if on_hold is True:
+        conditions.append(Quote.on_hold_at.isnot(None))
+
     if search_active:
         term = f"%{search.strip()}%"
         conditions.append(
@@ -1497,6 +1504,7 @@ async def export_quotes_csv(
     lifecycle: Optional[Literal["live", "closed"]] = Query(None),
     search: Optional[str] = Query(None),
     temperature: Optional[QuoteTemperature] = Query(None),
+    on_hold: Optional[bool] = Query(None),
     include_archived: bool = Query(False, alias="includeArchived"),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
@@ -1509,6 +1517,7 @@ async def export_quotes_csv(
         lifecycle=lifecycle,
         search=search,
         temperature=temperature,
+        on_hold=on_hold,
         include_archived=include_archived,
     )
     content = export_quotes_to_csv(session, where_clause)

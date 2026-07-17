@@ -17,13 +17,19 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "LeadLock - Cheshire Stables Sales Control",
+  title: "Cheshire Stables (CSGB Group)",
   description: "Premium lead management system for Cheshire Stables",
   applicationName: "LeadLock",
   appleWebApp: {
     capable: true,
     title: "LeadLock",
     statusBarStyle: "default",
+  },
+  openGraph: {
+    title: "Cheshire Stables (CSGB Group)",
+  },
+  twitter: {
+    title: "Cheshire Stables (CSGB Group)",
   },
   // Explicit links so tabs pick up favicon even if app/icon convention is cached oddly;
   // app/icon.png + app/apple-icon.png still provide the assets.

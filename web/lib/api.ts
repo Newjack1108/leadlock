@@ -1013,6 +1013,7 @@ export const getQuotes = async (options?: {
   lifecycle?: 'live' | 'closed';
   search?: string;
   temperature?: QuoteTemperature;
+  onHold?: boolean;
   page?: number;
   page_size?: number;
   includeArchived?: boolean;
@@ -1022,6 +1023,7 @@ export const getQuotes = async (options?: {
   if (options?.lifecycle) params.lifecycle = options.lifecycle;
   if (options?.search?.trim()) params.search = options.search.trim();
   if (options?.temperature) params.temperature = options.temperature;
+  if (options?.onHold) params.on_hold = true;
   if (options?.page != null) params.page = options.page;
   if (options?.page_size != null) params.page_size = options.page_size;
   if (options?.includeArchived) params.includeArchived = true;
@@ -1034,6 +1036,7 @@ export const downloadQuotesCsv = async (options?: {
   lifecycle?: 'live' | 'closed';
   search?: string;
   temperature?: QuoteTemperature;
+  onHold?: boolean;
   includeArchived?: boolean;
 }) => {
   const params: Record<string, string | boolean> = {};
@@ -1041,6 +1044,7 @@ export const downloadQuotesCsv = async (options?: {
   if (options?.lifecycle) params.lifecycle = options.lifecycle;
   if (options?.search?.trim()) params.search = options.search.trim();
   if (options?.temperature) params.temperature = options.temperature;
+  if (options?.onHold) params.on_hold = true;
   if (options?.includeArchived) params.includeArchived = true;
   const response = await api.get('/api/quotes/export.csv', {
     responseType: 'blob',

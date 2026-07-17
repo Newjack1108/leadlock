@@ -193,6 +193,7 @@ function QuotesPageContent() {
   const [viewMode, setViewMode] = useState<'list' | 'tile'>('list');
   const [statusFilter, setStatusFilter] = useState<QuotesListFilter>(() => parseFilterFromSearchParams(searchParams));
   const [temperatureFilter, setTemperatureFilter] = useState<QuoteTemperature | 'ALL'>('ALL');
+  const [onHoldFilter, setOnHoldFilter] = useState<'ALL' | 'ON_HOLD'>('ALL');
   const [searchDraft, setSearchDraft] = useState('');
   const [searchApplied, setSearchApplied] = useState('');
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -252,7 +253,7 @@ function QuotesPageContent() {
 
   useLayoutEffect(() => {
     setPage(1);
-  }, [statusFilter, temperatureFilter, searchApplied, includeArchived]);
+  }, [statusFilter, temperatureFilter, onHoldFilter, searchApplied, includeArchived]);
 
   const fetchQuotes = useCallback(async () => {
     try {
@@ -268,6 +269,7 @@ function QuotesPageContent() {
           statusFilter === 'LIVE' ? 'live' : statusFilter === 'CLOSED' ? 'closed' : undefined,
         search: searchValue,
         temperature: temperatureFilter === 'ALL' ? undefined : temperatureFilter,
+        onHold: onHoldFilter === 'ON_HOLD' || undefined,
         page,
         page_size: QUOTES_PAGE_SIZE,
         includeArchived: includeArchived || undefined,
@@ -284,7 +286,7 @@ function QuotesPageContent() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [statusFilter, temperatureFilter, searchApplied, page, includeArchived, router]);
+  }, [statusFilter, temperatureFilter, onHoldFilter, searchApplied, page, includeArchived, router]);
 
   useEffect(() => {
     fetchQuotes();
@@ -342,6 +344,7 @@ function QuotesPageContent() {
           statusFilter === 'LIVE' ? 'live' : statusFilter === 'CLOSED' ? 'closed' : undefined,
         search: searchValue,
         temperature: temperatureFilter === 'ALL' ? undefined : temperatureFilter,
+        onHold: onHoldFilter === 'ON_HOLD' || undefined,
         includeArchived: includeArchived || undefined,
       });
       toast.success('CSV downloaded');
@@ -350,7 +353,7 @@ function QuotesPageContent() {
     } finally {
       setDownloadingCsv(false);
     }
-  }, [statusFilter, temperatureFilter, searchApplied, includeArchived]);
+  }, [statusFilter, temperatureFilter, onHoldFilter, searchApplied, includeArchived]);
 
   // Auto-refresh when user returns to this tab/window
   useEffect(() => {
@@ -449,6 +452,15 @@ function QuotesPageContent() {
                     {t}
                   </SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+            <Select value={onHoldFilter} onValueChange={(v) => setOnHoldFilter(v as 'ALL' | 'ON_HOLD')}>
+              <SelectTrigger className="w-full md:w-[160px]">
+                <SelectValue placeholder="On Hold" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All quotes</SelectItem>
+                <SelectItem value="ON_HOLD">On Hold</SelectItem>
               </SelectContent>
             </Select>
             <Select value={sortBy} onValueChange={(v) => setSortBy(v as QuotesSortBy)}>
