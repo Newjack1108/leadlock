@@ -138,6 +138,8 @@ export interface AuthMe {
   full_name: string;
   role: string;
   can_access_configurator: boolean;
+  on_leave?: boolean;
+  leave_until?: string | null;
 }
 
 export interface UserList {
@@ -148,6 +150,8 @@ export interface UserList {
   dealer_id?: number | null;
   dealer_commission_pct?: number | null;
   is_active: boolean;
+  on_leave?: boolean;
+  leave_until?: string | null;
   created_at: string;
 }
 

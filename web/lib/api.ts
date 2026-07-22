@@ -93,8 +93,21 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     const requestConfig = (error?.config ?? {}) as AxiosRequestConfig;
-    if (error.response?.status === 401 && !requestConfig.skipAuthRedirect) {
-      if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && !requestConfig.skipAuthRedirect) {
+      const status = error.response?.status;
+      const detail = error.response?.data?.detail;
+      const onLeave =
+        status === 403 &&
+        detail &&
+        typeof detail === 'object' &&
+        detail.code === 'on_leave';
+      if (onLeave) {
+        if (window.location.pathname !== '/on-leave') {
+          window.location.href = '/on-leave';
+        }
+        return Promise.reject(error);
+      }
+      if (status === 401) {
         localStorage.removeItem('token');
         window.location.href = '/login';
       }
@@ -2264,8 +2277,10 @@ export const updateUser = async (
     full_name?: string;
     role?: string;
     password?: string;
-    dealer_id?: number;
-    dealer_commission_pct?: number;
+    dealer_id?: number | null;
+    dealer_commission_pct?: number | null;
+    on_leave?: boolean;
+    leave_until?: string | null;
   }
 ) => {
   const response = await api.put(`/api/users/${userId}`, data);

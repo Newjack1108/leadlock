@@ -40,6 +40,8 @@ export default function UsersPage() {
     role: 'CLOSER' as string,
     dealer_id: '',
     dealer_commission_pct: '10',
+    on_leave: false,
+    leave_until: '',
   });
 
   useEffect(() => {
@@ -90,6 +92,8 @@ export default function UsersPage() {
       role: 'CLOSER',
       dealer_id: '',
       dealer_commission_pct: '10',
+      on_leave: false,
+      leave_until: '',
     });
     setDialogOpen(true);
   };
@@ -103,6 +107,8 @@ export default function UsersPage() {
       role: user.role,
       dealer_id: user.dealer_id?.toString() || '',
       dealer_commission_pct: user.dealer_commission_pct?.toString() || '10',
+      on_leave: Boolean(user.on_leave),
+      leave_until: user.leave_until ? String(user.leave_until).slice(0, 10) : '',
     });
     setDialogOpen(true);
   };
@@ -154,9 +160,13 @@ export default function UsersPage() {
           password?: string;
           dealer_id?: number;
           dealer_commission_pct?: number;
+          on_leave?: boolean;
+          leave_until?: string | null;
         } = {
           full_name: formData.full_name.trim(),
           role: formData.role,
+          on_leave: formData.on_leave,
+          leave_until: formData.on_leave && formData.leave_until ? formData.leave_until : null,
         };
         if (isDealerRole) {
           payload.dealer_id = parseInt(formData.dealer_id, 10);
@@ -235,7 +245,8 @@ export default function UsersPage() {
               Team Members
             </CardTitle>
             <CardDescription>
-              Create and manage user accounts. Inactive users cannot log in.
+              Create and manage user accounts. Inactive users cannot log in. Users on holiday
+              can log in but only see the holiday screen.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -267,12 +278,19 @@ export default function UsersPage() {
                           <Badge variant="secondary">{user.role.replace('_', ' ')}</Badge>
                         </td>
                         <td className="py-3 px-4">
-                          {user.is_active ? (
-                            <Badge variant="default">Active</Badge>
-                          ) : (
+                          {!user.is_active ? (
                             <Badge variant="outline" className="text-muted-foreground">
                               Inactive
                             </Badge>
+                          ) : user.on_leave ? (
+                            <Badge className="bg-emerald-600 hover:bg-emerald-600">
+                              Holiday
+                              {user.leave_until
+                                ? ` · ${String(user.leave_until).slice(0, 10)}`
+                                : ''}
+                            </Badge>
+                          ) : (
+                            <Badge variant="default">Active</Badge>
                           )}
                         </td>
                         <td className="py-3 px-4 text-right">
@@ -406,6 +424,50 @@ export default function UsersPage() {
                     </select>
                   </div>
                 </>
+              )}
+              {editingUser && (
+                <div className="space-y-3 rounded-md border border-border p-3">
+                  <div className="flex items-center gap-2">
+                    <input
+                      id="on_leave"
+                      type="checkbox"
+                      checked={formData.on_leave}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          on_leave: e.target.checked,
+                          leave_until: e.target.checked ? formData.leave_until : '',
+                        })
+                      }
+                      disabled={saving}
+                      className="h-4 w-4 rounded border-input"
+                    />
+                    <Label htmlFor="on_leave" className="font-medium">
+                      On holiday
+                    </Label>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    While on holiday they can log in but only see the holiday screen. Only a
+                    director can clear this.
+                  </p>
+                  {formData.on_leave && (
+                    <div className="space-y-2">
+                      <Label htmlFor="leave_until">Back on (optional)</Label>
+                      <Input
+                        id="leave_until"
+                        type="date"
+                        value={formData.leave_until}
+                        onChange={(e) =>
+                          setFormData({ ...formData, leave_until: e.target.value })
+                        }
+                        disabled={saving}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        If set, leave clears automatically after this date.
+                      </p>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
             <DialogFooter>

@@ -111,6 +111,8 @@ class User(SQLModel, table=True):
     dealer_id: Optional[int] = Field(default=None, foreign_key="dealer.id", index=True)
     dealer_commission_pct: Optional[int] = Field(default=None)
     is_active: bool = Field(default=True)
+    on_leave: bool = Field(default=False)
+    leave_until: Optional[date] = Field(default=None)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
     # Email Settings (per-user)

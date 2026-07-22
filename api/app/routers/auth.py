@@ -8,8 +8,10 @@ from app.auth import (
     verify_password,
     create_access_token,
     get_current_user,
+    get_current_user_base,
     get_password_hash,
     has_configurator_access,
+    effective_on_leave,
 )
 from app.system_user_service import system_user_email
 from app.schemas import Token, UserLogin, UserResponse, BootstrapCreate, LoginQuoteResponse
@@ -27,6 +29,8 @@ def _build_user_response(user: User) -> UserResponse:
         full_name=user.full_name,
         role=user.role,
         can_access_configurator=has_configurator_access(user),
+        on_leave=bool(getattr(user, "on_leave", False)),
+        leave_until=getattr(user, "leave_until", None),
     )
 
 
@@ -86,7 +90,12 @@ def login(credentials: UserLogin, session: Session = Depends(get_session)):
 
 
 @router.get("/me", response_model=UserResponse)
-async def get_current_user_info(current_user: User = Depends(get_current_user)):
+async def get_current_user_info(
+    current_user: User = Depends(get_current_user_base),
+    session: Session = Depends(get_session),
+):
+    # Re-evaluate leave (auto-clear) so the client sees accurate status
+    effective_on_leave(current_user, session)
     return _build_user_response(current_user)
 
 

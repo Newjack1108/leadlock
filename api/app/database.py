@@ -1005,6 +1005,24 @@ def backfill_prize_draw_congratulations_templates(session: Session) -> None:
         print("Backfilled prize draw congratulations templates", file=sys.stderr, flush=True)
 
 
+def _ensure_user_leave_schema(engine) -> None:
+    """Add on_leave / leave_until columns for temporary holiday lock."""
+    import sys
+
+    try:
+        inspector = inspect(engine)
+        if not inspector.has_table("user"):
+            return
+        with engine.begin() as conn:
+            conn.execute(
+                text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS on_leave BOOLEAN NOT NULL DEFAULT FALSE')
+            )
+            conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS leave_until DATE'))
+        print("User leave schema ensured", file=sys.stderr, flush=True)
+    except Exception as exc:
+        print(f"Warning: could not ensure user leave schema: {exc}", file=sys.stderr, flush=True)
+
+
 def create_db_and_tables():
     """Create all tables and migrate existing data."""
     import sys
@@ -1022,6 +1040,7 @@ def create_db_and_tables():
     _ensure_quote_payment_link_url_column(engine)
     _ensure_quote_on_hold_at_column(engine)
     _ensure_dealer_portal_schema(engine)
+    _ensure_user_leave_schema(engine)
     _ensure_weekly_planner_schema(engine)
     _ensure_weekly_plan_template_schema(engine)
     _ensure_sales_document_storage_schema(engine)

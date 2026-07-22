@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 from app.database import get_session
 from app.models import User, UserRole
-from app.auth import get_current_user, require_role, get_password_hash
+from app.auth import get_current_user, require_role, get_password_hash, effective_on_leave
 from app.schemas import (
     UserCreate,
     UserUpdate,
@@ -32,6 +32,8 @@ def _user_to_response(user: User) -> UserListResponse:
         dealer_id=user.dealer_id,
         dealer_commission_pct=user.dealer_commission_pct,
         is_active=user.is_active,
+        on_leave=bool(getattr(user, "on_leave", False)),
+        leave_until=getattr(user, "leave_until", None),
         created_at=user.created_at,
     )
 
@@ -89,10 +91,12 @@ async def list_assignable_users(
     """Active users for task assignee picker (any authenticated user)."""
     statement = select(User).where(User.is_active == True).order_by(User.full_name)  # noqa: E712
     users = session.exec(statement).all()
-    return [
-        AssignableUserResponse(id=u.id, full_name=u.full_name, email=u.email)
-        for u in users
-    ]
+    assignable = []
+    for u in users:
+        if effective_on_leave(u, session):
+            continue
+        assignable.append(AssignableUserResponse(id=u.id, full_name=u.full_name, email=u.email))
+    return assignable
 
 
 @router.post("", response_model=UserListResponse)
@@ -196,6 +200,9 @@ async def update_user(
     update_data = data.dict(exclude_unset=True)
     if "password" in update_data:
         update_data["hashed_password"] = get_password_hash(update_data.pop("password"))
+    # Clearing leave should also clear leave_until when on_leave is explicitly set false
+    if update_data.get("on_leave") is False and "leave_until" not in update_data:
+        update_data["leave_until"] = None
     for field, value in update_data.items():
         setattr(user, field, value)
     session.add(user)

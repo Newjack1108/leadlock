@@ -1,0 +1,44 @@
+.screen {
+  position: relative;
+  display: flex;
+  min-height: 100dvh;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 3rem 1.5rem;
+  background:
+    radial-gradient(ellipse 80% 60% at 70% 15%, rgba(253, 230, 138, 0.45), transparent 55%),
+    radial-gradient(ellipse 70% 50% at 20% 80%, rgba(167, 243, 208, 0.35), transparent 50%),
+    linear-gradient(135deg, #1f6b3a 0%, #2d8f52 38%, #3fa86b 68%, #10b981 100%);
+  background-size: 140% 140%;
+  animation: holidayGradientDrift 18s ease-in-out infinite alternate;
+}
+
+.sunburst {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  background: repeating-conic-gradient(
+    from 0deg at 50% 40%,
+    rgba(255, 255, 255, 0.07) 0deg 8deg,
+    transparent 8deg 16deg
+  );
+  opacity: 0.55;
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, black 20%, transparent 75%);
+}
+
+@keyframes holidayGradientDrift {
+  from {
+    background-position: 0% 40%;
+  }
+  to {
+    background-position: 100% 60%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .screen {
+    animation: none;
+    background-size: 100% 100%;
+  }
+}

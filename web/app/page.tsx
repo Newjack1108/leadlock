@@ -27,6 +27,10 @@ export default function Home() {
           window.location.replace('/login');
           return;
         }
+        if (response.data?.on_leave) {
+          window.location.replace('/on-leave');
+          return;
+        }
         const role = response.data?.role;
         const path =
           role === 'CLOSER'

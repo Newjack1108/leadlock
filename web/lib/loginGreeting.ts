@@ -24,7 +24,7 @@ export function getGreetingLabelForHour(hour: number): string {
 /** Paths where we do not show the post-login greeting (aligns with middleware public routes + home redirect). */
 export function loginGreetingPathShouldSuppress(pathname: string | null): boolean {
   if (!pathname) return true;
-  if (pathname === '/' || pathname === '/login') return true;
+  if (pathname === '/' || pathname === '/login' || pathname === '/on-leave') return true;
   if (pathname.startsWith('/quotes/view/')) return true;
   if (pathname.startsWith('/orders/view/')) return true;
   if (pathname.startsWith('/access-sheet/')) return true;

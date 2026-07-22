@@ -62,6 +62,8 @@ class UserResponse(BaseModel):
     full_name: str
     role: UserRole
     can_access_configurator: bool = False
+    on_leave: bool = False
+    leave_until: Optional[date] = None
 
 
 class UserCreate(BaseModel):
@@ -79,6 +81,8 @@ class UserUpdate(BaseModel):
     password: Optional[str] = None
     dealer_id: Optional[int] = None
     dealer_commission_pct: Optional[int] = None
+    on_leave: Optional[bool] = None
+    leave_until: Optional[date] = None
 
 
 class SystemAttributionBackfillRequest(BaseModel):
@@ -114,6 +118,8 @@ class UserListResponse(BaseModel):
     dealer_id: Optional[int] = None
     dealer_commission_pct: Optional[int] = None
     is_active: bool
+    on_leave: bool = False
+    leave_until: Optional[date] = None
     created_at: datetime
 
 

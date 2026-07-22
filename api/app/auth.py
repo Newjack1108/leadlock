@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date, timezone
 from typing import Optional
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -52,10 +52,39 @@ def _env_csv(name: str) -> set[str]:
     return {_normalize_email(item) for item in raw.split(",") if _normalize_email(item)}
 
 
-def get_current_user(
+def _utc_today() -> date:
+    return datetime.now(timezone.utc).date()
+
+
+def effective_on_leave(user: User, session: Session) -> bool:
+    """Return whether the user is currently locked for leave; auto-clear expired leave."""
+    if not getattr(user, "on_leave", False):
+        return False
+    leave_until = getattr(user, "leave_until", None)
+    if leave_until is not None and _utc_today() > leave_until:
+        user.on_leave = False
+        user.leave_until = None
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+        return False
+    return True
+
+
+def leave_forbidden_detail(user: User) -> dict:
+    leave_until = getattr(user, "leave_until", None)
+    return {
+        "code": "on_leave",
+        "message": "Account is on leave",
+        "leave_until": leave_until.isoformat() if leave_until else None,
+    }
+
+
+def get_current_user_base(
     token: str = Depends(oauth2_scheme),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
 ) -> User:
+    """JWT + active check; does not block users on leave (used by /me)."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -68,13 +97,29 @@ def get_current_user(
             raise credentials_exception
     except JWTError:
         raise credentials_exception
-    
+
     statement = select(User).where(User.email == email)
     user = session.exec(statement).first()
     if user is None:
         raise credentials_exception
     if not user.is_active:
         raise credentials_exception
+    # Expire leave before reporting status on /me
+    effective_on_leave(user, session)
+    return user
+
+
+def get_current_user(
+    token: str = Depends(oauth2_scheme),
+    session: Session = Depends(get_session),
+) -> User:
+    """Authenticated active user; hard-locks accounts currently on leave."""
+    user = get_current_user_base(token=token, session=session)
+    if effective_on_leave(user, session):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=leave_forbidden_detail(user),
+        )
     return user
 
 
