@@ -609,6 +609,7 @@ export interface SalesReportPeriodMetrics {
   end_date: string;
   leads_count: number;
   qualified_count: number;
+  quotes_created: SalesReportMetricBlock;
   quotes_sent: SalesReportMetricBlock;
   quotes_accepted: SalesReportMetricBlock;
   quotes_rejected: SalesReportMetricBlock;
@@ -624,6 +625,7 @@ export interface SalesReport {
   end_date: string;
   leads_count: number;
   qualified_count: number;
+  quotes_created: SalesReportMetricBlock;
   quotes_sent: SalesReportMetricBlock;
   quotes_accepted: SalesReportMetricBlock;
   quotes_rejected: SalesReportMetricBlock;

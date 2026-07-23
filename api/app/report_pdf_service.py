@@ -1051,6 +1051,7 @@ def generate_sales_report_pdf(
 
     leads_count = int(data.get("leads_count", 0) or 0)
     qualified_count = int(data.get("qualified_count", 0) or 0)
+    quotes_created = _metric_block(data.get("quotes_created"))
     quotes_sent = _metric_block(data.get("quotes_sent"))
     quotes_accepted = _metric_block(data.get("quotes_accepted"))
     quotes_rejected = _metric_block(data.get("quotes_rejected"))
@@ -1060,14 +1061,16 @@ def generate_sales_report_pdf(
     current_chart = [
         leads_count,
         qualified_count,
+        int(quotes_created["count"]),
         int(quotes_sent["count"]),
         int(quotes_accepted["count"]),
         int(quotes_rejected["count"]),
         int(quotes_lost["count"]),
         int(quotes_closed["count"]),
     ]
-    chart_labels = ["Leads", "Qualified", "Sent", "Accepted", "Rejected", "Lost", "Closed"]
+    chart_labels = ["Leads", "Qualified", "Created", "Sent", "Accepted", "Rejected", "Lost", "Closed"]
     if comparison:
+        prior_created = _metric_block(comparison.get("quotes_created"))
         prior_sent = _metric_block(comparison.get("quotes_sent"))
         prior_accepted = _metric_block(comparison.get("quotes_accepted"))
         prior_rejected = _metric_block(comparison.get("quotes_rejected"))
@@ -1076,6 +1079,7 @@ def generate_sales_report_pdf(
         prior_chart = [
             int(comparison.get("leads_count", 0) or 0),
             int(comparison.get("qualified_count", 0) or 0),
+            int(prior_created["count"]),
             int(prior_sent["count"]),
             int(prior_accepted["count"]),
             int(prior_rejected["count"]),
@@ -1103,6 +1107,7 @@ def generate_sales_report_pdf(
     if comparison:
         prior_leads = int(comparison.get("leads_count", 0) or 0)
         prior_qualified = int(comparison.get("qualified_count", 0) or 0)
+        prior_created = _metric_block(comparison.get("quotes_created"))
         prior_sent = _metric_block(comparison.get("quotes_sent"))
         prior_accepted = _metric_block(comparison.get("quotes_accepted"))
         prior_rejected = _metric_block(comparison.get("quotes_rejected"))
@@ -1120,6 +1125,7 @@ def generate_sales_report_pdf(
                 _format_change(qualified_count, prior_qualified),
             ]
         )
+        table_data.extend(_sales_metric_rows("Quotes Created", quotes_created, prior_created))
         table_data.extend(_sales_metric_rows("Quotes Sent", quotes_sent, prior_sent))
         table_data.extend(_sales_metric_rows("Accepted (order)", quotes_accepted, prior_accepted))
         table_data.extend(_sales_metric_rows("Rejected", quotes_rejected, prior_rejected))
@@ -1132,6 +1138,7 @@ def generate_sales_report_pdf(
             ["Leads", str(leads_count)],
             ["Qualified", str(qualified_count)],
         ]
+        table_data.extend(_sales_metric_rows("Quotes Created", quotes_created))
         table_data.extend(_sales_metric_rows("Quotes Sent", quotes_sent))
         table_data.extend(_sales_metric_rows("Accepted (order)", quotes_accepted))
         table_data.extend(_sales_metric_rows("Rejected", quotes_rejected))

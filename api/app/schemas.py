@@ -1130,6 +1130,7 @@ class SalesReportPeriodMetrics(BaseModel):
     end_date: datetime
     leads_count: int = 0
     qualified_count: int = 0
+    quotes_created: SalesReportMetricBlock = SalesReportMetricBlock()
     quotes_sent: SalesReportMetricBlock = SalesReportMetricBlock()
     quotes_accepted: SalesReportMetricBlock = SalesReportMetricBlock()
     quotes_rejected: SalesReportMetricBlock = SalesReportMetricBlock()
@@ -1145,6 +1146,7 @@ class SalesReport(BaseModel):
     end_date: datetime
     leads_count: int = 0
     qualified_count: int = 0
+    quotes_created: SalesReportMetricBlock = SalesReportMetricBlock()
     quotes_sent: SalesReportMetricBlock = SalesReportMetricBlock()
     quotes_accepted: SalesReportMetricBlock = SalesReportMetricBlock()
     quotes_rejected: SalesReportMetricBlock = SalesReportMetricBlock()

@@ -838,6 +838,7 @@ def _build_sales_report_metrics(
         Lead.status.in_([LeadStatus.QUALIFIED, LeadStatus.QUOTED, LeadStatus.WON])
     )
 
+    created_stmt = select(Quote).where(_quote_stats_filter())
     sent_stmt = (
         select(Quote)
         .where(_quote_stats_filter())
@@ -863,17 +864,20 @@ def _build_sales_report_metrics(
     )
 
     if apply_range:
+        created_stmt = created_stmt.where(Quote.created_at >= start).where(Quote.created_at <= end)
         sent_stmt = sent_stmt.where(Quote.sent_at >= start).where(Quote.sent_at <= end)
         lost_stmt = lost_stmt.where(Quote.updated_at >= start).where(Quote.updated_at <= end)
         closed_stmt = closed_stmt.where(Quote.updated_at >= start).where(Quote.updated_at <= end)
         accepted_stmt = accepted_stmt.where(Order.created_at >= start).where(Order.created_at <= end)
 
+    created_quotes = list(session.exec(created_stmt).all())
     sent_quotes = list(session.exec(sent_stmt).all())
     lost_quotes = list(session.exec(lost_stmt).all())
     closed_quotes = list(session.exec(closed_stmt).all())
     accepted_orders = list(session.exec(accepted_stmt).all())
 
     if apply_range:
+        created_quotes = [q for q in created_quotes if _in_range(q.created_at, start, end)]
         sent_quotes = [q for q in sent_quotes if _in_range(q.sent_at, start, end)]
         lost_quotes = [q for q in lost_quotes if _in_range(q.updated_at, start, end)]
         closed_quotes = [q for q in closed_quotes if _in_range(q.updated_at, start, end)]
@@ -889,6 +893,9 @@ def _build_sales_report_metrics(
         end_date=end,
         leads_count=leads_count,
         qualified_count=qualified_count,
+        quotes_created=_metric_block(
+            [_decimal_or_zero(q.total_amount) for q in created_quotes]
+        ),
         quotes_sent=_metric_block([_decimal_or_zero(q.total_amount) for q in sent_quotes]),
         quotes_accepted=_metric_block(
             [_decimal_or_zero(o.total_amount) for o in accepted_orders]
@@ -912,6 +919,7 @@ def _sales_report_pdf_payload(report: SalesReport) -> dict:
     data["start_date"] = report.start_date.isoformat()
     data["end_date"] = report.end_date.isoformat()
     for key in (
+        "quotes_created",
         "quotes_sent",
         "quotes_accepted",
         "quotes_rejected",
@@ -924,6 +932,7 @@ def _sales_report_pdf_payload(report: SalesReport) -> dict:
         cmp["start_date"] = report.comparison.start_date.isoformat()
         cmp["end_date"] = report.comparison.end_date.isoformat()
         for key in (
+            "quotes_created",
             "quotes_sent",
             "quotes_accepted",
             "quotes_rejected",
@@ -967,6 +976,7 @@ async def get_sales_report(
         end_date=resolved_range.end,
         leads_count=current.leads_count,
         qualified_count=current.qualified_count,
+        quotes_created=current.quotes_created,
         quotes_sent=current.quotes_sent,
         quotes_accepted=current.quotes_accepted,
         quotes_rejected=current.quotes_rejected,

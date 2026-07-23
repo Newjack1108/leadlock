@@ -737,7 +737,7 @@ export default function DashboardPage() {
                   <span className="font-medium">Sales Report</span>
                 </div>
                 <p className="text-xs text-muted-foreground mb-3">
-                  Leads, quotes sent, accepted orders, and rejected outcomes for {activeRangeLabel}
+                  Leads, quotes created/sent, accepted orders, and rejected outcomes for {activeRangeLabel}
                   {!(dateFilter.mode === 'preset' && dateFilter.period === 'all')
                     ? '. Includes prior period comparison.'
                     : ''}

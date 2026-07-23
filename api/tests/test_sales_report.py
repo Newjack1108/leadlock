@@ -356,6 +356,55 @@ def test_sales_report_quote_buckets_and_accepted_requires_order(api_client, sqli
     assert Decimal(str(data["quotes_sent"]["total_value"])) == Decimal("7500.00")
     assert Decimal(str(data["quotes_sent"]["average_value"])) == Decimal("1875.00")
 
+    # Created in range: QT-QUOTED + QT-DRAFT (includes drafts; excludes older created_at)
+    assert data["quotes_created"]["count"] == 2
+    assert Decimal(str(data["quotes_created"]["total_value"])) == Decimal("10499.00")
+    assert Decimal(str(data["quotes_created"]["average_value"])) == Decimal("5249.50")
+
+
+def test_sales_report_quotes_created_uses_created_at(api_client, sqlite_engine):
+    """quotes_created counts by created_at (including drafts), not sent_at."""
+    with Session(sqlite_engine) as session:
+        user = _seed_user(session)
+        in_range = datetime(2026, 6, 10, 10, 0, 0)
+        out_of_range = datetime(2026, 5, 1, 10, 0, 0)
+        lead = Lead(name="Created range", status=LeadStatus.QUOTED, created_at=in_range)
+        session.add(lead)
+        session.commit()
+        session.refresh(lead)
+
+        _add_quote(
+            session,
+            user_id=user.id,
+            lead_id=lead.id,
+            quote_number="QT-CREATED-IN",
+            status=QuoteStatus.DRAFT,
+            total_amount=Decimal("1200.00"),
+            created_at=in_range,
+            sent_at=None,
+        )
+        _add_quote(
+            session,
+            user_id=user.id,
+            lead_id=lead.id,
+            quote_number="QT-CREATED-OUT",
+            status=QuoteStatus.SENT,
+            total_amount=Decimal("3400.00"),
+            created_at=out_of_range,
+            sent_at=in_range,
+        )
+
+    response = api_client.get(
+        "/api/reports/sales-report",
+        params={"start_date": "2026-06-08", "end_date": "2026-06-12"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["quotes_created"]["count"] == 1
+    assert Decimal(str(data["quotes_created"]["total_value"])) == Decimal("1200.00")
+    assert data["quotes_sent"]["count"] == 1
+    assert Decimal(str(data["quotes_sent"]["total_value"])) == Decimal("3400.00")
+
 
 def test_sales_report_quotes_sent_requires_sent_at(api_client, sqlite_engine):
     """Non-draft quotes with null sent_at must not inflate quotes_sent via created_at."""
