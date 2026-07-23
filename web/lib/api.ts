@@ -2438,19 +2438,19 @@ export const downloadQuoteEngagementReportPdf = async (filter?: DateRangeQueryPa
   window.URL.revokeObjectURL(url);
 };
 
-export const getWeeklySummaryReport = async (filter?: DateRangeQueryParams) => {
+export const getSalesReport = async (filter?: DateRangeQueryParams) => {
   const params: Record<string, string | boolean> = {
     ...buildDateRangeParams(filter),
     compare: true,
   };
-  const response = await api.get('/api/reports/weekly-summary', { params });
+  const response = await api.get('/api/reports/sales-report', { params });
   return response.data;
 };
 
-export const downloadWeeklySummaryReportPdf = async (filter?: DateRangeQueryParams) => {
+export const downloadSalesReportPdf = async (filter?: DateRangeQueryParams) => {
   const rangeParams = buildDateRangeParams(filter);
   const params: Record<string, string | boolean> = { ...rangeParams, compare: true };
-  const response = await api.get('/api/reports/weekly-summary/pdf', {
+  const response = await api.get('/api/reports/sales-report/pdf', {
     responseType: 'blob',
     params,
   });
@@ -2459,14 +2459,14 @@ export const downloadWeeklySummaryReportPdf = async (filter?: DateRangeQueryPara
   const link = document.createElement('a');
   link.href = url;
   const disposition = response.headers['content-disposition'] as string | undefined;
-  let filename = 'Pipeline_Summary.pdf';
+  let filename = 'Sales_Report.pdf';
   if (disposition) {
     const match = /filename="?([^"]+)"?/.exec(disposition);
     if (match?.[1]) filename = match[1];
   } else if (rangeParams.start_date && rangeParams.end_date) {
-    filename = `Pipeline_Summary_${rangeParams.start_date}_to_${rangeParams.end_date}.pdf`;
+    filename = `Sales_Report_${rangeParams.start_date}_to_${rangeParams.end_date}.pdf`;
   } else if (rangeParams.period) {
-    filename = `Pipeline_Summary_${rangeParams.period}.pdf`;
+    filename = `Sales_Report_${rangeParams.period}.pdf`;
   }
   link.setAttribute('download', filename);
   document.body.appendChild(link);

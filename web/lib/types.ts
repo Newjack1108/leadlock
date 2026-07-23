@@ -597,16 +597,39 @@ export interface QuoteEngagementReport {
   rejected_count: number;
 }
 
-export interface WeeklyPipelineSummaryReport {
-  week_label: string;
-  generated_at: string;
-  new_count: number;
-  quoted_count: number;
-  won_count: number;
-  lost_count: number;
-  closed_count: number;
+export interface SalesReportMetricBlock {
+  count: number;
+  total_value: number;
+  average_value: number;
+}
+
+export interface SalesReportPeriodMetrics {
+  label: string;
   start_date: string;
   end_date: string;
+  leads_count: number;
+  qualified_count: number;
+  quotes_sent: SalesReportMetricBlock;
+  quotes_accepted: SalesReportMetricBlock;
+  quotes_rejected: SalesReportMetricBlock;
+  quotes_lost: SalesReportMetricBlock;
+  quotes_closed: SalesReportMetricBlock;
+}
+
+export interface SalesReport {
+  period?: string | null;
+  period_label: string;
+  generated_at: string;
+  start_date: string;
+  end_date: string;
+  leads_count: number;
+  qualified_count: number;
+  quotes_sent: SalesReportMetricBlock;
+  quotes_accepted: SalesReportMetricBlock;
+  quotes_rejected: SalesReportMetricBlock;
+  quotes_lost: SalesReportMetricBlock;
+  quotes_closed: SalesReportMetricBlock;
+  comparison?: SalesReportPeriodMetrics | null;
 }
 
 export interface Product {

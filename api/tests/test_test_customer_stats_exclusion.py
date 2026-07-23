@@ -15,6 +15,8 @@ from app.models import (
     LeadSource,
     LeadStatus,
     LeadType,
+    LossCategory,
+    Order,
     Quote,
     QuoteStatus,
     ReminderPriority,
@@ -26,7 +28,7 @@ from app.models import (
 )
 from app.reminder_service import detect_stale_leads
 from app.routers.dashboard import get_dashboard_stats
-from app.routers.reports import get_weekly_summary_report
+from app.routers.reports import get_sales_report
 from app.test_customer_service import ensure_test_customer
 
 
@@ -381,7 +383,7 @@ def test_dashboard_excludes_unlinked_lead_with_test_customer_email():
     assert stats.new_count == 1
 
 
-def test_weekly_summary_matches_dashboard_inbound_exclusion():
+def test_sales_report_matches_dashboard_inbound_exclusion():
     engine = _engine()
     with Session(engine) as session:
         user = User(
@@ -414,11 +416,52 @@ def test_weekly_summary_matches_dashboard_inbound_exclusion():
                 lead_source=LeadSource.MANUAL_ENTRY,
             )
         )
+        now = datetime.utcnow()
+        amount = Decimal("1500.00")
+        sandbox_quote = Quote(
+            customer_id=test_customer.id,
+            quote_number="Q-SANDBOX-SR",
+            status=QuoteStatus.ACCEPTED,
+            sent_at=now,
+            accepted_at=now,
+            subtotal=amount,
+            total_amount=amount,
+            created_by_id=user.id,
+            version=1,
+        )
+        real_quote = Quote(
+            customer_id=None,
+            quote_number="Q-REAL-SR",
+            status=QuoteStatus.REJECTED,
+            sent_at=now,
+            updated_at=now,
+            loss_category=LossCategory.PRICE,
+            loss_reason="Price",
+            subtotal=Decimal("900.00"),
+            total_amount=Decimal("900.00"),
+            created_by_id=user.id,
+            version=1,
+        )
+        session.add(sandbox_quote)
+        session.add(real_quote)
+        session.commit()
+        session.refresh(sandbox_quote)
+        session.add(
+            Order(
+                quote_id=sandbox_quote.id,
+                customer_id=test_customer.id,
+                order_number="ORD-SANDBOX-SR",
+                subtotal=amount,
+                total_amount=amount,
+                created_by_id=user.id,
+                created_at=now,
+            )
+        )
         session.commit()
 
         stats = _dashboard_stats(session)
-        weekly = asyncio.run(
-            get_weekly_summary_report(
+        report = asyncio.run(
+            get_sales_report(
                 session=session,
                 current_user=object(),
                 period=None,
@@ -428,7 +471,11 @@ def test_weekly_summary_matches_dashboard_inbound_exclusion():
         )
 
     assert stats.total_leads == 1
-    assert weekly.new_count == stats.total_leads
+    assert report.leads_count == stats.total_leads
+    assert report.quotes_accepted.count == 0
+    assert report.quotes_sent.count == 1
+    assert report.quotes_lost.count == 1
+    assert report.quotes_rejected.count == 1
 
 
 def test_ensure_test_customer_backfills_orphan_lead_by_email():

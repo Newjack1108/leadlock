@@ -86,7 +86,7 @@ def resolve_date_range(
 def previous_equal_range(resolved: ResolvedDateRange) -> Optional[ResolvedDateRange]:
     """Return an equal-length window immediately before ``resolved``.
 
-    Used for Pipeline Summary comparisons (this week vs prior week-to-date,
+    Used for Sales Report comparisons (this week vs prior week-to-date,
     custom range vs auto-shifted prior of the same duration). Returns ``None``
     for ``all`` (no meaningful prior window).
     """

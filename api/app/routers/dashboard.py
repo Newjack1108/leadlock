@@ -80,7 +80,7 @@ async def get_dashboard_stats(
     qualified_count = count_leads(Lead.status.in_([LeadStatus.QUALIFIED, LeadStatus.QUOTED, LeadStatus.WON]))
     quoted_count = count_leads(Lead.status == LeadStatus.QUOTED)
 
-    # Won / Lost / Closed = quote outcomes in range (same semantics as Pipeline Summary)
+    # Won / Lost / Closed = quote outcomes in range (same split as Sales Report lost/closed)
     # Lost = Mark Lost (REJECTED + loss_category); Closed = Close quote (REJECTED, no category)
     quote_stats_filter = or_(
         Quote.customer_id.is_(None),

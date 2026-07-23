@@ -1,4 +1,4 @@
-"""Pipeline summary: inbound leads by created_at; won/lost from accepted/rejected quotes."""
+"""Sales Report: leads by created_at; quote buckets by sent/updated/order dates."""
 import os
 from datetime import datetime, timedelta
 from decimal import Decimal
@@ -14,7 +14,7 @@ from sqlmodel import Session, SQLModel, create_engine
 
 from app.auth import get_current_user
 from app.database import get_session
-from app.models import Lead, LeadStatus, LossCategory, Quote, QuoteStatus, User, UserRole
+from app.models import Lead, LeadStatus, LossCategory, Order, Quote, QuoteStatus, User, UserRole
 from app.routers import reports as reports_router
 
 
@@ -49,9 +49,9 @@ def api_client(sqlite_engine):
 
 def _seed_user(session: Session) -> User:
     user = User(
-        email="summary-reporter@example.com",
+        email="sales-reporter@example.com",
         hashed_password="x",
-        full_name="Summary Reporter",
+        full_name="Sales Reporter",
         role=UserRole.DIRECTOR,
     )
     session.add(user)
@@ -97,6 +97,31 @@ def _add_quote(
     return quote
 
 
+def _add_order(
+    session: Session,
+    *,
+    quote: Quote,
+    user_id: int,
+    order_number: str,
+    created_at: datetime,
+    total_amount: Decimal | None = None,
+) -> Order:
+    amount = total_amount if total_amount is not None else quote.total_amount
+    order = Order(
+        quote_id=quote.id,
+        customer_id=quote.customer_id,
+        order_number=order_number,
+        subtotal=amount,
+        total_amount=amount,
+        created_by_id=user_id,
+        created_at=created_at,
+    )
+    session.add(order)
+    session.commit()
+    session.refresh(order)
+    return order
+
+
 def _seed_inbound_leads(session: Session) -> None:
     week_start = datetime(2026, 6, 8, 0, 0, 0)  # Monday
     week_mid = week_start + timedelta(days=2)
@@ -114,29 +139,28 @@ def _seed_inbound_leads(session: Session) -> None:
     session.commit()
 
 
-def test_weekly_summary_new_count_is_all_inbound(api_client, sqlite_engine):
+def test_sales_report_leads_count_is_all_inbound(api_client, sqlite_engine):
     with Session(sqlite_engine) as session:
         _seed_inbound_leads(session)
 
     response = api_client.get(
-        "/api/reports/weekly-summary",
+        "/api/reports/sales-report",
         params={"start_date": "2026-06-08", "end_date": "2026-06-11"},
     )
     assert response.status_code == 200
     data = response.json()
 
-    assert data["new_count"] == 4
-    assert data["quoted_count"] == 1
-    # QUALIFIED + QUOTED + WON among inbound (4 leads: NEW, QUALIFIED, WON, QUOTED)
+    assert data["leads_count"] == 4
+    # QUALIFIED + QUOTED + WON among inbound
     assert data["qualified_count"] == 3
-    # Won/lost are quote-based; no quotes seeded here
-    assert data["won_count"] == 0
-    assert data["lost_count"] == 0
-    assert data["closed_count"] == 0
+    assert data["quotes_accepted"]["count"] == 0
+    assert data["quotes_lost"]["count"] == 0
+    assert data["quotes_closed"]["count"] == 0
+    assert data["quotes_rejected"]["count"] == 0
     assert data["period"] == "custom"
 
 
-def test_weekly_summary_period_week_excludes_prior_week(api_client, sqlite_engine, monkeypatch):
+def test_sales_report_period_week_excludes_prior_week(api_client, sqlite_engine, monkeypatch):
     week_end = datetime(2026, 6, 11, 12, 0, 0)
 
     class FixedDatetime(datetime):
@@ -149,22 +173,21 @@ def test_weekly_summary_period_week_excludes_prior_week(api_client, sqlite_engin
     with Session(sqlite_engine) as session:
         _seed_inbound_leads(session)
 
-    response = api_client.get("/api/reports/weekly-summary", params={"period": "week"})
+    response = api_client.get("/api/reports/sales-report", params={"period": "week"})
     assert response.status_code == 200
     data = response.json()
 
     assert data["period"] == "week"
-    assert data["new_count"] == 4
+    assert data["leads_count"] == 4
     assert data["start_date"].startswith("2026-06-08")
 
 
-def test_weekly_summary_won_lost_from_quotes_not_leads(api_client, sqlite_engine):
+def test_sales_report_quote_buckets_and_accepted_requires_order(api_client, sqlite_engine):
     with Session(sqlite_engine) as session:
         user = _seed_user(session)
         in_range = datetime(2026, 6, 10, 10, 0, 0)
         out_of_range = datetime(2026, 5, 1, 10, 0, 0)
 
-        # Lead statuses must not drive won/lost counts
         lead_won_status = Lead(name="Lead Still Won", status=LeadStatus.WON, created_at=in_range)
         lead_alice = Lead(name="Won Alice", status=LeadStatus.QUOTED, created_at=out_of_range)
         lead_bob = Lead(name="Won Bob", status=LeadStatus.NEW, created_at=out_of_range)
@@ -181,7 +204,7 @@ def test_weekly_summary_won_lost_from_quotes_not_leads(api_client, sqlite_engine
         for lead in (lead_won_status, lead_alice, lead_bob, lead_carol, lead_erin, lead_dave):
             session.refresh(lead)
 
-        _add_quote(
+        q_a = _add_quote(
             session,
             user_id=user.id,
             lead_id=lead_alice.id,
@@ -192,7 +215,15 @@ def test_weekly_summary_won_lost_from_quotes_not_leads(api_client, sqlite_engine
             created_at=out_of_range,
             sent_at=in_range,
         )
-        _add_quote(
+        _add_order(
+            session,
+            quote=q_a,
+            user_id=user.id,
+            order_number="ORD-A",
+            created_at=in_range,
+            total_amount=Decimal("2000.00"),
+        )
+        q_b = _add_quote(
             session,
             user_id=user.id,
             lead_id=lead_bob.id,
@@ -203,8 +234,28 @@ def test_weekly_summary_won_lost_from_quotes_not_leads(api_client, sqlite_engine
             created_at=out_of_range,
             sent_at=in_range,
         )
-        # Accepted outside range — excluded from won
+        _add_order(
+            session,
+            quote=q_b,
+            user_id=user.id,
+            order_number="ORD-B",
+            created_at=in_range,
+            total_amount=Decimal("1000.00"),
+        )
+        # Accepted in range but no order — excluded from accepted
         _add_quote(
+            session,
+            user_id=user.id,
+            lead_id=lead_won_status.id,
+            quote_number="QT-NO-ORDER",
+            status=QuoteStatus.ACCEPTED,
+            total_amount=Decimal("4000.00"),
+            accepted_at=in_range,
+            created_at=out_of_range,
+            sent_at=in_range,
+        )
+        # Order outside range — excluded from accepted
+        q_old = _add_quote(
             session,
             user_id=user.id,
             lead_id=lead_won_status.id,
@@ -214,6 +265,14 @@ def test_weekly_summary_won_lost_from_quotes_not_leads(api_client, sqlite_engine
             accepted_at=out_of_range,
             created_at=out_of_range,
             sent_at=out_of_range,
+        )
+        _add_order(
+            session,
+            quote=q_old,
+            user_id=user.id,
+            order_number="ORD-OLD",
+            created_at=out_of_range,
+            total_amount=Decimal("5000.00"),
         )
         _add_quote(
             session,
@@ -228,7 +287,6 @@ def test_weekly_summary_won_lost_from_quotes_not_leads(api_client, sqlite_engine
             loss_category=LossCategory.PRICE,
             loss_reason="Too expensive",
         )
-        # Close quote (no loss_category) — counts as closed, not lost
         _add_quote(
             session,
             user_id=user.id,
@@ -240,7 +298,6 @@ def test_weekly_summary_won_lost_from_quotes_not_leads(api_client, sqlite_engine
             sent_at=out_of_range,
             updated_at=in_range,
         )
-        # Rejected outside range — excluded from lost
         _add_quote(
             session,
             user_id=user.id,
@@ -264,7 +321,6 @@ def test_weekly_summary_won_lost_from_quotes_not_leads(api_client, sqlite_engine
             created_at=in_range,
             sent_at=in_range,
         )
-        # Draft should not affect average quote value
         _add_quote(
             session,
             user_id=user.id,
@@ -277,65 +333,61 @@ def test_weekly_summary_won_lost_from_quotes_not_leads(api_client, sqlite_engine
         )
 
     response = api_client.get(
-        "/api/reports/weekly-summary",
+        "/api/reports/sales-report",
         params={"start_date": "2026-06-08", "end_date": "2026-06-12"},
     )
     assert response.status_code == 200
     data = response.json()
 
-    assert data["won_count"] == 2
-    assert data["lost_count"] == 1
-    assert data["closed_count"] == 1
-    # Quotes sent in range: WON-A, WON-B, QUOTED (draft + out-of-range rejected excluded)
-    assert data["quotes_sent_count"] == 3
-    # Win rate = accepted among those sent / sent = 2/3
-    assert data["win_rate"] == 66.7
-    # Avg quote by sent_at in range: 2000 + 1000 + 500 (rejected quotes sent out of range; draft excluded)
-    assert Decimal(str(data["average_quote_value"])) == Decimal("3500") / Decimal("3")
-    assert Decimal(str(data["total_quote_value"])) == Decimal("3500.00")
-    assert Decimal(str(data["average_won_value"])) == Decimal("1500.00")
+    assert data["quotes_accepted"]["count"] == 2
+    assert Decimal(str(data["quotes_accepted"]["total_value"])) == Decimal("3000.00")
+    assert Decimal(str(data["quotes_accepted"]["average_value"])) == Decimal("1500.00")
 
-    won_names = [d["name"] for d in data["won_deals"]]
-    assert won_names == ["Won Alice", "Won Bob"]
-    assert Decimal(str(data["won_deals"][0]["value"])) == Decimal("2000.00")
-    assert Decimal(str(data["won_deals"][1]["value"])) == Decimal("1000.00")
+    assert data["quotes_lost"]["count"] == 1
+    assert data["quotes_closed"]["count"] == 1
+    assert data["quotes_rejected"]["count"] == 2
+    assert data["quotes_rejected"]["count"] == (
+        data["quotes_lost"]["count"] + data["quotes_closed"]["count"]
+    )
+    assert Decimal(str(data["quotes_rejected"]["total_value"])) == Decimal("2200.00")
 
-    assert len(data["lost_deals"]) == 1
-    assert data["lost_deals"][0]["name"] == "Lost Carol"
-    assert Decimal(str(data["lost_deals"][0]["value"])) == Decimal("1500.00")
+    # Sent in range: WON-A, WON-B, NO-ORDER, QUOTED (draft + out-of-range rejected/sent excluded)
+    assert data["quotes_sent"]["count"] == 4
+    assert Decimal(str(data["quotes_sent"]["total_value"])) == Decimal("7500.00")
+    assert Decimal(str(data["quotes_sent"]["average_value"])) == Decimal("1875.00")
 
 
-def test_weekly_summary_pdf_accepts_date_range(api_client, sqlite_engine):
+def test_sales_report_pdf_accepts_date_range(api_client, sqlite_engine):
     with Session(sqlite_engine) as session:
         _seed_inbound_leads(session)
 
     response = api_client.get(
-        "/api/reports/weekly-summary/pdf",
+        "/api/reports/sales-report/pdf",
         params={"start_date": "2026-06-08", "end_date": "2026-06-11"},
     )
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/pdf"
-    assert "Pipeline_Summary_" in response.headers.get("content-disposition", "")
+    assert "Sales_Report_" in response.headers.get("content-disposition", "")
     assert "2026-06-08_to_2026-06-11" in response.headers.get("content-disposition", "")
 
 
-def test_weekly_summary_pdf_period_label_follows_query_params(api_client, sqlite_engine):
+def test_sales_report_period_label_follows_query_params(api_client, sqlite_engine):
     with Session(sqlite_engine) as session:
         _seed_inbound_leads(session)
 
     june = api_client.get(
-        "/api/reports/weekly-summary",
+        "/api/reports/sales-report",
         params={"start_date": "2026-06-08", "end_date": "2026-06-11"},
     ).json()
     may = api_client.get(
-        "/api/reports/weekly-summary",
+        "/api/reports/sales-report",
         params={"start_date": "2026-05-01", "end_date": "2026-05-31"},
     ).json()
 
-    assert june["new_count"] == 4
-    assert may["new_count"] == 0
-    assert "08 Jun" in june["week_label"]
-    assert "01 May" in may["week_label"]
+    assert june["leads_count"] == 4
+    assert may["leads_count"] == 0
+    assert "08 Jun" in june["period_label"]
+    assert "01 May" in may["period_label"]
     assert june["period"] == "custom"
     assert may["period"] == "custom"
 
@@ -371,28 +423,27 @@ def test_previous_equal_range_all_returns_none():
     )
 
 
-def test_weekly_summary_comparison_custom_isolates_periods(api_client, sqlite_engine):
+def test_sales_report_comparison_custom_isolates_periods(api_client, sqlite_engine):
     with Session(sqlite_engine) as session:
         _seed_inbound_leads(session)
-        # Extra lead only in the auto-shifted prior window (before 8 Jun)
         session.add(Lead(name="Prior Only", status=LeadStatus.NEW, created_at=datetime(2026, 6, 5, 12, 0, 0)))
         session.commit()
 
     response = api_client.get(
-        "/api/reports/weekly-summary",
+        "/api/reports/sales-report",
         params={"start_date": "2026-06-08", "end_date": "2026-06-11", "compare": True},
     )
     assert response.status_code == 200
     data = response.json()
 
-    assert data["new_count"] == 4
+    assert data["leads_count"] == 4
     assert data["comparison"] is not None
-    assert data["comparison"]["new_count"] == 2  # Old NEW (Jun 5 from seed) + Prior Only
+    assert data["comparison"]["leads_count"] == 2
     assert data["comparison"]["start_date"].startswith("2026-06-04")
     assert data["comparison"]["end_date"].startswith("2026-06-07")
 
 
-def test_weekly_summary_comparison_week_equal_length(api_client, sqlite_engine, monkeypatch):
+def test_sales_report_comparison_week_equal_length(api_client, sqlite_engine, monkeypatch):
     week_end = datetime(2026, 6, 11, 12, 0, 0)
 
     class FixedDatetime(datetime):
@@ -405,52 +456,51 @@ def test_weekly_summary_comparison_week_equal_length(api_client, sqlite_engine, 
     with Session(sqlite_engine) as session:
         _seed_inbound_leads(session)
 
-    response = api_client.get("/api/reports/weekly-summary", params={"period": "week", "compare": True})
+    response = api_client.get("/api/reports/sales-report", params={"period": "week", "compare": True})
     assert response.status_code == 200
     data = response.json()
 
     assert data["period"] == "week"
-    assert data["new_count"] == 4
+    assert data["leads_count"] == 4
     assert data["comparison"] is not None
-    # Primary Mon 8 Jun 00:00 → Thu 11 Jun 12:00; prior is equal length ending just before
     start = datetime.fromisoformat(data["start_date"])
     end = datetime.fromisoformat(data["end_date"])
     cmp_start = datetime.fromisoformat(data["comparison"]["start_date"])
     cmp_end = datetime.fromisoformat(data["comparison"]["end_date"])
     assert (cmp_end - cmp_start) == (end - start)
     assert cmp_end < start
-    assert data["comparison"]["new_count"] == 1  # Old NEW from last_week seed
+    assert data["comparison"]["leads_count"] == 1
 
 
-def test_weekly_summary_period_all_has_no_comparison(api_client, sqlite_engine):
+def test_sales_report_period_all_has_no_comparison(api_client, sqlite_engine):
     with Session(sqlite_engine) as session:
         _seed_inbound_leads(session)
 
-    response = api_client.get("/api/reports/weekly-summary", params={"period": "all", "compare": True})
+    response = api_client.get("/api/reports/sales-report", params={"period": "all", "compare": True})
     assert response.status_code == 200
     data = response.json()
     assert data["period"] == "all"
     assert data["comparison"] is None
 
 
-def test_weekly_summary_compare_false_skips_comparison(api_client, sqlite_engine):
+def test_sales_report_compare_false_skips_comparison(api_client, sqlite_engine):
     with Session(sqlite_engine) as session:
         _seed_inbound_leads(session)
 
     response = api_client.get(
-        "/api/reports/weekly-summary",
+        "/api/reports/sales-report",
         params={"start_date": "2026-06-08", "end_date": "2026-06-11", "compare": False},
     )
     assert response.status_code == 200
     assert response.json()["comparison"] is None
 
 
-def test_weekly_summary_pdf_with_compare(api_client, sqlite_engine):
+def test_sales_report_pdf_with_compare(api_client, sqlite_engine):
     with Session(sqlite_engine) as session:
         _seed_inbound_leads(session)
 
     response = api_client.get(
-        "/api/reports/weekly-summary/pdf",
+        "/api/reports/sales-report/pdf",
         params={"start_date": "2026-06-08", "end_date": "2026-06-11", "compare": True},
     )
     assert response.status_code == 200

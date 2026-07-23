@@ -984,23 +984,64 @@ def generate_facebook_lead_conversion_pdf(
     return buffer
 
 
-def generate_weekly_summary_pdf(
+def _metric_block(data: Optional[Dict[str, Any]]) -> Dict[str, float]:
+    block = data or {}
+    return {
+        "count": float(block.get("count", 0) or 0),
+        "total_value": float(block.get("total_value", 0) or 0),
+        "average_value": float(block.get("average_value", 0) or 0),
+    }
+
+
+def _sales_metric_rows(
+    label: str,
+    current: Dict[str, float],
+    prior: Optional[Dict[str, float]] = None,
+) -> List[List[str]]:
+    if prior is None:
+        return [
+            [f"{label} — Count", str(int(current["count"]))],
+            [f"{label} — Total", format_currency(current["total_value"])],
+            [f"{label} — Avg", format_currency(current["average_value"])],
+        ]
+    return [
+        [
+            f"{label} — Count",
+            str(int(current["count"])),
+            str(int(prior["count"])),
+            _format_change(current["count"], prior["count"]),
+        ],
+        [
+            f"{label} — Total",
+            format_currency(current["total_value"]),
+            format_currency(prior["total_value"]),
+            _format_currency_change(current["total_value"], prior["total_value"]),
+        ],
+        [
+            f"{label} — Avg",
+            format_currency(current["average_value"]),
+            format_currency(prior["average_value"]),
+            _format_currency_change(current["average_value"], prior["average_value"]),
+        ],
+    ]
+
+
+def generate_sales_report_pdf(
     data: Dict[str, Any],
     company_name: str = "",
     company_settings: Optional[CompanySettings] = None,
 ) -> BytesIO:
-    """Generate PDF for Pipeline Summary Report with logo, chart, and deal lists."""
+    """Generate PDF for Sales Report with period comparison metrics."""
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=40, leftMargin=40, topMargin=40, bottomMargin=40)
     styles = getSampleStyleSheet()
     normal = styles["Normal"]
-    heading = styles["Heading2"]
 
     _, logo_bytes = _resolve_logo(company_settings)
-    flowables = _build_report_header(company_name, "Pipeline Summary", logo_bytes)
+    flowables = _build_report_header(company_name, "Sales Report", logo_bytes)
 
     comparison = data.get("comparison")
-    period_line = f"<b>Period:</b> {data.get('week_label', '')}"
+    period_line = f"<b>Period:</b> {data.get('period_label', '')}"
     if data.get("period"):
         period_line += f" ({data.get('period')})"
     if comparison and comparison.get("label"):
@@ -1008,245 +1049,98 @@ def generate_weekly_summary_pdf(
     flowables.append(Paragraph(period_line, normal))
     flowables.append(Spacer(1, 15))
 
-    new_count = data.get("new_count", 0)
-    quoted_count = data.get("quoted_count", 0)
-    qualified_count = data.get("qualified_count", 0)
-    won_count = data.get("won_count", 0)
-    lost_count = data.get("lost_count", 0)
-    closed_count = data.get("closed_count", 0)
-    average_quote_value = data.get("average_quote_value", 0)
-    total_quote_value = data.get("total_quote_value", 0)
-    average_won_value = data.get("average_won_value", 0)
-    won_deals = data.get("won_deals") or []
-    lost_deals = data.get("lost_deals") or []
+    leads_count = int(data.get("leads_count", 0) or 0)
+    qualified_count = int(data.get("qualified_count", 0) or 0)
+    quotes_sent = _metric_block(data.get("quotes_sent"))
+    quotes_accepted = _metric_block(data.get("quotes_accepted"))
+    quotes_rejected = _metric_block(data.get("quotes_rejected"))
+    quotes_lost = _metric_block(data.get("quotes_lost"))
+    quotes_closed = _metric_block(data.get("quotes_closed"))
 
-    current_chart = [new_count, quoted_count, won_count, lost_count, closed_count]
-    chart_labels = ["New", "Quoted", "Won", "Lost", "Closed"]
+    current_chart = [
+        leads_count,
+        qualified_count,
+        int(quotes_sent["count"]),
+        int(quotes_accepted["count"]),
+        int(quotes_rejected["count"]),
+        int(quotes_lost["count"]),
+        int(quotes_closed["count"]),
+    ]
+    chart_labels = ["Leads", "Qualified", "Sent", "Accepted", "Rejected", "Lost", "Closed"]
     if comparison:
+        prior_sent = _metric_block(comparison.get("quotes_sent"))
+        prior_accepted = _metric_block(comparison.get("quotes_accepted"))
+        prior_rejected = _metric_block(comparison.get("quotes_rejected"))
+        prior_lost = _metric_block(comparison.get("quotes_lost"))
+        prior_closed = _metric_block(comparison.get("quotes_closed"))
         prior_chart = [
-            comparison.get("new_count", 0),
-            comparison.get("quoted_count", 0),
-            comparison.get("won_count", 0),
-            comparison.get("lost_count", 0),
-            comparison.get("closed_count", 0),
+            int(comparison.get("leads_count", 0) or 0),
+            int(comparison.get("qualified_count", 0) or 0),
+            int(prior_sent["count"]),
+            int(prior_accepted["count"]),
+            int(prior_rejected["count"]),
+            int(prior_lost["count"]),
+            int(prior_closed["count"]),
         ]
         if any(v > 0 for v in current_chart + prior_chart):
             chart = _create_comparison_bar_chart(
                 chart_labels,
                 [float(v) for v in current_chart],
                 [float(v) for v in prior_chart],
-                "Pipeline Activity",
-                width=380,
-                height=210,
+                "Sales Activity",
+                width=400,
+                height=220,
             )
             flowables.append(chart)
             flowables.append(Spacer(1, 15))
     else:
         chart_data = list(zip(chart_labels, current_chart))
         if any(v > 0 for _, v in chart_data):
-            chart = _create_bar_chart(chart_data, "Pipeline Activity", width=350, height=180)
+            chart = _create_bar_chart(chart_data, "Sales Activity", width=380, height=200)
             flowables.append(chart)
             flowables.append(Spacer(1, 15))
 
-    # Metrics table
     if comparison:
-        prior_new = comparison.get("new_count", 0)
-        prior_qualified = comparison.get("qualified_count", 0)
-        prior_quoted = comparison.get("quoted_count", 0)
-        prior_won = comparison.get("won_count", 0)
-        prior_lost = comparison.get("lost_count", 0)
-        prior_closed = comparison.get("closed_count", 0)
-        table_data = [
-            ["Metric", "Current", "Prior", "Change"],
-            ["New Leads", str(new_count), str(prior_new), _format_change(new_count, prior_new)],
+        prior_leads = int(comparison.get("leads_count", 0) or 0)
+        prior_qualified = int(comparison.get("qualified_count", 0) or 0)
+        prior_sent = _metric_block(comparison.get("quotes_sent"))
+        prior_accepted = _metric_block(comparison.get("quotes_accepted"))
+        prior_rejected = _metric_block(comparison.get("quotes_rejected"))
+        prior_lost = _metric_block(comparison.get("quotes_lost"))
+        prior_closed = _metric_block(comparison.get("quotes_closed"))
+        table_data: List[List[str]] = [["Metric", "Current", "Prior", "Change"]]
+        table_data.append(
+            ["Leads", str(leads_count), str(prior_leads), _format_change(leads_count, prior_leads)]
+        )
+        table_data.append(
             [
                 "Qualified",
                 str(qualified_count),
                 str(prior_qualified),
                 _format_change(qualified_count, prior_qualified),
-            ],
-            [
-                "Quoted",
-                str(quoted_count),
-                str(prior_quoted),
-                _format_change(quoted_count, prior_quoted),
-            ],
-            ["Won", str(won_count), str(prior_won), _format_change(won_count, prior_won)],
-            ["Lost", str(lost_count), str(prior_lost), _format_change(lost_count, prior_lost)],
-            [
-                "Closed",
-                str(closed_count),
-                str(prior_closed),
-                _format_change(closed_count, prior_closed),
-            ],
-        ]
-        t = Table(table_data, colWidths=[120, 80, 80, 80])
+            ]
+        )
+        table_data.extend(_sales_metric_rows("Quotes Sent", quotes_sent, prior_sent))
+        table_data.extend(_sales_metric_rows("Accepted (order)", quotes_accepted, prior_accepted))
+        table_data.extend(_sales_metric_rows("Rejected", quotes_rejected, prior_rejected))
+        table_data.extend(_sales_metric_rows("Lost", quotes_lost, prior_lost))
+        table_data.extend(_sales_metric_rows("Closed", quotes_closed, prior_closed))
+        t = Table(table_data, colWidths=[140, 90, 90, 90])
     else:
         table_data = [
-            ["Metric", "Count"],
-            ["New Leads", str(new_count)],
+            ["Metric", "Value"],
+            ["Leads", str(leads_count)],
             ["Qualified", str(qualified_count)],
-            ["Quoted", str(quoted_count)],
-            ["Won", str(won_count)],
-            ["Lost", str(lost_count)],
-            ["Closed", str(closed_count)],
         ]
-        t = Table(table_data, colWidths=[180, 100])
+        table_data.extend(_sales_metric_rows("Quotes Sent", quotes_sent))
+        table_data.extend(_sales_metric_rows("Accepted (order)", quotes_accepted))
+        table_data.extend(_sales_metric_rows("Rejected", quotes_rejected))
+        table_data.extend(_sales_metric_rows("Lost", quotes_lost))
+        table_data.extend(_sales_metric_rows("Closed", quotes_closed))
+        t = Table(table_data, colWidths=[200, 160])
 
     t.setStyle(_table_style())
     flowables.append(t)
-
-    # Summary strip
-    win_rate = float(data.get("win_rate", 0) or 0)
-    prior_win_rate = float((comparison or {}).get("win_rate", 0) or 0) if comparison else 0.0
-    prior_avg_quote = (comparison or {}).get("average_quote_value", 0) if comparison else 0
-    prior_total_quote = (comparison or {}).get("total_quote_value", 0) if comparison else 0
-    prior_avg_won = (comparison or {}).get("average_won_value", 0) if comparison else 0
-    prior_qualified = (comparison or {}).get("qualified_count", 0) if comparison else 0
-    prior_new = (comparison or {}).get("new_count", 0) if comparison else 0
-
-    show_summary = (
-        new_count > 0
-        or qualified_count > 0
-        or won_count > 0
-        or lost_count > 0
-        or average_quote_value
-        or total_quote_value
-        or average_won_value
-        or (comparison and (
-            prior_new
-            or prior_qualified
-            or prior_avg_quote
-            or prior_total_quote
-            or prior_avg_won
-        ))
-    )
-    if show_summary:
-        flowables.append(Spacer(1, 15))
-        if comparison:
-            summary_data = [
-                [
-                    f"Current — Leads: {new_count}",
-                    f"Qualified: {qualified_count}",
-                    f"Win Rate: {win_rate:.1f}%",
-                    f"Avg Quote: {format_currency(average_quote_value)}",
-                ],
-                [
-                    f"Total Quoted: {format_currency(total_quote_value)}",
-                    f"Avg Won: {format_currency(average_won_value)}",
-                    "",
-                    "",
-                ],
-                [
-                    f"Prior — Leads: {prior_new}",
-                    f"Qualified: {prior_qualified}",
-                    f"Win Rate: {prior_win_rate:.1f}%",
-                    f"Avg Quote: {format_currency(prior_avg_quote)}",
-                ],
-                [
-                    f"Total Quoted: {format_currency(prior_total_quote)}",
-                    f"Avg Won: {format_currency(prior_avg_won)}",
-                    f"Δ Win Rate: {_format_change(win_rate, prior_win_rate, as_percent=True)}",
-                    f"Δ Quoted: {_format_currency_change(total_quote_value, prior_total_quote)}",
-                ],
-            ]
-            summary_table = Table(summary_data, colWidths=[130, 110, 110, 120])
-            summary_table.setStyle(TableStyle([
-                ("BACKGROUND", (0, 0), (-1, 1), LIGHT_GREEN),
-                ("TEXTCOLOR", (0, 0), (-1, 1), DARK_GREEN),
-                ("BACKGROUND", (0, 2), (-1, 3), LIGHT_COMPARISON),
-                ("TEXTCOLOR", (0, 2), (-1, 3), DARK_COMPARISON),
-                ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"),
-                ("FONTSIZE", (0, 0), (-1, -1), 8),
-                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-                ("TOPPADDING", (0, 0), (-1, -1), 8),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-                ("BOX", (0, 0), (-1, -1), 1, PRIMARY_GREEN),
-                ("LINEABOVE", (0, 2), (-1, 2), 1, COMPARISON_BLUE),
-                ("SPAN", (2, 1), (-1, 1)),
-            ]))
-        else:
-            summary_data = [
-                [
-                    f"Leads Received: {new_count}",
-                    f"Qualified: {qualified_count}",
-                    f"Win Rate: {win_rate:.1f}%",
-                    f"Avg Quote: {format_currency(average_quote_value)}",
-                ],
-                [
-                    f"Total Quoted: {format_currency(total_quote_value)}",
-                    f"Avg Won: {format_currency(average_won_value)}",
-                    "",
-                    "",
-                ],
-            ]
-            summary_table = Table(summary_data, colWidths=[130, 110, 100, 120])
-            summary_table.setStyle(TableStyle([
-                ("BACKGROUND", (0, 0), (-1, -1), LIGHT_GREEN),
-                ("TEXTCOLOR", (0, 0), (-1, -1), DARK_GREEN),
-                ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"),
-                ("FONTSIZE", (0, 0), (-1, -1), 9),
-                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-                ("TOPPADDING", (0, 0), (-1, -1), 10),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
-                ("BOX", (0, 0), (-1, -1), 1, PRIMARY_GREEN),
-                ("SPAN", (2, 1), (-1, 1)),
-            ]))
-        flowables.append(summary_table)
-
-    # Won deals
-    flowables.append(Spacer(1, 20))
-    flowables.append(Paragraph("Won Deals", heading))
-    flowables.append(Spacer(1, 8))
-    won_table_data = [["Name", "Value"]]
-    if won_deals:
-        won_total = 0.0
-        for deal in won_deals:
-            value = float(deal.get("value", 0) or 0)
-            won_total += value
-            won_table_data.append([
-                str(deal.get("name", "")),
-                format_currency(value),
-            ])
-        won_table_data.append(["Total", format_currency(won_total)])
-    else:
-        won_table_data.append(["No won deals in this period", ""])
-    won_table = Table(won_table_data, colWidths=[280, 100])
-    won_style = _table_style()
-    if won_deals:
-        last = len(won_table_data) - 1
-        won_style.add("FONTNAME", (0, last), (-1, last), "Helvetica-Bold")
-        won_style.add("BACKGROUND", (0, last), (-1, last), LIGHT_GREEN)
-        won_style.add("TEXTCOLOR", (0, last), (-1, last), DARK_GREEN)
-    won_table.setStyle(won_style)
-    flowables.append(won_table)
-
-    # Lost deals
-    flowables.append(Spacer(1, 20))
-    flowables.append(Paragraph("Lost Deals", heading))
-    flowables.append(Spacer(1, 8))
-    lost_table_data = [["Name", "Value"]]
-    if lost_deals:
-        lost_total = 0.0
-        for deal in lost_deals:
-            value = float(deal.get("value", 0) or 0)
-            lost_total += value
-            lost_table_data.append([
-                str(deal.get("name", "")),
-                format_currency(value),
-            ])
-        lost_table_data.append(["Total", format_currency(lost_total)])
-    else:
-        lost_table_data.append(["No lost deals in this period", ""])
-    lost_table = Table(lost_table_data, colWidths=[280, 100])
-    lost_style = _table_style()
-    if lost_deals:
-        last = len(lost_table_data) - 1
-        lost_style.add("FONTNAME", (0, last), (-1, last), "Helvetica-Bold")
-        lost_style.add("BACKGROUND", (0, last), (-1, last), LIGHT_GREEN)
-        lost_style.add("TEXTCOLOR", (0, last), (-1, last), DARK_GREEN)
-    lost_table.setStyle(lost_style)
-    flowables.append(lost_table)
 
     doc.build(flowables)
     buffer.seek(0)

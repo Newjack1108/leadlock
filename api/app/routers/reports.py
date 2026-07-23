@@ -25,9 +25,9 @@ from app.schemas import (
     FacebookLeadConversionBreakdownItem, FacebookLeadConversionRow,
     CloserPerformanceReport, CloserPerformanceItem,
     QuoteEngagementReport,
-    WeeklyPipelineSummaryReport,
-    WeeklyPipelinePeriodMetrics,
-    WeeklySummaryDealItem,
+    SalesReport,
+    SalesReportMetricBlock,
+    SalesReportPeriodMetrics,
 )
 from app.stats_exclusion import lead_counts_toward_stats, quote_counts_toward_stats
 from app.report_pdf_service import (
@@ -36,7 +36,7 @@ from app.report_pdf_service import (
     generate_facebook_lead_conversion_pdf,
     generate_closer_performance_pdf,
     generate_quote_engagement_pdf,
-    generate_weekly_summary_pdf,
+    generate_sales_report_pdf,
 )
 from datetime import datetime
 from decimal import Decimal
@@ -775,7 +775,7 @@ async def get_quote_engagement_pdf(
     )
 
 
-# --- Weekly Pipeline Summary Report ---
+# --- Sales Report ---
 
 def _as_naive_utc(value: Optional[datetime]) -> Optional[datetime]:
     """Normalize DB datetimes so range compares never mix aware/naive values."""
@@ -794,18 +794,6 @@ def _in_range(value: Optional[datetime], start: datetime, end: datetime) -> bool
     return start <= normalized <= end
 
 
-def _quote_display_name(
-    quote: Quote,
-    customers_by_id: dict[int, Customer],
-    leads_by_id: dict[int, Lead],
-) -> str:
-    if quote.customer_id and quote.customer_id in customers_by_id:
-        return customers_by_id[quote.customer_id].name
-    if quote.lead_id and quote.lead_id in leads_by_id:
-        return leads_by_id[quote.lead_id].name
-    return quote.quote_number
-
-
 def _quote_stats_filter():
     """Include unlinked quotes; exclude sandbox-customer quotes only."""
     return or_(
@@ -818,13 +806,18 @@ def _period_label(start: datetime, end: datetime) -> str:
     return f"{start.strftime('%d %b %Y')} – {end.strftime('%d %b %Y')}"
 
 
-def _build_weekly_pipeline_metrics(
+def _metric_block(amounts: list[Decimal]) -> SalesReportMetricBlock:
+    count = len(amounts)
+    total = sum(amounts, Decimal("0")) if amounts else Decimal("0")
+    average = total / Decimal(count) if count else Decimal("0")
+    return SalesReportMetricBlock(count=count, total_value=total, average_value=average)
+
+
+def _build_sales_report_metrics(
     session: Session,
     resolved_range: ResolvedDateRange,
-    *,
-    include_deals: bool = False,
-) -> tuple[WeeklyPipelinePeriodMetrics, list[WeeklySummaryDealItem], list[WeeklySummaryDealItem]]:
-    """Compute Pipeline Summary metrics for one date window."""
+) -> SalesReportPeriodMetrics:
+    """Compute Sales Report metrics for one date window."""
     apply_range = resolved_range.period != "all"
     start, end = resolved_range.start, resolved_range.end
 
@@ -840,19 +833,16 @@ def _build_weekly_pipeline_metrics(
             stmt = stmt.where(extra)
         return scalar_int(session.exec(stmt).one())
 
-    new_count = _lead_count()
-    quoted_count = _lead_count(Lead.status == LeadStatus.QUOTED)
+    leads_count = _lead_count()
     qualified_count = _lead_count(
         Lead.status.in_([LeadStatus.QUALIFIED, LeadStatus.QUOTED, LeadStatus.WON])
     )
 
-    won_date_expr = func.coalesce(Quote.accepted_at, Quote.created_at)
-    avg_quote_date_expr = func.coalesce(Quote.sent_at, Quote.created_at)
-
-    won_stmt = (
+    sent_date_expr = func.coalesce(Quote.sent_at, Quote.created_at)
+    sent_stmt = (
         select(Quote)
         .where(_quote_stats_filter())
-        .where(Quote.status == QuoteStatus.ACCEPTED)
+        .where(Quote.status != QuoteStatus.DRAFT)
     )
     lost_stmt = (
         select(Quote)
@@ -866,111 +856,86 @@ def _build_weekly_pipeline_metrics(
         .where(Quote.status == QuoteStatus.REJECTED)
         .where(Quote.loss_category.is_(None))
     )
-    avg_quote_stmt = (
-        select(Quote)
+    accepted_stmt = (
+        select(Order)
+        .join(Quote, Quote.id == Order.quote_id)
         .where(_quote_stats_filter())
-        .where(Quote.status != QuoteStatus.DRAFT)
     )
 
     if apply_range:
-        won_stmt = won_stmt.where(won_date_expr >= start).where(won_date_expr <= end)
+        sent_stmt = sent_stmt.where(sent_date_expr >= start).where(sent_date_expr <= end)
         lost_stmt = lost_stmt.where(Quote.updated_at >= start).where(Quote.updated_at <= end)
         closed_stmt = closed_stmt.where(Quote.updated_at >= start).where(Quote.updated_at <= end)
-        avg_quote_stmt = avg_quote_stmt.where(avg_quote_date_expr >= start).where(
-            avg_quote_date_expr <= end
-        )
+        accepted_stmt = accepted_stmt.where(Order.created_at >= start).where(Order.created_at <= end)
 
-    won_quotes = list(session.exec(won_stmt).all())
+    sent_quotes = list(session.exec(sent_stmt).all())
     lost_quotes = list(session.exec(lost_stmt).all())
     closed_quotes = list(session.exec(closed_stmt).all())
-    avg_quote_source = list(session.exec(avg_quote_stmt).all())
+    accepted_orders = list(session.exec(accepted_stmt).all())
 
     if apply_range:
-        won_quotes = [q for q in won_quotes if _in_range(q.accepted_at or q.created_at, start, end)]
+        sent_quotes = [q for q in sent_quotes if _in_range(q.sent_at or q.created_at, start, end)]
         lost_quotes = [q for q in lost_quotes if _in_range(q.updated_at, start, end)]
         closed_quotes = [q for q in closed_quotes if _in_range(q.updated_at, start, end)]
-        avg_quote_source = [
-            q for q in avg_quote_source if _in_range(q.sent_at or q.created_at, start, end)
-        ]
+        accepted_orders = [o for o in accepted_orders if _in_range(o.created_at, start, end)]
 
-    won_count = len(won_quotes)
-    lost_count = len(lost_quotes)
-    closed_count = len(closed_quotes)
+    rejected_amounts = [
+        _decimal_or_zero(q.total_amount) for q in lost_quotes + closed_quotes
+    ]
 
-    quotes_sent_count = len(avg_quote_source)
-    won_among_sent = sum(1 for q in avg_quote_source if q.status == QuoteStatus.ACCEPTED)
-    win_rate = (
-        round(won_among_sent / quotes_sent_count * 100, 1) if quotes_sent_count > 0 else 0.0
-    )
-
-    non_draft_amounts = [_decimal_or_zero(q.total_amount) for q in avg_quote_source]
-    total_quote_value = sum(non_draft_amounts) if non_draft_amounts else Decimal("0")
-    average_quote_value = (
-        total_quote_value / Decimal(len(non_draft_amounts))
-        if non_draft_amounts
-        else Decimal("0")
-    )
-
-    won_amounts = [_decimal_or_zero(q.total_amount) for q in won_quotes]
-    average_won_value = (
-        sum(won_amounts) / Decimal(len(won_amounts)) if won_amounts else Decimal("0")
-    )
-
-    won_deals: list[WeeklySummaryDealItem] = []
-    lost_deals: list[WeeklySummaryDealItem] = []
-    if include_deals:
-        customer_ids = {q.customer_id for q in won_quotes + lost_quotes if q.customer_id}
-        lead_ids = {q.lead_id for q in won_quotes + lost_quotes if q.lead_id}
-        customers_by_id: dict[int, Customer] = {}
-        if customer_ids:
-            for customer in session.exec(select(Customer).where(Customer.id.in_(customer_ids))).all():
-                if customer.id is not None:
-                    customers_by_id[customer.id] = customer
-        leads_by_id: dict[int, Lead] = {}
-        if lead_ids:
-            for lead in session.exec(select(Lead).where(Lead.id.in_(lead_ids))).all():
-                if lead.id is not None:
-                    leads_by_id[lead.id] = lead
-
-        won_deals = [
-            WeeklySummaryDealItem(
-                name=_quote_display_name(q, customers_by_id, leads_by_id),
-                value=_decimal_or_zero(q.total_amount),
-            )
-            for q in won_quotes
-        ]
-        won_deals.sort(key=lambda d: d.value, reverse=True)
-
-        lost_deals = [
-            WeeklySummaryDealItem(
-                name=_quote_display_name(q, customers_by_id, leads_by_id),
-                value=_decimal_or_zero(q.total_amount),
-            )
-            for q in lost_quotes
-        ]
-        lost_deals.sort(key=lambda d: d.value, reverse=True)
-
-    metrics = WeeklyPipelinePeriodMetrics(
+    return SalesReportPeriodMetrics(
         label=_period_label(start, end),
         start_date=start,
         end_date=end,
-        new_count=new_count,
-        quoted_count=quoted_count,
+        leads_count=leads_count,
         qualified_count=qualified_count,
-        won_count=won_count,
-        lost_count=lost_count,
-        closed_count=closed_count,
-        quotes_sent_count=quotes_sent_count,
-        win_rate=win_rate,
-        average_quote_value=average_quote_value,
-        total_quote_value=total_quote_value,
-        average_won_value=average_won_value,
+        quotes_sent=_metric_block([_decimal_or_zero(q.total_amount) for q in sent_quotes]),
+        quotes_accepted=_metric_block(
+            [_decimal_or_zero(o.total_amount) for o in accepted_orders]
+        ),
+        quotes_rejected=_metric_block(rejected_amounts),
+        quotes_lost=_metric_block([_decimal_or_zero(q.total_amount) for q in lost_quotes]),
+        quotes_closed=_metric_block([_decimal_or_zero(q.total_amount) for q in closed_quotes]),
     )
-    return metrics, won_deals, lost_deals
 
 
-@router.get("/weekly-summary", response_model=WeeklyPipelineSummaryReport)
-async def get_weekly_summary_report(
+def _sales_report_metric_floats(block: SalesReportMetricBlock) -> dict:
+    return {
+        "count": block.count,
+        "total_value": float(block.total_value),
+        "average_value": float(block.average_value),
+    }
+
+
+def _sales_report_pdf_payload(report: SalesReport) -> dict:
+    data = report.model_dump()
+    data["start_date"] = report.start_date.isoformat()
+    data["end_date"] = report.end_date.isoformat()
+    for key in (
+        "quotes_sent",
+        "quotes_accepted",
+        "quotes_rejected",
+        "quotes_lost",
+        "quotes_closed",
+    ):
+        data[key] = _sales_report_metric_floats(getattr(report, key))
+    if report.comparison:
+        cmp = data["comparison"]
+        cmp["start_date"] = report.comparison.start_date.isoformat()
+        cmp["end_date"] = report.comparison.end_date.isoformat()
+        for key in (
+            "quotes_sent",
+            "quotes_accepted",
+            "quotes_rejected",
+            "quotes_lost",
+            "quotes_closed",
+        ):
+            cmp[key] = _sales_report_metric_floats(getattr(report.comparison, key))
+    return data
+
+
+@router.get("/sales-report", response_model=SalesReport)
+async def get_sales_report(
     session: Session = Depends(get_session),
     current_user=Depends(get_current_user),
     period: Optional[str] = Query(None, description="Period: all, week, month, quarter, year."),
@@ -978,51 +943,41 @@ async def get_weekly_summary_report(
     end_date: Optional[str] = Query(None, description="Custom range end date (YYYY-MM-DD)."),
     compare: bool = Query(True, description="Include equal-length prior period comparison."),
 ):
-    """Inbound lead counts plus quotes won/lost for the selected date range."""
+    """Weekly meeting Sales Report for the selected date range."""
     resolved_range = resolve_date_range(
         period=period, start_date=start_date, end_date=end_date, default_period="week"
     )
-    current, won_deals, lost_deals = _build_weekly_pipeline_metrics(
-        session, resolved_range, include_deals=True
-    )
+    current = _build_sales_report_metrics(session, resolved_range)
 
-    comparison: Optional[WeeklyPipelinePeriodMetrics] = None
+    comparison: Optional[SalesReportPeriodMetrics] = None
     if compare:
         prior = previous_equal_range(resolved_range)
         if prior is not None:
-            comparison, _, _ = _build_weekly_pipeline_metrics(
-                session, prior, include_deals=False
-            )
+            comparison = _build_sales_report_metrics(session, prior)
 
-    week_label = (
+    period_label = (
         f"{resolved_range.start.strftime('%d %b')} - {resolved_range.end.strftime('%d %b %Y')}"
     )
 
-    return WeeklyPipelineSummaryReport(
+    return SalesReport(
         period=resolved_range.period,
-        week_label=week_label,
+        period_label=period_label,
         generated_at=datetime.utcnow(),
-        new_count=current.new_count,
-        quoted_count=current.quoted_count,
-        qualified_count=current.qualified_count,
-        won_count=current.won_count,
-        lost_count=current.lost_count,
-        closed_count=current.closed_count,
-        quotes_sent_count=current.quotes_sent_count,
-        win_rate=current.win_rate,
-        average_quote_value=current.average_quote_value,
-        total_quote_value=current.total_quote_value,
-        average_won_value=current.average_won_value,
-        won_deals=won_deals,
-        lost_deals=lost_deals,
         start_date=resolved_range.start,
         end_date=resolved_range.end,
+        leads_count=current.leads_count,
+        qualified_count=current.qualified_count,
+        quotes_sent=current.quotes_sent,
+        quotes_accepted=current.quotes_accepted,
+        quotes_rejected=current.quotes_rejected,
+        quotes_lost=current.quotes_lost,
+        quotes_closed=current.quotes_closed,
         comparison=comparison,
     )
 
 
-@router.get("/weekly-summary/pdf")
-async def get_weekly_summary_pdf(
+@router.get("/sales-report/pdf")
+async def get_sales_report_pdf(
     session: Session = Depends(get_session),
     current_user=Depends(get_current_user),
     period: Optional[str] = Query(None),
@@ -1030,8 +985,8 @@ async def get_weekly_summary_pdf(
     end_date: Optional[str] = Query(None),
     compare: bool = Query(True),
 ):
-    """Download Pipeline Summary Report as PDF."""
-    report = await get_weekly_summary_report(
+    """Download Sales Report as PDF."""
+    report = await get_sales_report(
         session=session,
         current_user=current_user,
         period=period,
@@ -1039,34 +994,22 @@ async def get_weekly_summary_pdf(
         end_date=end_date,
         compare=compare,
     )
-    data = report.model_dump()
-    data["start_date"] = report.start_date.isoformat() if report.start_date else ""
-    data["end_date"] = report.end_date.isoformat() if report.end_date else ""
-    data["average_quote_value"] = float(report.average_quote_value)
-    data["total_quote_value"] = float(report.total_quote_value)
-    data["average_won_value"] = float(report.average_won_value)
-    for deal in data.get("won_deals", []):
-        deal["value"] = float(deal["value"])
-    for deal in data.get("lost_deals", []):
-        deal["value"] = float(deal["value"])
-    if report.comparison:
-        cmp = data["comparison"]
-        cmp["average_quote_value"] = float(report.comparison.average_quote_value)
-        cmp["total_quote_value"] = float(report.comparison.total_quote_value)
-        cmp["average_won_value"] = float(report.comparison.average_won_value)
-        cmp["start_date"] = report.comparison.start_date.isoformat()
-        cmp["end_date"] = report.comparison.end_date.isoformat()
+    data = _sales_report_pdf_payload(report)
     company_settings = _get_company_settings(session)
-    company_name = (company_settings.trading_name or company_settings.company_name or "LeadLock") if company_settings else "LeadLock"
-    buffer = generate_weekly_summary_pdf(data, company_name, company_settings=company_settings)
+    company_name = (
+        (company_settings.trading_name or company_settings.company_name or "LeadLock")
+        if company_settings
+        else "LeadLock"
+    )
+    buffer = generate_sales_report_pdf(data, company_name, company_settings=company_settings)
     pdf_content = buffer.read()
     if report.period == "custom":
         fn = (
-            f"Pipeline_Summary_{report.start_date.strftime('%Y-%m-%d')}"
+            f"Sales_Report_{report.start_date.strftime('%Y-%m-%d')}"
             f"_to_{report.end_date.strftime('%Y-%m-%d')}.pdf"
         )
     else:
-        fn = f"Pipeline_Summary_{report.period}_{report.end_date.strftime('%Y-%m-%d')}.pdf"
+        fn = f"Sales_Report_{report.period}_{report.end_date.strftime('%Y-%m-%d')}.pdf"
     return Response(
         content=pdf_content,
         media_type="application/pdf",

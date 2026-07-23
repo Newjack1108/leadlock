@@ -1116,49 +1116,41 @@ class QuoteEngagementReport(BaseModel):
     rejected_count: int
 
 
-class WeeklySummaryDealItem(BaseModel):
-    name: str
-    value: Decimal
+class SalesReportMetricBlock(BaseModel):
+    """Count plus money totals for one quote/order bucket."""
+    count: int = 0
+    total_value: Decimal = Decimal("0")
+    average_value: Decimal = Decimal("0")
 
 
-class WeeklyPipelinePeriodMetrics(BaseModel):
-    """Counts and money metrics for one Pipeline Summary date window."""
+class SalesReportPeriodMetrics(BaseModel):
+    """Sales Report metrics for one date window."""
     label: str
     start_date: datetime
     end_date: datetime
-    new_count: int = 0
-    quoted_count: int = 0
+    leads_count: int = 0
     qualified_count: int = 0
-    won_count: int = 0
-    lost_count: int = 0
-    closed_count: int = 0
-    quotes_sent_count: int = 0
-    win_rate: float = 0.0
-    average_quote_value: Decimal = Decimal("0")
-    total_quote_value: Decimal = Decimal("0")
-    average_won_value: Decimal = Decimal("0")
+    quotes_sent: SalesReportMetricBlock = SalesReportMetricBlock()
+    quotes_accepted: SalesReportMetricBlock = SalesReportMetricBlock()
+    quotes_rejected: SalesReportMetricBlock = SalesReportMetricBlock()
+    quotes_lost: SalesReportMetricBlock = SalesReportMetricBlock()
+    quotes_closed: SalesReportMetricBlock = SalesReportMetricBlock()
 
 
-class WeeklyPipelineSummaryReport(BaseModel):
+class SalesReport(BaseModel):
     period: Optional[str] = None
-    week_label: str
+    period_label: str
     generated_at: datetime
-    new_count: int
-    quoted_count: int
-    qualified_count: int = 0
-    won_count: int
-    lost_count: int
-    closed_count: int
-    quotes_sent_count: int = 0
-    win_rate: float = 0.0
-    average_quote_value: Decimal = Decimal("0")
-    total_quote_value: Decimal = Decimal("0")
-    average_won_value: Decimal = Decimal("0")
-    won_deals: List[WeeklySummaryDealItem] = []
-    lost_deals: List[WeeklySummaryDealItem] = []
     start_date: datetime
     end_date: datetime
-    comparison: Optional[WeeklyPipelinePeriodMetrics] = None
+    leads_count: int = 0
+    qualified_count: int = 0
+    quotes_sent: SalesReportMetricBlock = SalesReportMetricBlock()
+    quotes_accepted: SalesReportMetricBlock = SalesReportMetricBlock()
+    quotes_rejected: SalesReportMetricBlock = SalesReportMetricBlock()
+    quotes_lost: SalesReportMetricBlock = SalesReportMetricBlock()
+    quotes_closed: SalesReportMetricBlock = SalesReportMetricBlock()
+    comparison: Optional[SalesReportPeriodMetrics] = None
 
 
 class UnreadSmsMessageItem(BaseModel):

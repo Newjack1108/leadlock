@@ -26,7 +26,7 @@ import api, {
   downloadFacebookLeadConversionReportCsv,
   downloadCloserPerformanceReportPdf,
   downloadQuoteEngagementReportPdf,
-  downloadWeeklySummaryReportPdf,
+  downloadSalesReportPdf,
 } from '@/lib/api';
 import { DashboardStats, StaleSummary, CompanySettings, UnreadSmsSummary, UnreadMessengerSummary, LeadLocationItem, DiscountTemplate, DashboardCommunicationTotals, FacebookLeadConversionReport, FacebookLeadConversionRow, DashboardPresetPeriod, DateRangeQueryParams } from '@/lib/types';
 import { getInstallationLeadTimeRows, hasAnyInstallationLeadTime } from '@/lib/companyLeadTimeDisplay';
@@ -734,10 +734,10 @@ export default function DashboardPage() {
               <div className="flex flex-col p-4 rounded-lg border border-border">
                 <div className="flex items-center gap-2 mb-2">
                   <Calendar className="h-4 w-4 text-primary" />
-                  <span className="font-medium">Pipeline Summary</span>
+                  <span className="font-medium">Sales Report</span>
                 </div>
                 <p className="text-xs text-muted-foreground mb-3">
-                  Inbound leads plus quotes won/lost for {activeRangeLabel}
+                  Leads, quotes sent, accepted orders, and rejected outcomes for {activeRangeLabel}
                   {!(dateFilter.mode === 'preset' && dateFilter.period === 'all')
                     ? '. Includes prior period comparison.'
                     : ''}
@@ -745,7 +745,7 @@ export default function DashboardPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => downloadWeeklySummaryReportPdf(activeDateParams)}
+                  onClick={() => downloadSalesReportPdf(activeDateParams)}
                   className="mt-auto"
                 >
                   <FileDown className="h-4 w-4 mr-1" />
