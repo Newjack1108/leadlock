@@ -838,11 +838,11 @@ def _build_sales_report_metrics(
         Lead.status.in_([LeadStatus.QUALIFIED, LeadStatus.QUOTED, LeadStatus.WON])
     )
 
-    sent_date_expr = func.coalesce(Quote.sent_at, Quote.created_at)
     sent_stmt = (
         select(Quote)
         .where(_quote_stats_filter())
         .where(Quote.status != QuoteStatus.DRAFT)
+        .where(Quote.sent_at.isnot(None))
     )
     lost_stmt = (
         select(Quote)
@@ -863,7 +863,7 @@ def _build_sales_report_metrics(
     )
 
     if apply_range:
-        sent_stmt = sent_stmt.where(sent_date_expr >= start).where(sent_date_expr <= end)
+        sent_stmt = sent_stmt.where(Quote.sent_at >= start).where(Quote.sent_at <= end)
         lost_stmt = lost_stmt.where(Quote.updated_at >= start).where(Quote.updated_at <= end)
         closed_stmt = closed_stmt.where(Quote.updated_at >= start).where(Quote.updated_at <= end)
         accepted_stmt = accepted_stmt.where(Order.created_at >= start).where(Order.created_at <= end)
@@ -874,7 +874,7 @@ def _build_sales_report_metrics(
     accepted_orders = list(session.exec(accepted_stmt).all())
 
     if apply_range:
-        sent_quotes = [q for q in sent_quotes if _in_range(q.sent_at or q.created_at, start, end)]
+        sent_quotes = [q for q in sent_quotes if _in_range(q.sent_at, start, end)]
         lost_quotes = [q for q in lost_quotes if _in_range(q.updated_at, start, end)]
         closed_quotes = [q for q in closed_quotes if _in_range(q.updated_at, start, end)]
         accepted_orders = [o for o in accepted_orders if _in_range(o.created_at, start, end)]
