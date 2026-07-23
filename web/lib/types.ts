@@ -605,6 +605,7 @@ export interface SalesReportMetricBlock {
 
 export interface SalesReportOrderRow {
   customer_name: string;
+  lead_type?: string | null;
   order_number: string;
   total_amount: number;
 }

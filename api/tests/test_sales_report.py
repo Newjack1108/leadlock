@@ -18,6 +18,7 @@ from app.models import (
     Customer,
     Lead,
     LeadStatus,
+    LeadType,
     LossCategory,
     Order,
     Quote,
@@ -392,6 +393,7 @@ def test_sales_report_orders_list_uses_customer_name_and_ex_vat_value(api_client
         lead = Lead(
             name="Lead Name Ignored",
             status=LeadStatus.WON,
+            lead_type=LeadType.STABLES,
             created_at=in_range,
             customer_id=customer.id,
         )
@@ -432,6 +434,7 @@ def test_sales_report_orders_list_uses_customer_name_and_ex_vat_value(api_client
     assert data["orders"] == [
         {
             "customer_name": "Jane Order",
+            "lead_type": "STABLES",
             "order_number": "ORD-LIST-1",
             "total_amount": "1250.00",
         }

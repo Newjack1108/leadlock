@@ -1154,7 +1154,7 @@ def generate_sales_report_pdf(
     flowables.append(Paragraph("<b>Orders in period (ex VAT)</b>", normal))
     flowables.append(Spacer(1, 8))
     if orders:
-        order_table_data: List[List[str]] = [["Name", "Order number", "Value (ex VAT)"]]
+        order_table_data: List[List[str]] = [["Name", "Lead type", "Order number", "Value (ex VAT)"]]
         orders_total = 0.0
         for row in orders:
             amount = float(row.get("total_amount", 0) or 0)
@@ -1162,14 +1162,15 @@ def generate_sales_report_pdf(
             order_table_data.append(
                 [
                     str(row.get("customer_name") or "Unknown"),
+                    str(row.get("lead_type") or ""),
                     str(row.get("order_number") or ""),
                     format_currency(amount),
                 ]
             )
-        order_table_data.append(["Total", "", format_currency(orders_total)])
-        order_table = Table(order_table_data, colWidths=[220, 120, 110])
+        order_table_data.append(["Total", "", "", format_currency(orders_total)])
+        order_table = Table(order_table_data, colWidths=[170, 80, 110, 100])
         order_style = _table_style()
-        order_style.add("ALIGN", (2, 0), (2, -1), "RIGHT")
+        order_style.add("ALIGN", (3, 0), (3, -1), "RIGHT")
         order_style.add("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold")
         order_table.setStyle(order_style)
         flowables.append(order_table)

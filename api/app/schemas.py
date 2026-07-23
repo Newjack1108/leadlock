@@ -1126,6 +1126,7 @@ class SalesReportMetricBlock(BaseModel):
 class SalesReportOrderRow(BaseModel):
     """One accepted order in the Sales Report period (values are ex VAT)."""
     customer_name: str
+    lead_type: Optional[str] = None
     order_number: str
     total_amount: Decimal = Decimal("0")
 

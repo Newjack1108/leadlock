@@ -836,6 +836,21 @@ def _sales_report_order_name(
     return "Unknown"
 
 
+def _sales_report_order_lead_type(
+    order: Order,
+    *,
+    quotes_by_id: dict,
+    leads_by_id: dict,
+) -> Optional[str]:
+    quote = quotes_by_id.get(int(order.quote_id)) if order.quote_id else None
+    if not quote or not quote.lead_id:
+        return None
+    lead = leads_by_id.get(int(quote.lead_id))
+    if not lead or lead.lead_type is None:
+        return None
+    return _enum_value(lead.lead_type, default="")
+
+
 def _build_sales_report_order_rows(
     session: Session,
     accepted_orders: List[Order],
@@ -880,6 +895,11 @@ def _build_sales_report_order_rows(
             customer_name=_sales_report_order_name(
                 order,
                 customers_by_id=customers_by_id,
+                quotes_by_id=quotes_by_id,
+                leads_by_id=leads_by_id,
+            ),
+            lead_type=_sales_report_order_lead_type(
+                order,
                 quotes_by_id=quotes_by_id,
                 leads_by_id=leads_by_id,
             ),
@@ -1008,6 +1028,7 @@ def _sales_report_pdf_payload(report: SalesReport) -> dict:
     data["orders"] = [
         {
             "customer_name": row.customer_name,
+            "lead_type": row.lead_type,
             "order_number": row.order_number,
             "total_amount": float(row.total_amount),
         }
