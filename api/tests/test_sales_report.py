@@ -14,7 +14,17 @@ from sqlmodel import Session, SQLModel, create_engine
 
 from app.auth import get_current_user
 from app.database import get_session
-from app.models import Lead, LeadStatus, LossCategory, Order, Quote, QuoteStatus, User, UserRole
+from app.models import (
+    Customer,
+    Lead,
+    LeadStatus,
+    LossCategory,
+    Order,
+    Quote,
+    QuoteStatus,
+    User,
+    UserRole,
+)
 from app.routers import reports as reports_router
 
 
@@ -343,6 +353,11 @@ def test_sales_report_quote_buckets_and_accepted_requires_order(api_client, sqli
     assert Decimal(str(data["quotes_accepted"]["total_value"])) == Decimal("3000.00")
     assert Decimal(str(data["quotes_accepted"]["average_value"])) == Decimal("1500.00")
 
+    assert len(data["orders"]) == 2
+    assert {row["order_number"] for row in data["orders"]} == {"ORD-A", "ORD-B"}
+    assert {row["customer_name"] for row in data["orders"]} == {"Won Alice", "Won Bob"}
+    assert sum(Decimal(str(row["total_amount"])) for row in data["orders"]) == Decimal("3000.00")
+
     assert data["quotes_lost"]["count"] == 1
     assert data["quotes_closed"]["count"] == 1
     assert data["quotes_rejected"]["count"] == 2
@@ -360,6 +375,67 @@ def test_sales_report_quote_buckets_and_accepted_requires_order(api_client, sqli
     assert data["quotes_created"]["count"] == 2
     assert Decimal(str(data["quotes_created"]["total_value"])) == Decimal("10499.00")
     assert Decimal(str(data["quotes_created"]["average_value"])) == Decimal("5249.50")
+
+
+def test_sales_report_orders_list_uses_customer_name_and_ex_vat_value(api_client, sqlite_engine):
+    with Session(sqlite_engine) as session:
+        user = _seed_user(session)
+        in_range = datetime(2026, 6, 10, 10, 0, 0)
+        customer = Customer(
+            customer_number="CUST-SR-1",
+            name="Jane Order",
+            email="jane-order@example.com",
+        )
+        session.add(customer)
+        session.commit()
+        session.refresh(customer)
+        lead = Lead(
+            name="Lead Name Ignored",
+            status=LeadStatus.WON,
+            created_at=in_range,
+            customer_id=customer.id,
+        )
+        session.add(lead)
+        session.commit()
+        session.refresh(lead)
+        quote = Quote(
+            quote_number="QT-ORDER-LIST",
+            status=QuoteStatus.ACCEPTED,
+            subtotal=Decimal("1250.00"),
+            total_amount=Decimal("1250.00"),
+            created_by_id=user.id,
+            lead_id=lead.id,
+            customer_id=customer.id,
+            sent_at=in_range,
+            accepted_at=in_range,
+            created_at=in_range,
+            updated_at=in_range,
+        )
+        session.add(quote)
+        session.commit()
+        session.refresh(quote)
+        _add_order(
+            session,
+            quote=quote,
+            user_id=user.id,
+            order_number="ORD-LIST-1",
+            created_at=in_range,
+            total_amount=Decimal("1250.00"),
+        )
+
+    response = api_client.get(
+        "/api/reports/sales-report",
+        params={"start_date": "2026-06-08", "end_date": "2026-06-12", "compare": "false"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["orders"] == [
+        {
+            "customer_name": "Jane Order",
+            "order_number": "ORD-LIST-1",
+            "total_amount": "1250.00",
+        }
+    ]
 
 
 def test_sales_report_quotes_created_uses_created_at(api_client, sqlite_engine):

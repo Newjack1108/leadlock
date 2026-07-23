@@ -1123,6 +1123,13 @@ class SalesReportMetricBlock(BaseModel):
     average_value: Decimal = Decimal("0")
 
 
+class SalesReportOrderRow(BaseModel):
+    """One accepted order in the Sales Report period (values are ex VAT)."""
+    customer_name: str
+    order_number: str
+    total_amount: Decimal = Decimal("0")
+
+
 class SalesReportPeriodMetrics(BaseModel):
     """Sales Report metrics for one date window."""
     label: str
@@ -1152,6 +1159,7 @@ class SalesReport(BaseModel):
     quotes_rejected: SalesReportMetricBlock = SalesReportMetricBlock()
     quotes_lost: SalesReportMetricBlock = SalesReportMetricBlock()
     quotes_closed: SalesReportMetricBlock = SalesReportMetricBlock()
+    orders: List[SalesReportOrderRow] = []
     comparison: Optional[SalesReportPeriodMetrics] = None
 
 

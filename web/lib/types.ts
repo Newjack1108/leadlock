@@ -603,6 +603,12 @@ export interface SalesReportMetricBlock {
   average_value: number;
 }
 
+export interface SalesReportOrderRow {
+  customer_name: string;
+  order_number: string;
+  total_amount: number;
+}
+
 export interface SalesReportPeriodMetrics {
   label: string;
   start_date: string;
@@ -631,6 +637,7 @@ export interface SalesReport {
   quotes_rejected: SalesReportMetricBlock;
   quotes_lost: SalesReportMetricBlock;
   quotes_closed: SalesReportMetricBlock;
+  orders: SalesReportOrderRow[];
   comparison?: SalesReportPeriodMetrics | null;
 }
 

@@ -27,6 +27,7 @@ from app.schemas import (
     QuoteEngagementReport,
     SalesReport,
     SalesReportMetricBlock,
+    SalesReportOrderRow,
     SalesReportPeriodMetrics,
 )
 from app.stats_exclusion import lead_counts_toward_stats, quote_counts_toward_stats
@@ -40,7 +41,7 @@ from app.report_pdf_service import (
 )
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
+from typing import List, Optional, Tuple
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
 UNKNOWN_ADVERT_PROFILE_NAME = "Unknown / Not tagged"
@@ -813,11 +814,87 @@ def _metric_block(amounts: list[Decimal]) -> SalesReportMetricBlock:
     return SalesReportMetricBlock(count=count, total_value=total, average_value=average)
 
 
+def _sales_report_order_name(
+    order: Order,
+    *,
+    customers_by_id: dict,
+    quotes_by_id: dict,
+    leads_by_id: dict,
+) -> str:
+    if order.customer_id:
+        customer = customers_by_id.get(int(order.customer_id))
+        if customer and customer.name:
+            return customer.name
+    quote = quotes_by_id.get(int(order.quote_id)) if order.quote_id else None
+    if quote:
+        if quote.dealer_customer_name:
+            return quote.dealer_customer_name
+        if quote.lead_id:
+            lead = leads_by_id.get(int(quote.lead_id))
+            if lead and lead.name:
+                return lead.name
+    return "Unknown"
+
+
+def _build_sales_report_order_rows(
+    session: Session,
+    accepted_orders: List[Order],
+) -> List[SalesReportOrderRow]:
+    if not accepted_orders:
+        return []
+
+    customer_ids = {int(o.customer_id) for o in accepted_orders if o.customer_id}
+    quote_ids = {int(o.quote_id) for o in accepted_orders if o.quote_id}
+
+    customers_by_id = {}
+    if customer_ids:
+        customers_by_id = {
+            int(c.id): c
+            for c in session.exec(select(Customer).where(Customer.id.in_(customer_ids))).all()
+            if c.id is not None
+        }
+
+    quotes_by_id = {}
+    if quote_ids:
+        quotes_by_id = {
+            int(q.id): q
+            for q in session.exec(select(Quote).where(Quote.id.in_(quote_ids))).all()
+            if q.id is not None
+        }
+
+    lead_ids = {int(q.lead_id) for q in quotes_by_id.values() if q.lead_id}
+    leads_by_id = {}
+    if lead_ids:
+        leads_by_id = {
+            int(lead.id): lead
+            for lead in session.exec(select(Lead).where(Lead.id.in_(lead_ids))).all()
+            if lead.id is not None
+        }
+
+    ordered = sorted(
+        accepted_orders,
+        key=lambda o: (_as_naive_utc(o.created_at) or datetime.min, o.order_number or ""),
+    )
+    return [
+        SalesReportOrderRow(
+            customer_name=_sales_report_order_name(
+                order,
+                customers_by_id=customers_by_id,
+                quotes_by_id=quotes_by_id,
+                leads_by_id=leads_by_id,
+            ),
+            order_number=order.order_number,
+            total_amount=_decimal_or_zero(order.total_amount),
+        )
+        for order in ordered
+    ]
+
+
 def _build_sales_report_metrics(
     session: Session,
     resolved_range: ResolvedDateRange,
-) -> SalesReportPeriodMetrics:
-    """Compute Sales Report metrics for one date window."""
+) -> Tuple[SalesReportPeriodMetrics, List[SalesReportOrderRow]]:
+    """Compute Sales Report metrics and accepted-order rows for one date window."""
     apply_range = resolved_range.period != "all"
     start, end = resolved_range.start, resolved_range.end
 
@@ -887,7 +964,7 @@ def _build_sales_report_metrics(
         _decimal_or_zero(q.total_amount) for q in lost_quotes + closed_quotes
     ]
 
-    return SalesReportPeriodMetrics(
+    metrics = SalesReportPeriodMetrics(
         label=_period_label(start, end),
         start_date=start,
         end_date=end,
@@ -904,6 +981,7 @@ def _build_sales_report_metrics(
         quotes_lost=_metric_block([_decimal_or_zero(q.total_amount) for q in lost_quotes]),
         quotes_closed=_metric_block([_decimal_or_zero(q.total_amount) for q in closed_quotes]),
     )
+    return metrics, _build_sales_report_order_rows(session, accepted_orders)
 
 
 def _sales_report_metric_floats(block: SalesReportMetricBlock) -> dict:
@@ -927,6 +1005,14 @@ def _sales_report_pdf_payload(report: SalesReport) -> dict:
         "quotes_closed",
     ):
         data[key] = _sales_report_metric_floats(getattr(report, key))
+    data["orders"] = [
+        {
+            "customer_name": row.customer_name,
+            "order_number": row.order_number,
+            "total_amount": float(row.total_amount),
+        }
+        for row in report.orders
+    ]
     if report.comparison:
         cmp = data["comparison"]
         cmp["start_date"] = report.comparison.start_date.isoformat()
@@ -956,13 +1042,13 @@ async def get_sales_report(
     resolved_range = resolve_date_range(
         period=period, start_date=start_date, end_date=end_date, default_period="week"
     )
-    current = _build_sales_report_metrics(session, resolved_range)
+    current, orders = _build_sales_report_metrics(session, resolved_range)
 
     comparison: Optional[SalesReportPeriodMetrics] = None
     if compare:
         prior = previous_equal_range(resolved_range)
         if prior is not None:
-            comparison = _build_sales_report_metrics(session, prior)
+            comparison, _ = _build_sales_report_metrics(session, prior)
 
     period_label = (
         f"{resolved_range.start.strftime('%d %b')} - {resolved_range.end.strftime('%d %b %Y')}"
@@ -982,6 +1068,7 @@ async def get_sales_report(
         quotes_rejected=current.quotes_rejected,
         quotes_lost=current.quotes_lost,
         quotes_closed=current.quotes_closed,
+        orders=orders,
         comparison=comparison,
     )
 
