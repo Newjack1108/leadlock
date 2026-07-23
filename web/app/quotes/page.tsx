@@ -128,10 +128,17 @@ function QuoteListEngagementBadges({ quote }: { quote: Quote }) {
 
 const VALID_QUOTE_STATUSES = Object.values(QuoteStatus);
 
-type QuotesListFilter = QuoteStatus | 'ALL' | 'LIVE' | 'CLOSED';
+type QuotesListFilter = QuoteStatus | 'ALL' | 'ALL_INCLUDING' | 'LIVE' | 'CLOSED';
 
 function isConcreteQuoteStatus(f: QuotesListFilter): f is QuoteStatus {
-  return f !== 'ALL' && f !== 'LIVE' && f !== 'CLOSED';
+  return f !== 'ALL' && f !== 'ALL_INCLUDING' && f !== 'LIVE' && f !== 'CLOSED';
+}
+
+function lifecycleForFilter(filter: QuotesListFilter): 'live' | 'closed' | 'all' | undefined {
+  if (filter === 'LIVE') return 'live';
+  if (filter === 'CLOSED') return 'closed';
+  if (filter === 'ALL_INCLUDING') return 'all';
+  return undefined;
 }
 
 /** URL → filter (default LIVE when no relevant params). ALL uses pipeline=1. */
@@ -142,22 +149,40 @@ function parseFilterFromSearchParams(sp: { get: (key: string) => string | null }
   }
   if (sp.get('lifecycle') === 'closed') return 'CLOSED';
   if (sp.get('lifecycle') === 'live') return 'LIVE';
+  if (sp.get('lifecycle') === 'all') return 'ALL_INCLUDING';
   if (sp.get('pipeline') === '1') return 'ALL';
   return 'LIVE';
 }
 
-/** Filter → query string (null means bare /quotes). */
-function filterToSearchString(filter: QuotesListFilter): string | null {
+function parseCreatedDatesFromSearchParams(sp: {
+  get: (key: string) => string | null;
+}): { createdFrom: string; createdTo: string } {
+  return {
+    createdFrom: sp.get('created_from')?.trim() || '',
+    createdTo: sp.get('created_to')?.trim() || '',
+  };
+}
+
+/** Filter + optional created date range → query string (null means bare /quotes). */
+function quotesListSearchString(
+  filter: QuotesListFilter,
+  createdFrom: string,
+  createdTo: string,
+): string | null {
+  const params = new URLSearchParams();
   if (isConcreteQuoteStatus(filter)) {
-    return new URLSearchParams({ status: filter }).toString();
+    params.set('status', filter);
+  } else if (filter === 'CLOSED') {
+    params.set('lifecycle', 'closed');
+  } else if (filter === 'ALL') {
+    params.set('pipeline', '1');
+  } else if (filter === 'ALL_INCLUDING') {
+    params.set('lifecycle', 'all');
   }
-  if (filter === 'CLOSED') {
-    return new URLSearchParams({ lifecycle: 'closed' }).toString();
-  }
-  if (filter === 'ALL') {
-    return new URLSearchParams({ pipeline: '1' }).toString();
-  }
-  return null;
+  if (createdFrom.trim()) params.set('created_from', createdFrom.trim());
+  if (createdTo.trim()) params.set('created_to', createdTo.trim());
+  const qs = params.toString();
+  return qs || null;
 }
 
 const QUOTES_PAGE_SIZE = 50;
@@ -192,6 +217,8 @@ function QuotesPageContent() {
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'list' | 'tile'>('list');
   const [statusFilter, setStatusFilter] = useState<QuotesListFilter>(() => parseFilterFromSearchParams(searchParams));
+  const [createdFrom, setCreatedFrom] = useState(() => parseCreatedDatesFromSearchParams(searchParams).createdFrom);
+  const [createdTo, setCreatedTo] = useState(() => parseCreatedDatesFromSearchParams(searchParams).createdTo);
   const [temperatureFilter, setTemperatureFilter] = useState<QuoteTemperature | 'ALL'>('ALL');
   const [onHoldFilter, setOnHoldFilter] = useState<'ALL' | 'ON_HOLD'>('ALL');
   const [searchDraft, setSearchDraft] = useState('');
@@ -215,6 +242,9 @@ function QuotesPageContent() {
   useEffect(() => {
     const parsed = parseFilterFromSearchParams(searchParams);
     setStatusFilter((prev) => (prev === parsed ? prev : parsed));
+    const dates = parseCreatedDatesFromSearchParams(searchParams);
+    setCreatedFrom((prev) => (prev === dates.createdFrom ? prev : dates.createdFrom));
+    setCreatedTo((prev) => (prev === dates.createdTo ? prev : dates.createdTo));
   }, [searchParams]);
 
   useEffect(() => {
@@ -241,19 +271,42 @@ function QuotesPageContent() {
     setSearchApplied(searchDraft);
   }, [searchDraft]);
 
-  const onStatusFilterChange = useCallback(
-    (v: string) => {
-      const next = v as QuotesListFilter;
-      setStatusFilter(next);
-      const qs = filterToSearchString(next);
+  const replaceQuotesUrl = useCallback(
+    (filter: QuotesListFilter, from: string, to: string) => {
+      const qs = quotesListSearchString(filter, from, to);
       router.replace(qs ? `/quotes?${qs}` : '/quotes', { scroll: false });
     },
     [router],
   );
 
+  const onStatusFilterChange = useCallback(
+    (v: string) => {
+      const next = v as QuotesListFilter;
+      setStatusFilter(next);
+      replaceQuotesUrl(next, createdFrom, createdTo);
+    },
+    [replaceQuotesUrl, createdFrom, createdTo],
+  );
+
+  const onCreatedFromChange = useCallback(
+    (value: string) => {
+      setCreatedFrom(value);
+      replaceQuotesUrl(statusFilter, value, createdTo);
+    },
+    [replaceQuotesUrl, statusFilter, createdTo],
+  );
+
+  const onCreatedToChange = useCallback(
+    (value: string) => {
+      setCreatedTo(value);
+      replaceQuotesUrl(statusFilter, createdFrom, value);
+    },
+    [replaceQuotesUrl, statusFilter, createdFrom],
+  );
+
   useLayoutEffect(() => {
     setPage(1);
-  }, [statusFilter, temperatureFilter, onHoldFilter, searchApplied, includeArchived]);
+  }, [statusFilter, temperatureFilter, onHoldFilter, searchApplied, includeArchived, createdFrom, createdTo]);
 
   const fetchQuotes = useCallback(async () => {
     try {
@@ -265,11 +318,12 @@ function QuotesPageContent() {
       const searchValue = searchApplied.trim() || undefined;
       const data = await getQuotes({
         status: isConcreteQuoteStatus(statusFilter) ? statusFilter : undefined,
-        lifecycle:
-          statusFilter === 'LIVE' ? 'live' : statusFilter === 'CLOSED' ? 'closed' : undefined,
+        lifecycle: lifecycleForFilter(statusFilter),
         search: searchValue,
         temperature: temperatureFilter === 'ALL' ? undefined : temperatureFilter,
         onHold: onHoldFilter === 'ON_HOLD' || undefined,
+        createdFrom: createdFrom.trim() || undefined,
+        createdTo: createdTo.trim() || undefined,
         page,
         page_size: QUOTES_PAGE_SIZE,
         includeArchived: includeArchived || undefined,
@@ -278,7 +332,7 @@ function QuotesPageContent() {
       setTotal(data.total);
       hasLoadedRef.current = true;
     } catch (error: any) {
-      toast.error('Failed to load quotes');
+      toast.error(error.response?.data?.detail || 'Failed to load quotes');
       if (error.response?.status === 401) {
         router.push('/login');
       }
@@ -286,7 +340,17 @@ function QuotesPageContent() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [statusFilter, temperatureFilter, onHoldFilter, searchApplied, page, includeArchived, router]);
+  }, [
+    statusFilter,
+    temperatureFilter,
+    onHoldFilter,
+    searchApplied,
+    page,
+    includeArchived,
+    createdFrom,
+    createdTo,
+    router,
+  ]);
 
   useEffect(() => {
     fetchQuotes();
@@ -340,11 +404,12 @@ function QuotesPageContent() {
       const searchValue = searchApplied.trim() || undefined;
       await downloadQuotesCsv({
         status: isConcreteQuoteStatus(statusFilter) ? statusFilter : undefined,
-        lifecycle:
-          statusFilter === 'LIVE' ? 'live' : statusFilter === 'CLOSED' ? 'closed' : undefined,
+        lifecycle: lifecycleForFilter(statusFilter),
         search: searchValue,
         temperature: temperatureFilter === 'ALL' ? undefined : temperatureFilter,
         onHold: onHoldFilter === 'ON_HOLD' || undefined,
+        createdFrom: createdFrom.trim() || undefined,
+        createdTo: createdTo.trim() || undefined,
         includeArchived: includeArchived || undefined,
       });
       toast.success('CSV downloaded');
@@ -353,7 +418,15 @@ function QuotesPageContent() {
     } finally {
       setDownloadingCsv(false);
     }
-  }, [statusFilter, temperatureFilter, onHoldFilter, searchApplied, includeArchived]);
+  }, [
+    statusFilter,
+    temperatureFilter,
+    onHoldFilter,
+    searchApplied,
+    includeArchived,
+    createdFrom,
+    createdTo,
+  ]);
 
   // Auto-refresh when user returns to this tab/window
   useEffect(() => {
@@ -427,13 +500,14 @@ function QuotesPageContent() {
 
         <div className="flex flex-col lg:flex-row flex-wrap gap-4 mb-6 items-end">
             <Select value={statusFilter} onValueChange={onStatusFilterChange}>
-              <SelectTrigger className="w-full md:w-[220px]">
+              <SelectTrigger className="w-full md:w-[280px]">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="LIVE">Live quotes</SelectItem>
                 <SelectItem value="CLOSED">Closed quotes</SelectItem>
                 <SelectItem value="ALL">All statuses (excl. rejected & expired)</SelectItem>
+                <SelectItem value="ALL_INCLUDING">All including rejected & expired</SelectItem>
                 {Object.values(QuoteStatus).map((s) => (
                   <SelectItem key={s} value={s}>
                     {s}
@@ -441,6 +515,24 @@ function QuotesPageContent() {
                 ))}
               </SelectContent>
             </Select>
+            <div className="w-full md:w-auto">
+              <p className="mb-1 text-xs text-muted-foreground">Created from</p>
+              <Input
+                type="date"
+                value={createdFrom}
+                onChange={(e) => onCreatedFromChange(e.target.value)}
+                className="w-full md:w-[160px]"
+              />
+            </div>
+            <div className="w-full md:w-auto">
+              <p className="mb-1 text-xs text-muted-foreground">Created to</p>
+              <Input
+                type="date"
+                value={createdTo}
+                onChange={(e) => onCreatedToChange(e.target.value)}
+                className="w-full md:w-[160px]"
+              />
+            </div>
             <Select value={temperatureFilter} onValueChange={(v) => setTemperatureFilter(v as QuoteTemperature | 'ALL')}>
               <SelectTrigger className="w-full md:w-[180px]">
                 <SelectValue placeholder="Temperature" />

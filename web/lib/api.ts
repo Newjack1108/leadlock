@@ -1023,10 +1023,12 @@ export const duplicateQuoteToDraft = async (quoteId: number) => {
 
 export const getQuotes = async (options?: {
   status?: QuoteStatus;
-  lifecycle?: 'live' | 'closed';
+  lifecycle?: 'live' | 'closed' | 'all';
   search?: string;
   temperature?: QuoteTemperature;
   onHold?: boolean;
+  createdFrom?: string;
+  createdTo?: string;
   page?: number;
   page_size?: number;
   includeArchived?: boolean;
@@ -1037,6 +1039,8 @@ export const getQuotes = async (options?: {
   if (options?.search?.trim()) params.search = options.search.trim();
   if (options?.temperature) params.temperature = options.temperature;
   if (options?.onHold) params.on_hold = true;
+  if (options?.createdFrom?.trim()) params.created_from = options.createdFrom.trim();
+  if (options?.createdTo?.trim()) params.created_to = options.createdTo.trim();
   if (options?.page != null) params.page = options.page;
   if (options?.page_size != null) params.page_size = options.page_size;
   if (options?.includeArchived) params.includeArchived = true;
@@ -1046,10 +1050,12 @@ export const getQuotes = async (options?: {
 
 export const downloadQuotesCsv = async (options?: {
   status?: QuoteStatus;
-  lifecycle?: 'live' | 'closed';
+  lifecycle?: 'live' | 'closed' | 'all';
   search?: string;
   temperature?: QuoteTemperature;
   onHold?: boolean;
+  createdFrom?: string;
+  createdTo?: string;
   includeArchived?: boolean;
 }) => {
   const params: Record<string, string | boolean> = {};
@@ -1058,6 +1064,8 @@ export const downloadQuotesCsv = async (options?: {
   if (options?.search?.trim()) params.search = options.search.trim();
   if (options?.temperature) params.temperature = options.temperature;
   if (options?.onHold) params.on_hold = true;
+  if (options?.createdFrom?.trim()) params.created_from = options.createdFrom.trim();
+  if (options?.createdTo?.trim()) params.created_to = options.createdTo.trim();
   if (options?.includeArchived) params.includeArchived = true;
   const response = await api.get('/api/quotes/export.csv', {
     responseType: 'blob',

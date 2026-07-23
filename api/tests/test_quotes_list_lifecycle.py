@@ -131,6 +131,80 @@ def test_quotes_list_default_pipeline_excludes_rejected_expired(api_client, sqli
     assert {item["status"] for item in data["items"]} == {"DRAFT", "SENT", "VIEWED", "ACCEPTED"}
 
 
+def test_quotes_list_lifecycle_all_includes_rejected_expired(api_client, sqlite_engine):
+    r = api_client.get("/api/quotes", params={"lifecycle": "all"}, headers=_auth_headers(sqlite_engine))
+    assert r.status_code == 200
+    data = r.json()
+    assert data["total"] == 6
+    assert {item["status"] for item in data["items"]} == {
+        "DRAFT",
+        "SENT",
+        "VIEWED",
+        "ACCEPTED",
+        "REJECTED",
+        "EXPIRED",
+    }
+
+
+def test_quotes_list_created_from_to_filters_by_created_at(api_client, sqlite_engine):
+    with Session(sqlite_engine) as session:
+        user = session.exec(select(User).where(User.email == "quotes-list-lifecycle@example.com")).first()
+        assert user is not None
+        old = Quote(
+            quote_number="QT-DATE-OLD",
+            status=QuoteStatus.REJECTED,
+            subtotal=Decimal("10.00"),
+            total_amount=Decimal("10.00"),
+            created_by_id=user.id,
+            created_at=datetime(2024, 1, 15, 12, 0, 0),
+        )
+        mid = Quote(
+            quote_number="QT-DATE-MID",
+            status=QuoteStatus.EXPIRED,
+            subtotal=Decimal("10.00"),
+            total_amount=Decimal("10.00"),
+            created_by_id=user.id,
+            created_at=datetime(2024, 6, 15, 12, 0, 0),
+        )
+        new = Quote(
+            quote_number="QT-DATE-NEW",
+            status=QuoteStatus.SENT,
+            subtotal=Decimal("10.00"),
+            total_amount=Decimal("10.00"),
+            created_by_id=user.id,
+            created_at=datetime(2025, 1, 15, 12, 0, 0),
+        )
+        session.add(old)
+        session.add(mid)
+        session.add(new)
+        session.commit()
+
+    r = api_client.get(
+        "/api/quotes",
+        params={
+            "lifecycle": "all",
+            "created_from": "2024-06-01",
+            "created_to": "2024-12-31",
+        },
+        headers=_auth_headers(sqlite_engine),
+    )
+    assert r.status_code == 200
+    data = r.json()
+    numbers = {item["quote_number"] for item in data["items"]}
+    assert "QT-DATE-MID" in numbers
+    assert "QT-DATE-OLD" not in numbers
+    assert "QT-DATE-NEW" not in numbers
+
+
+def test_quotes_list_created_to_before_from_returns_400(api_client, sqlite_engine):
+    r = api_client.get(
+        "/api/quotes",
+        params={"created_from": "2024-06-01", "created_to": "2024-01-01"},
+        headers=_auth_headers(sqlite_engine),
+    )
+    assert r.status_code == 400
+
+
 def test_quotes_list_lifecycle_live_excludes_past_valid_until(api_client, sqlite_engine):
     with Session(sqlite_engine) as session:
         user = session.exec(select(User).where(User.email == "quotes-list-lifecycle@example.com")).first()

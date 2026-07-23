@@ -6,6 +6,7 @@ import os
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 
 import pytest
+from datetime import datetime
 from decimal import Decimal
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -221,3 +222,65 @@ def test_quotes_export_csv_default_pipeline_excludes_rejected(api_client, sqlite
     rows = _parse_csv(r.text)
     quote_numbers = {row["quote_number"] for row in rows}
     assert quote_numbers == {"QT-EXP-001"}
+
+
+def test_quotes_export_csv_lifecycle_all_includes_rejected(api_client, sqlite_engine):
+    r = api_client.get(
+        "/api/quotes/export.csv",
+        params={"lifecycle": "all"},
+        headers=_auth_headers(sqlite_engine),
+    )
+    assert r.status_code == 200
+    rows = _parse_csv(r.text)
+    quote_numbers = {row["quote_number"] for row in rows}
+    assert quote_numbers == {"QT-EXP-001", "QT-EXP-002"}
+
+
+def test_quotes_export_csv_lifecycle_all_with_created_date_range(api_client, sqlite_engine):
+    with Session(sqlite_engine) as session:
+        user = session.exec(select(User).where(User.email == "quotes-export@example.com")).first()
+        assert user is not None
+        customer = session.exec(select(Customer).where(Customer.email == "jane@example.com")).first()
+        assert customer is not None
+        session.add(
+            Quote(
+                quote_number="QT-EXP-OLD",
+                status=QuoteStatus.EXPIRED,
+                customer_id=customer.id,
+                subtotal=Decimal("200.00"),
+                total_amount=Decimal("200.00"),
+                created_by_id=user.id,
+                created_at=datetime(2023, 3, 10, 9, 0, 0),
+            )
+        )
+        session.add(
+            Quote(
+                quote_number="QT-EXP-INRANGE",
+                status=QuoteStatus.REJECTED,
+                customer_id=customer.id,
+                subtotal=Decimal("300.00"),
+                total_amount=Decimal("300.00"),
+                created_by_id=user.id,
+                created_at=datetime(2024, 8, 20, 15, 30, 0),
+            )
+        )
+        session.commit()
+
+    r = api_client.get(
+        "/api/quotes/export.csv",
+        params={
+            "lifecycle": "all",
+            "created_from": "2024-01-01",
+            "created_to": "2024-12-31",
+        },
+        headers=_auth_headers(sqlite_engine),
+    )
+    assert r.status_code == 200
+    rows = _parse_csv(r.text)
+    quote_numbers = {row["quote_number"] for row in rows}
+    # Fixture quotes use "now" created_at; only the 2024 rejected quote is in range among seeded extras.
+    assert "QT-EXP-INRANGE" in quote_numbers
+    assert "QT-EXP-OLD" not in quote_numbers
+    # Default fixture quotes (created at seed time = "now") are outside 2024.
+    assert "QT-EXP-001" not in quote_numbers
+    assert "QT-EXP-002" not in quote_numbers

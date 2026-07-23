@@ -6,7 +6,7 @@ from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Query, 
 from fastapi.responses import Response
 from sqlmodel import Session, select, or_, and_
 from sqlalchemy import func, true, String as SAString, delete, update
-from datetime import datetime
+from datetime import date, datetime, time, timedelta
 from typing import Dict, List, Literal, Optional, Tuple
 from html import escape
 from jinja2 import TemplateError
@@ -1325,10 +1325,12 @@ async def create_quote(
 @router.get("", response_model=QuoteListResponse)
 async def get_all_quotes(
     status: Optional[QuoteStatus] = Query(None),
-    lifecycle: Optional[Literal["live", "closed"]] = Query(None),
+    lifecycle: Optional[Literal["live", "closed", "all"]] = Query(None),
     search: Optional[str] = Query(None),
     temperature: Optional[QuoteTemperature] = Query(None),
     on_hold: Optional[bool] = Query(None),
+    created_from: Optional[str] = Query(None, description="Filter by created_at start date (YYYY-MM-DD)."),
+    created_to: Optional[str] = Query(None, description="Filter by created_at end date (YYYY-MM-DD)."),
     page: int = Query(1, ge=1),
     page_size: int = Query(LIST_PAGE_SIZE_DEFAULT, ge=1, le=LIST_PAGE_SIZE_MAX),
     include_archived: bool = Query(False, alias="includeArchived"),
@@ -1340,7 +1342,9 @@ async def get_all_quotes(
     Default: excludes REJECTED and EXPIRED (pipeline list).
     Pass status= for a single status (special case: VIEWED includes SENT rows with viewed_at set); lifecycle is ignored.
     Pass lifecycle=live for DRAFT/SENT/VIEWED only (also excludes quotes with valid_until in the past),
-    or lifecycle=closed for ACCEPTED/REJECTED/EXPIRED only.
+    lifecycle=closed for ACCEPTED/REJECTED/EXPIRED only,
+    or lifecycle=all for every status including REJECTED and EXPIRED.
+    Pass created_from / created_to (YYYY-MM-DD) to filter by Quote.created_at.
     Pass on_hold=true to only include quotes with on_hold_at set (customer replied HOLD).
     """
     try:
@@ -1351,6 +1355,8 @@ async def get_all_quotes(
             temperature=temperature,
             on_hold=on_hold,
             include_archived=include_archived,
+            created_from=created_from,
+            created_to=created_to,
         )
 
         count_stmt = (
@@ -1428,6 +1434,8 @@ async def get_all_quotes(
             )
 
         return QuoteListResponse(items=result, total=total, page=page, page_size=page_size)
+    except HTTPException:
+        raise
     except Exception as e:
         import traceback
         error_detail = str(e)
@@ -1435,14 +1443,28 @@ async def get_all_quotes(
         raise HTTPException(status_code=500, detail=f"Error fetching quotes: {error_detail}")
 
 
+def _parse_created_date_bound(value: Optional[str], *, param_name: str) -> Optional[date]:
+    if value is None or not str(value).strip():
+        return None
+    try:
+        return date.fromisoformat(str(value).strip())
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{param_name} must use YYYY-MM-DD format",
+        ) from exc
+
+
 def _quote_list_where_clause(
     *,
     status: Optional[QuoteStatus] = None,
-    lifecycle: Optional[Literal["live", "closed"]] = None,
+    lifecycle: Optional[Literal["live", "closed", "all"]] = None,
     search: Optional[str] = None,
     temperature: Optional[QuoteTemperature] = None,
     on_hold: Optional[bool] = None,
     include_archived: bool = False,
+    created_from: Optional[str] = None,
+    created_to: Optional[str] = None,
 ):
     """Shared filter logic for GET /api/quotes and GET /api/quotes/export.csv."""
     search_active = bool(search and search.strip())
@@ -1471,6 +1493,8 @@ def _quote_list_where_clause(
             )
         elif lifecycle == "closed":
             conditions.append(Quote.status.in_(QUOTE_CLOSED_STATUSES))
+        elif lifecycle == "all":
+            pass  # every status including REJECTED and EXPIRED
         else:
             conditions.append(Quote.status.notin_(QUOTE_LIST_EXCLUDED_STATUSES))
 
@@ -1482,6 +1506,16 @@ def _quote_list_where_clause(
 
     if on_hold is True:
         conditions.append(Quote.on_hold_at.isnot(None))
+
+    from_day = _parse_created_date_bound(created_from, param_name="created_from")
+    to_day = _parse_created_date_bound(created_to, param_name="created_to")
+    if from_day is not None and to_day is not None and to_day < from_day:
+        raise HTTPException(status_code=400, detail="created_to must be on or after created_from")
+    if from_day is not None:
+        conditions.append(Quote.created_at >= datetime.combine(from_day, time.min))
+    if to_day is not None:
+        # Exclusive next-day bound so end-of-day is inclusive without relying on time.max precision.
+        conditions.append(Quote.created_at < datetime.combine(to_day + timedelta(days=1), time.min))
 
     if search_active:
         term = f"%{search.strip()}%"
@@ -1501,10 +1535,12 @@ def _quote_list_where_clause(
 @router.get("/export.csv")
 async def export_quotes_csv(
     status: Optional[QuoteStatus] = Query(None),
-    lifecycle: Optional[Literal["live", "closed"]] = Query(None),
+    lifecycle: Optional[Literal["live", "closed", "all"]] = Query(None),
     search: Optional[str] = Query(None),
     temperature: Optional[QuoteTemperature] = Query(None),
     on_hold: Optional[bool] = Query(None),
+    created_from: Optional[str] = Query(None, description="Filter by created_at start date (YYYY-MM-DD)."),
+    created_to: Optional[str] = Query(None, description="Filter by created_at end date (YYYY-MM-DD)."),
     include_archived: bool = Query(False, alias="includeArchived"),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
@@ -1519,6 +1555,8 @@ async def export_quotes_csv(
         temperature=temperature,
         on_hold=on_hold,
         include_archived=include_archived,
+        created_from=created_from,
+        created_to=created_to,
     )
     content = export_quotes_to_csv(session, where_clause)
     date_str = datetime.utcnow().strftime("%Y-%m-%d")
