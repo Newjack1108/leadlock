@@ -554,13 +554,13 @@ export default function WeeklyPlanPage() {
           <div
             role="status"
             aria-live="polite"
-            className="rounded-md border border-border bg-muted/50 px-4 py-3 text-sm"
+            className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100"
           >
             <div className="flex items-start gap-3">
-              <RefreshCw className="h-4 w-4 mt-0.5 animate-spin shrink-0 text-muted-foreground" />
+              <RefreshCw className="h-4 w-4 mt-0.5 animate-spin shrink-0 text-amber-700 dark:text-amber-300" />
               <div>
                 <p className="font-medium">Your weekly plan is being generated — please be patient.</p>
-                <p className="text-muted-foreground mt-1">
+                <p className="mt-1 text-amber-900/80 dark:text-amber-100/80">
                   This can take up to a minute or two. Please don’t click Generate again until it finishes.
                 </p>
               </div>
