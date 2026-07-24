@@ -79,6 +79,7 @@ import SendConfiguratorLinkDialog from '@/components/configurator/SendConfigurat
 import ComposeEmailDialog from '@/components/ComposeEmailDialog';
 import CallNotesDialog from '@/components/CallNotesDialog';
 import AddManualActivityDialog from '@/components/AddManualActivityDialog';
+import CreateTaskDialog from '@/components/CreateTaskDialog';
 import NinoxBadge from '@/components/NinoxBadge';
 import TestCustomerBadge from '@/components/TestCustomerBadge';
 import CustomerCommunicationBarChart from '@/components/CustomerCommunicationBarChart';
@@ -216,6 +217,7 @@ export default function CustomerDetailPage() {
   const [callNotesDialogOpen, setCallNotesDialogOpen] = useState(false);
   const [callNotesPhone, setCallNotesPhone] = useState('');
   const [manualActivityDialogOpen, setManualActivityDialogOpen] = useState(false);
+  const [createTaskDialogOpen, setCreateTaskDialogOpen] = useState(false);
   const [expandedActivityNotes, setExpandedActivityNotes] = useState<Record<number, boolean>>({});
   const [historyExpanded, setHistoryExpanded] = useState(false);
   const [editingName, setEditingName] = useState(false);
@@ -1149,15 +1151,26 @@ export default function CustomerDetailPage() {
               <CardHeader>
                 <div className="flex items-center justify-between gap-2">
                   <CardTitle>Activity Timeline</CardTitle>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setManualActivityDialogOpen(true)}
-                  >
-                    <Plus className="h-4 w-4 mr-1.5" />
-                    Add note
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCreateTaskDialogOpen(true)}
+                    >
+                      <Plus className="h-4 w-4 mr-1.5" />
+                      Create task
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setManualActivityDialogOpen(true)}
+                    >
+                      <Plus className="h-4 w-4 mr-1.5" />
+                      Add note
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
@@ -1405,6 +1418,15 @@ export default function CustomerDetailPage() {
             fetchActivities();
             fetchHistory();
           }}
+        />
+      )}
+
+      {customer && (
+        <CreateTaskDialog
+          open={createTaskDialogOpen}
+          onOpenChange={setCreateTaskDialogOpen}
+          customerId={customer.id}
+          customerName={customer.name}
         />
       )}
 

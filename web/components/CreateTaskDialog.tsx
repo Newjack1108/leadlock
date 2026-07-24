@@ -36,9 +36,17 @@ interface CreateTaskDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onCreated?: () => void;
+  customerId?: number;
+  customerName?: string;
 }
 
-export default function CreateTaskDialog({ open, onOpenChange, onCreated }: CreateTaskDialogProps) {
+export default function CreateTaskDialog({
+  open,
+  onOpenChange,
+  onCreated,
+  customerId,
+  customerName,
+}: CreateTaskDialogProps) {
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
   const [dueDate, setDueDate] = useState(todayIsoDate());
@@ -96,6 +104,7 @@ export default function CreateTaskDialog({ open, onOpenChange, onCreated }: Crea
         message: message.trim() || ' ',
         due_date: dueDate,
         assigned_to_id: aid,
+        ...(customerId != null ? { customer_id: customerId } : {}),
       });
       toast.success('Task created');
       setTitle('');
@@ -119,6 +128,7 @@ export default function CreateTaskDialog({ open, onOpenChange, onCreated }: Crea
             <DialogTitle>Create task</DialogTitle>
             <DialogDescription>
               Tasks appear in reminders and escalate when overdue.
+              {customerName ? ` Linked to ${customerName}.` : ''}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
