@@ -162,9 +162,12 @@ export default function WeeklyPlanPage() {
     });
   };
 
-  const loadData = async () => {
+  const loadData = async (options?: { silent?: boolean }): Promise<WeeklyPlanListResponse | null> => {
+    const silent = Boolean(options?.silent);
     try {
-      setLoading(true);
+      if (!silent) {
+        setLoading(true);
+      }
       const [latestPlan, assignableUsers] = await Promise.all([
         getLatestWeeklyPlan(),
         getAssignableUsers().catch(() => []),
@@ -189,16 +192,23 @@ export default function WeeklyPlanPage() {
         setTrend([]);
       }
       setSelectedItemIds([]);
+      return latestPlan;
     } catch (error: any) {
       if (error?.response?.status === 401) {
         router.push('/login');
-        return;
+        return null;
       }
-      setPlan(null);
-      setMetrics(null);
-      setMessageDrafts({});
+      // Keep the current plan on silent refresh failures (e.g. after generate timeout)
+      if (!silent) {
+        setPlan(null);
+        setMetrics(null);
+        setMessageDrafts({});
+      }
+      return null;
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   };
 
@@ -280,6 +290,7 @@ export default function WeeklyPlanPage() {
   };
 
   const handleGenerate = async () => {
+    const previousRunId = plan?.run?.id ?? null;
     try {
       setLoadingRun(true);
       const run = await generateWeeklyPlan({ auto_execute: autoExecuteOnGenerate, dry_run: false });
@@ -288,13 +299,30 @@ export default function WeeklyPlanPage() {
           ? `Weekly plan generated (${run.total_items} items, ${run.auto_sent_items} auto-sent)`
           : `Weekly plan generated (${run.total_items} items)`
       );
-      await loadData();
+      // Silent refresh keeps the page mounted so the new plan appears without a full-page grey-out
+      await loadData({ silent: true });
     } catch (error) {
       const detail = getApiErrorDetail(error);
       if (detail.toLowerCase().includes('timeout')) {
         toast.error(
-          'Weekly plan generation timed out. The server may still be working — refresh in a minute, or try again.'
+          'Weekly plan generation timed out. Checking whether the server finished…'
         );
+        // Client timed out but the server may still have completed — poll briefly for a new run
+        let found = false;
+        for (let attempt = 0; attempt < 4; attempt += 1) {
+          await new Promise((resolve) => setTimeout(resolve, 3000));
+          const latest = await loadData({ silent: true });
+          if (latest?.run?.id && latest.run.id !== previousRunId) {
+            toast.success(`Weekly plan generated (${latest.run.total_items} items)`);
+            found = true;
+            break;
+          }
+        }
+        if (!found) {
+          toast.error(
+            'Still waiting on the server — leave this page and come back in a minute, or try Generate again.'
+          );
+        }
       } else {
         toast.error(detail || 'Failed to generate weekly plan');
       }

@@ -641,6 +641,12 @@ def _completed_weekly_plan_targets(
     return _collect_weekly_plan_target_ids(rows)
 
 
+def _sms_stopped_customer_ids(session: Session) -> tuple[set[int], set[int], set[int]]:
+    """Customers who stopped SMS are excluded from weekly plan generation entirely."""
+    rows = session.exec(select(Customer.id).where(Customer.sms_bot_stopped.is_(True))).all()
+    return set(), set(), {customer_id for customer_id in rows if customer_id is not None}
+
+
 def _merge_weekly_plan_exclusions(
     *exclusions: tuple[set[int], set[int], set[int]],
 ) -> tuple[set[int], set[int], set[int]]:
@@ -702,6 +708,7 @@ def generate_weekly_plan(
     excluded_lead_ids, excluded_quote_ids, excluded_customer_ids = _merge_weekly_plan_exclusions(
         _rejected_weekly_plan_targets(session),
         _completed_weekly_plan_targets(session, week_start),
+        _sms_stopped_customer_ids(session),
     )
 
     for lead, rule, days_stale in detect_stale_leads(session):
@@ -1029,6 +1036,12 @@ def _dispatch_weekly_plan_item(
     now = datetime.utcnow()
     try:
         if channel == "SMS":
+            if customer.sms_bot_stopped:
+                item.status = WeeklyPlanItemStatus.REJECTED
+                item.execution_error = "Customer has stopped SMS"
+                item.updated_at = now
+                session.add(item)
+                return False
             phone = (customer.phone or "").strip()
             if not phone:
                 raise ValueError("Customer has no phone number")
