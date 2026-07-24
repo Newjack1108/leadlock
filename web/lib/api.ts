@@ -34,6 +34,7 @@ import {
   type OrderListPayload,
   type CustomerListPayload,
   type AutomatedReminderCleanupResult,
+  type Reminder,
   type StaleSummary,
   type WeeklyPlanListResponse,
   type WeeklyPlanRun,
@@ -1805,6 +1806,12 @@ export const createUserTask = async (data: {
 }) => {
   const response = await api.post('/api/reminders/tasks', data);
   return response.data;
+};
+
+/** Open USER_TASKs assigned to the current user (includes far-future due dates). */
+export const getMyAssignedTasks = async () => {
+  const response = await api.get('/api/reminders/tasks/assigned-to-me');
+  return response.data as Reminder[];
 };
 
 export const getAssignableUsers = async () => {

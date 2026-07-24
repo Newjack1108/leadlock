@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import LoginGreeting from "@/components/LoginGreeting";
+import TaskAssignmentPopup from "@/components/TaskAssignmentPopup";
 import AreaBackgroundWrapper from "@/components/AreaBackgroundWrapper";
 import Footer from "@/components/Footer";
 
@@ -85,6 +86,7 @@ export default function RootLayout({
           </div>
           <Toaster />
           <LoginGreeting />
+          <TaskAssignmentPopup />
         </AreaBackgroundWrapper>
       </body>
     </html>

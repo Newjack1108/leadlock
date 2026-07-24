@@ -625,6 +625,36 @@ async def create_user_task(
     return _reminder_to_response(session, reminder, today, uid_map)
 
 
+@router.get("/tasks/assigned-to-me", response_model=List[ReminderResponse])
+async def get_my_assigned_tasks(
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Open USER_TASKs assigned to the current user (no near-due filter; for assignment popups)."""
+    today = date_type.today()
+    statement = (
+        select(Reminder)
+        .where(
+            Reminder.reminder_type == ReminderType.USER_TASK,
+            Reminder.assigned_to_id == current_user.id,
+            Reminder.dismissed_at.is_(None),
+            Reminder.acted_upon_at.is_(None),
+        )
+        .order_by(col(Reminder.created_at).desc())
+    )
+    reminders = list(session.exec(statement).all())
+
+    creator_ids = {r.created_by_id for r in reminders if r.created_by_id}
+    uid_map: Dict[int, User] = {current_user.id: current_user}
+    if creator_ids:
+        creators = session.exec(select(User).where(User.id.in_(creator_ids))).all()
+        for u in creators:
+            if u.id is not None:
+                uid_map[u.id] = u
+
+    return [_reminder_to_response(session, r, today, uid_map) for r in reminders]
+
+
 @router.get("", response_model=List[ReminderResponse])
 async def get_reminders(
     dismissed: Optional[bool] = False,
