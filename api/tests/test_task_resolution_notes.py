@@ -167,3 +167,85 @@ def test_non_user_task_act_without_note_allowed(engine):
         assert reminder is not None
         assert reminder.acted_upon_at is not None
         assert reminder.resolution_notes is None
+
+
+def _seed_task_for_assignee(engine, assignee_email: str, other_email: str):
+    with Session(engine) as session:
+        assignee = User(
+            email=assignee_email,
+            hashed_password="dummy",
+            full_name="Assignee User",
+            role=UserRole.DIRECTOR,
+        )
+        other = User(
+            email=other_email,
+            hashed_password="dummy",
+            full_name="Other User",
+            role=UserRole.DIRECTOR,
+        )
+        session.add(assignee)
+        session.add(other)
+        session.commit()
+        session.refresh(assignee)
+        session.refresh(other)
+
+        task = Reminder(
+            reminder_type=ReminderType.USER_TASK,
+            assigned_to_id=assignee.id,
+            created_by_id=other.id,
+            priority=ReminderPriority.MEDIUM,
+            title="Assigned task",
+            message="Only assignee may close",
+            suggested_action=SuggestedAction.FOLLOW_UP,
+            days_stale=0,
+            due_date=date_type.today() + timedelta(days=1),
+        )
+        session.add(task)
+        session.commit()
+        session.refresh(task)
+
+        assignee_ctx = SimpleNamespace(id=assignee.id, role=assignee.role, full_name=assignee.full_name)
+        other_ctx = SimpleNamespace(id=other.id, role=other.role, full_name=other.full_name)
+        return assignee_ctx, other_ctx, task.id
+
+
+def test_user_task_dismiss_forbidden_for_non_assignee(engine):
+    _, other_ctx, task_id = _seed_task_for_assignee(
+        engine,
+        "task-assignee-dismiss@example.com",
+        "task-other-dismiss@example.com",
+    )
+    client = TestClient(_make_test_app(engine, other_ctx))
+
+    res = client.post(
+        f"/api/reminders/{task_id}/dismiss",
+        json={"reason": "Trying to dismiss"},
+    )
+    assert res.status_code == 403
+    assert "assigned user" in res.json()["detail"].lower()
+
+    with Session(engine) as session:
+        reminder = session.exec(select(Reminder).where(Reminder.id == task_id)).first()
+        assert reminder is not None
+        assert reminder.dismissed_at is None
+
+
+def test_user_task_act_forbidden_for_non_assignee(engine):
+    _, other_ctx, task_id = _seed_task_for_assignee(
+        engine,
+        "task-assignee-act@example.com",
+        "task-other-act@example.com",
+    )
+    client = TestClient(_make_test_app(engine, other_ctx))
+
+    res = client.post(
+        f"/api/reminders/{task_id}/act",
+        json={"action_taken": "FOLLOW_UP", "notes": "Trying to complete"},
+    )
+    assert res.status_code == 403
+    assert "assigned user" in res.json()["detail"].lower()
+
+    with Session(engine) as session:
+        reminder = session.exec(select(Reminder).where(Reminder.id == task_id)).first()
+        assert reminder is not None
+        assert reminder.acted_upon_at is None

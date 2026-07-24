@@ -14,7 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { CompanySettings, Reminder, ReminderPriority, SuggestedAction, ReminderType } from '@/lib/types';
+import { AuthMe, CompanySettings, Reminder, ReminderPriority, SuggestedAction, ReminderType } from '@/lib/types';
 import {
   getReminders,
   dismissReminder,
@@ -22,13 +22,14 @@ import {
   invalidateStaleSummaryCache,
   generateReminders,
   getCompanySettings,
+  getAuthMe,
 } from '@/lib/api';
 import ReviewRequestSection from '@/components/ReviewRequestSection';
 import SendReviewRequestDialog from '@/components/SendReviewRequestDialog';
 import { toast } from 'sonner';
 import { 
   RefreshCw, X, CheckCircle2, Mail, Phone, 
-  FileText, ArrowRight, AlertCircle, MailCheck, AlertTriangle, Star
+  FileText, ArrowRight, AlertCircle, MailCheck, AlertTriangle, Star, ListTodo
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
@@ -83,6 +84,7 @@ export default function ReminderList({
   const [pendingTaskNote, setPendingTaskNote] = useState<PendingTaskNote | null>(null);
   const [taskNote, setTaskNote] = useState('');
   const [taskNoteSubmitting, setTaskNoteSubmitting] = useState(false);
+  const [currentUser, setCurrentUser] = useState<AuthMe | null>(null);
 
   const fetchReminders = async () => {
     try {
@@ -126,6 +128,18 @@ export default function ReminderList({
       .then(setCompanySettings)
       .catch(() => setCompanySettings(null));
   }, []);
+
+  useEffect(() => {
+    void getAuthMe()
+      .then(setCurrentUser)
+      .catch(() => setCurrentUser(null));
+  }, []);
+
+  const canCloseTask = (r: Reminder) => {
+    if (r.reminder_type !== ReminderType.USER_TASK) return true;
+    if (currentUser == null) return false;
+    return currentUser.id === r.assigned_to_id;
+  };
 
   const isTaskOverdue = (r: Reminder) => {
     if (r.reminder_type !== ReminderType.USER_TASK || !r.due_date) return false;
@@ -486,7 +500,10 @@ export default function ReminderList({
                         {reminder.priority}
                       </Badge>
                       {reminder.reminder_type === ReminderType.USER_TASK && (
-                        <Badge variant="outline">Task</Badge>
+                        <Badge className="bg-sky-600 text-white border-sky-700 hover:bg-sky-600">
+                          <ListTodo className="h-3 w-3 mr-1" />
+                          Task
+                        </Badge>
                       )}
                       {reminder.reminder_type === ReminderType.REQUEST_REVIEW &&
                       reminder.message?.includes('Returning customer') ? (
@@ -595,46 +612,54 @@ export default function ReminderList({
               </div>
               {showActions && !isDoneMode && (
                 <div className={`flex items-center gap-2 border-t ${compact ? 'px-3 py-2' : 'px-4 py-3'}`}>
-                  <Button
-                    size="sm"
-                    variant="default"
-                    className={compact ? 'h-7 text-xs' : ''}
-                    onClick={() => {
-                      if (reminder.reminder_type === ReminderType.REQUEST_REVIEW) {
-                        handleQuickAction(reminder, reminder.suggested_action);
-                        return;
-                      }
-                      if (reminder.reminder_type === ReminderType.USER_TASK) {
-                        requestAct(reminder, reminder.suggested_action);
-                        return;
-                      }
-                      handleQuickAction(reminder, reminder.suggested_action);
-                      requestAct(reminder, reminder.suggested_action);
-                    }}
-                  >
-                    {getActionIcon(reminder.suggested_action)}
-                    <span className="ml-2">
-                      {reminder.reminder_type === ReminderType.REQUEST_REVIEW ? 'View order' : getActionLabel(reminder.suggested_action)}
-                    </span>
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className={compact ? 'h-7 text-xs' : ''}
-                    onClick={() => requestDismiss(reminder)}
-                  >
-                    <X className="h-4 w-4 mr-2" />
-                    Dismiss
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className={compact ? 'h-7 text-xs' : ''}
-                    onClick={() => requestAct(reminder, reminder.suggested_action)}
-                  >
-                    <CheckCircle2 className="h-4 w-4 mr-2" />
-                    Mark Done
-                  </Button>
+                  {canCloseTask(reminder) ? (
+                    <>
+                      <Button
+                        size="sm"
+                        variant="default"
+                        className={compact ? 'h-7 text-xs' : ''}
+                        onClick={() => {
+                          if (reminder.reminder_type === ReminderType.REQUEST_REVIEW) {
+                            handleQuickAction(reminder, reminder.suggested_action);
+                            return;
+                          }
+                          if (reminder.reminder_type === ReminderType.USER_TASK) {
+                            requestAct(reminder, reminder.suggested_action);
+                            return;
+                          }
+                          handleQuickAction(reminder, reminder.suggested_action);
+                          requestAct(reminder, reminder.suggested_action);
+                        }}
+                      >
+                        {getActionIcon(reminder.suggested_action)}
+                        <span className="ml-2">
+                          {reminder.reminder_type === ReminderType.REQUEST_REVIEW ? 'View order' : getActionLabel(reminder.suggested_action)}
+                        </span>
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className={compact ? 'h-7 text-xs' : ''}
+                        onClick={() => requestDismiss(reminder)}
+                      >
+                        <X className="h-4 w-4 mr-2" />
+                        Dismiss
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className={compact ? 'h-7 text-xs' : ''}
+                        onClick={() => requestAct(reminder, reminder.suggested_action)}
+                      >
+                        <CheckCircle2 className="h-4 w-4 mr-2" />
+                        Mark Done
+                      </Button>
+                    </>
+                  ) : (
+                    <p className={`text-sm text-muted-foreground ${compact ? 'text-xs' : ''}`}>
+                      Only {reminder.assigned_to_name || 'the assignee'} can close this task.
+                    </p>
+                  )}
                 </div>
               )}
             </div>

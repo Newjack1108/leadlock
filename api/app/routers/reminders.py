@@ -822,13 +822,22 @@ async def dismiss_reminder(
     reminder_id: int,
     request: ReminderDismissRequest,
     session: Session = Depends(get_session),
-    _current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
-    """Dismiss a reminder. Any authenticated user may dismiss any reminder."""
+    """Dismiss a reminder. USER_TASK may only be dismissed by the assignee."""
     reminder = session.exec(select(Reminder).where(Reminder.id == reminder_id)).first()
     
     if not reminder:
         raise HTTPException(status_code=404, detail="Reminder not found")
+
+    if (
+        reminder.reminder_type == ReminderType.USER_TASK
+        and current_user.id != reminder.assigned_to_id
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Only the assigned user can dismiss this task.",
+        )
 
     note = (request.reason or "").strip()
     if reminder.reminder_type == ReminderType.USER_TASK and not note:
@@ -854,13 +863,22 @@ async def act_on_reminder(
     reminder_id: int,
     request: ReminderActRequest,
     session: Session = Depends(get_session),
-    _current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
-    """Mark a reminder as acted upon. Any authenticated user may complete any reminder."""
+    """Mark a reminder as acted upon. USER_TASK may only be completed by the assignee."""
     reminder = session.exec(select(Reminder).where(Reminder.id == reminder_id)).first()
     
     if not reminder:
         raise HTTPException(status_code=404, detail="Reminder not found")
+
+    if (
+        reminder.reminder_type == ReminderType.USER_TASK
+        and current_user.id != reminder.assigned_to_id
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Only the assigned user can complete this task.",
+        )
 
     note = (request.notes or "").strip()
     if reminder.reminder_type == ReminderType.USER_TASK and not note:
