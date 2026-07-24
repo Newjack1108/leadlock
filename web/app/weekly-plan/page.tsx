@@ -123,6 +123,7 @@ export default function WeeklyPlanPage() {
   const [composeSmsPhone, setComposeSmsPhone] = useState('');
   const [composeSmsInitialBody, setComposeSmsInitialBody] = useState('');
   const composeSmsItemIdRef = useRef<number | null>(null);
+  const generatingRef = useRef(false);
 
   const resetComposeEmailState = () => {
     setComposeCustomer(null);
@@ -290,6 +291,8 @@ export default function WeeklyPlanPage() {
   };
 
   const handleGenerate = async () => {
+    if (generatingRef.current || loadingRun) return;
+    generatingRef.current = true;
     const previousRunId = plan?.run?.id ?? null;
     try {
       setLoadingRun(true);
@@ -327,6 +330,7 @@ export default function WeeklyPlanPage() {
         toast.error(detail || 'Failed to generate weekly plan');
       }
     } finally {
+      generatingRef.current = false;
       setLoadingRun(false);
     }
   };
@@ -511,11 +515,16 @@ export default function WeeklyPlanPage() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
+            <label
+              className={`flex items-center gap-2 text-sm select-none ${
+                loadingRun ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
+              }`}
+            >
               <input
                 type="checkbox"
                 checked={autoExecuteOnGenerate}
                 onChange={(e) => handleAutoExecuteToggle(e.target.checked)}
+                disabled={loadingRun}
                 className="h-4 w-4 rounded border-input"
               />
               <span>
@@ -525,18 +534,39 @@ export default function WeeklyPlanPage() {
                 </span>
               </span>
             </label>
-            <Button variant="outline" onClick={loadData}>
+            <Button variant="outline" onClick={() => loadData()} disabled={loadingRun}>
               <RefreshCw className="h-4 w-4 mr-2" />
               Refresh
             </Button>
             <Button variant="outline" onClick={handleGenerate} disabled={loadingRun}>
               {loadingRun ? 'Generating...' : 'Generate Weekly Plan'}
             </Button>
-            <Button onClick={handleSendSelected} disabled={sendingBulk || selectedItemIds.length === 0}>
+            <Button
+              onClick={handleSendSelected}
+              disabled={loadingRun || sendingBulk || selectedItemIds.length === 0}
+            >
               {sendingBulk ? 'Sending...' : `Send Selected (${selectedItemIds.length})`}
             </Button>
           </div>
         </div>
+
+        {loadingRun && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="rounded-md border border-border bg-muted/50 px-4 py-3 text-sm"
+          >
+            <div className="flex items-start gap-3">
+              <RefreshCw className="h-4 w-4 mt-0.5 animate-spin shrink-0 text-muted-foreground" />
+              <div>
+                <p className="font-medium">Your weekly plan is being generated — please be patient.</p>
+                <p className="text-muted-foreground mt-1">
+                  This can take up to a minute or two. Please don’t click Generate again until it finishes.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {plan?.run && (
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
