@@ -1814,6 +1814,12 @@ export const getMyAssignedTasks = async () => {
   return response.data as Reminder[];
 };
 
+/** Mark a USER_TASK as acknowledged / in hand (assignee only). */
+export const acknowledgeReminder = async (reminderId: number) => {
+  const response = await api.post(`/api/reminders/${reminderId}/acknowledge`);
+  return response.data as Reminder;
+};
+
 export const getAssignableUsers = async () => {
   const response = await api.get('/api/users/assignable');
   return response.data;

@@ -1782,6 +1782,7 @@ export interface Reminder {
   dismissed_at?: string;
   acted_upon_at?: string;
   resolution_notes?: string | null;
+  acknowledged_at?: string | null;
   lead_name?: string;
   quote_number?: string;
   customer_name?: string;

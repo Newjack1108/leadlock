@@ -2303,6 +2303,7 @@ class ReminderResponse(BaseModel):
     dismissed_at: Optional[datetime]
     acted_upon_at: Optional[datetime]
     resolution_notes: Optional[str] = None
+    acknowledged_at: Optional[datetime] = None
     lead_name: Optional[str] = None
     quote_number: Optional[str] = None
     customer_name: Optional[str] = None

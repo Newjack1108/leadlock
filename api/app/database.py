@@ -2886,6 +2886,17 @@ def create_db_and_tables():
                     error_str = str(e).lower()
                     if "already exists" not in error_str and "duplicate" not in error_str:
                         print(f"Warning: could not add resolution_notes to reminder: {e}", file=sys.stderr, flush=True)
+            reminder_columns = [col["name"] for col in inspector.get_columns("reminder")]
+            if "acknowledged_at" not in reminder_columns:
+                print("Adding acknowledged_at column to reminder table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE reminder ADD COLUMN acknowledged_at TIMESTAMP"))
+                    print("Added acknowledged_at column to reminder table", file=sys.stderr, flush=True)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Warning: could not add acknowledged_at to reminder: {e}", file=sys.stderr, flush=True)
         
         # Step 9f: Partial index for active reminder lists and stale-summary style filters
         if has_reminder_table or inspector.has_table("reminder"):

@@ -12,7 +12,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { getAuthMe, getMyAssignedTasks, invalidateStaleSummaryCache } from '@/lib/api';
+import { getAuthMe, getMyAssignedTasks, acknowledgeReminder, invalidateStaleSummaryCache } from '@/lib/api';
 import { loginGreetingPathShouldSuppress } from '@/lib/loginGreeting';
 import type { AuthMe, Reminder } from '@/lib/types';
 
@@ -65,6 +65,9 @@ export default function TaskAssignmentPopup() {
     }
     queueIdsRef.current.delete(taskId);
     setQueue((prev) => prev.filter((t) => t.id !== taskId));
+    void acknowledgeReminder(taskId).catch(() => {
+      // Local seen IDs already updated so the popup does not reappear; list can Mark in hand.
+    });
     invalidateStaleSummaryCache();
   }, []);
 

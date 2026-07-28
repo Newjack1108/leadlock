@@ -531,6 +531,7 @@ def _reminder_to_response(
         dismissed_at=reminder.dismissed_at,
         acted_upon_at=reminder.acted_upon_at,
         resolution_notes=reminder.resolution_notes,
+        acknowledged_at=reminder.acknowledged_at,
         lead_name=lead_name,
         quote_number=quote_number,
         customer_name=customer_name,
@@ -927,6 +928,44 @@ async def act_on_reminder(
     session.commit()
     
     return {"message": "Reminder marked as acted upon", "id": reminder_id}
+
+
+@router.post("/{reminder_id}/acknowledge", response_model=ReminderResponse)
+async def acknowledge_reminder(
+    reminder_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Mark a USER_TASK as acknowledged / in hand. Only the assignee may acknowledge."""
+    reminder = session.exec(select(Reminder).where(Reminder.id == reminder_id)).first()
+    if not reminder:
+        raise HTTPException(status_code=404, detail="Reminder not found")
+
+    if reminder.reminder_type != ReminderType.USER_TASK:
+        raise HTTPException(status_code=400, detail="Only tasks can be marked in hand.")
+
+    if current_user.id != reminder.assigned_to_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Only the assigned user can acknowledge this task.",
+        )
+
+    if reminder.dismissed_at is not None or reminder.acted_upon_at is not None:
+        raise HTTPException(status_code=400, detail="This task is already closed.")
+
+    if reminder.acknowledged_at is None:
+        reminder.acknowledged_at = datetime.utcnow()
+        session.add(reminder)
+        session.commit()
+        session.refresh(reminder)
+
+    today = date_type.today()
+    uid_map: Dict[int, User] = {current_user.id: current_user}
+    if reminder.created_by_id and reminder.created_by_id != current_user.id:
+        creator = session.exec(select(User).where(User.id == reminder.created_by_id)).first()
+        if creator and creator.id is not None:
+            uid_map[creator.id] = creator
+    return _reminder_to_response(session, reminder, today, uid_map)
 
 
 @router.post("/generate")

@@ -19,6 +19,7 @@ import {
   getReminders,
   dismissReminder,
   actOnReminder,
+  acknowledgeReminder,
   invalidateStaleSummaryCache,
   generateReminders,
   getCompanySettings,
@@ -29,7 +30,7 @@ import SendReviewRequestDialog from '@/components/SendReviewRequestDialog';
 import { toast } from 'sonner';
 import { 
   RefreshCw, X, CheckCircle2, Mail, Phone, 
-  FileText, ArrowRight, AlertCircle, MailCheck, AlertTriangle, Star, ListTodo
+  FileText, ArrowRight, AlertCircle, MailCheck, AlertTriangle, Star, ListTodo, Hand
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
@@ -202,6 +203,19 @@ export default function ReminderList({
       toast.error('Failed to mark reminder as acted upon');
       console.error('Error acting on reminder:', error);
       throw error;
+    }
+  };
+
+  const handleAcknowledge = async (reminder: Reminder) => {
+    try {
+      await acknowledgeReminder(reminder.id);
+      invalidateStaleSummaryCache();
+      toast.success('Task marked in hand');
+      fetchReminders();
+      onReminderAction?.();
+    } catch (error: unknown) {
+      toast.error('Failed to mark task in hand');
+      console.error('Error acknowledging task:', error);
     }
   };
 
@@ -505,6 +519,12 @@ export default function ReminderList({
                           Task
                         </Badge>
                       )}
+                      {reminder.reminder_type === ReminderType.USER_TASK && reminder.acknowledged_at && (
+                        <Badge className="bg-emerald-600 text-white border-emerald-700 hover:bg-emerald-600">
+                          <Hand className="h-3 w-3 mr-1" />
+                          In hand
+                        </Badge>
+                      )}
                       {reminder.reminder_type === ReminderType.REQUEST_REVIEW &&
                       reminder.message?.includes('Returning customer') ? (
                         <Badge variant="secondary">Returning customer</Badge>
@@ -636,6 +656,17 @@ export default function ReminderList({
                           {reminder.reminder_type === ReminderType.REQUEST_REVIEW ? 'View order' : getActionLabel(reminder.suggested_action)}
                         </span>
                       </Button>
+                      {reminder.reminder_type === ReminderType.USER_TASK && !reminder.acknowledged_at && (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          className={compact ? 'h-7 text-xs' : ''}
+                          onClick={() => void handleAcknowledge(reminder)}
+                        >
+                          <Hand className="h-4 w-4 mr-2" />
+                          Mark in hand
+                        </Button>
+                      )}
                       <Button
                         size="sm"
                         variant="outline"
@@ -658,6 +689,9 @@ export default function ReminderList({
                   ) : (
                     <p className={`text-sm text-muted-foreground ${compact ? 'text-xs' : ''}`}>
                       Only {reminder.assigned_to_name || 'the assignee'} can close this task.
+                      {reminder.reminder_type === ReminderType.USER_TASK && reminder.acknowledged_at
+                        ? ' In hand.'
+                        : ''}
                     </p>
                   )}
                 </div>
