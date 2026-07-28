@@ -73,12 +73,22 @@ def apply_sms_quote_keyword(session: Session, customer_id: int, body: str) -> Op
 
     # CLOSE — same semantics as staff mark_opportunity_lost
     any_newly_rejected = False
+    actor_id = None
+    try:
+        from app.system_user_service import get_system_user_id
+
+        actor_id = get_system_user_id(session)
+    except Exception:
+        actor_id = None
+
     for quote in quotes:
         old_status = quote.status
         quote.status = QuoteStatus.REJECTED
         quote.opportunity_stage = OpportunityStage.LOST
         quote.loss_reason = CLOSE_LOSS_REASON
         quote.loss_category = LossCategory.OTHER
+        if actor_id is not None:
+            quote.rejected_by_id = actor_id
         quote.updated_at = now
         session.add(quote)
         if old_status != QuoteStatus.REJECTED:
@@ -87,13 +97,7 @@ def apply_sms_quote_keyword(session: Session, customer_id: int, body: str) -> Op
     session.commit()
 
     if any_newly_rejected:
-        from app.system_user_service import get_system_user_id
         from app.workflow import auto_transition_lead_status, find_leads_by_customer_id
-
-        try:
-            actor_id = get_system_user_id(session)
-        except Exception:
-            actor_id = None
 
         if actor_id is not None:
             leads = find_leads_by_customer_id(customer_id, session)

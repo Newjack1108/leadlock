@@ -166,6 +166,7 @@ def test_close_marks_lost_and_transitions_quoted_leads():
         assert quote.opportunity_stage == OpportunityStage.LOST
         assert quote.loss_reason == "Customer replied CLOSE via SMS"
         assert quote.loss_category == LossCategory.OTHER
+        assert quote.rejected_by_id is not None
         assert draft.status == QuoteStatus.DRAFT
         assert lead.status == LeadStatus.LOST
 

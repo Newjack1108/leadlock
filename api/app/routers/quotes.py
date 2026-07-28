@@ -1723,6 +1723,7 @@ async def mark_opportunity_close(
     quote.opportunity_stage = OpportunityStage.LOST
     if body and body.reason:
         quote.loss_reason = body.reason
+    quote.rejected_by_id = current_user.id
     quote.updated_at = datetime.utcnow()
     session.add(quote)
     session.commit()
@@ -1758,6 +1759,7 @@ async def mark_opportunity_lost(
     quote.opportunity_stage = OpportunityStage.LOST
     quote.loss_reason = body.loss_reason
     quote.loss_category = body.loss_category
+    quote.rejected_by_id = current_user.id
     quote.updated_at = datetime.utcnow()
     session.add(quote)
     session.commit()
@@ -3134,6 +3136,9 @@ async def update_quote(
         validate_and_record_redemptions_on_accept(session, quote.id)
         create_order_from_quote(quote, session, current_user.id)
         dismiss_open_reminders_for_quote(session, quote.id)
+
+    if quote.status == QuoteStatus.REJECTED and old_status != QuoteStatus.REJECTED:
+        quote.rejected_by_id = current_user.id
     
     # Mandatory next action validation (for open opportunities)
     if quote.opportunity_stage and quote.opportunity_stage not in [OpportunityStage.WON, OpportunityStage.LOST]:

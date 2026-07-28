@@ -690,6 +690,7 @@ class Quote(SQLModel, table=True):
     next_action_due_date: Optional[datetime] = None
     loss_reason: Optional[str] = None
     loss_category: Optional["LossCategory"] = None
+    rejected_by_id: Optional[int] = Field(default=None, foreign_key="user.id")  # Who closed/lost the quote
     owner_id: Optional[int] = Field(default=None, foreign_key="user.id")  # Opportunity owner (can differ from created_by)
     dealer_id: Optional[int] = Field(default=None, foreign_key="dealer.id", index=True)
     dealer_customer_name: Optional[str] = None

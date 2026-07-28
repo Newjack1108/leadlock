@@ -35,6 +35,7 @@ from app.models import LeadType, LeadSource
 from app.auth import get_current_user
 from app.closer_pipeline import customer_in_closer_pipeline_exists
 from app.models import UserRole
+from app.sms_quote_keyword_service import CLOSE_LOSS_REASON
 from app.schemas import (
     ChannelDirectionCounts,
     CustomerCommunicationStats,
@@ -936,17 +937,30 @@ async def get_customer_history(
                 created_by_name=None
             ))
         elif quote.status == QuoteStatus.REJECTED:
+            rejected_by_id = getattr(quote, "rejected_by_id", None)
+            rejected_by_name = None
+            if quote.loss_reason == CLOSE_LOSS_REASON:
+                rejected_by_name = "Customer via SMS"
+            elif rejected_by_id:
+                rejected_user = session.get(User, rejected_by_id)
+                rejected_by_name = rejected_user.full_name if rejected_user else None
+
+            description = f"Quote {quote.quote_number} was rejected"
+            if quote.loss_reason:
+                description = f"{description}: {quote.loss_reason}"
+
             events.append(CustomerHistoryEvent(
                 event_type=CustomerHistoryEventType.QUOTE_REJECTED,
                 timestamp=quote.updated_at,
                 title="Quote Rejected",
-                description=f"Quote {quote.quote_number} was rejected",
+                description=description,
                 metadata={
                     "quote_id": quote.id,
-                    "quote_number": quote.quote_number
+                    "quote_number": quote.quote_number,
+                    "loss_reason": quote.loss_reason,
                 },
-                created_by_id=None,
-                created_by_name=None
+                created_by_id=rejected_by_id,
+                created_by_name=rejected_by_name,
             ))
         elif quote.status == QuoteStatus.EXPIRED:
             events.append(CustomerHistoryEvent(

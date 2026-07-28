@@ -233,6 +233,26 @@ def _ensure_quote_on_hold_at_column(engine) -> None:
             print(f"Warning: could not ensure quote.on_hold_at: {e}", file=sys.stderr, flush=True)
 
 
+def _ensure_quote_rejected_by_id_column(engine) -> None:
+    """Add rejected_by_id to quote (staff/system who closed or lost the quote)."""
+    import sys
+
+    try:
+        insp = inspect(engine)
+        if not insp.has_table("quote"):
+            return
+        cols = [c["name"] for c in insp.get_columns("quote")]
+        if "rejected_by_id" in cols:
+            return
+        with engine.begin() as conn:
+            conn.execute(text('ALTER TABLE quote ADD COLUMN rejected_by_id INTEGER REFERENCES "user"(id)'))
+        print("Added rejected_by_id to quote table", file=sys.stderr, flush=True)
+    except Exception as e:
+        err = str(e).lower()
+        if "already exists" not in err and "duplicate" not in err:
+            print(f"Warning: could not ensure quote.rejected_by_id: {e}", file=sys.stderr, flush=True)
+
+
 def _ensure_list_performance_indexes(engine) -> None:
     """Indexes for customer list ordering and unread-count aggregations (Railway public DB latency)."""
     import sys
@@ -1039,6 +1059,7 @@ def create_db_and_tables():
     _ensure_archive_columns(engine)
     _ensure_quote_payment_link_url_column(engine)
     _ensure_quote_on_hold_at_column(engine)
+    _ensure_quote_rejected_by_id_column(engine)
     _ensure_dealer_portal_schema(engine)
     _ensure_user_leave_schema(engine)
     _ensure_weekly_planner_schema(engine)
