@@ -1202,6 +1202,7 @@ def create_db_and_tables():
                 ("delivery_postcode", "TEXT"),
                 ("delivery_country", "TEXT DEFAULT 'United Kingdom'"),
                 ("delivery_location_notes", "TEXT"),
+                ("delivery_what3words", "VARCHAR(128)"),
             ]
             for col_name, col_type in _order_delivery_cols:
                 if col_name not in order_columns:
@@ -1582,6 +1583,17 @@ def create_db_and_tables():
                             file=sys.stderr,
                             flush=True,
                         )
+            customer_columns = [col["name"] for col in inspector.get_columns("customer")]
+            if "what3words" not in customer_columns:
+                print("Adding what3words column to customer table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE customer ADD COLUMN what3words VARCHAR(128)"))
+                    print("Added what3words column to customer table", file=sys.stderr, flush=True)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Error adding what3words to customer: {e}", file=sys.stderr, flush=True)
         if has_lead_table:
             lead_columns = [col['name'] for col in inspector.get_columns("lead")]
             if "messenger_psid" not in lead_columns:
@@ -2137,6 +2149,7 @@ def create_db_and_tables():
                 ("delivery_postcode", "TEXT"),
                 ("delivery_country", "TEXT DEFAULT 'United Kingdom'"),
                 ("delivery_location_notes", "TEXT"),
+                ("delivery_what3words", "VARCHAR(128)"),
             ]
             for col_name, col_type in _quote_delivery_cols:
                 if col_name not in quote_columns:

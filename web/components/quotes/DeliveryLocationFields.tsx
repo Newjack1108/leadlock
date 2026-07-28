@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import type { QuoteFulfillmentMethod } from '@/lib/types';
+import { isValidWhat3Words, normalizeWhat3Words } from '@/lib/what3words';
 
 type DeliveryLocationFieldsProps = {
   fulfillmentMethod: QuoteFulfillmentMethod;
@@ -23,6 +24,8 @@ type DeliveryLocationFieldsProps = {
   onDeliveryCountryChange: (value: string) => void;
   deliveryLocationNotes: string;
   onDeliveryLocationNotesChange: (value: string) => void;
+  deliveryWhat3Words: string;
+  onDeliveryWhat3WordsChange: (value: string) => void;
 };
 
 export default function DeliveryLocationFields(props: DeliveryLocationFieldsProps) {
@@ -44,9 +47,14 @@ export default function DeliveryLocationFields(props: DeliveryLocationFieldsProp
     onDeliveryCountryChange,
     deliveryLocationNotes,
     onDeliveryLocationNotesChange,
+    deliveryWhat3Words,
+    onDeliveryWhat3WordsChange,
   } = props;
 
   if (fulfillmentMethod === 'COLLECTION') return null;
+
+  const w3wInvalid =
+    Boolean(normalizeWhat3Words(deliveryWhat3Words)) && !isValidWhat3Words(deliveryWhat3Words);
 
   return (
     <div className="space-y-3">
@@ -112,6 +120,23 @@ export default function DeliveryLocationFields(props: DeliveryLocationFieldsProp
                 onChange={(e) => onDeliveryCountryChange(e.target.value)}
                 placeholder="Country"
               />
+            </div>
+            <div className="sm:col-span-2">
+              <Label>What3Words (optional)</Label>
+              <Input
+                value={deliveryWhat3Words}
+                onChange={(e) => onDeliveryWhat3WordsChange(e.target.value)}
+                placeholder="e.g. filled.table.chair"
+                aria-invalid={w3wInvalid}
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Precise install pin for field sites. Format: word.word.word
+              </p>
+              {w3wInvalid && (
+                <p className="mt-1 text-xs text-destructive">
+                  Enter three words separated by dots (e.g. filled.table.chair).
+                </p>
+              )}
             </div>
             <div className="sm:col-span-2">
               <Label>Delivery location notes</Label>

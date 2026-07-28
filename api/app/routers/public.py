@@ -301,6 +301,7 @@ def get_public_quote_view(
                 address=build_delivery_address(quote),
                 postcode=(quote.delivery_postcode or "").strip(),
                 notes=(quote.delivery_location_notes or "").strip() or None,
+                what3words=(getattr(quote, "delivery_what3words", None) or "").strip() or None,
             )
             if (
                 getattr(quote, "use_alternate_delivery_address", False)

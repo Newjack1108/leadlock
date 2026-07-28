@@ -111,6 +111,8 @@ LeadLock allows re-sending the same order; the production app upserts by `order_
 | `address_is_delivery_location` | `true` when alternate delivery address is used (not collection) |
 | `delivery_location_notes` | With alternate delivery |
 | `crm_customer_address` | With alternate delivery (CRM/home address while routing uses delivery site) |
+| `what3words` | When set on the routing install site (CRM `what3words`, or `delivery_what3words` if alternate delivery) |
+| `crm_what3words` | When alternate delivery is used **and** CRM has a What3Words value |
 
 ### Example (delivery + alternate address)
 
@@ -148,9 +150,20 @@ LeadLock allows re-sending the same order; the production app upserts by `order_
   "travel_time_hours_round_trip": 2.5,
   "address_is_delivery_location": true,
   "delivery_location_notes": "Use rear gate",
-  "crm_customer_address": "1 High Street, Chester, CH1 1AA, United Kingdom"
+  "crm_customer_address": "1 High Street, Chester, CH1 1AA, United Kingdom",
+  "what3words": "filled.table.chair",
+  "crm_what3words": "index.home.raft"
 }
 ```
+
+LeadLock will **not** require What3Words to send an order. When present, production should persist and display it (see “What production should do” below).
+
+### What production should do (`ai-sms-chat`)
+
+1. Accept optional `what3words` and `crm_what3words` on `POST /api/webhooks/work-orders` (do not reject unknown fields if validation is strict).
+2. Persist them on the work order; upsert by `order_id` should update on re-send.
+3. Show `what3words` on load/job sheets next to the install address (link to `https://what3words.com/{words}` is useful).
+4. Touch the same places as other address display: `leadlock-work-order.js`, `production-database.js`, `public/production/common.js`.
 
 ---
 

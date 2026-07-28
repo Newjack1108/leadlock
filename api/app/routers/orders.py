@@ -607,6 +607,7 @@ async def update_order(
         "delivery_postcode",
         "delivery_country",
         "delivery_location_notes",
+        "delivery_what3words",
     }
     has_delivery_update = bool(delivery_field_names.intersection(update_dict))
     for field, value in update_dict.items():
@@ -1232,9 +1233,11 @@ async def send_to_production(
     if use_alternate:
         routing_address = build_delivery_address(order)
         routing_postcode = order.delivery_postcode or ""
+        routing_what3words = (getattr(order, "delivery_what3words", None) or "").strip() or None
     else:
         routing_address = _build_customer_address(customer)
         routing_postcode = customer.postcode or ""
+        routing_what3words = (getattr(customer, "what3words", None) or "").strip() or None
 
     production_notes = order.notes or ""
     delivery_notes = (getattr(order, "delivery_location_notes", None) or "").strip()
@@ -1270,10 +1273,15 @@ async def send_to_production(
         "balance_amount": float(order.balance_amount),
         "invoice_number": order.invoice_number,
     }
+    if routing_what3words:
+        payload["what3words"] = routing_what3words
     if use_alternate:
         payload["address_is_delivery_location"] = True
         payload["delivery_location_notes"] = delivery_notes
         payload["crm_customer_address"] = _build_customer_address(customer)
+        crm_what3words = (getattr(customer, "what3words", None) or "").strip() or None
+        if crm_what3words:
+            payload["crm_what3words"] = crm_what3words
     if (
         not is_collection
         and order.travel_time_hours_one_way is not None

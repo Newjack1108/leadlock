@@ -28,6 +28,7 @@ from app.models import (
 )
 from app.routers import orders as orders_router
 from app.routers import quotes as quotes_router
+from app.routers import customers as customers_router
 
 
 @pytest.fixture(name="engine")
@@ -127,6 +128,7 @@ def fixture_client(engine, seeded_session):
     app = FastAPI()
     app.include_router(orders_router.router)
     app.include_router(quotes_router.router)
+    app.include_router(customers_router.router)
     app.dependency_overrides[get_session] = override_get_session
     app.dependency_overrides[get_current_user] = lambda: user
 
@@ -388,3 +390,144 @@ def test_send_to_production_rejects_incomplete_alternate_delivery_address(client
 
     assert res.status_code == 400
     assert "delivery location" in res.json()["detail"].lower()
+
+
+def _fake_httpx_capturing(captured: dict):
+    class FakeResponse:
+        status_code = 200
+        content = b'{"ok": true}'
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"ok": True}
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def post(self, url, json=None, headers=None):
+            captured["payload"] = json
+            return FakeResponse()
+
+    return FakeClient
+
+
+@patch.dict(os.environ, {"PRODUCTION_APP_API_URL": "https://prod.example", "PRODUCTION_APP_API_KEY": "key"})
+def test_send_to_production_includes_crm_what3words(client, seeded_session):
+    session, user, order, customer, quote = seeded_session
+
+    order.fulfillment_method = QuoteFulfillmentMethod.DELIVERY
+    order.use_alternate_delivery_address = False
+    order.delivery_address_line1 = None
+    customer.address_line1 = "1 CRM Street"
+    customer.city = "CRM City"
+    customer.postcode = "CR1 1AA"
+    customer.what3words = "index.home.raft"
+    session.add(order)
+    session.add(customer)
+    session.commit()
+
+    captured = {}
+    with patch("app.routers.orders.httpx.AsyncClient", _fake_httpx_capturing(captured)):
+        res = client.post(f"/api/orders/{order.id}/send-to-production")
+
+    assert res.status_code == 200
+    payload = captured["payload"]
+    assert payload["what3words"] == "index.home.raft"
+    assert "crm_what3words" not in payload
+
+
+@patch.dict(os.environ, {"PRODUCTION_APP_API_URL": "https://prod.example", "PRODUCTION_APP_API_KEY": "key"})
+def test_send_to_production_prefers_delivery_what3words_and_sends_crm(client, seeded_session):
+    session, user, order, customer, quote = seeded_session
+
+    order.fulfillment_method = QuoteFulfillmentMethod.DELIVERY
+    order.use_alternate_delivery_address = True
+    order.delivery_address_line1 = "Delivery line 1"
+    order.delivery_city = "Delivery City"
+    order.delivery_postcode = "DL2 2BB"
+    order.delivery_country = "United Kingdom"
+    order.delivery_what3words = "filled.table.chair"
+    customer.what3words = "index.home.raft"
+    session.add(order)
+    session.add(customer)
+    session.commit()
+
+    captured = {}
+    with patch("app.routers.orders.httpx.AsyncClient", _fake_httpx_capturing(captured)):
+        res = client.post(f"/api/orders/{order.id}/send-to-production")
+
+    assert res.status_code == 200
+    payload = captured["payload"]
+    assert payload["what3words"] == "filled.table.chair"
+    assert payload["crm_what3words"] == "index.home.raft"
+
+
+@patch.dict(os.environ, {"PRODUCTION_APP_API_URL": "https://prod.example", "PRODUCTION_APP_API_KEY": "key"})
+def test_send_to_production_omits_what3words_when_unset(client, seeded_session):
+    session, user, order, customer, quote = seeded_session
+
+    order.fulfillment_method = QuoteFulfillmentMethod.DELIVERY
+    order.use_alternate_delivery_address = False
+    customer.address_line1 = "1 CRM Street"
+    customer.city = "CRM City"
+    customer.postcode = "CR1 1AA"
+    customer.what3words = None
+    session.add(order)
+    session.add(customer)
+    session.commit()
+
+    captured = {}
+    with patch("app.routers.orders.httpx.AsyncClient", _fake_httpx_capturing(captured)):
+        res = client.post(f"/api/orders/{order.id}/send-to-production")
+
+    assert res.status_code == 200
+    assert "what3words" not in captured["payload"]
+    assert "crm_what3words" not in captured["payload"]
+
+
+def test_customer_rejects_invalid_what3words(client, seeded_session):
+    session, user, order, customer, quote = seeded_session
+
+    res = client.patch(
+        f"/api/customers/{customer.id}",
+        json={"what3words": "not-valid"},
+    )
+    assert res.status_code == 400
+    assert "what3words" in res.json()["detail"].lower()
+
+
+def test_customer_accepts_and_normalizes_what3words(client, seeded_session):
+    session, user, order, customer, quote = seeded_session
+
+    res = client.patch(
+        f"/api/customers/{customer.id}",
+        json={"what3words": "///Filled.Table.Chair"},
+    )
+    assert res.status_code == 200
+    assert res.json()["what3words"] == "filled.table.chair"
+
+
+def test_order_rejects_invalid_delivery_what3words(client, seeded_session):
+    session, user, order, customer, quote = seeded_session
+
+    res = client.patch(
+        f"/api/orders/{order.id}",
+        json={
+            "use_alternate_delivery_address": True,
+            "delivery_address_line1": "Delivery line 1",
+            "delivery_city": "Delivery City",
+            "delivery_postcode": "DL2 2BB",
+            "delivery_what3words": "bad format here",
+        },
+    )
+    assert res.status_code == 400
+    assert "what3words" in res.json()["detail"].lower()

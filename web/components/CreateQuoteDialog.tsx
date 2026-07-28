@@ -79,6 +79,7 @@ export default function CreateQuoteDialog({
   const [deliveryPostcode, setDeliveryPostcode] = useState('');
   const [deliveryCountry, setDeliveryCountry] = useState('United Kingdom');
   const [deliveryLocationNotes, setDeliveryLocationNotes] = useState('');
+  const [deliveryWhat3Words, setDeliveryWhat3Words] = useState('');
   const [productDetails, setProductDetails] = useState<Record<number, Product>>({});
   const [allOptionalExtras, setAllOptionalExtras] = useState<Product[]>([]);
   const [displayedOptionalExtraIds, setDisplayedOptionalExtraIds] = useState<number[]>([]);
@@ -345,6 +346,7 @@ export default function CreateQuoteDialog({
       quoteData.delivery_postcode = useAlternateDeliveryAddress ? deliveryPostcode.trim() || undefined : undefined;
       quoteData.delivery_country = useAlternateDeliveryAddress ? deliveryCountry.trim() || 'United Kingdom' : undefined;
       quoteData.delivery_location_notes = useAlternateDeliveryAddress ? deliveryLocationNotes.trim() || undefined : undefined;
+      quoteData.delivery_what3words = useAlternateDeliveryAddress ? deliveryWhat3Words.trim() || undefined : undefined;
 
       await createQuote(quoteData);
       toast.success('Quote created successfully');
@@ -757,6 +759,8 @@ export default function CreateQuoteDialog({
                 onDeliveryCountryChange={setDeliveryCountry}
                 deliveryLocationNotes={deliveryLocationNotes}
                 onDeliveryLocationNotesChange={setDeliveryLocationNotes}
+                deliveryWhat3Words={deliveryWhat3Words}
+                onDeliveryWhat3WordsChange={setDeliveryWhat3Words}
               />
               {fulfillmentMethod !== 'COLLECTION' && (
                 <div className="flex items-center gap-2">

@@ -1006,6 +1006,7 @@ export const createQuote = async (quoteData: {
   delivery_postcode?: string;
   delivery_country?: string;
   delivery_location_notes?: string;
+  delivery_what3words?: string;
 }) => {
   const response = await api.post('/api/quotes', quoteData);
   return response.data;
@@ -1263,6 +1264,7 @@ export const updateOrder = async (
     delivery_postcode?: string | null;
     delivery_country?: string | null;
     delivery_location_notes?: string | null;
+    delivery_what3words?: string | null;
   }
 ) => {
   const response = await api.patch(`/api/orders/${orderId}`, data, {
@@ -1594,6 +1596,7 @@ export const updateDraftQuote = async (quoteId: number, quoteData: {
   delivery_postcode?: string;
   delivery_country?: string;
   delivery_location_notes?: string;
+  delivery_what3words?: string;
 }) => {
   const response = await api.put(`/api/quotes/${quoteId}/draft`, quoteData, {
     timeout: EMAIL_AND_UPLOAD_TIMEOUT_MS,

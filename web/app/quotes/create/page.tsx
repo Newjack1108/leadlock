@@ -166,6 +166,7 @@ function CreateQuoteContent() {
   const [deliveryPostcode, setDeliveryPostcode] = useState('');
   const [deliveryCountry, setDeliveryCountry] = useState('United Kingdom');
   const [deliveryLocationNotes, setDeliveryLocationNotes] = useState('');
+  const [deliveryWhat3Words, setDeliveryWhat3Words] = useState('');
   const [depositAmount, setDepositAmount] = useState<number | ''>('');
   const [companySettings, setCompanySettings] = useState<any>(null);
   const [availableDiscounts, setAvailableDiscounts] = useState<DiscountTemplate[]>([]);
@@ -533,6 +534,7 @@ function CreateQuoteContent() {
         deliveryPostcode,
         deliveryCountry,
         deliveryLocationNotes,
+        deliveryWhat3Words,
         depositAmount,
         selectedDiscountIds,
       }),
@@ -557,6 +559,7 @@ function CreateQuoteContent() {
       deliveryPostcode,
       deliveryCountry,
       deliveryLocationNotes,
+      deliveryWhat3Words,
       depositAmount,
       selectedDiscountIds,
     ]
@@ -585,6 +588,7 @@ function CreateQuoteContent() {
         deliveryPostcode,
         deliveryCountry,
         deliveryLocationNotes,
+        deliveryWhat3Words,
         depositAmount,
         selectedDiscountIds,
       }),
@@ -609,6 +613,7 @@ function CreateQuoteContent() {
       deliveryPostcode,
       deliveryCountry,
       deliveryLocationNotes,
+      deliveryWhat3Words,
       depositAmount,
       selectedDiscountIds,
     ]
@@ -709,6 +714,7 @@ function CreateQuoteContent() {
           setDeliveryPostcode(q.delivery_postcode ?? '');
           setDeliveryCountry(q.delivery_country ?? 'United Kingdom');
           setDeliveryLocationNotes(q.delivery_location_notes ?? '');
+          setDeliveryWhat3Words(q.delivery_what3words ?? '');
           setDepositAmount(q.deposit_amount != null ? Number(q.deposit_amount) : '');
           setSelectedDiscountIds(
             (q.discounts ?? [])
@@ -806,6 +812,7 @@ function CreateQuoteContent() {
           delivery_postcode: useAlternateDeliveryAddress ? deliveryPostcode.trim() || undefined : undefined,
           delivery_country: useAlternateDeliveryAddress ? deliveryCountry.trim() || 'United Kingdom' : undefined,
           delivery_location_notes: useAlternateDeliveryAddress ? deliveryLocationNotes.trim() || undefined : undefined,
+          delivery_what3words: useAlternateDeliveryAddress ? deliveryWhat3Words.trim() || undefined : undefined,
         });
         if (cancelled) return;
         try {
@@ -1367,6 +1374,8 @@ function CreateQuoteContent() {
                     onDeliveryCountryChange={setDeliveryCountry}
                     deliveryLocationNotes={deliveryLocationNotes}
                     onDeliveryLocationNotesChange={setDeliveryLocationNotes}
+                    deliveryWhat3Words={deliveryWhat3Words}
+                    onDeliveryWhat3WordsChange={setDeliveryWhat3Words}
                   />
                 </div>
               </CardContent>

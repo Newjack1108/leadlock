@@ -747,6 +747,18 @@ export default function CustomerDetailPage() {
                         onBlur={(e) => handleUpdateCustomer('country', e.target.value)}
                       />
                     </div>
+                    <div className="col-span-2">
+                      <Label>What3Words (optional)</Label>
+                      <Input
+                        value={customer.what3words || ''}
+                        onChange={(e) => handleFieldChange('what3words', e.target.value)}
+                        onBlur={(e) => handleUpdateCustomer('what3words', e.target.value)}
+                        placeholder="e.g. filled.table.chair"
+                      />
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Precise install pin for field sites. Format: word.word.word
+                      </p>
+                    </div>
                   </div>
                 </CardContent>
               </Card>

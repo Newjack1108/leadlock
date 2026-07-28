@@ -1016,6 +1016,19 @@ export default function QuoteDetailPage() {
                         Notes: {quote.delivery_location_notes}
                       </div>
                     )}
+                    {quote.delivery_what3words && (
+                      <div className="text-xs text-muted-foreground mt-1">
+                        What3Words:{' '}
+                        <a
+                          href={`https://what3words.com/${quote.delivery_what3words}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="underline"
+                        >
+                          {quote.delivery_what3words}
+                        </a>
+                      </div>
+                    )}
                   </div>
                 )}
               </CardContent>
@@ -1049,6 +1062,21 @@ export default function QuoteDetailPage() {
                         >
                           {customer.phone}
                         </button>
+                      </div>
+                    )}
+                    {customer.what3words && (
+                      <div>
+                        <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
+                          What3Words
+                        </div>
+                        <a
+                          href={`https://what3words.com/${customer.what3words}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm underline"
+                        >
+                          {customer.what3words}
+                        </a>
                       </div>
                     )}
                     <Button

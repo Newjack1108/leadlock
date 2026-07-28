@@ -383,6 +383,10 @@ async def update_customer(
                 status_code=400,
                 detail="Cannot change source_system on TEST customers",
             )
+    if "what3words" in update_data:
+        from app.what3words import validate_what3words
+
+        update_data["what3words"] = validate_what3words(update_data.get("what3words"))
     for field, value in update_data.items():
         setattr(customer, field, value)
     

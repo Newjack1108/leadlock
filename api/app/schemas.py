@@ -337,6 +337,7 @@ class CustomerCreate(BaseModel):
     county: Optional[str] = None
     postcode: Optional[str] = None
     country: Optional[str] = "United Kingdom"
+    what3words: Optional[str] = None
 
 
 class CustomerUpdate(BaseModel):
@@ -350,6 +351,7 @@ class CustomerUpdate(BaseModel):
     county: Optional[str] = None
     postcode: Optional[str] = None
     country: Optional[str] = None
+    what3words: Optional[str] = None
     automated_reminder_outreach_opt_out: Optional[bool] = None
     wrong_email_address: Optional[bool] = None
     # Only "Ninox" or null/empty allowed via PATCH (TEST protected in router)
@@ -369,6 +371,7 @@ class CustomerResponse(BaseModel):
     county: Optional[str]
     postcode: Optional[str]
     country: Optional[str]
+    what3words: Optional[str] = None
     customer_since: datetime
     sms_bot_paused_until: Optional[datetime] = None
     sms_bot_stopped: bool = False
@@ -395,6 +398,7 @@ def customer_to_response(customer: Customer) -> CustomerResponse:
         county=customer.county,
         postcode=customer.postcode,
         country=customer.country,
+        what3words=getattr(customer, "what3words", None),
         customer_since=customer.customer_since,
         sms_bot_paused_until=customer.sms_bot_paused_until,
         sms_bot_stopped=bool(getattr(customer, "sms_bot_stopped", False)),
@@ -1765,6 +1769,7 @@ class QuoteCreate(BaseModel):
     delivery_postcode: Optional[str] = None
     delivery_country: Optional[str] = "United Kingdom"
     delivery_location_notes: Optional[str] = None
+    delivery_what3words: Optional[str] = None
     # When True, skip QUALIFIED→QUOTED until POST /quotes/{id}/apply-qualified-to-quoted (e.g. placeholder bootstrap draft)
     defer_qualified_to_quoted_transition: bool = False
 
@@ -1793,6 +1798,7 @@ class QuoteDraftUpdate(BaseModel):
     delivery_postcode: Optional[str] = None
     delivery_country: Optional[str] = None
     delivery_location_notes: Optional[str] = None
+    delivery_what3words: Optional[str] = None
 
 
 class QuoteUpdate(BaseModel):
@@ -1878,6 +1884,7 @@ class QuoteResponse(BaseModel):
     delivery_postcode: Optional[str] = None
     delivery_country: Optional[str] = None
     delivery_location_notes: Optional[str] = None
+    delivery_what3words: Optional[str] = None
     total_open_count: int = 0  # Total times quote view link was opened (across all sends)
     order_id: Optional[int] = None  # Order ID when quote is accepted (for View order link)
     customer_last_interacted_at: Optional[datetime] = None  # Last Activity date for this customer
@@ -1978,6 +1985,7 @@ class PublicQuoteDeliveryLocationResponse(BaseModel):
     address: str
     postcode: str
     notes: Optional[str] = None
+    what3words: Optional[str] = None
 
 
 class PublicQuoteViewResponse(BaseModel):
@@ -2108,6 +2116,7 @@ class OrderUpdate(BaseModel):
     delivery_postcode: Optional[str] = None
     delivery_country: Optional[str] = None
     delivery_location_notes: Optional[str] = None
+    delivery_what3words: Optional[str] = None
     payment_link_url: Optional[str] = None
 
 
@@ -2167,6 +2176,7 @@ class OrderResponse(BaseModel):
     delivery_postcode: Optional[str] = None
     delivery_country: Optional[str] = None
     delivery_location_notes: Optional[str] = None
+    delivery_what3words: Optional[str] = None
     payment_link_url: Optional[str] = None
     is_ninox_origin: bool = False
     items: List[OrderItemResponse] = []

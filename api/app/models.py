@@ -167,6 +167,7 @@ class Customer(SQLModel, table=True):
     county: Optional[str] = None
     postcode: Optional[str] = None
     country: Optional[str] = Field(default="United Kingdom")
+    what3words: Optional[str] = None  # Optional precise install pin (e.g. filled.table.chair)
     customer_since: datetime = Field(default_factory=datetime.utcnow)  # When first qualified
     sms_bot_paused_until: Optional[datetime] = None
     sms_bot_stopped: bool = Field(default=False)
@@ -679,6 +680,7 @@ class Quote(SQLModel, table=True):
     delivery_postcode: Optional[str] = None
     delivery_country: Optional[str] = Field(default="United Kingdom")
     delivery_location_notes: Optional[str] = None
+    delivery_what3words: Optional[str] = None
 
     # Opportunity management fields
     opportunity_stage: Optional["OpportunityStage"] = Field(default=None)
@@ -1021,6 +1023,7 @@ class Order(SQLModel, table=True):
     delivery_postcode: Optional[str] = None
     delivery_country: Optional[str] = Field(default="United Kingdom")
     delivery_location_notes: Optional[str] = None
+    delivery_what3words: Optional[str] = None
 
     # Relationships
     quote: "Quote" = Relationship(back_populates="order")

@@ -286,6 +286,8 @@ export interface Customer {
   county?: string;
   postcode?: string;
   country?: string;
+  /** Optional precise install pin (e.g. filled.table.chair) */
+  what3words?: string | null;
   customer_since: string;
   sms_bot_paused_until?: string | null;
   sms_bot_stopped?: boolean;
@@ -1392,6 +1394,7 @@ export interface Order {
   delivery_postcode?: string | null;
   delivery_country?: string | null;
   delivery_location_notes?: string | null;
+  delivery_what3words?: string | null;
   is_ninox_origin?: boolean;
   items: OrderItem[];
   access_sheet?: AccessSheet | null;
@@ -1502,6 +1505,7 @@ export interface Quote {
   delivery_postcode?: string | null;
   delivery_country?: string | null;
   delivery_location_notes?: string | null;
+  delivery_what3words?: string | null;
   total_open_count?: number;
   order_id?: number | null;
   customer_last_interacted_at?: string | null;
@@ -1613,6 +1617,7 @@ export interface PublicQuoteView {
     address: string;
     postcode: string;
     notes?: string | null;
+    what3words?: string | null;
   } | null;
   layout?: PublicQuoteLayout | null;
 }
@@ -1640,6 +1645,7 @@ export interface QuoteCreate {
   delivery_postcode?: string;
   delivery_country?: string;
   delivery_location_notes?: string;
+  delivery_what3words?: string;
 }
 
 export interface DiscountTemplate {

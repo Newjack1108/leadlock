@@ -79,6 +79,7 @@ export type QuoteDraftPayload = {
   delivery_postcode?: string;
   delivery_country?: string;
   delivery_location_notes?: string;
+  delivery_what3words?: string;
 };
 
 function isValidLine(item: QuoteItemCreate): boolean {
@@ -106,6 +107,7 @@ export interface BuildDraftPayloadInput {
   deliveryPostcode: string;
   deliveryCountry: string;
   deliveryLocationNotes: string;
+  deliveryWhat3Words: string;
   depositAmount: number | '';
   selectedDiscountIds: number[];
 }
@@ -132,6 +134,7 @@ export function buildUpdateDraftPayload(input: BuildDraftPayloadInput): QuoteDra
     deliveryPostcode,
     deliveryCountry,
     deliveryLocationNotes,
+    deliveryWhat3Words,
     depositAmount,
     selectedDiscountIds,
   } = input;
@@ -215,6 +218,7 @@ export function buildUpdateDraftPayload(input: BuildDraftPayloadInput): QuoteDra
     delivery_postcode: useAlternateDeliveryAddress ? deliveryPostcode.trim() || undefined : undefined,
     delivery_country: useAlternateDeliveryAddress ? deliveryCountry.trim() || 'United Kingdom' : undefined,
     delivery_location_notes: useAlternateDeliveryAddress ? deliveryLocationNotes.trim() || undefined : undefined,
+    delivery_what3words: useAlternateDeliveryAddress ? deliveryWhat3Words.trim() || undefined : undefined,
   };
 
   if (validUntil) {
@@ -269,6 +273,7 @@ export function buildPlaceholderOnlyDraftPayloadFromQuote(quote: Quote): QuoteDr
     delivery_postcode: quote.delivery_postcode ?? undefined,
     delivery_country: quote.delivery_country ?? 'United Kingdom',
     delivery_location_notes: quote.delivery_location_notes ?? undefined,
+    delivery_what3words: quote.delivery_what3words ?? undefined,
   };
 
   if (quote.valid_until) {

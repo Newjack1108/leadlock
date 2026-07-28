@@ -4,6 +4,7 @@ from typing import Any, Optional, Protocol
 from fastapi import HTTPException
 
 from app.models import QuoteFulfillmentMethod
+from app.what3words import validate_what3words
 
 
 class DeliveryLocationFields(Protocol):
@@ -15,6 +16,7 @@ class DeliveryLocationFields(Protocol):
     delivery_postcode: Optional[str]
     delivery_country: Optional[str]
     delivery_location_notes: Optional[str]
+    delivery_what3words: Optional[str]
     fulfillment_method: QuoteFulfillmentMethod
 
 
@@ -81,6 +83,7 @@ def apply_delivery_location_fields(
     delivery_postcode: Optional[str] = None,
     delivery_country: Optional[str] = None,
     delivery_location_notes: Optional[str] = None,
+    delivery_what3words: Optional[str] = None,
     set_fields: bool = True,
 ) -> None:
     """Apply delivery location fields to a Quote or Order model instance."""
@@ -96,6 +99,7 @@ def apply_delivery_location_fields(
         target.delivery_postcode = None
         target.delivery_country = "United Kingdom"
         target.delivery_location_notes = None
+        target.delivery_what3words = None
         return
     if delivery_address_line1 is not None:
         target.delivery_address_line1 = delivery_address_line1 or None
@@ -111,6 +115,8 @@ def apply_delivery_location_fields(
         target.delivery_country = delivery_country or "United Kingdom"
     if delivery_location_notes is not None:
         target.delivery_location_notes = delivery_location_notes or None
+    if delivery_what3words is not None:
+        target.delivery_what3words = validate_what3words(delivery_what3words)
 
 
 def copy_delivery_location_fields(source: Any, target: Any) -> None:
@@ -125,6 +131,7 @@ def copy_delivery_location_fields(source: Any, target: Any) -> None:
     target.delivery_postcode = getattr(source, "delivery_postcode", None)
     target.delivery_country = getattr(source, "delivery_country", None) or "United Kingdom"
     target.delivery_location_notes = getattr(source, "delivery_location_notes", None)
+    target.delivery_what3words = getattr(source, "delivery_what3words", None)
 
 
 def delivery_location_response_fields(entity: Any) -> dict:
@@ -140,6 +147,7 @@ def delivery_location_response_fields(entity: Any) -> dict:
         "delivery_postcode": getattr(entity, "delivery_postcode", None),
         "delivery_country": getattr(entity, "delivery_country", None),
         "delivery_location_notes": getattr(entity, "delivery_location_notes", None),
+        "delivery_what3words": getattr(entity, "delivery_what3words", None),
     }
 
 
@@ -168,6 +176,7 @@ def sync_delivery_location_from_payload(
         target.delivery_postcode = None
         target.delivery_country = "United Kingdom"
         target.delivery_location_notes = None
+        target.delivery_what3words = None
         return
 
     for field in (
@@ -178,10 +187,13 @@ def sync_delivery_location_from_payload(
         "delivery_postcode",
         "delivery_country",
         "delivery_location_notes",
+        "delivery_what3words",
     ):
         if _should_apply(field):
             value = getattr(payload, field, None)
             if field == "delivery_country":
                 setattr(target, field, value or "United Kingdom")
+            elif field == "delivery_what3words":
+                setattr(target, field, validate_what3words(value))
             else:
                 setattr(target, field, value or None)

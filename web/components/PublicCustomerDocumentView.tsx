@@ -168,6 +168,19 @@ export default function PublicCustomerDocumentView() {
               <div className="border-t pt-4">
                 <h3 className="font-medium mb-2">Delivery location</h3>
                 <p className="text-sm whitespace-pre-wrap">{data.delivery_location.address}</p>
+                {data.delivery_location.what3words && (
+                  <p className="text-sm mt-2">
+                    What3Words:{' '}
+                    <a
+                      href={`https://what3words.com/${data.delivery_location.what3words}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline"
+                    >
+                      {data.delivery_location.what3words}
+                    </a>
+                  </p>
+                )}
                 {data.delivery_location.notes && (
                   <p className="text-sm text-muted-foreground mt-2">
                     {data.delivery_location.notes}

@@ -152,6 +152,7 @@ function EditQuoteContent() {
   const [deliveryPostcode, setDeliveryPostcode] = useState('');
   const [deliveryCountry, setDeliveryCountry] = useState('United Kingdom');
   const [deliveryLocationNotes, setDeliveryLocationNotes] = useState('');
+  const [deliveryWhat3Words, setDeliveryWhat3Words] = useState('');
   const [depositAmount, setDepositAmount] = useState<number | ''>('');
   const [companySettings, setCompanySettings] = useState<any>(null);
   const [availableDiscounts, setAvailableDiscounts] = useState<DiscountTemplate[]>([]);
@@ -269,6 +270,7 @@ function EditQuoteContent() {
       setDeliveryPostcode(quoteData.delivery_postcode ?? '');
       setDeliveryCountry(quoteData.delivery_country ?? 'United Kingdom');
       setDeliveryLocationNotes(quoteData.delivery_location_notes ?? '');
+      setDeliveryWhat3Words(quoteData.delivery_what3words ?? '');
       setDepositAmount(quoteData.deposit_amount ?? '');
       setSelectedDiscountIds(
         (quoteData.discounts ?? [])
@@ -545,6 +547,7 @@ function EditQuoteContent() {
         deliveryPostcode,
         deliveryCountry,
         deliveryLocationNotes,
+        deliveryWhat3Words,
         depositAmount,
         selectedDiscountIds,
       }),
@@ -569,6 +572,7 @@ function EditQuoteContent() {
       deliveryPostcode,
       deliveryCountry,
       deliveryLocationNotes,
+      deliveryWhat3Words,
       depositAmount,
       selectedDiscountIds,
     ]
@@ -597,6 +601,7 @@ function EditQuoteContent() {
         deliveryPostcode,
         deliveryCountry,
         deliveryLocationNotes,
+        deliveryWhat3Words,
         depositAmount,
         selectedDiscountIds,
       }),
@@ -621,6 +626,7 @@ function EditQuoteContent() {
       deliveryPostcode,
       deliveryCountry,
       deliveryLocationNotes,
+      deliveryWhat3Words,
       depositAmount,
       selectedDiscountIds,
     ]
@@ -1207,6 +1213,8 @@ function EditQuoteContent() {
                     onDeliveryCountryChange={setDeliveryCountry}
                     deliveryLocationNotes={deliveryLocationNotes}
                     onDeliveryLocationNotesChange={setDeliveryLocationNotes}
+                    deliveryWhat3Words={deliveryWhat3Words}
+                    onDeliveryWhat3WordsChange={setDeliveryWhat3Words}
                   />
                 </div>
               </CardContent>

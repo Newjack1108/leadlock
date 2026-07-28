@@ -73,6 +73,7 @@ from app.delivery_location import (
     delivery_location_response_fields,
     sync_delivery_location_from_payload,
 )
+from app.what3words import validate_what3words
 from app.quote_email_service import send_quote_email
 from app.routers.emails import (
     MAX_ATTACHMENT_SIZE,
@@ -1175,6 +1176,11 @@ async def create_quote(
             delivery_postcode=quote_data.delivery_postcode if quote_data.use_alternate_delivery_address else None,
             delivery_country=quote_data.delivery_country if quote_data.use_alternate_delivery_address else "United Kingdom",
             delivery_location_notes=quote_data.delivery_location_notes if quote_data.use_alternate_delivery_address else None,
+            delivery_what3words=(
+                validate_what3words(quote_data.delivery_what3words)
+                if quote_data.use_alternate_delivery_address
+                else None
+            ),
         )
         session.add(quote)
         session.commit()
@@ -1869,6 +1875,7 @@ def _build_duplicate_draft_payload_from_source(source: Quote, session: Session) 
         delivery_postcode=getattr(source, "delivery_postcode", None),
         delivery_country=getattr(source, "delivery_country", None),
         delivery_location_notes=getattr(source, "delivery_location_notes", None),
+        delivery_what3words=getattr(source, "delivery_what3words", None),
         displayed_optional_extra_ids=displayed_extra_ids if displayed_extra_ids else None,
     )
 

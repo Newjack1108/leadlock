@@ -93,6 +93,7 @@ export default function OrderDetailPage() {
   const [deliveryPostcodeDraft, setDeliveryPostcodeDraft] = useState('');
   const [deliveryCountryDraft, setDeliveryCountryDraft] = useState('United Kingdom');
   const [deliveryLocationNotesDraft, setDeliveryLocationNotesDraft] = useState('');
+  const [deliveryWhat3WordsDraft, setDeliveryWhat3WordsDraft] = useState('');
   const [savingNotes, setSavingNotes] = useState(false);
   const [composeEmailOpen, setComposeEmailOpen] = useState(false);
   const [composeEmailInitialAttachments, setComposeEmailInitialAttachments] = useState<File[]>([]);
@@ -119,6 +120,7 @@ export default function OrderDetailPage() {
     setDeliveryPostcodeDraft(order.delivery_postcode ?? '');
     setDeliveryCountryDraft(order.delivery_country ?? 'United Kingdom');
     setDeliveryLocationNotesDraft(order.delivery_location_notes ?? '');
+    setDeliveryWhat3WordsDraft(order.delivery_what3words ?? '');
   }, [order]);
 
   const fetchOrder = async () => {
@@ -304,6 +306,7 @@ export default function OrderDetailPage() {
         delivery_postcode: useAlternateDeliveryAddressDraft ? deliveryPostcodeDraft : null,
         delivery_country: useAlternateDeliveryAddressDraft ? deliveryCountryDraft : null,
         delivery_location_notes: useAlternateDeliveryAddressDraft ? deliveryLocationNotesDraft : null,
+        delivery_what3words: useAlternateDeliveryAddressDraft ? deliveryWhat3WordsDraft : null,
       });
       setOrder(updated);
       toast.success('Production details saved');
@@ -640,6 +643,12 @@ export default function OrderDetailPage() {
                       <Input value={deliveryCountyDraft} onChange={(e) => setDeliveryCountyDraft(e.target.value)} placeholder="County" />
                       <Input value={deliveryPostcodeDraft} onChange={(e) => setDeliveryPostcodeDraft(e.target.value)} placeholder="Postcode" />
                       <Input value={deliveryCountryDraft} onChange={(e) => setDeliveryCountryDraft(e.target.value)} placeholder="Country" />
+                      <Input
+                        value={deliveryWhat3WordsDraft}
+                        onChange={(e) => setDeliveryWhat3WordsDraft(e.target.value)}
+                        placeholder="What3Words (e.g. filled.table.chair)"
+                        className="sm:col-span-2"
+                      />
                       <Textarea value={deliveryLocationNotesDraft} onChange={(e) => setDeliveryLocationNotesDraft(e.target.value)} placeholder="Delivery location notes" className="sm:col-span-2" rows={3} />
                     </div>
                   )}
@@ -674,7 +683,8 @@ export default function OrderDetailPage() {
                         deliveryCountyDraft === (order.delivery_county ?? '') &&
                         deliveryPostcodeDraft === (order.delivery_postcode ?? '') &&
                         deliveryCountryDraft === (order.delivery_country ?? 'United Kingdom') &&
-                        deliveryLocationNotesDraft === (order.delivery_location_notes ?? '')
+                        deliveryLocationNotesDraft === (order.delivery_location_notes ?? '') &&
+                        deliveryWhat3WordsDraft === (order.delivery_what3words ?? '')
                       )
                     }
                   >
