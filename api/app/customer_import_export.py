@@ -230,7 +230,7 @@ def import_customers_from_csv(
                 postcode=postcode,
                 status=lead_status,
                 lead_type=product_type,
-                lead_source=LeadSource.NINOX,
+                lead_source=LeadSource.UNKNOWN,
                 customer_id=customer.id,
             )
             session.add(lead)

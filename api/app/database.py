@@ -2592,6 +2592,37 @@ def create_db_and_tables():
             error_str = str(e).lower()
             if "already exists" not in error_str and "duplicate" not in error_str:
                 print(f"Error in lead source revert migration: {e}", file=sys.stderr, flush=True)
+
+        # Step 8g: Move Ninox from lead_source to customer.source_system
+        try:
+            with engine.connect() as conn:
+                result = conn.execute(text(
+                    "SELECT 1 FROM applied_data_migrations WHERE migration_name = 'ninox_to_customer_source_system'"
+                ))
+                if result.fetchone() is None:
+                    print("Migrating NINOX lead sources to customer.source_system...", file=sys.stderr, flush=True)
+                    with engine.begin() as mig_conn:
+                        # Mark customers of NINOX leads (do not overwrite TEST or other values)
+                        mig_conn.execute(text("""
+                            UPDATE customer
+                            SET source_system = 'Ninox'
+                            WHERE id IN (
+                                SELECT DISTINCT customer_id FROM lead
+                                WHERE lead_source = 'NINOX' AND customer_id IS NOT NULL
+                            )
+                            AND (source_system IS NULL OR source_system = '')
+                        """))
+                        mig_conn.execute(text(
+                            "UPDATE lead SET lead_source = 'UNKNOWN' WHERE lead_source = 'NINOX'"
+                        ))
+                        mig_conn.execute(text(
+                            "INSERT INTO applied_data_migrations (migration_name) VALUES ('ninox_to_customer_source_system')"
+                        ))
+                    print("Ninox source_system migration completed", file=sys.stderr, flush=True)
+        except Exception as e:
+            error_str = str(e).lower()
+            if "already exists" not in error_str and "duplicate" not in error_str:
+                print(f"Error in ninox source_system migration: {e}", file=sys.stderr, flush=True)
         
         # Step 9: Create Reminder and ReminderRule tables + seed default rules
         has_reminder_table = inspector.has_table("reminder")

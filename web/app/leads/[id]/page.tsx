@@ -375,7 +375,7 @@ export default function LeadDetailPage() {
     );
   }
 
-  const isNinoxLead = lead.lead_source === LeadSource.NINOX || lead.customer?.source_system === 'Ninox';
+  const isNinoxLead = lead.customer?.source_system === 'Ninox';
   const canQualifyFields = leadFieldsAllowQualify(lead.lead_source, lead.lead_type);
   const qualifyFieldsHint = qualifyFieldsMessage(lead.lead_source, lead.lead_type);
 

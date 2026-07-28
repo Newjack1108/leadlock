@@ -352,6 +352,8 @@ class CustomerUpdate(BaseModel):
     country: Optional[str] = None
     automated_reminder_outreach_opt_out: Optional[bool] = None
     wrong_email_address: Optional[bool] = None
+    # Only "Ninox" or null/empty allowed via PATCH (TEST protected in router)
+    source_system: Optional[str] = None
 
 
 class CustomerResponse(BaseModel):

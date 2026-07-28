@@ -451,6 +451,19 @@ export default function CustomerDetailPage() {
     }
   };
 
+  const handleNinoxOrigin = async (fromNinox: boolean) => {
+    try {
+      await api.patch(`/api/customers/${customerId}`, {
+        source_system: fromNinox ? 'Ninox' : null,
+      });
+      setCustomer((prev) => (prev ? { ...prev, source_system: fromNinox ? 'Ninox' : null } : null));
+      toast.success(fromNinox ? 'Marked as from Ninox' : 'Ninox flag removed');
+      fetchHistory();
+    } catch {
+      toast.error('Failed to update Ninox setting');
+    }
+  };
+
   const handleDeleteCustomer = async () => {
     if (
       !window.confirm(
@@ -603,6 +616,17 @@ export default function CustomerDetailPage() {
                     <div className="text-xs text-muted-foreground mt-1">
                       Customer since: {new Date(customer.customer_since).toLocaleDateString('en-GB')}
                     </div>
+                    {customer.source_system !== 'TEST' && (
+                      <label className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-foreground">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-input"
+                          checked={customer.source_system === 'Ninox'}
+                          onChange={(e) => handleNinoxOrigin(e.target.checked)}
+                        />
+                        From Ninox
+                      </label>
+                    )}
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
@@ -1130,7 +1154,7 @@ export default function CustomerDetailPage() {
                         <div className="flex items-center justify-between">
                           <span className="inline-flex items-center gap-1.5">
                             <span className="font-medium">{lead.name}</span>
-                            {(lead.lead_source === 'NINOX' || lead.customer?.source_system === 'Ninox') && (
+                            {(customer.source_system === 'Ninox') && (
                               <NinoxBadge className="h-auto px-1.5 py-0.5 text-xs" />
                             )}
                           </span>

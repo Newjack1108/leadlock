@@ -9,7 +9,7 @@ STAFF_SELECTABLE_LEAD_SOURCES: tuple[LeadSource, ...] = tuple(
     s
     for s in LeadSource
     if s not in DISALLOWED_LEAD_SOURCES_FOR_QUALIFY
-    and s not in (LeadSource.WEBSITE, LeadSource.UNKNOWN)
+    and s not in (LeadSource.WEBSITE, LeadSource.UNKNOWN, LeadSource.NINOX)
 )
 
 SELECTABLE_LEAD_TYPES: tuple[LeadType, ...] = (

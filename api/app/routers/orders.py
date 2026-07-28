@@ -22,7 +22,6 @@ from app.models import (
     Quote,
     Lead,
     LeadType,
-    LeadSource,
     QuoteFulfillmentMethod,
     Activity,
     ActivityType,
@@ -249,10 +248,7 @@ def build_order_list_response(
     """Lightweight order row for GET /api/orders (no line items or per-row DB queries)."""
     customer_name = customer.name if customer else None
     lead_type = lead.lead_type if lead else None
-    is_ninox_origin = (
-        (lead is not None and lead.lead_source == LeadSource.NINOX)
-        or (customer is not None and customer.source_system == "Ninox")
-    )
+    is_ninox_origin = customer is not None and customer.source_system == "Ninox"
     access_sheet = None
     if access_req:
         access_sheet = AccessSheetResponse(
@@ -356,12 +352,10 @@ def build_order_response(order: Order, order_items: List[OrderItem], session: Se
             customer_source_system = customer.source_system
 
     quote = session.exec(select(Quote).where(Quote.id == order.quote_id)).first()
-    lead_source = None
     if quote and quote.lead_id:
         lead = session.exec(select(Lead).where(Lead.id == quote.lead_id)).first()
-        lead_source = lead.lead_source if lead else None
         lead_type = lead.lead_type if lead else None
-    is_ninox_origin = lead_source == LeadSource.NINOX or customer_source_system == "Ninox"
+    is_ninox_origin = customer_source_system == "Ninox"
 
     access_sheet = _build_access_sheet_response(order.id, session)
     review_hub_url = _build_review_hub_url(order, session)

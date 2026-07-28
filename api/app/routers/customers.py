@@ -368,6 +368,21 @@ async def update_customer(
         raise HTTPException(status_code=404, detail="Customer not found")
     
     update_data = customer_data.dict(exclude_unset=True)
+    if "source_system" in update_data:
+        new_source = update_data["source_system"]
+        if new_source == "":
+            new_source = None
+            update_data["source_system"] = None
+        if new_source is not None and new_source != "Ninox":
+            raise HTTPException(
+                status_code=400,
+                detail="source_system may only be set to 'Ninox' or cleared",
+            )
+        if getattr(customer, "source_system", None) == "TEST":
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot change source_system on TEST customers",
+            )
     for field, value in update_data.items():
         setattr(customer, field, value)
     

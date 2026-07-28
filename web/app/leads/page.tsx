@@ -126,8 +126,7 @@ function LeadsPageContent() {
   });
   const [removingSpamId, setRemovingSpamId] = useState<number | null>(null);
 
-  const isNinoxLead = (lead: Lead) =>
-    lead.lead_source === LeadSource.NINOX || lead.customer?.source_system === 'Ninox';
+  const isNinoxLead = (lead: Lead) => lead.customer?.source_system === 'Ninox';
 
   const canRemoveSpam = (lead: Lead) => canRemoveSpamLead(userRole, lead);
 

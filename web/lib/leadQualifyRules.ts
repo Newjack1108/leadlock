@@ -9,6 +9,7 @@ export const STAFF_SELECTABLE_LEAD_SOURCES = Object.values(LeadSource).filter(
   (s) =>
     s !== LeadSource.WEBSITE &&
     s !== LeadSource.UNKNOWN &&
+    s !== LeadSource.NINOX &&
     !DISALLOWED_SOURCES_FOR_QUALIFY.has(s)
 );
 
