@@ -1778,6 +1778,54 @@ async def mark_opportunity_lost(
     return build_quote_response(quote, quote_items, session)
 
 
+@router.post("/opportunities/{quote_id}/reopen", response_model=QuoteResponse)
+async def reopen_opportunity(
+    quote_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Manual override: restore a closed/lost (REJECTED) quote to the live pipeline."""
+    statement = select(Quote).where(Quote.id == quote_id)
+    quote = session.exec(statement).first()
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    if quote.status != QuoteStatus.REJECTED:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Only closed or lost quotes can be reopened. This quote has status: {quote.status}",
+        )
+
+    was_lost = quote.loss_category is not None
+    quote.status = QuoteStatus.VIEWED if quote.viewed_at else QuoteStatus.SENT
+    quote.opportunity_stage = OpportunityStage.QUOTE_SENT
+    quote.loss_reason = None
+    quote.loss_category = None
+    quote.rejected_by_id = None
+    quote.archived_at = None
+    quote.updated_at = datetime.utcnow()
+    session.add(quote)
+    session.commit()
+    session.refresh(quote)
+
+    # Mark Lost had moved QUOTED leads to LOST — restore the linked lead if still LOST
+    if was_lost and quote.lead_id:
+        from app.workflow import auto_transition_lead_status
+
+        lead = session.get(Lead, quote.lead_id)
+        if lead and lead.status == LeadStatus.LOST:
+            auto_transition_lead_status(
+                lead.id,
+                LeadStatus.QUOTED,
+                session,
+                current_user.id,
+                "Automatic transition: Quote reopened",
+            )
+
+    statement = select(QuoteItem).where(QuoteItem.quote_id == quote.id).order_by(QuoteItem.sort_order)
+    quote_items = session.exec(statement).all()
+    return build_quote_response(quote, quote_items, session)
+
+
 @router.post("/{quote_id}/apply-qualified-to-quoted", status_code=204)
 async def apply_qualified_to_quoted_for_quote(
     quote_id: int,

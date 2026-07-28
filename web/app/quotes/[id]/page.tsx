@@ -30,7 +30,7 @@ import FilesCard from '@/components/FilesCard';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { formatDateTime } from '@/lib/utils';
-import { ArrowLeft, Mail, Eye, Tag, Pencil, ChevronDown, ChevronUp, Send, ExternalLink, CheckCircle, ShoppingBag, XCircle, MinusCircle, FileSearch, Trash2, Copy, AlertTriangle, CreditCard, PauseCircle } from 'lucide-react';
+import { ArrowLeft, Mail, Eye, Tag, Pencil, ChevronDown, ChevronUp, Send, ExternalLink, CheckCircle, ShoppingBag, XCircle, MinusCircle, FileSearch, Trash2, Copy, AlertTriangle, CreditCard, PauseCircle, RotateCcw } from 'lucide-react';
 import DraftConfiguratorLink from '@/components/configurator/DraftConfiguratorLink';
 import {
   Dialog,
@@ -85,10 +85,12 @@ export default function QuoteDetailPage() {
   const [repairingOrder, setRepairingOrder] = useState(false);
   const [lostDialogOpen, setLostDialogOpen] = useState(false);
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
+  const [reopenDialogOpen, setReopenDialogOpen] = useState(false);
   const [lossReason, setLossReason] = useState('');
   const [lossCategory, setLossCategory] = useState<LossCategory | ''>('');
   const [markingLost, setMarkingLost] = useState(false);
   const [markingClose, setMarkingClose] = useState(false);
+  const [reopening, setReopening] = useState(false);
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
@@ -175,6 +177,20 @@ export default function QuoteDetailPage() {
     }
   };
 
+  const handleReopen = async () => {
+    try {
+      setReopening(true);
+      await api.post(`/api/quotes/opportunities/${quoteId}/reopen`);
+      toast.success('Quote reopened and returned to the live pipeline.');
+      setReopenDialogOpen(false);
+      fetchQuote();
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || 'Failed to reopen quote');
+    } finally {
+      setReopening(false);
+    }
+  };
+
   const handleCancelDraft = async () => {
     try {
       setCancelling(true);
@@ -244,6 +260,7 @@ export default function QuoteDetailPage() {
   };
 
   const isClosable = quote && ['SENT', 'VIEWED'].includes(quote.status);
+  const isReopenable = quote && quote.status === QuoteStatus.REJECTED;
 
   if (loading) {
     return (
@@ -450,6 +467,12 @@ export default function QuoteDetailPage() {
                         Close
                       </DropdownMenuItem>
                     </>
+                  )}
+                  {isReopenable && (
+                    <DropdownMenuItem onClick={() => setReopenDialogOpen(true)}>
+                      <RotateCcw className="h-4 w-4 mr-2" />
+                      Reopen
+                    </DropdownMenuItem>
                   )}
                 </DropdownMenuContent>
                 </DropdownMenu>
@@ -1162,6 +1185,29 @@ export default function QuoteDetailPage() {
               </Button>
               <Button onClick={handleClose} disabled={markingClose}>
                 {markingClose ? 'Closing...' : 'Close Quote'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Reopen Dialog */}
+        <Dialog open={reopenDialogOpen} onOpenChange={setReopenDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Reopen Quote</DialogTitle>
+              <DialogDescription>
+                Bring this closed or lost quote back into the live pipeline. Loss reason is cleared.
+                {quote.loss_category
+                  ? ' If the linked lead is LOST, it will be restored to QUOTED.'
+                  : ''}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setReopenDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleReopen} disabled={reopening}>
+                {reopening ? 'Reopening...' : 'Reopen Quote'}
               </Button>
             </DialogFooter>
           </DialogContent>

@@ -26,7 +26,7 @@ import api, { cancelDraftQuote, downloadQuotesCsv, getQuotes, previewQuotePdf } 
 import { LeadType, Quote, QuoteStatus, QuoteTemperature, OpportunityStage } from '@/lib/types';
 import { toast } from 'sonner';
 import Link from 'next/link';
-import { FileText, Eye, Pencil, List, LayoutGrid, ShoppingCart, SendHorizontal, MessageCircle, MinusCircle, Trash2, FileDown, PauseCircle } from 'lucide-react';
+import { FileText, Eye, Pencil, List, LayoutGrid, ShoppingCart, SendHorizontal, MessageCircle, MinusCircle, Trash2, FileDown, PauseCircle, RotateCcw } from 'lucide-react';
 
 const statusColors: Record<QuoteStatus, string> = {
   DRAFT: 'bg-gray-100 text-gray-700',
@@ -210,6 +210,10 @@ function quoteIsClosable(quote: Quote): boolean {
   return quote.status === QuoteStatus.SENT || quote.status === QuoteStatus.VIEWED;
 }
 
+function quoteIsReopenable(quote: Quote): boolean {
+  return quote.status === QuoteStatus.REJECTED;
+}
+
 function QuotesPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -231,6 +235,9 @@ function QuotesPageContent() {
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
   const [quotePendingClose, setQuotePendingClose] = useState<Quote | null>(null);
   const [markingClose, setMarkingClose] = useState(false);
+  const [reopenDialogOpen, setReopenDialogOpen] = useState(false);
+  const [quotePendingReopen, setQuotePendingReopen] = useState<Quote | null>(null);
+  const [reopening, setReopening] = useState(false);
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [quotePendingCancel, setQuotePendingCancel] = useState<Quote | null>(null);
   const [cancellingDraft, setCancellingDraft] = useState(false);
@@ -376,6 +383,27 @@ function QuotesPageContent() {
       setMarkingClose(false);
     }
   }, [quotePendingClose, fetchQuotes]);
+
+  const openReopenDialog = useCallback((quote: Quote) => {
+    setQuotePendingReopen(quote);
+    setReopenDialogOpen(true);
+  }, []);
+
+  const handleReopenQuote = useCallback(async () => {
+    if (!quotePendingReopen) return;
+    try {
+      setReopening(true);
+      await api.post(`/api/quotes/opportunities/${quotePendingReopen.id}/reopen`);
+      toast.success('Quote reopened and returned to the live pipeline.');
+      setReopenDialogOpen(false);
+      setQuotePendingReopen(null);
+      await fetchQuotes();
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || 'Failed to reopen quote');
+    } finally {
+      setReopening(false);
+    }
+  }, [quotePendingReopen, fetchQuotes]);
 
   const openCancelDraftDialog = useCallback((quote: Quote) => {
     setQuotePendingCancel(quote);
@@ -739,6 +767,17 @@ function QuotesPageContent() {
                               Close
                             </Button>
                           )}
+                          {quoteIsReopenable(quote) && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => openReopenDialog(quote)}
+                              disabled={reopening && quotePendingReopen?.id === quote.id}
+                            >
+                              <RotateCcw className="h-4 w-4 mr-1" />
+                              Reopen
+                            </Button>
+                          )}
                           <Button
                             variant="default"
                             size="sm"
@@ -871,6 +910,17 @@ function QuotesPageContent() {
                           Close
                         </Button>
                       )}
+                      {quoteIsReopenable(quote) && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openReopenDialog(quote)}
+                          disabled={reopening && quotePendingReopen?.id === quote.id}
+                        >
+                          <RotateCcw className="h-4 w-4 mr-2" />
+                          Reopen
+                        </Button>
+                      )}
                       <Button
                         variant="default"
                         size="sm"
@@ -942,6 +992,43 @@ function QuotesPageContent() {
               </Button>
               <Button onClick={() => void handleCloseQuote()} disabled={markingClose || !quotePendingClose}>
                 {markingClose ? 'Closing...' : 'Close Quote'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog
+          open={reopenDialogOpen}
+          onOpenChange={(open) => {
+            if (!reopening) {
+              setReopenDialogOpen(open);
+              if (!open) setQuotePendingReopen(null);
+            }
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Reopen Quote</DialogTitle>
+              <DialogDescription>
+                Bring this closed or lost quote back into the live pipeline. Loss reason is cleared.
+                {quotePendingReopen?.loss_category
+                  ? ' If the linked lead is LOST, it will be restored to QUOTED.'
+                  : ''}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setReopenDialogOpen(false);
+                  setQuotePendingReopen(null);
+                }}
+                disabled={reopening}
+              >
+                Cancel
+              </Button>
+              <Button onClick={() => void handleReopenQuote()} disabled={reopening || !quotePendingReopen}>
+                {reopening ? 'Reopening...' : 'Reopen Quote'}
               </Button>
             </DialogFooter>
           </DialogContent>
