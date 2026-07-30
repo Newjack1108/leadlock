@@ -130,3 +130,24 @@ def test_ensure_order_recreates_missing_order_for_accepted_quote(api_client, sql
         order_items = session.exec(select(OrderItem).where(OrderItem.order_id == order.id)).all()
         assert len(order_items) == 1
         assert order_items[0].description == "Test building"
+
+
+def test_quote_response_includes_order_id_even_when_status_not_accepted(api_client, sqlite_engine):
+    """Re-sent accepted quotes keep their order; API must still expose order_id."""
+    ensure = api_client.post("/api/quotes/1/ensure-order", headers=_auth_headers(sqlite_engine))
+    assert ensure.status_code == 200
+    order_id = ensure.json()["order_id"]
+    assert order_id is not None
+
+    with Session(sqlite_engine) as session:
+        quote = session.get(Quote, 1)
+        assert quote is not None
+        quote.status = QuoteStatus.SENT
+        session.add(quote)
+        session.commit()
+
+    response = api_client.get("/api/quotes/1", headers=_auth_headers(sqlite_engine))
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "SENT"
+    assert payload["order_id"] == order_id

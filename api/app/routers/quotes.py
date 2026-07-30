@@ -541,10 +541,11 @@ def batch_quote_list_lookups(
                 open_counts_by_quote[int(qid)] = int(cnt) if cnt is not None else 0
 
     order_id_by_quote: Dict[int, int] = {}
-    accepted_quote_ids = [q.id for q in quotes if q.status == QuoteStatus.ACCEPTED and q.id is not None]
-    if accepted_quote_ids:
+    # Always resolve orders by quote_id. An order can still exist after quote status
+    # moves away from ACCEPTED (e.g. re-send), and the UI treats order_id as the link.
+    if quote_ids:
         for row in session.exec(
-            select(Order.quote_id, Order.id).where(Order.quote_id.in_(accepted_quote_ids))
+            select(Order.quote_id, Order.id).where(Order.quote_id.in_(quote_ids))
         ).all():
             qid, oid = row[0], row[1]
             if qid is not None and oid is not None:
@@ -719,8 +720,11 @@ def build_quote_response(
         if hasattr(total_open_count, "__int__"):
             total_open_count = int(total_open_count)
 
+    # Always expose order_id when an order exists for this quote. Status alone is not
+    # enough: re-sending or other transitions can leave status != ACCEPTED while the
+    # order row still points at this quote, and the UI needs the link either way.
     order_id = None
-    if quote.status == QuoteStatus.ACCEPTED:
+    if quote.id is not None:
         order = session.exec(select(Order).where(Order.quote_id == quote.id)).first()
         if order:
             order_id = order.id
