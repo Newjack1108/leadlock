@@ -1043,7 +1043,10 @@ class SourcePerformanceReport(BaseModel):
 class FacebookLeadConversionSummary(BaseModel):
     total_facebook_leads: int
     converted_leads: int
-    conversion_rate: float
+    conversion_rate: float  # Period throughput rate (alias of period_conversion_rate)
+    period_conversion_rate: float  # Accepted in period / created in period (can exceed 100%)
+    cohort_conversion_rate: float  # Created in period that ever converted / created in period
+    cohort_converted_leads: int
     total_orders: int
     total_order_revenue: Decimal
     average_order_value: Decimal
@@ -1056,7 +1059,10 @@ class FacebookLeadConversionBreakdownItem(BaseModel):
     name: str
     leads_count: int
     converted_leads: int
-    conversion_rate: float
+    conversion_rate: float  # Period throughput rate for this group
+    period_conversion_rate: float
+    cohort_conversion_rate: float
+    cohort_converted_leads: int
     total_orders: int
     total_revenue: Decimal
     average_order_value: Decimal
@@ -1066,6 +1072,7 @@ class FacebookLeadConversionBreakdownItem(BaseModel):
 class FacebookLeadConversionRow(BaseModel):
     lead_id: int
     lead_created_at: datetime
+    accepted_at: Optional[datetime] = None
     lead_name: str
     email: Optional[str] = None
     phone: Optional[str] = None
@@ -1081,6 +1088,8 @@ class FacebookLeadConversionRow(BaseModel):
     order_amount: Optional[Decimal] = None
     days_to_convert: Optional[float] = None
     converted: bool
+    created_in_period: bool
+    converted_in_period: bool
     order_count: int
     won_without_order: bool
 

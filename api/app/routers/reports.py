@@ -6,7 +6,7 @@ import io
 from collections import defaultdict
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
-from sqlalchemy import or_
+from sqlalchemy import and_, or_
 from sqlmodel import Session, select, func
 from app.database import get_session
 from app.auth import get_current_user
@@ -75,8 +75,29 @@ def _decimal_or_zero(value: Optional[Decimal]) -> Decimal:
 
 
 def _average_days_to_convert(rows: list[FacebookLeadConversionRow]) -> float:
-    values = [row.days_to_convert for row in rows if row.days_to_convert is not None]
+    values = [
+        row.days_to_convert
+        for row in rows
+        if row.converted_in_period and row.days_to_convert is not None
+    ]
     return round(sum(values) / len(values), 1) if values else 0.0
+
+
+def _in_resolved_range(value: datetime, resolved_range: ResolvedDateRange) -> bool:
+    if resolved_range.period == "all":
+        return True
+    return resolved_range.start <= value <= resolved_range.end
+
+
+def _order_accepted_at(order: Order, quote: Optional[Quote]) -> datetime:
+    """Acceptance date for an order: quote.accepted_at, else order.created_at."""
+    if quote is not None and quote.accepted_at is not None:
+        return quote.accepted_at
+    return order.created_at
+
+
+def _rate_or_zero(numerator: int, denominator: int) -> float:
+    return round((numerator / denominator * 100), 1) if denominator else 0.0
 
 
 def _derive_product_type(
@@ -126,17 +147,25 @@ def _build_facebook_lead_conversion_breakdown(
 
     items: list[FacebookLeadConversionBreakdownItem] = []
     for name, group_rows in grouped_rows.items():
-        leads_count = len(group_rows)
-        converted_leads = sum(1 for row in group_rows if row.converted)
-        total_orders = sum(row.order_count for row in group_rows)
-        total_revenue = sum((_decimal_or_zero(row.order_amount) for row in group_rows), Decimal("0"))
-        conversion_rate = round((converted_leads / leads_count * 100), 1) if leads_count else 0.0
+        leads_count = sum(1 for row in group_rows if row.created_in_period)
+        converted_leads = sum(1 for row in group_rows if row.converted_in_period)
+        cohort_converted_leads = sum(1 for row in group_rows if row.created_in_period and row.converted)
+        period_conversion_rate = _rate_or_zero(converted_leads, leads_count)
+        cohort_conversion_rate = _rate_or_zero(cohort_converted_leads, leads_count)
+        total_orders = sum(row.order_count for row in group_rows if row.converted_in_period)
+        total_revenue = sum(
+            (_decimal_or_zero(row.order_amount) for row in group_rows if row.converted_in_period),
+            Decimal("0"),
+        )
         average_order_value = (total_revenue / total_orders) if total_orders else Decimal("0")
         items.append(FacebookLeadConversionBreakdownItem(
             name=name,
             leads_count=leads_count,
             converted_leads=converted_leads,
-            conversion_rate=conversion_rate,
+            conversion_rate=period_conversion_rate,
+            period_conversion_rate=period_conversion_rate,
+            cohort_conversion_rate=cohort_conversion_rate,
+            cohort_converted_leads=cohort_converted_leads,
             total_orders=total_orders,
             total_revenue=total_revenue,
             average_order_value=average_order_value,
@@ -147,36 +176,61 @@ def _build_facebook_lead_conversion_breakdown(
     return items
 
 
+def _empty_facebook_lead_conversion_report(
+    resolved_range: ResolvedDateRange,
+) -> FacebookLeadConversionReport:
+    return FacebookLeadConversionReport(
+        period=resolved_range.period,
+        start_date=resolved_range.start,
+        end_date=resolved_range.end,
+        generated_at=datetime.utcnow(),
+        summary=FacebookLeadConversionSummary(
+            total_facebook_leads=0,
+            converted_leads=0,
+            conversion_rate=0.0,
+            period_conversion_rate=0.0,
+            cohort_conversion_rate=0.0,
+            cohort_converted_leads=0,
+            total_orders=0,
+            total_order_revenue=Decimal("0"),
+            average_order_value=Decimal("0"),
+            average_days_to_convert=0.0,
+            unknown_advert_profile_leads=0,
+            won_without_order_leads=0,
+        ),
+        advert_breakdown=[],
+        product_type_breakdown=[],
+        rows=[],
+    )
+
+
 def _build_facebook_lead_conversion_report(
     session: Session,
     resolved_range: ResolvedDateRange,
 ) -> FacebookLeadConversionReport:
     lead_stmt = select(Lead).where(Lead.lead_source == LeadSource.FACEBOOK, lead_counts_toward_stats())
     if resolved_range.period != "all":
-        lead_stmt = lead_stmt.where(Lead.created_at >= resolved_range.start).where(Lead.created_at <= resolved_range.end)
+        accepted_expr = func.coalesce(Quote.accepted_at, Order.created_at)
+        accepted_lead_ids = (
+            select(Quote.lead_id)
+            .join(Order, Order.quote_id == Quote.id)
+            .where(Quote.lead_id.is_not(None))
+            .where(accepted_expr >= resolved_range.start)
+            .where(accepted_expr <= resolved_range.end)
+        )
+        lead_stmt = lead_stmt.where(
+            or_(
+                and_(
+                    Lead.created_at >= resolved_range.start,
+                    Lead.created_at <= resolved_range.end,
+                ),
+                Lead.id.in_(accepted_lead_ids),
+            )
+        )
 
     leads = list(session.exec(lead_stmt.order_by(Lead.created_at.desc())).all())
     if not leads:
-        return FacebookLeadConversionReport(
-            period=resolved_range.period,
-            start_date=resolved_range.start,
-            end_date=resolved_range.end,
-            generated_at=datetime.utcnow(),
-            summary=FacebookLeadConversionSummary(
-                total_facebook_leads=0,
-                converted_leads=0,
-                conversion_rate=0.0,
-                total_orders=0,
-                total_order_revenue=Decimal("0"),
-                average_order_value=Decimal("0"),
-                average_days_to_convert=0.0,
-                unknown_advert_profile_leads=0,
-                won_without_order_leads=0,
-            ),
-            advert_breakdown=[],
-            product_type_breakdown=[],
-            rows=[],
-        )
+        return _empty_facebook_lead_conversion_report(resolved_range)
 
     lead_ids = [lead.id for lead in leads if lead.id is not None]
     quotes = list(session.exec(select(Quote).where(Quote.lead_id.in_(lead_ids))).all()) if lead_ids else []
@@ -229,13 +283,51 @@ def _build_facebook_lead_conversion_report(
                     key=lambda order: (order.created_at, order.id or 0),
                 ))
 
-        primary_order = lead_orders[0] if lead_orders else None
+        created_in_period = _in_resolved_range(lead.created_at, resolved_range)
+
+        in_period_orders: list[Order] = []
+        for order in lead_orders:
+            quote = quote_by_id.get(order.quote_id)
+            if _in_resolved_range(_order_accepted_at(order, quote), resolved_range):
+                in_period_orders.append(order)
+        in_period_orders.sort(
+            key=lambda order: (
+                _order_accepted_at(order, quote_by_id.get(order.quote_id)),
+                order.id or 0,
+            )
+        )
+
+        converted = bool(lead_orders)
+        converted_in_period = bool(in_period_orders)
+
+        # Period metrics use in-period acceptances; display falls back to earliest overall order.
+        period_orders = in_period_orders
+        display_orders = period_orders if period_orders else lead_orders
+        primary_order = display_orders[0] if display_orders else None
         latest_quote = lead_quotes[-1] if lead_quotes else None
         primary_quote = quote_by_id.get(primary_order.quote_id) if primary_order else latest_quote
-        order_total = sum((_decimal_or_zero(order.total_amount) for order in lead_orders), Decimal("0"))
+
+        order_total = (
+            sum((_decimal_or_zero(order.total_amount) for order in period_orders), Decimal("0"))
+            if converted_in_period
+            else (
+                sum((_decimal_or_zero(order.total_amount) for order in lead_orders), Decimal("0"))
+                if created_in_period and converted
+                else None
+            )
+        )
+        order_count = (
+            len(period_orders) if converted_in_period
+            else (len(lead_orders) if created_in_period and converted else 0)
+        )
+
+        accepted_at = None
         days_to_convert = None
-        if primary_order:
-            days_to_convert = round((primary_order.created_at - lead.created_at).total_seconds() / 86400, 1)
+        if converted_in_period and primary_order:
+            accepted_at = _order_accepted_at(primary_order, quote_by_id.get(primary_order.quote_id))
+            days_to_convert = round((accepted_at - lead.created_at).total_seconds() / 86400, 1)
+        elif primary_order:
+            accepted_at = _order_accepted_at(primary_order, quote_by_id.get(primary_order.quote_id))
 
         advert_profile_name = UNKNOWN_ADVERT_PROFILE_NAME
         if lead.facebook_advert_profile_id is not None:
@@ -243,9 +335,12 @@ def _build_facebook_lead_conversion_report(
             if advert_profile:
                 advert_profile_name = advert_profile.name
 
+        product_orders = period_orders if period_orders else lead_orders
+        show_order_details = converted_in_period or (created_in_period and converted)
         rows.append(FacebookLeadConversionRow(
             lead_id=lead.id,
             lead_created_at=lead.created_at,
+            accepted_at=accepted_at if show_order_details else None,
             lead_name=lead.name,
             email=lead.email,
             phone=lead.phone,
@@ -254,25 +349,35 @@ def _build_facebook_lead_conversion_report(
             advert_profile_name=advert_profile_name,
             product_interest=lead.product_interest,
             lead_type=_enum_value(lead.lead_type),
-            product_type=_derive_product_type(lead, lead_orders, items_by_order_id, products_by_id),
+            product_type=_derive_product_type(lead, product_orders, items_by_order_id, products_by_id),
             quote_number=primary_quote.quote_number if primary_quote else None,
-            order_number=primary_order.order_number if primary_order else None,
-            order_created_at=primary_order.created_at if primary_order else None,
-            order_amount=order_total if lead_orders else None,
+            order_number=primary_order.order_number if primary_order and show_order_details else None,
+            order_created_at=primary_order.created_at if primary_order and show_order_details else None,
+            order_amount=order_total if show_order_details else None,
             days_to_convert=days_to_convert,
-            converted=bool(lead_orders),
-            order_count=len(lead_orders),
+            converted=converted,
+            created_in_period=created_in_period,
+            converted_in_period=converted_in_period,
+            order_count=order_count,
             won_without_order=(lead.status == LeadStatus.WON and not lead_orders),
         ))
 
-    total_facebook_leads = len(rows)
-    converted_leads = sum(1 for row in rows if row.converted)
-    total_orders = sum(row.order_count for row in rows)
-    total_order_revenue = sum((_decimal_or_zero(row.order_amount) for row in rows), Decimal("0"))
-    conversion_rate = round((converted_leads / total_facebook_leads * 100), 1) if total_facebook_leads else 0.0
+    total_facebook_leads = sum(1 for row in rows if row.created_in_period)
+    converted_leads = sum(1 for row in rows if row.converted_in_period)
+    cohort_converted_leads = sum(1 for row in rows if row.created_in_period and row.converted)
+    period_conversion_rate = _rate_or_zero(converted_leads, total_facebook_leads)
+    cohort_conversion_rate = _rate_or_zero(cohort_converted_leads, total_facebook_leads)
+    total_orders = sum(row.order_count for row in rows if row.converted_in_period)
+    total_order_revenue = sum(
+        (_decimal_or_zero(row.order_amount) for row in rows if row.converted_in_period),
+        Decimal("0"),
+    )
     average_order_value = (total_order_revenue / total_orders) if total_orders else Decimal("0")
-    unknown_advert_profile_leads = sum(1 for row in rows if row.advert_profile_name == UNKNOWN_ADVERT_PROFILE_NAME)
-    won_without_order_leads = sum(1 for row in rows if row.won_without_order)
+    unknown_advert_profile_leads = sum(
+        1 for row in rows
+        if row.created_in_period and row.advert_profile_name == UNKNOWN_ADVERT_PROFILE_NAME
+    )
+    won_without_order_leads = sum(1 for row in rows if row.created_in_period and row.won_without_order)
 
     return FacebookLeadConversionReport(
         period=resolved_range.period,
@@ -282,7 +387,10 @@ def _build_facebook_lead_conversion_report(
         summary=FacebookLeadConversionSummary(
             total_facebook_leads=total_facebook_leads,
             converted_leads=converted_leads,
-            conversion_rate=conversion_rate,
+            conversion_rate=period_conversion_rate,
+            period_conversion_rate=period_conversion_rate,
+            cohort_conversion_rate=cohort_conversion_rate,
+            cohort_converted_leads=cohort_converted_leads,
             total_orders=total_orders,
             total_order_revenue=total_order_revenue,
             average_order_value=average_order_value,
@@ -539,6 +647,7 @@ async def download_facebook_lead_conversion_report_csv(
     writer = csv.writer(output)
     writer.writerow([
         "Lead Date",
+        "Accepted Date",
         "Lead Name",
         "Email",
         "Phone",
@@ -554,12 +663,15 @@ async def download_facebook_lead_conversion_report_csv(
         "Order Amount",
         "Days To Convert",
         "Converted",
+        "Created In Period",
+        "Converted In Period",
         "Order Count",
         "Won Without Order",
     ])
     for row in report.rows:
         writer.writerow([
             row.lead_created_at.isoformat(),
+            row.accepted_at.isoformat() if row.accepted_at else "",
             row.lead_name,
             row.email or "",
             row.phone or "",
@@ -575,6 +687,8 @@ async def download_facebook_lead_conversion_report_csv(
             f"{row.order_amount:.2f}" if row.order_amount is not None else "",
             f"{row.days_to_convert:.1f}" if row.days_to_convert is not None else "",
             "Yes" if row.converted else "No",
+            "Yes" if row.created_in_period else "No",
+            "Yes" if row.converted_in_period else "No",
             row.order_count,
             "Yes" if row.won_without_order else "No",
         ])

@@ -521,6 +521,9 @@ export interface FacebookLeadConversionSummary {
   total_facebook_leads: number;
   converted_leads: number;
   conversion_rate: number;
+  period_conversion_rate: number;
+  cohort_conversion_rate: number;
+  cohort_converted_leads: number;
   total_orders: number;
   total_order_revenue: number;
   average_order_value: number;
@@ -534,6 +537,9 @@ export interface FacebookLeadConversionBreakdownItem {
   leads_count: number;
   converted_leads: number;
   conversion_rate: number;
+  period_conversion_rate: number;
+  cohort_conversion_rate: number;
+  cohort_converted_leads: number;
   total_orders: number;
   total_revenue: number;
   average_order_value: number;
@@ -543,6 +549,7 @@ export interface FacebookLeadConversionBreakdownItem {
 export interface FacebookLeadConversionRow {
   lead_id: number;
   lead_created_at: string;
+  accepted_at?: string | null;
   lead_name: string;
   email?: string | null;
   phone?: string | null;
@@ -558,6 +565,8 @@ export interface FacebookLeadConversionRow {
   order_amount?: number | null;
   days_to_convert?: number | null;
   converted: boolean;
+  created_in_period: boolean;
+  converted_in_period: boolean;
   order_count: number;
   won_without_order: boolean;
 }

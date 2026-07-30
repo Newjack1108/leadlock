@@ -789,17 +789,24 @@ def generate_facebook_lead_conversion_pdf(
     _, logo_bytes = _resolve_logo(company_settings)
     flowables = _build_report_header(company_name, "Facebook Lead-to-Order Report", logo_bytes)
     flowables.append(Paragraph(f"<b>Range:</b> {_format_range_label(data)}", normal))
-    flowables.append(Paragraph("Condensed printable summary for marketing review and team handover.", muted))
+    flowables.append(Paragraph(
+        "Converted leads and revenue use quote acceptance date (falling back to order date). "
+        "Period conversion rate = accepted this period ÷ leads created this period (can exceed 100%). "
+        "Lead cohort conversion rate = created this period that converted ÷ leads created this period.",
+        muted,
+    ))
     flowables.append(Spacer(1, 12))
 
     summary = data.get("summary", {}) or {}
+    period_rate = summary.get("period_conversion_rate", summary.get("conversion_rate", 0))
+    cohort_rate = summary.get("cohort_conversion_rate", 0)
     kpi_cards = [
-        ("Facebook leads", summary.get("total_facebook_leads", 0), FACEBOOK_REPORT_COLORS[0], None),
-        ("Converted leads", summary.get("converted_leads", 0), FACEBOOK_REPORT_COLORS[1], f"{summary.get('total_orders', 0)} linked orders"),
-        ("Conversion rate", f"{summary.get('conversion_rate', 0):.1f}%", FACEBOOK_REPORT_COLORS[2], "Lead to order"),
-        ("Order revenue", format_currency(summary.get("total_order_revenue", 0)), FACEBOOK_REPORT_COLORS[3], None),
-        ("Average order", format_currency(summary.get("average_order_value", 0)), FACEBOOK_REPORT_COLORS[4], None),
-        ("Avg days", f"{summary.get('average_days_to_convert', 0):.1f} days", FACEBOOK_REPORT_COLORS[5], "Converted leads"),
+        ("Facebook leads", summary.get("total_facebook_leads", 0), FACEBOOK_REPORT_COLORS[0], "Created in period"),
+        ("Converted leads", summary.get("converted_leads", 0), FACEBOOK_REPORT_COLORS[1], f"{summary.get('total_orders', 0)} orders accepted in period"),
+        ("Period conv. rate", f"{period_rate:.1f}%", FACEBOOK_REPORT_COLORS[2], "Accepted ÷ created (period)"),
+        ("Cohort conv. rate", f"{cohort_rate:.1f}%", FACEBOOK_REPORT_COLORS[5], f"{summary.get('cohort_converted_leads', 0)} of created leads converted"),
+        ("Order revenue", format_currency(summary.get("total_order_revenue", 0)), FACEBOOK_REPORT_COLORS[3], "Accepted in period"),
+        ("Avg days", f"{summary.get('average_days_to_convert', 0):.1f} days", FACEBOOK_REPORT_COLORS[4], "Accepted in period"),
     ]
 
     def build_kpi_card(title: str, value: Any, accent: colors.Color, note: Optional[str]) -> Table:
@@ -865,7 +872,7 @@ def generate_facebook_lead_conversion_pdf(
 
     if not rows:
         empty_box = Table(
-            [[Paragraph("No Facebook leads were found for the selected range.", normal)]],
+            [[Paragraph("No Facebook leads created or accepted for the selected range.", normal)]],
             colWidths=[175 * mm],
         )
         empty_box.setStyle(TableStyle([
@@ -892,17 +899,19 @@ def generate_facebook_lead_conversion_pdf(
             flowables.append(_create_colorful_horizontal_bar_chart(chart_data, f"{title} by revenue", width=460, height=180))
             flowables.append(Spacer(1, 10))
 
-        table_data = [["Name", "Leads", "Conv %", "Revenue", "Avg order", "Avg days"]]
+        table_data = [["Name", "Leads", "Period %", "Cohort %", "Revenue", "Avg days"]]
         for item in items[:8]:
+            period_rate = item.get("period_conversion_rate", item.get("conversion_rate", 0))
+            cohort_rate = item.get("cohort_conversion_rate", 0)
             table_data.append([
                 Paragraph(str(item.get("name", "") or "—"), table_cell),
                 str(item.get("leads_count", 0)),
-                f"{item.get('conversion_rate', 0):.1f}%",
+                f"{period_rate:.1f}%",
+                f"{cohort_rate:.1f}%",
                 format_currency(item.get("total_revenue", 0)),
-                format_currency(item.get("average_order_value", 0)),
                 f"{item.get('average_days_to_convert', 0):.1f}",
             ])
-        table = Table(table_data, colWidths=[58 * mm, 18 * mm, 20 * mm, 28 * mm, 28 * mm, 20 * mm], repeatRows=1)
+        table = Table(table_data, colWidths=[50 * mm, 16 * mm, 22 * mm, 22 * mm, 28 * mm, 20 * mm], repeatRows=1)
         table.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, 0), accent_color),
             ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
@@ -943,21 +952,24 @@ def generate_facebook_lead_conversion_pdf(
     flowables.append(exceptions)
     flowables.append(Spacer(1, 10))
 
-    converted_rows = [row for row in rows if row.get("converted")]
+    converted_rows = [row for row in rows if row.get("converted_in_period") or row.get("converted")]
     converted_rows.sort(
         key=lambda row: (
-            _coerce_datetime(row.get("order_created_at")) or datetime.min,
+            _coerce_datetime(row.get("accepted_at"))
+            or _coerce_datetime(row.get("order_created_at"))
+            or datetime.min,
             float(row.get("order_amount", 0) or 0),
         ),
         reverse=True,
     )
 
-    recent_table_data = [["Lead", "Advert", "Order", "Revenue", "Days"]]
+    recent_table_data = [["Lead", "Advert", "Accepted", "Revenue", "Days"]]
     for row in converted_rows[:8]:
+        accepted = _coerce_datetime(row.get("accepted_at")) or _coerce_datetime(row.get("order_created_at"))
         recent_table_data.append([
             Paragraph(str(row.get("lead_name", "") or "—"), table_cell),
             Paragraph(str(row.get("advert_profile_name", "") or "—"), table_cell),
-            Paragraph(str(row.get("order_number", "") or f"{row.get('order_count', 0)} orders"), table_cell),
+            accepted.strftime("%d %b %Y") if accepted else "—",
             format_currency(row.get("order_amount", 0)),
             f"{row.get('days_to_convert', 0):.1f}" if row.get("days_to_convert") is not None else "—",
         ])

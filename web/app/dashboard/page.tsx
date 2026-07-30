@@ -77,6 +77,7 @@ function formatDays(value?: number | null): string {
 }
 
 function getConversionRowStatus(row: FacebookLeadConversionRow): string {
+  if (row.converted_in_period) return 'Accepted in period';
   if (row.converted) return 'Ordered';
   if (row.won_without_order) return 'Won without order';
   return 'Lead only';
@@ -772,7 +773,8 @@ export default function DashboardPage() {
                         Facebook Lead-to-Order
                       </CardTitle>
                       <p className="text-sm text-muted-foreground mt-1">
-                        {activeRangeLabel} Facebook lead performance, conversion, revenue, and tagged advert breakdown.
+                        {activeRangeLabel} Facebook lead performance. Converted leads and revenue use acceptance date;
+                        lead volume uses lead created date.
                       </p>
                     </div>
                     {facebookLeadReportExpanded ? (
@@ -810,7 +812,7 @@ export default function DashboardPage() {
             <CardContent>
               {facebookLeadReport.rows.length === 0 ? (
                 <div className="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
-                  No Facebook leads found for this period.
+                  No Facebook leads created or accepted for this period.
                 </div>
               ) : (
                 <div className={facebookLeadReportExpanded ? 'space-y-6' : 'space-y-4'}>
@@ -818,19 +820,22 @@ export default function DashboardPage() {
                     <div className="rounded-lg border p-4">
                       <p className="text-sm text-muted-foreground">Facebook leads</p>
                       <p className="mt-1 text-2xl font-semibold">{facebookLeadReport.summary.total_facebook_leads}</p>
+                      <p className="text-xs text-muted-foreground">Created in period</p>
                     </div>
                     <div className="rounded-lg border p-4">
                       <p className="text-sm text-muted-foreground">Converted leads</p>
                       <p className="mt-1 text-2xl font-semibold">{facebookLeadReport.summary.converted_leads}</p>
                       <p className="text-xs text-muted-foreground">
-                        {facebookLeadReport.summary.total_orders} linked orders
+                        {facebookLeadReport.summary.total_orders} orders accepted in period
                       </p>
                     </div>
                     <div className="rounded-lg border p-4">
-                      <p className="text-sm text-muted-foreground">Conversion rate</p>
-                      <p className="mt-1 text-2xl font-semibold">{facebookLeadReport.summary.conversion_rate}%</p>
+                      <p className="text-sm text-muted-foreground">Period conversion rate</p>
+                      <p className="mt-1 text-2xl font-semibold">
+                        {facebookLeadReport.summary.period_conversion_rate ?? facebookLeadReport.summary.conversion_rate}%
+                      </p>
                       <p className="text-xs text-muted-foreground">
-                        Lead to order
+                        Accepted ÷ created (can exceed 100%)
                       </p>
                     </div>
                     <div className="rounded-lg border p-4">
@@ -846,14 +851,23 @@ export default function DashboardPage() {
 
                   {facebookLeadReportExpanded && (
                     <>
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    <div className="rounded-lg border p-4">
+                      <p className="text-sm text-muted-foreground">Lead cohort conversion rate</p>
+                      <p className="mt-1 text-2xl font-semibold">
+                        {facebookLeadReport.summary.cohort_conversion_rate}%
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {facebookLeadReport.summary.cohort_converted_leads} of created leads converted
+                      </p>
+                    </div>
                     <div className="rounded-lg border p-4">
                       <p className="text-sm text-muted-foreground">Avg days to convert</p>
                       <p className="mt-1 text-2xl font-semibold">
                         {formatDays(facebookLeadReport.summary.average_days_to_convert)}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        Converted leads only
+                        Accepted in period only
                       </p>
                     </div>
                     <div className="rounded-lg border p-4">
@@ -884,7 +898,8 @@ export default function DashboardPage() {
                             <tr className="border-b bg-muted/40">
                               <th className="p-3 text-left font-medium">Advert</th>
                               <th className="p-3 text-left font-medium">Leads</th>
-                              <th className="p-3 text-left font-medium">Conv %</th>
+                              <th className="p-3 text-left font-medium">Period %</th>
+                              <th className="p-3 text-left font-medium">Cohort %</th>
                               <th className="p-3 text-left font-medium">Revenue</th>
                               <th className="p-3 text-left font-medium">Avg days</th>
                             </tr>
@@ -895,9 +910,10 @@ export default function DashboardPage() {
                                 <td className="p-3 font-medium">{item.name}</td>
                                 <td className="p-3 text-muted-foreground">
                                   {item.leads_count}
-                                  <span className="ml-1 text-xs">({item.converted_leads} converted)</span>
+                                  <span className="ml-1 text-xs">({item.converted_leads} accepted)</span>
                                 </td>
-                                <td className="p-3">{item.conversion_rate}%</td>
+                                <td className="p-3">{item.period_conversion_rate ?? item.conversion_rate}%</td>
+                                <td className="p-3">{item.cohort_conversion_rate}%</td>
                                 <td className="p-3">{formatCurrency(item.total_revenue)}</td>
                                 <td className="p-3">{formatDays(item.average_days_to_convert)}</td>
                               </tr>
@@ -918,7 +934,8 @@ export default function DashboardPage() {
                             <tr className="border-b bg-muted/40">
                               <th className="p-3 text-left font-medium">Product type</th>
                               <th className="p-3 text-left font-medium">Leads</th>
-                              <th className="p-3 text-left font-medium">Conv %</th>
+                              <th className="p-3 text-left font-medium">Period %</th>
+                              <th className="p-3 text-left font-medium">Cohort %</th>
                               <th className="p-3 text-left font-medium">Revenue</th>
                               <th className="p-3 text-left font-medium">Avg days</th>
                             </tr>
@@ -929,9 +946,10 @@ export default function DashboardPage() {
                                 <td className="p-3 font-medium">{item.name}</td>
                                 <td className="p-3 text-muted-foreground">
                                   {item.leads_count}
-                                  <span className="ml-1 text-xs">({item.converted_leads} converted)</span>
+                                  <span className="ml-1 text-xs">({item.converted_leads} accepted)</span>
                                 </td>
-                                <td className="p-3">{item.conversion_rate}%</td>
+                                <td className="p-3">{item.period_conversion_rate ?? item.conversion_rate}%</td>
+                                <td className="p-3">{item.cohort_conversion_rate}%</td>
                                 <td className="p-3">{formatCurrency(item.total_revenue)}</td>
                                 <td className="p-3">{formatDays(item.average_days_to_convert)}</td>
                               </tr>
@@ -946,7 +964,7 @@ export default function DashboardPage() {
                     <div className="border-b px-4 py-3">
                       <h3 className="font-medium">Lead Details</h3>
                       <p className="text-sm text-muted-foreground">
-                        Lead-level breakdown showing tagged advert, order outcome, and conversion timing.
+                        Lead-level breakdown showing tagged advert, acceptance date, order outcome, and conversion timing.
                       </p>
                     </div>
                     <div className="overflow-x-auto">
@@ -954,6 +972,7 @@ export default function DashboardPage() {
                         <thead>
                           <tr className="border-b bg-muted/40">
                             <th className="p-3 text-left font-medium">Lead date</th>
+                            <th className="p-3 text-left font-medium">Accepted</th>
                             <th className="p-3 text-left font-medium">Lead</th>
                             <th className="p-3 text-left font-medium">Advert</th>
                             <th className="p-3 text-left font-medium">Product type</th>
@@ -968,10 +987,14 @@ export default function DashboardPage() {
                           {facebookLeadReport.rows.map((row) => (
                             <tr key={row.lead_id} className="border-b last:border-0 align-top">
                               <td className="p-3 text-muted-foreground">{formatShortDate(row.lead_created_at)}</td>
+                              <td className="p-3 text-muted-foreground">
+                                {row.accepted_at ? formatShortDate(row.accepted_at) : '—'}
+                              </td>
                               <td className="p-3">
                                 <div className="font-medium">{row.lead_name}</div>
                                 <div className="text-xs text-muted-foreground">
                                   {[row.email, row.phone].filter(Boolean).join(' • ') || row.lead_status}
+                                  {!row.created_in_period && row.converted_in_period ? ' • Prior lead' : ''}
                                 </div>
                               </td>
                               <td className="p-3">{row.advert_profile_name}</td>
