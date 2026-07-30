@@ -236,8 +236,13 @@ Production sends `Authorization: Bearer <LEADLOCK_WEBHOOK_API_KEY>`. LeadLock va
 | `installation_scheduled_at` | string (ISO datetime) | Optional booked install start |
 | `installation_scheduled_end_at` | string (ISO datetime) | Optional booked install end |
 | `installation_completed` | boolean | Optional; when set true, runs the same review-request side effects as the CRM toggle |
+| `deposit_paid` | boolean | Optional |
+| `balance_paid` | boolean | Optional; when true, also sets `deposit_paid` and `paid_in_full` |
+| `paid_in_full` | boolean | Optional; when true, also sets `deposit_paid` and `balance_paid` |
 
 Sending `installation_scheduled_at` implies `installation_booked = true` unless `installation_booked` is explicitly sent as `false`.
+
+Sending `balance_paid: true` or `paid_in_full: true` marks the order paid in full on LeadLock (and assigns an invoice number if missing).
 
 Notes are **not** part of this contract.
 
@@ -261,6 +266,16 @@ Notes are **not** part of this contract.
 }
 ```
 
+### Example (balance paid / paid in full)
+
+```json
+{
+  "order_id": 42,
+  "balance_paid": true,
+  "paid_in_full": true
+}
+```
+
 ### Response
 
 ```json
@@ -280,8 +295,12 @@ On unknown `order_id`, LeadLock returns **404**.
 
 1. Set `LEADLOCK_API_URL` to the LeadLock API base URL (no trailing slash).
 2. Reuse `LEADLOCK_WEBHOOK_API_KEY` as the Bearer token.
-3. Provide manual buttons on LeadLock-linked works orders / installations: **Send install date to LeadLock** and **Send completed to LeadLock**.
+3. Provide manual buttons on LeadLock-linked works orders / installations:
+   - **Send install date to LeadLock**
+   - **Send balance paid to LeadLock** (sets paid in full on both apps)
+   - **Send completed to LeadLock**
 4. Resolve dates from the installation calendar (`start_date` / `end_date`).
+5. When sending balance paid, also update the local works-order payment flags so load sheets match.
 
 LeadLock unit tests: `api/tests/test_webhook_work_order_status.py`.
 

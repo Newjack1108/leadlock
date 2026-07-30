@@ -1450,13 +1450,16 @@ class ProductImportResponse(BaseModel):
 
 
 class WorkOrderStatusUpdatePayload(BaseModel):
-    """Payload for production → LeadLock install status updates."""
+    """Payload for production → LeadLock install/payment status updates."""
 
     order_id: int
     installation_booked: Optional[bool] = None
     installation_scheduled_at: Optional[datetime] = None
     installation_scheduled_end_at: Optional[datetime] = None
     installation_completed: Optional[bool] = None
+    deposit_paid: Optional[bool] = None
+    balance_paid: Optional[bool] = None
+    paid_in_full: Optional[bool] = None
 
 
 class WorkOrderStatusUpdateResponse(BaseModel):

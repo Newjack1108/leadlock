@@ -364,17 +364,54 @@ _INSTALLATION_FIELD_LABELS = {
     "installation_scheduled_end_at": "Installation scheduled end",
 }
 
+_PAYMENT_FIELD_LABELS = {
+    "deposit_paid": "Deposit paid",
+    "balance_paid": "Balance paid",
+    "paid_in_full": "Paid in full",
+}
 
-def _describe_installation_status_changes(changes: list[dict]) -> str:
+
+def _describe_flag_changes(changes: list[dict], *, bool_fields: set[str]) -> str:
     parts = []
     for change in changes:
         field = change.get("field")
-        label = change.get("label") or _INSTALLATION_FIELD_LABELS.get(field, field)
-        if field in ("installation_booked", "installation_completed"):
+        label = change.get("label") or field
+        if field in bool_fields:
             parts.append(f"{label} {'marked' if change.get('new') else 'cleared'}")
         else:
             parts.append(f"{label} updated")
-    return "; ".join(parts) if parts else "Installation status updated"
+    return "; ".join(parts) if parts else "Status updated"
+
+
+def _describe_installation_status_changes(changes: list[dict]) -> str:
+    return _describe_flag_changes(
+        changes,
+        bool_fields={"installation_booked", "installation_completed"},
+    )
+
+
+def _reconcile_payment_flags_from_update(update_dict: dict, order: Order) -> None:
+    """
+    Align deposit / balance / paid-in-full when production pushes a payment flag.
+    Balance paid implies paid in full (and deposit paid). Paid in full implies both.
+    """
+    if not any(k in update_dict for k in ("deposit_paid", "balance_paid", "paid_in_full")):
+        return
+
+    deposit_paid = bool(update_dict["deposit_paid"]) if "deposit_paid" in update_dict else bool(order.deposit_paid or False)
+    balance_paid = bool(update_dict["balance_paid"]) if "balance_paid" in update_dict else bool(order.balance_paid or False)
+    paid_in_full = bool(update_dict["paid_in_full"]) if "paid_in_full" in update_dict else bool(order.paid_in_full or False)
+
+    if paid_in_full or ("balance_paid" in update_dict and balance_paid):
+        deposit_paid = True
+        balance_paid = True
+        paid_in_full = True
+    elif deposit_paid and balance_paid:
+        paid_in_full = True
+
+    update_dict["deposit_paid"] = deposit_paid
+    update_dict["balance_paid"] = balance_paid
+    update_dict["paid_in_full"] = paid_in_full
 
 
 @router.post("/work-orders/status", response_model=WorkOrderStatusUpdateResponse)
@@ -384,10 +421,12 @@ async def work_order_status_webhook(
     session: Session = Depends(get_session),
 ):
     """
-    Accept install booked dates and completed status from the production app.
+    Accept install booked dates, completed status, and payment flags from production.
     Requires Bearer token matching PRODUCTION_APP_API_KEY (or WEBHOOK_API_KEY).
     Matched by LeadLock order primary key (`order_id`).
     """
+    from app.routers.orders import generate_invoice_number
+
     order = session.exec(select(Order).where(Order.id == payload.order_id)).first()
     if not order:
         raise HTTPException(status_code=404, detail=f"Order {payload.order_id} not found")
@@ -399,6 +438,9 @@ async def work_order_status_webhook(
     old_completed = bool(order.installation_completed or False)
     old_scheduled_at = getattr(order, "installation_scheduled_at", None)
     old_scheduled_end_at = getattr(order, "installation_scheduled_end_at", None)
+    old_deposit = bool(order.deposit_paid or False)
+    old_balance = bool(order.balance_paid or False)
+    old_paid_in_full = bool(order.paid_in_full or False)
 
     # Sending a scheduled date implies booked unless explicitly sent false.
     if (
@@ -408,13 +450,21 @@ async def work_order_status_webhook(
     ):
         update_dict["installation_booked"] = True
 
+    _reconcile_payment_flags_from_update(update_dict, order)
+
     for field, value in update_dict.items():
         setattr(order, field, value)
 
-    changes: list[dict] = []
+    # Assign invoice_number when first payment is recorded (same as CRM PATCH)
+    if order.invoice_number is None and (order.deposit_paid or order.paid_in_full):
+        order.invoice_number = generate_invoice_number(session)
+
+    installation_changes: list[dict] = []
+    payment_changes: list[dict] = []
+
     new_booked = bool(order.installation_booked or False)
     if old_booked != new_booked:
-        changes.append(
+        installation_changes.append(
             {
                 "field": "installation_booked",
                 "label": _INSTALLATION_FIELD_LABELS["installation_booked"],
@@ -424,7 +474,7 @@ async def work_order_status_webhook(
         )
     new_completed = bool(order.installation_completed or False)
     if old_completed != new_completed:
-        changes.append(
+        installation_changes.append(
             {
                 "field": "installation_completed",
                 "label": _INSTALLATION_FIELD_LABELS["installation_completed"],
@@ -434,7 +484,7 @@ async def work_order_status_webhook(
         )
     new_scheduled_at = getattr(order, "installation_scheduled_at", None)
     if old_scheduled_at != new_scheduled_at:
-        changes.append(
+        installation_changes.append(
             {
                 "field": "installation_scheduled_at",
                 "label": _INSTALLATION_FIELD_LABELS["installation_scheduled_at"],
@@ -444,7 +494,7 @@ async def work_order_status_webhook(
         )
     new_scheduled_end_at = getattr(order, "installation_scheduled_end_at", None)
     if old_scheduled_end_at != new_scheduled_end_at:
-        changes.append(
+        installation_changes.append(
             {
                 "field": "installation_scheduled_end_at",
                 "label": _INSTALLATION_FIELD_LABELS["installation_scheduled_end_at"],
@@ -453,7 +503,38 @@ async def work_order_status_webhook(
             }
         )
 
-    if not changes:
+    new_deposit = bool(order.deposit_paid or False)
+    if old_deposit != new_deposit:
+        payment_changes.append(
+            {
+                "field": "deposit_paid",
+                "label": _PAYMENT_FIELD_LABELS["deposit_paid"],
+                "old": old_deposit,
+                "new": new_deposit,
+            }
+        )
+    new_balance = bool(order.balance_paid or False)
+    if old_balance != new_balance:
+        payment_changes.append(
+            {
+                "field": "balance_paid",
+                "label": _PAYMENT_FIELD_LABELS["balance_paid"],
+                "old": old_balance,
+                "new": new_balance,
+            }
+        )
+    new_paid_in_full = bool(order.paid_in_full or False)
+    if old_paid_in_full != new_paid_in_full:
+        payment_changes.append(
+            {
+                "field": "paid_in_full",
+                "label": _PAYMENT_FIELD_LABELS["paid_in_full"],
+                "old": old_paid_in_full,
+                "new": new_paid_in_full,
+            }
+        )
+
+    if not installation_changes and not payment_changes:
         return WorkOrderStatusUpdateResponse(
             success=True,
             updated=False,
@@ -462,15 +543,33 @@ async def work_order_status_webhook(
         )
 
     system_user_id = get_system_user_id(session)
-    record_order_audit_event(
-        session,
-        event_type=CustomerHistoryEventType.ORDER_INSTALLATION_UPDATED.value,
-        title="Order Installation Updated",
-        description=f"{_describe_installation_status_changes(changes)} for order {order.order_number} (from production)",
-        order=order,
-        metadata={"changes": changes, "source": "production"},
-        created_by_id=system_user_id,
-    )
+    if payment_changes:
+        record_order_audit_event(
+            session,
+            event_type=CustomerHistoryEventType.ORDER_PAYMENT_UPDATED.value,
+            title="Order Payment Updated",
+            description=(
+                f"{_describe_flag_changes(payment_changes, bool_fields=set(_PAYMENT_FIELD_LABELS))} "
+                f"for order {order.order_number} (from production)"
+            ),
+            order=order,
+            metadata={
+                "changes": payment_changes,
+                "invoice_number": order.invoice_number,
+                "source": "production",
+            },
+            created_by_id=system_user_id,
+        )
+    if installation_changes:
+        record_order_audit_event(
+            session,
+            event_type=CustomerHistoryEventType.ORDER_INSTALLATION_UPDATED.value,
+            title="Order Installation Updated",
+            description=f"{_describe_installation_status_changes(installation_changes)} for order {order.order_number} (from production)",
+            order=order,
+            metadata={"changes": installation_changes, "source": "production"},
+            created_by_id=system_user_id,
+        )
 
     if old_completed != new_completed:
         if new_completed:
