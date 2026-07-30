@@ -197,6 +197,7 @@ export default function OrdersPage() {
                       <th className="text-left p-3 font-medium">Lead type</th>
                       <th className="text-left p-3 font-medium">Total</th>
                       <th className="text-left p-3 font-medium">Status</th>
+                      <th className="text-left p-3 font-medium">Install booked</th>
                       <th className="text-left p-3 font-medium">Created</th>
                       <th className="text-right p-3 font-medium">Quote</th>
                     </tr>
@@ -251,6 +252,11 @@ export default function OrdersPage() {
                               <span className="text-muted-foreground text-sm">—</span>
                             )}
                           </div>
+                        </td>
+                        <td className="p-3 text-muted-foreground">
+                          {order.installation_scheduled_at
+                            ? new Date(order.installation_scheduled_at).toLocaleDateString('en-GB')
+                            : '—'}
                         </td>
                         <td className="p-3 text-muted-foreground">
                           {new Date(order.created_at).toLocaleDateString('en-GB')}
