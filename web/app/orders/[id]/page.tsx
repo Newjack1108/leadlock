@@ -621,6 +621,22 @@ export default function OrderDetailPage() {
                     </Button>
                   ))}
                 </div>
+                {(order.installation_scheduled_at || order.installation_scheduled_end_at) && (
+                  <p className="mt-3 text-sm text-muted-foreground">
+                    Booked install
+                    {order.installation_scheduled_at
+                      ? `: ${formatDateTime(order.installation_scheduled_at)}`
+                      : ''}
+                    {order.installation_scheduled_end_at
+                      ? ` – ${formatDateTime(order.installation_scheduled_end_at)}`
+                      : ''}
+                  </p>
+                )}
+                {order.installation_completed_at && (
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Completed: {formatDateTime(order.installation_completed_at)}
+                  </p>
+                )}
                 <div className="mt-4 pt-4 border-t space-y-2">
                   <Label className="block">Delivery location for works order</Label>
                   <div className="flex items-center gap-2">

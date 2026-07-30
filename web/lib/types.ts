@@ -1387,6 +1387,8 @@ export interface Order {
   installation_booked?: boolean;
   installation_completed?: boolean;
   installation_completed_at?: string | null;
+  installation_scheduled_at?: string | null;
+  installation_scheduled_end_at?: string | null;
   review_request_customer_sent_at?: string | null;
   review_request_customer_channel?: string | null;
   invoice_number?: string | null;

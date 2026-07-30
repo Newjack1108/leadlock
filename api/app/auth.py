@@ -222,3 +222,27 @@ def get_product_import_api_key(authorization: Optional[str] = Header(None, alias
             headers={"WWW-Authenticate": "Bearer"},
         )
     return token
+
+
+def get_production_app_api_key(authorization: Optional[str] = Header(None, alias="Authorization")) -> str:
+    """Validate Bearer token against production↔LeadLock shared secret."""
+    expected_key = os.getenv("PRODUCTION_APP_API_KEY") or os.getenv("WEBHOOK_API_KEY")
+    if not expected_key:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Production app API key not configured",
+        )
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing or invalid Authorization header. Expected: Bearer <token>",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    token = authorization[7:].strip()
+    if token != expected_key:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid Bearer token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return token

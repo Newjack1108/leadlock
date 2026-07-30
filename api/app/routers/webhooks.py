@@ -39,9 +39,18 @@ from app.models import (
     Product,
     ProductCategory,
     ProductOptionalExtra,
+    Order,
 )
-from app.schemas import LeadCreate, LeadResponse, ProductImportPayload, ProductImportResponse
-from app.auth import get_webhook_api_key, get_product_import_api_key
+from app.schemas import (
+    LeadCreate,
+    LeadResponse,
+    ProductImportPayload,
+    ProductImportResponse,
+    WorkOrderStatusUpdatePayload,
+    WorkOrderStatusUpdateResponse,
+    CustomerHistoryEventType,
+)
+from app.auth import get_webhook_api_key, get_product_import_api_key, get_production_app_api_key
 from app.routers.settings import get_company_settings
 from app.workflow import check_sla_overdue
 from app.lead_create_utils import lead_create_to_model_fields
@@ -61,6 +70,8 @@ from app.messenger_service import (
     fetch_leadgen_lead,
 )
 from app.system_user_service import get_system_user_id
+from app.order_audit import record_order_audit_event
+from app.review_request_service import on_installation_completed, on_installation_uncompleted
 
 router = APIRouter(prefix="/api/webhooks", tags=["webhooks"])
 
@@ -344,6 +355,139 @@ async def import_product_webhook(
             session.commit()
 
     return ProductImportResponse(success=True, product_id=str(product.id))
+
+
+_INSTALLATION_FIELD_LABELS = {
+    "installation_booked": "Installation booked",
+    "installation_completed": "Installation completed",
+    "installation_scheduled_at": "Installation scheduled start",
+    "installation_scheduled_end_at": "Installation scheduled end",
+}
+
+
+def _describe_installation_status_changes(changes: list[dict]) -> str:
+    parts = []
+    for change in changes:
+        field = change.get("field")
+        label = change.get("label") or _INSTALLATION_FIELD_LABELS.get(field, field)
+        if field in ("installation_booked", "installation_completed"):
+            parts.append(f"{label} {'marked' if change.get('new') else 'cleared'}")
+        else:
+            parts.append(f"{label} updated")
+    return "; ".join(parts) if parts else "Installation status updated"
+
+
+@router.post("/work-orders/status", response_model=WorkOrderStatusUpdateResponse)
+async def work_order_status_webhook(
+    payload: WorkOrderStatusUpdatePayload,
+    _api_key: str = Depends(get_production_app_api_key),
+    session: Session = Depends(get_session),
+):
+    """
+    Accept install booked dates and completed status from the production app.
+    Requires Bearer token matching PRODUCTION_APP_API_KEY (or WEBHOOK_API_KEY).
+    Matched by LeadLock order primary key (`order_id`).
+    """
+    order = session.exec(select(Order).where(Order.id == payload.order_id)).first()
+    if not order:
+        raise HTTPException(status_code=404, detail=f"Order {payload.order_id} not found")
+
+    update_dict = payload.model_dump(exclude_unset=True)
+    update_dict.pop("order_id", None)
+
+    old_booked = bool(order.installation_booked or False)
+    old_completed = bool(order.installation_completed or False)
+    old_scheduled_at = getattr(order, "installation_scheduled_at", None)
+    old_scheduled_end_at = getattr(order, "installation_scheduled_end_at", None)
+
+    # Sending a scheduled date implies booked unless explicitly sent false.
+    if (
+        "installation_scheduled_at" in update_dict
+        and update_dict.get("installation_scheduled_at") is not None
+        and "installation_booked" not in update_dict
+    ):
+        update_dict["installation_booked"] = True
+
+    for field, value in update_dict.items():
+        setattr(order, field, value)
+
+    changes: list[dict] = []
+    new_booked = bool(order.installation_booked or False)
+    if old_booked != new_booked:
+        changes.append(
+            {
+                "field": "installation_booked",
+                "label": _INSTALLATION_FIELD_LABELS["installation_booked"],
+                "old": old_booked,
+                "new": new_booked,
+            }
+        )
+    new_completed = bool(order.installation_completed or False)
+    if old_completed != new_completed:
+        changes.append(
+            {
+                "field": "installation_completed",
+                "label": _INSTALLATION_FIELD_LABELS["installation_completed"],
+                "old": old_completed,
+                "new": new_completed,
+            }
+        )
+    new_scheduled_at = getattr(order, "installation_scheduled_at", None)
+    if old_scheduled_at != new_scheduled_at:
+        changes.append(
+            {
+                "field": "installation_scheduled_at",
+                "label": _INSTALLATION_FIELD_LABELS["installation_scheduled_at"],
+                "old": old_scheduled_at.isoformat() if old_scheduled_at else None,
+                "new": new_scheduled_at.isoformat() if new_scheduled_at else None,
+            }
+        )
+    new_scheduled_end_at = getattr(order, "installation_scheduled_end_at", None)
+    if old_scheduled_end_at != new_scheduled_end_at:
+        changes.append(
+            {
+                "field": "installation_scheduled_end_at",
+                "label": _INSTALLATION_FIELD_LABELS["installation_scheduled_end_at"],
+                "old": old_scheduled_end_at.isoformat() if old_scheduled_end_at else None,
+                "new": new_scheduled_end_at.isoformat() if new_scheduled_end_at else None,
+            }
+        )
+
+    if not changes:
+        return WorkOrderStatusUpdateResponse(
+            success=True,
+            updated=False,
+            order_id=order.id,
+            order_number=order.order_number,
+        )
+
+    system_user_id = get_system_user_id(session)
+    record_order_audit_event(
+        session,
+        event_type=CustomerHistoryEventType.ORDER_INSTALLATION_UPDATED.value,
+        title="Order Installation Updated",
+        description=f"{_describe_installation_status_changes(changes)} for order {order.order_number} (from production)",
+        order=order,
+        metadata={"changes": changes, "source": "production"},
+        created_by_id=system_user_id,
+    )
+
+    if old_completed != new_completed:
+        if new_completed:
+            on_installation_completed(order, session)
+        else:
+            on_installation_uncompleted(order, session)
+
+    session.add(order)
+    session.commit()
+    session.refresh(order)
+
+    return WorkOrderStatusUpdateResponse(
+        success=True,
+        updated=True,
+        order_id=order.id,
+        order_number=order.order_number,
+    )
 
 
 @router.post("/twilio/sms")

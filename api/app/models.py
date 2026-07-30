@@ -1008,6 +1008,8 @@ class Order(SQLModel, table=True):
     installation_booked: bool = Field(default=False)
     installation_completed: bool = Field(default=False)
     installation_completed_at: Optional[datetime] = Field(default=None, index=True)
+    installation_scheduled_at: Optional[datetime] = Field(default=None)  # Booked install start from production
+    installation_scheduled_end_at: Optional[datetime] = Field(default=None)  # Booked install end from production
     review_request_customer_sent_at: Optional[datetime] = None
     review_request_customer_channel: Optional[str] = None  # SMS | EMAIL
     invoice_number: Optional[str] = Field(default=None, unique=True, index=True)  # e.g. "INV-2025-001"

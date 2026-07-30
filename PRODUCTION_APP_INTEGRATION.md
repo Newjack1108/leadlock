@@ -204,13 +204,98 @@ Products are pushed **production → LeadLock** via `POST /api/webhooks/products
 
 ---
 
+## Reverse direction (install status)
+
+Production can push install booked dates and completed status back to LeadLock so sales staff do not need to toggle them manually.
+
+```text
+Production app  --POST-->  LeadLock API
+  button: Send install date / completed
+                       |
+                       v
+          POST {LEADLOCK_API_URL}/api/webhooks/work-orders/status
+          Authorization: Bearer {LEADLOCK_WEBHOOK_API_KEY}
+```
+
+### Auth
+
+Production sends `Authorization: Bearer <LEADLOCK_WEBHOOK_API_KEY>`. LeadLock validates against `PRODUCTION_APP_API_KEY` (fallback: `WEBHOOK_API_KEY`). Use the **same shared secret** already used for outbound work-order push.
+
+### Request
+
+| Item | Value |
+|------|--------|
+| Method / path | `POST /api/webhooks/work-orders/status` |
+| Auth | `Authorization: Bearer <shared key>` |
+| Body | `Content-Type: application/json` |
+
+| Field | Type | Notes |
+|-------|------|--------|
+| `order_id` | number | **Required.** LeadLock order primary key (same as outbound `order_id`) |
+| `installation_booked` | boolean | Optional |
+| `installation_scheduled_at` | string (ISO datetime) | Optional booked install start |
+| `installation_scheduled_end_at` | string (ISO datetime) | Optional booked install end |
+| `installation_completed` | boolean | Optional; when set true, runs the same review-request side effects as the CRM toggle |
+
+Sending `installation_scheduled_at` implies `installation_booked = true` unless `installation_booked` is explicitly sent as `false`.
+
+Notes are **not** part of this contract.
+
+### Example (booked dates)
+
+```json
+{
+  "order_id": 42,
+  "installation_booked": true,
+  "installation_scheduled_at": "2026-08-15T09:00:00",
+  "installation_scheduled_end_at": "2026-08-16T17:00:00"
+}
+```
+
+### Example (completed)
+
+```json
+{
+  "order_id": 42,
+  "installation_completed": true
+}
+```
+
+### Response
+
+```json
+{
+  "success": true,
+  "updated": true,
+  "order_id": 42,
+  "order_number": "ORD-2026-042"
+}
+```
+
+`updated` is `false` when the payload matches current state (idempotent; no new audit event).
+
+On unknown `order_id`, LeadLock returns **404**.
+
+### What production should do (`ai-sms-chat`)
+
+1. Set `LEADLOCK_API_URL` to the LeadLock API base URL (no trailing slash).
+2. Reuse `LEADLOCK_WEBHOOK_API_KEY` as the Bearer token.
+3. Provide manual buttons on LeadLock-linked works orders / installations: **Send install date to LeadLock** and **Send completed to LeadLock**.
+4. Resolve dates from the installation calendar (`start_date` / `end_date`).
+
+LeadLock unit tests: `api/tests/test_webhook_work_order_status.py`.
+
+---
+
 ## Deployment checklist
 
 1. Deploy production app with LeadLock webhook support (`LEADLOCK_WEBHOOK_API_KEY` set).
 2. Deploy LeadLock API with recent order-push commits.
 3. Set `PRODUCTION_APP_API_URL` to the production app’s public base URL.
 4. Set `PRODUCTION_APP_API_KEY` on LeadLock and the **same** value as `LEADLOCK_WEBHOOK_API_KEY` on production.
-5. Test on staging: delivery order, collection order, alternate delivery address; confirm work order in production UI.
+5. For install-status push: set `LEADLOCK_API_URL` on production to the LeadLock API base URL.
+6. Test on staging: delivery order, collection order, alternate delivery address; confirm work order in production UI.
+7. Test reverse sync: book an install in production → Send install date; mark complete → Send completed; confirm flags and dates on the LeadLock order page.
 
 ---
 

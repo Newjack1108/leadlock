@@ -3488,6 +3488,8 @@ def create_db_and_tables():
             order_columns = [col["name"] for col in inspector.get_columns("customer_order")]
             for col_name, col_type in (
                 ("installation_completed_at", "TIMESTAMP"),
+                ("installation_scheduled_at", "TIMESTAMP"),
+                ("installation_scheduled_end_at", "TIMESTAMP"),
                 ("review_request_customer_sent_at", "TIMESTAMP"),
                 ("review_request_customer_channel", "VARCHAR(16)"),
             ):

@@ -1449,6 +1449,25 @@ class ProductImportResponse(BaseModel):
     product_id: str
 
 
+class WorkOrderStatusUpdatePayload(BaseModel):
+    """Payload for production → LeadLock install status updates."""
+
+    order_id: int
+    installation_booked: Optional[bool] = None
+    installation_scheduled_at: Optional[datetime] = None
+    installation_scheduled_end_at: Optional[datetime] = None
+    installation_completed: Optional[bool] = None
+
+
+class WorkOrderStatusUpdateResponse(BaseModel):
+    """Response for work-order status webhook."""
+
+    success: bool = True
+    updated: bool = False
+    order_id: int
+    order_number: Optional[str] = None
+
+
 class CompanySettingsCreate(BaseModel):
     company_name: str
     trading_name: Optional[str] = None
@@ -2171,6 +2190,8 @@ class OrderResponse(BaseModel):
     installation_booked: bool = False
     installation_completed: bool = False
     installation_completed_at: Optional[datetime] = None
+    installation_scheduled_at: Optional[datetime] = None
+    installation_scheduled_end_at: Optional[datetime] = None
     review_request_customer_sent_at: Optional[datetime] = None
     review_request_customer_channel: Optional[str] = None
     invoice_number: Optional[str] = None
