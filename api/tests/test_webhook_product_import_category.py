@@ -119,6 +119,69 @@ def test_import_sets_production_pushed_at_and_updates_on_reimport():
         assert product.production_pushed_at > past
 
 
+def test_update_by_product_id_keeps_leadlock_name_and_applies_pricing_ops():
+    with _session() as session:
+        create_payload = ProductImportPayload(
+            product_id=301,
+            name="Production Name",
+            description="From production",
+            price_ex_vat=Decimal("100"),
+            install_hours=Decimal("1"),
+            number_of_boxes=Decimal("1"),
+            product_type="product",
+            category="stables",
+        )
+        asyncio.run(import_product_webhook(payload=create_payload, _api_key="test", session=session))
+
+        product = session.exec(select(Product).where(Product.production_product_id == 301)).first()
+        assert product is not None
+        product.name = "LeadLock Display Name"
+        product.description = "Staff-edited description"
+        session.add(product)
+        session.commit()
+
+        update_payload = ProductImportPayload(
+            product_id=301,
+            name="Production Name Changed",
+            description="Should not overwrite description",
+            price_ex_vat=Decimal("200"),
+            install_hours=Decimal("2.5"),
+            number_of_boxes=Decimal("3"),
+            product_type="extra",
+            category="sheds",
+        )
+        asyncio.run(import_product_webhook(payload=update_payload, _api_key="test", session=session))
+
+        session.refresh(product)
+        assert product.name == "LeadLock Display Name"
+        assert product.description == "Staff-edited description"
+        assert product.base_price == Decimal("200")
+        assert product.installation_hours == Decimal("2.5")
+        assert product.boxes_per_product == 3
+        assert product.is_extra is True
+        assert product.category == ProductCategory.SHEDS
+
+
+def test_create_still_uses_payload_name():
+    with _session() as session:
+        payload = ProductImportPayload(
+            product_id=302,
+            name="Brand New Product",
+            description="Created from production",
+            price_ex_vat=Decimal("50"),
+            install_hours=Decimal("0.5"),
+            number_of_boxes=Decimal("2"),
+            product_type="product",
+            category="cabins",
+        )
+        asyncio.run(import_product_webhook(payload=payload, _api_key="test", session=session))
+
+        product = session.exec(select(Product).where(Product.production_product_id == 302)).first()
+        assert product is not None
+        assert product.name == "Brand New Product"
+        assert product.description == "Created from production"
+
+
 def test_invalid_category_returns_422_validation_error():
     app = FastAPI()
 

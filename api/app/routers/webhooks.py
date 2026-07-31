@@ -252,6 +252,9 @@ async def import_product_webhook(
     Create or update a product pushed from the production app.
     Requires Bearer token in Authorization header.
     Upsert: if product_id (Production's ID) provided, match by production_product_id; else match by name.
+    When updating by product_id, only pricing/ops fields are applied (price → base_price, install_hours,
+    number_of_boxes, product_type/category); the existing LeadLock display name (and description) are kept.
+    Name/description from the payload are used on create (and on name-match updates).
     Products from production send cost ex VAT; RRP (base_price) is derived using company gross margin % if set.
     Optional product_type maps to is_extra (e.g. extra / product).
     Optional category maps to Product.category and takes precedence over product_type-derived category.
@@ -280,16 +283,20 @@ async def import_product_webhook(
 
     # Upsert: prefer production_product_id if provided, else fall back to name
     existing = None
+    matched_by_product_id = False
     if payload.product_id is not None:
         existing = session.exec(
             select(Product).where(Product.production_product_id == payload.product_id)
         ).first()
+        if existing is not None:
+            matched_by_product_id = True
     if existing is None:
         existing = session.exec(select(Product).where(Product.name == payload.name)).first()
 
     if existing:
-        existing.name = payload.name
-        existing.description = payload.description or None
+        if not matched_by_product_id:
+            existing.name = payload.name
+            existing.description = payload.description or None
         existing.base_price = base_price
         existing.installation_hours = installation_hours
         existing.boxes_per_product = number_of_boxes_int
