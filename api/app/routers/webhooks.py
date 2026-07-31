@@ -41,11 +41,15 @@ from app.models import (
     ProductOptionalExtra,
     Order,
 )
+from pydantic import ValidationError
 from app.schemas import (
     LeadCreate,
     LeadResponse,
     ProductImportPayload,
     ProductImportResponse,
+    ProductImportBatchPayload,
+    ProductImportBatchItemResult,
+    ProductImportBatchResponse,
     WorkOrderStatusUpdatePayload,
     WorkOrderStatusUpdateResponse,
     CustomerHistoryEventType,
@@ -242,25 +246,10 @@ async def create_lead_webhook(
         )
 
 
-@router.post("/products", response_model=ProductImportResponse)
-async def import_product_webhook(
-    payload: ProductImportPayload,
-    _api_key: str = Depends(get_product_import_api_key),
-    session: Session = Depends(get_session),
-):
+def upsert_product_from_import(session: Session, payload: ProductImportPayload) -> Product:
     """
-    Create or update a product pushed from the production app.
-    Requires Bearer token in Authorization header.
-    Upsert: if product_id (Production's ID) provided, match by production_product_id; else match by name.
-    When updating by product_id, only pricing/ops fields are applied (price → base_price, install_hours,
-    number_of_boxes, product_type/category); the existing LeadLock display name (and description) are kept.
-    Name/description from the payload are used on create (and on name-match updates).
-    Products from production send cost ex VAT; RRP (base_price) is derived using company gross margin % if set.
-    Optional product_type maps to is_extra (e.g. extra / product).
-    Optional category maps to Product.category and takes precedence over product_type-derived category.
-    If category is omitted, category falls back to product_type-derived mapping.
-    If both are omitted, update preserves existing category and create defaults to STABLES.
-    For optional extras, parent_product_id (production id of the main product) creates ProductOptionalExtra when set.
+    Create or update a product from a production import payload.
+    Commits on success. Raises HTTPException for invalid type/parent links.
     """
     resolved_is_extra = resolve_is_extra_from_product_type(payload.product_type)
     resolved_category = (
@@ -361,7 +350,96 @@ async def import_product_webhook(
             )
             session.commit()
 
+    return product
+
+
+def _batch_item_error_detail(exc: Exception) -> str:
+    if isinstance(exc, HTTPException):
+        detail = exc.detail
+        if isinstance(detail, str):
+            return detail
+        return str(detail)
+    if isinstance(exc, ValidationError):
+        # Compact first error for summary responses
+        errors = exc.errors()
+        if errors:
+            first = errors[0]
+            loc = ".".join(str(p) for p in first.get("loc", ()) if p != "body")
+            msg = first.get("msg") or "validation error"
+            return f"{loc}: {msg}" if loc else msg
+        return "validation error"
+    return str(exc) or exc.__class__.__name__
+
+
+@router.post("/products", response_model=ProductImportResponse)
+async def import_product_webhook(
+    payload: ProductImportPayload,
+    _api_key: str = Depends(get_product_import_api_key),
+    session: Session = Depends(get_session),
+):
+    """
+    Create or update a product pushed from the production app.
+    Requires Bearer token in Authorization header.
+    Upsert: if product_id (Production's ID) provided, match by production_product_id; else match by name.
+    When updating by product_id, only pricing/ops fields are applied (price → base_price, install_hours,
+    number_of_boxes, product_type/category); the existing LeadLock display name (and description) are kept.
+    Name/description from the payload are used on create (and on name-match updates).
+    Products from production send cost ex VAT; RRP (base_price) is derived using company gross margin % if set.
+    Optional product_type maps to is_extra (e.g. extra / product).
+    Optional category maps to Product.category and takes precedence over product_type-derived category.
+    If category is omitted, category falls back to product_type-derived mapping.
+    If both are omitted, update preserves existing category and create defaults to STABLES.
+    For optional extras, parent_product_id (production id of the main product) creates ProductOptionalExtra when set.
+    """
+    product = upsert_product_from_import(session, payload)
     return ProductImportResponse(success=True, product_id=str(product.id))
+
+
+@router.post("/products/batch", response_model=ProductImportBatchResponse)
+async def import_products_batch_webhook(
+    payload: ProductImportBatchPayload,
+    _api_key: str = Depends(get_product_import_api_key),
+    session: Session = Depends(get_session),
+):
+    """
+    Batch create/update products from the production app.
+    Each item is validated and upserted independently; failures do not stop the batch.
+    """
+    results: list[ProductImportBatchItemResult] = []
+    for raw in payload.products:
+        production_product_id = None
+        if isinstance(raw, dict) and raw.get("product_id") is not None:
+            try:
+                production_product_id = int(raw["product_id"])
+            except (TypeError, ValueError):
+                production_product_id = None
+        try:
+            item = ProductImportPayload.model_validate(raw)
+            if item.product_id is not None:
+                production_product_id = item.product_id
+            product = upsert_product_from_import(session, item)
+            results.append(
+                ProductImportBatchItemResult(
+                    success=True,
+                    production_product_id=production_product_id,
+                    product_id=str(product.id),
+                )
+            )
+        except Exception as exc:
+            try:
+                session.rollback()
+            except Exception:
+                pass
+            results.append(
+                ProductImportBatchItemResult(
+                    success=False,
+                    production_product_id=production_product_id,
+                    error=_batch_item_error_detail(exc),
+                )
+            )
+
+    overall_success = all(r.success for r in results) if results else True
+    return ProductImportBatchResponse(success=overall_success, results=results)
 
 
 _INSTALLATION_FIELD_LABELS = {

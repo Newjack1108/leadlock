@@ -200,7 +200,16 @@ Run production app tests: `npm test` (includes `test/leadlock-work-order*.test.j
 
 ## Reverse direction (products)
 
-Products are pushed **production → LeadLock** via `POST /api/webhooks/products` on LeadLock with Bearer `PRODUCT_IMPORT_API_KEY` or `WEBHOOK_API_KEY`. That flow is independent of work-order push.
+Products are pushed **production → LeadLock** via:
+
+| Endpoint | Purpose |
+|----------|---------|
+| `POST /api/webhooks/products` | Single product upsert |
+| `POST /api/webhooks/products/batch` | Batch upsert (`{ "products": [ ... ] }`); per-item success/failure |
+
+Auth: Bearer `PRODUCT_IMPORT_API_KEY` or `WEBHOOK_API_KEY`. Independent of work-order push.
+
+Production configures `SALES_APP_API_URL` to the single-product URL (`…/api/webhooks/products`) and derives the batch path as `…/products/batch`. Bulk push from production only includes active products already in `product_sales_sync` (optional filters: cost changed since last push, production category).
 
 ---
 

@@ -15,8 +15,8 @@ fake_database = types.ModuleType("app.database")
 fake_database.get_session = lambda: None
 sys.modules.setdefault("app.database", fake_database)
 
-from app.routers.webhooks import import_product_webhook
-from app.schemas import ProductImportPayload
+from app.routers.webhooks import import_product_webhook, import_products_batch_webhook
+from app.schemas import ProductImportPayload, ProductImportBatchPayload
 
 
 def _session() -> Session:
@@ -204,3 +204,127 @@ def test_invalid_category_returns_422_validation_error():
         },
     )
     assert response.status_code == 422
+
+
+def test_batch_import_mixed_create_update_and_partial_failure():
+    with _session() as session:
+        asyncio.run(
+            import_product_webhook(
+                payload=ProductImportPayload(
+                    product_id=401,
+                    name="Existing Batch Product",
+                    description="",
+                    price_ex_vat=Decimal("100"),
+                    install_hours=Decimal("1"),
+                    number_of_boxes=Decimal("1"),
+                    product_type="product",
+                    category="stables",
+                ),
+                _api_key="test",
+                session=session,
+            )
+        )
+
+        batch = ProductImportBatchPayload(
+            products=[
+                {
+                    "product_id": 401,
+                    "name": "Existing Batch Product Renamed",
+                    "description": "should not overwrite after product_id match",
+                    "price_ex_vat": "150",
+                    "install_hours": "2",
+                    "number_of_boxes": "2",
+                    "product_type": "product",
+                    "category": "sheds",
+                },
+                {
+                    "product_id": 402,
+                    "name": "New Batch Product",
+                    "description": "Created in batch",
+                    "price_ex_vat": "50",
+                    "install_hours": "0.5",
+                    "number_of_boxes": "1",
+                    "product_type": "product",
+                    "category": "cabins",
+                },
+                {
+                    "product_id": 403,
+                    "name": "Bad Type Product",
+                    "description": "",
+                    "price_ex_vat": "10",
+                    "install_hours": "1",
+                    "number_of_boxes": "1",
+                    "product_type": "other",
+                    "category": "stables",
+                },
+            ]
+        )
+
+        response = asyncio.run(
+            import_products_batch_webhook(payload=batch, _api_key="test", session=session)
+        )
+
+        assert response.success is False
+        assert len(response.results) == 3
+        assert response.results[0].success is True
+        assert response.results[0].production_product_id == 401
+        assert response.results[0].product_id is not None
+        assert response.results[1].success is True
+        assert response.results[1].production_product_id == 402
+        assert response.results[2].success is False
+        assert response.results[2].production_product_id == 403
+        assert response.results[2].error
+
+        existing = session.exec(select(Product).where(Product.production_product_id == 401)).first()
+        assert existing is not None
+        assert existing.name == "Existing Batch Product"
+        assert existing.base_price == Decimal("150")
+        assert existing.category == ProductCategory.SHEDS
+
+        created = session.exec(select(Product).where(Product.production_product_id == 402)).first()
+        assert created is not None
+        assert created.name == "New Batch Product"
+        assert created.category == ProductCategory.CABINS
+
+        missing = session.exec(select(Product).where(Product.production_product_id == 403)).first()
+        assert missing is None
+
+
+def test_batch_import_invalid_category_item_does_not_block_others():
+    with _session() as session:
+        batch = ProductImportBatchPayload(
+            products=[
+                {
+                    "product_id": 501,
+                    "name": "Good Product",
+                    "description": "",
+                    "price_ex_vat": "100",
+                    "install_hours": "1",
+                    "number_of_boxes": "1",
+                    "product_type": "product",
+                    "category": "stables",
+                },
+                {
+                    "product_id": 502,
+                    "name": "Bad Category",
+                    "description": "",
+                    "price_ex_vat": "100",
+                    "install_hours": "1",
+                    "number_of_boxes": "1",
+                    "product_type": "product",
+                    "category": "other",
+                },
+            ]
+        )
+
+        response = asyncio.run(
+            import_products_batch_webhook(payload=batch, _api_key="test", session=session)
+        )
+
+        assert response.success is False
+        assert response.results[0].success is True
+        assert response.results[1].success is False
+        assert "category" in (response.results[1].error or "").lower()
+
+        good = session.exec(select(Product).where(Product.production_product_id == 501)).first()
+        assert good is not None

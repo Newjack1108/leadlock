@@ -1449,6 +1449,28 @@ class ProductImportResponse(BaseModel):
     product_id: str
 
 
+class ProductImportBatchPayload(BaseModel):
+    """Batch product import from production app. Items are validated one-by-one."""
+
+    products: List[dict] = Field(min_length=1)
+
+
+class ProductImportBatchItemResult(BaseModel):
+    """Per-product result for batch import."""
+
+    success: bool
+    production_product_id: Optional[int] = None
+    product_id: Optional[str] = None  # LeadLock product id
+    error: Optional[str] = None
+
+
+class ProductImportBatchResponse(BaseModel):
+    """Response for batch product import endpoint."""
+
+    success: bool = True
+    results: List[ProductImportBatchItemResult]
+
+
 class WorkOrderStatusUpdatePayload(BaseModel):
     """Payload for production → LeadLock install/payment status updates."""
 
