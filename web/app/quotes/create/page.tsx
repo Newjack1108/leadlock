@@ -794,7 +794,7 @@ function CreateQuoteContent() {
           ],
           valid_until: new Date(vu).toISOString(),
           terms_and_conditions: termsAndConditions.trim() || undefined,
-          specification_sheet: specificationSheet.trim() || undefined,
+          specification_sheet: specificationSheet.trim(),
           notes: notes.trim() || undefined,
           deposit_amount: depositAmount !== '' ? Number(depositAmount) : undefined,
           temperature: temperature ? temperature : undefined,

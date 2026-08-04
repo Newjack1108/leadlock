@@ -321,9 +321,7 @@ export default function CreateQuoteDialog({
       if (termsAndConditions && termsAndConditions.trim()) {
         quoteData.terms_and_conditions = termsAndConditions.trim();
       }
-      if (specificationSheet && specificationSheet.trim()) {
-        quoteData.specification_sheet = specificationSheet.trim();
-      }
+      quoteData.specification_sheet = specificationSheet.trim();
       if (notes && notes.trim()) {
         quoteData.notes = notes.trim();
       }

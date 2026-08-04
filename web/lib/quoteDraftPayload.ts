@@ -48,7 +48,8 @@ export function isPlaceholderOnlyDraftItems(
 export type QuoteDraftPayload = {
   valid_until?: string;
   terms_and_conditions?: string;
-  specification_sheet?: string;
+  /** Empty string clears a previously saved quote override. */
+  specification_sheet?: string | null;
   notes?: string;
   deposit_amount?: number;
   items: Array<{
@@ -227,9 +228,8 @@ export function buildUpdateDraftPayload(input: BuildDraftPayloadInput): QuoteDra
   if (termsAndConditions?.trim()) {
     payload.terms_and_conditions = termsAndConditions.trim();
   }
-  if (specificationSheet?.trim()) {
-    payload.specification_sheet = specificationSheet.trim();
-  }
+  // Always send so clearing the text box removes a stored quote override.
+  payload.specification_sheet = specificationSheet?.trim() || '';
   if (notes?.trim()) {
     payload.notes = notes.trim();
   }
@@ -282,9 +282,7 @@ export function buildPlaceholderOnlyDraftPayloadFromQuote(quote: Quote): QuoteDr
   if (quote.terms_and_conditions?.trim()) {
     payload.terms_and_conditions = quote.terms_and_conditions.trim();
   }
-  if (quote.specification_sheet?.trim()) {
-    payload.specification_sheet = quote.specification_sheet.trim();
-  }
+  payload.specification_sheet = quote.specification_sheet?.trim() || '';
   if (quote.notes?.trim()) {
     payload.notes = quote.notes.trim();
   }

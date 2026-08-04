@@ -364,6 +364,8 @@ export default function CompanySettingsPage() {
       setSaving(true);
       const payload: Record<string, unknown> = {
         ...formData,
+        default_specification_sheet: formData.default_specification_sheet.trim() || null,
+        default_terms_and_conditions: formData.default_terms_and_conditions.trim() || null,
         installation_lead_time_stables: formData.installation_lead_time_stables || undefined,
         installation_lead_time_sheds: formData.installation_lead_time_sheds || undefined,
         installation_lead_time_cabins: formData.installation_lead_time_cabins || undefined,

@@ -2329,8 +2329,9 @@ def _update_draft_quote_impl(
         quote.valid_until = quote_data.valid_until
     if quote_data.terms_and_conditions is not None:
         quote.terms_and_conditions = quote_data.terms_and_conditions
-    if quote_data.specification_sheet is not None:
-        quote.specification_sheet = quote_data.specification_sheet
+    # exclude_unset so explicit ""/null clears a previous override; omitted leaves it unchanged
+    if "specification_sheet" in quote_data.model_dump(exclude_unset=True):
+        quote.specification_sheet = (quote_data.specification_sheet or "").strip() or None
     if quote_data.notes is not None:
         quote.notes = quote_data.notes
     if quote_data.temperature is not None:
@@ -3153,6 +3154,8 @@ async def update_quote(
     
     # Update quote fields
     update_data = quote_data.dict(exclude_unset=True)
+    if "specification_sheet" in update_data:
+        update_data["specification_sheet"] = (update_data["specification_sheet"] or "").strip() or None
     for field, value in update_data.items():
         setattr(quote, field, value)
     

@@ -12,6 +12,7 @@ from pypdf import PdfReader
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
 
+from app.auth import get_current_user
 from app.database import get_session
 from app.models import (
     CompanySettings,
@@ -24,6 +25,7 @@ from app.models import (
     User,
     UserRole,
 )
+from app.routers import quotes as quotes_router
 from app.quote_pdf_service import (
     _appendix_flowable_max_size,
     _image_from_bytes,
@@ -197,6 +199,104 @@ def test_resolve_specification_sheet_text_falls_back_to_company_default():
     quote = Quote(specification_sheet=None)
     company = CompanySettings(default_specification_sheet="Company default", updated_by_id=1)
     assert resolve_specification_sheet_text(quote, company) == "Company default"
+
+
+def test_resolve_specification_sheet_text_empty_quote_override_falls_back():
+    """Cleared quote text (empty/whitespace) must not block company default."""
+    quote = Quote(specification_sheet="   ")
+    company = CompanySettings(default_specification_sheet="Company default", updated_by_id=1)
+    assert resolve_specification_sheet_text(quote, company) == "Company default"
+
+
+def test_resolve_specification_sheet_text_cleared_quote_and_company_is_empty():
+    quote = Quote(specification_sheet=None)
+    company = CompanySettings(default_specification_sheet=None, updated_by_id=1)
+    assert resolve_specification_sheet_text(quote, company) == ""
+
+
+def test_draft_update_empty_specification_sheet_clears_quote_override():
+    """Clearing the quote text box must persist and stop 'test' appearing on PDFs."""
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SQLModel.metadata.create_all(engine)
+
+    with Session(engine) as session:
+        user = User(
+            email="spec-clear@example.com",
+            hashed_password="dummy",
+            full_name="Spec Clear Tester",
+            role=UserRole.DIRECTOR,
+        )
+        customer = Customer(
+            customer_number="C-SPEC-CLEAR",
+            name="Clear Customer",
+            email="clear@example.com",
+        )
+        session.add(user)
+        session.add(customer)
+        session.commit()
+        session.refresh(user)
+        session.refresh(customer)
+        settings = CompanySettings(
+            company_name="Spec Clear Co",
+            default_specification_sheet=None,
+            updated_by_id=user.id,
+        )
+        quote = Quote(
+            customer_id=customer.id,
+            quote_number="QT-SPEC-CLEAR",
+            status=QuoteStatus.DRAFT,
+            subtotal=Decimal("1000.00"),
+            discount_total=Decimal("0.00"),
+            total_amount=Decimal("1000.00"),
+            deposit_amount=Decimal("0.00"),
+            balance_amount=Decimal("1000.00"),
+            created_by_id=user.id,
+            specification_sheet="test",
+            include_specification_sheet=True,
+        )
+        session.add(settings)
+        session.add(quote)
+        session.commit()
+        session.refresh(quote)
+        quote_id = quote.id
+
+    def get_session_override():
+        with Session(engine) as session:
+            yield session
+
+    app = FastAPI()
+    app.include_router(quotes_router.router)
+    app.dependency_overrides[get_session] = get_session_override
+    app.dependency_overrides[get_current_user] = lambda: user
+    client = TestClient(app)
+
+    response = client.put(
+        f"/api/quotes/{quote_id}/draft",
+        json={
+            "specification_sheet": "",
+            "items": [
+                {
+                    "description": "Test building",
+                    "quantity": 1,
+                    "unit_price": 1000,
+                    "is_custom": True,
+                    "sort_order": 0,
+                }
+            ],
+        },
+    )
+    assert response.status_code == 200
+    assert response.json().get("specification_sheet") in (None, "")
+
+    with Session(engine) as session:
+        quote = session.get(Quote, quote_id)
+        company = session.exec(select(CompanySettings).limit(1)).first()
+        assert quote.specification_sheet is None
+        assert resolve_specification_sheet_text(quote, company) == ""
 
 
 def test_resolve_specification_sheet_image_url_from_company_only():
