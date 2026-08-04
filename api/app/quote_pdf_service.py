@@ -214,6 +214,8 @@ FOOTER_BOTTOM_MARGIN = 45 * mm  # Space for footer on every page (logo + text + 
 SPEC_SHEET_APPENDIX_SIDE_MARGIN = 15 * mm
 SPEC_SHEET_APPENDIX_TOP_MARGIN = 10 * mm
 SPEC_SHEET_IMAGE_FRAME_BUFFER = 1 * mm
+# Extra slack so header + heading + image stay on one page after wrap rounding.
+SPEC_SHEET_CONTENT_ABOVE_SLACK = 2 * mm
 # ReportLab Frame default padding is 6pt on each side (reduces usable area inside doc.width/height).
 _REPORTLAB_FRAME_PADDING_TOTAL = 12
 
@@ -224,8 +226,13 @@ def _appendix_flowable_max_size(
     right_margin: float = SPEC_SHEET_APPENDIX_SIDE_MARGIN,
     top_margin: float = SPEC_SHEET_APPENDIX_TOP_MARGIN,
     bottom_margin: float = FOOTER_BOTTOM_MARGIN,
+    reserved_height: float = 0,
 ) -> Tuple[float, float]:
-    """Max width/height for a single image on an appendix page (fits ReportLab frame)."""
+    """Max width/height for a single image on an appendix page (fits ReportLab frame).
+
+    Pass reserved_height for content already on the page (header, heading) so the
+    image scales into the remaining space instead of forcing a page break.
+    """
     doc = SimpleDocTemplate(
         BytesIO(),
         pagesize=A4,
@@ -235,8 +242,33 @@ def _appendix_flowable_max_size(
         rightMargin=right_margin,
     )
     max_w = doc.width - _REPORTLAB_FRAME_PADDING_TOTAL
-    max_h = doc.height - _REPORTLAB_FRAME_PADDING_TOTAL - SPEC_SHEET_IMAGE_FRAME_BUFFER
-    return max_w, max_h
+    max_h = (
+        doc.height
+        - _REPORTLAB_FRAME_PADDING_TOTAL
+        - SPEC_SHEET_IMAGE_FRAME_BUFFER
+        - max(0.0, float(reserved_height))
+    )
+    return max_w, max(max_h, 1.0)
+
+
+def _flowables_height(flowables: List[Any], avail_width: float) -> float:
+    """Sum heights flowables will consume in a ReportLab frame.
+
+    Includes wrap() height plus spaceBefore/spaceAfter, which the frame applies
+    outside wrap() and otherwise cause images sized to wrap-only height to
+    overflow onto a blank following page.
+    """
+    total = 0.0
+    for flowable in flowables:
+        _w, h = flowable.wrap(avail_width, 10000)
+        total += float(h)
+        get_before = getattr(flowable, "getSpaceBefore", None)
+        get_after = getattr(flowable, "getSpaceAfter", None)
+        if callable(get_before):
+            total += float(get_before() or 0)
+        if callable(get_after):
+            total += float(get_after() or 0)
+    return total
 
 
 def _resolve_logo_path_for_canvas(
@@ -1235,18 +1267,27 @@ def generate_quote_pdf(
                     rightMargin=15 * mm,
                 )
                 spec_sheet_elements: List[Any] = []
-                spec_sheet_elements.extend(
-                    _build_header_flowables(
-                        company_settings,
-                        logo_path,
-                        logo_bytes,
-                        normal_style,
-                        company_name_style,
-                        customer.customer_number,
-                        trading_name_override=trading_name_override,
-                    )
+                header_flowables = _build_header_flowables(
+                    company_settings,
+                    logo_path,
+                    logo_bytes,
+                    normal_style,
+                    company_name_style,
+                    customer.customer_number,
+                    trading_name_override=trading_name_override,
                 )
-                spec_sheet_elements.append(Paragraph("Specification Sheet:", heading_style))
+                spec_sheet_elements.extend(header_flowables)
+                heading_para = Paragraph("Specification Sheet:", heading_style)
+                max_img_w, _full_max_h = _appendix_flowable_max_size()
+                reserved_above = (
+                    _flowables_height(header_flowables + [heading_para], max_img_w)
+                    + SPEC_SHEET_CONTENT_ABOVE_SLACK
+                )
+                max_img_w, max_img_h = _appendix_flowable_max_size(
+                    reserved_height=reserved_above
+                )
+                heading_and_body: List[Any] = [heading_para]
+                has_spec_image = False
                 if resolved_spec_sheet_file_url and not file_is_pdf:
                     try:
                         img_data = file_bytes
@@ -1255,19 +1296,22 @@ def generate_quote_pdf(
                                 resolved_spec_sheet_file_url
                             )
                         if img_data:
-                            max_img_w, max_img_h = _appendix_flowable_max_size()
                             img_flowable = _image_from_bytes(
                                 img_data, width=max_img_w, max_height=max_img_h
                             )
                             if img_flowable:
-                                spec_sheet_elements.append(img_flowable)
-                                spec_sheet_elements.append(Spacer(1, 8))
+                                heading_and_body.append(img_flowable)
+                                has_spec_image = True
+                                if resolved_spec_sheet_text:
+                                    heading_and_body.append(Spacer(1, 8))
                     except Exception as e:
                         print(f"Could not embed specification sheet image: {e}", file=sys.stderr, flush=True)
+                spec_sheet_elements.append(KeepTogether(heading_and_body))
                 for line in resolved_spec_sheet_text.split("\n"):
                     if line.strip():
                         spec_sheet_elements.append(Paragraph(line.strip(), terms_style))
-                spec_sheet_elements.append(Spacer(1, 8))
+                if resolved_spec_sheet_text or not has_spec_image:
+                    spec_sheet_elements.append(Spacer(1, 8))
                 if footer_drawer:
                     spec_sheet_doc.build(spec_sheet_elements, onFirstPage=footer_drawer, onLaterPages=footer_drawer)
                 else:

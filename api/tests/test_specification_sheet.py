@@ -24,7 +24,12 @@ from app.models import (
     User,
     UserRole,
 )
-from app.quote_pdf_service import _merge_quote_pdf_parts, generate_quote_pdf
+from app.quote_pdf_service import (
+    _appendix_flowable_max_size,
+    _image_from_bytes,
+    _merge_quote_pdf_parts,
+    generate_quote_pdf,
+)
 from app.routers import public as public_router
 from app.specification_sheet import (
     fetch_specification_sheet_file_bytes,
@@ -332,21 +337,33 @@ def test_quote_pdf_includes_specification_sheet_image_when_enabled(monkeypatch):
     assert len(reader.pages) >= 2
 
 
-def test_quote_pdf_spec_sheet_tall_portrait_image_fits_frame(monkeypatch):
-    """Tall company spec images must scale to the appendix page frame (not 240mm cap)."""
-    from PIL import Image as PILImage
+def test_appendix_flowable_max_size_subtracts_reserved_height():
+    max_w, full_h = _appendix_flowable_max_size()
+    reserved = 40.0
+    max_w2, reduced_h = _appendix_flowable_max_size(reserved_height=reserved)
+    assert max_w2 == max_w
+    assert reduced_h == full_h - reserved
 
-    from app.quote_pdf_service import _appendix_flowable_max_size, _image_from_bytes
+
+def test_quote_pdf_spec_sheet_tall_portrait_image_fits_frame(monkeypatch):
+    """Tall company spec images scale under header+heading and stay on one appendix page."""
+    from PIL import Image as PILImage
 
     tall_buf = BytesIO()
     PILImage.new("RGB", (1200, 4000), color="white").save(tall_buf, format="PNG")
     tall_png = tall_buf.getvalue()
 
-    max_w, max_h = _appendix_flowable_max_size()
+    from reportlab.lib.units import mm
+
+    # Conservative reserved height for header + "Specification Sheet:" heading.
+    reserved = 32 * mm
+    max_w, max_h = _appendix_flowable_max_size(reserved_height=reserved)
+    _, full_h = _appendix_flowable_max_size()
     flowable = _image_from_bytes(tall_png, width=max_w, max_height=max_h)
     assert flowable is not None
     assert flowable.drawWidth <= max_w + 0.5
     assert flowable.drawHeight <= max_h + 0.5
+    assert max_h <= full_h - reserved + 0.5
 
     engine = create_engine(
         "sqlite://",
@@ -376,6 +393,15 @@ def test_quote_pdf_spec_sheet_tall_portrait_image_fits_frame(monkeypatch):
         items = list(session.exec(select(QuoteItem).where(QuoteItem.quote_id == quote_id)).all())
         company_settings = session.exec(select(CompanySettings).limit(1)).first()
         image_url = resolve_specification_sheet_image_url(company_settings)
+        baseline = generate_quote_pdf(
+            quote,
+            customer,
+            items,
+            company_settings=company_settings,
+            session=session,
+            include_spec_sheets=False,
+            include_specification_sheet=False,
+        )
         pdf_buffer = generate_quote_pdf(
             quote,
             customer,
@@ -388,8 +414,11 @@ def test_quote_pdf_spec_sheet_tall_portrait_image_fits_frame(monkeypatch):
             specification_sheet_image_url=image_url,
         )
 
+    baseline_pages = len(PdfReader(baseline).pages)
     reader = PdfReader(pdf_buffer)
-    assert len(reader.pages) >= 2
+    # Image-only company sheet must add exactly one appendix page (no orphan blank after heading).
+    assert len(reader.pages) == baseline_pages + 1
+    assert "Specification Sheet:" in _pdf_text(pdf_buffer)
 
 
 def test_quote_pdf_includes_company_spec_image_on_staff_preview_without_quote_flag(monkeypatch):
