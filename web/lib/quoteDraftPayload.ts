@@ -49,7 +49,7 @@ export type QuoteDraftPayload = {
   valid_until?: string;
   terms_and_conditions?: string;
   /** Empty string clears a previously saved quote override. */
-  specification_sheet?: string | null;
+  specification_sheet?: string;
   notes?: string;
   deposit_amount?: number;
   items: Array<{
