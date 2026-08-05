@@ -1017,6 +1017,8 @@ class Order(SQLModel, table=True):
     payment_link_url: Optional[str] = Field(default=None)  # External pay-by-link URL (paste or integration)
     # One-way drive time (hours); round-trip sent to production webhook is 2× this when set
     travel_time_hours_one_way: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(10, 4)))
+    # One-way road/estimated distance (miles); sent to production for install cost scenarios
+    distance_miles_one_way: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(10, 2)))
     fulfillment_method: QuoteFulfillmentMethod = Field(default=QuoteFulfillmentMethod.DELIVERY)
     use_alternate_delivery_address: bool = Field(default=False)
     delivery_address_line1: Optional[str] = None

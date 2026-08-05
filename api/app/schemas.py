@@ -2163,6 +2163,7 @@ class OrderUpdate(BaseModel):
     installation_completed: Optional[bool] = None
     notes: Optional[str] = None
     travel_time_hours_one_way: Optional[Decimal] = None
+    distance_miles_one_way: Optional[Decimal] = None
     use_alternate_delivery_address: Optional[bool] = None
     delivery_address_line1: Optional[str] = None
     delivery_address_line2: Optional[str] = None
@@ -2224,6 +2225,7 @@ class OrderResponse(BaseModel):
     invoice_number: Optional[str] = None
     xero_invoice_id: Optional[str] = None
     travel_time_hours_one_way: Optional[Decimal] = None
+    distance_miles_one_way: Optional[Decimal] = None
     fulfillment_method: QuoteFulfillmentMethod = QuoteFulfillmentMethod.DELIVERY
     use_alternate_delivery_address: bool = False
     delivery_address_line1: Optional[str] = None

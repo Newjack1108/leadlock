@@ -1259,6 +1259,19 @@ def create_db_and_tables():
                     if "already exists" not in str(e).lower():
                         print(f"Warning adding travel_time_hours_one_way: {e}", file=sys.stderr, flush=True)
             order_columns = [col["name"] for col in inspector.get_columns("customer_order")]
+            if "distance_miles_one_way" not in order_columns:
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(
+                            text(
+                                "ALTER TABLE customer_order ADD COLUMN distance_miles_one_way NUMERIC(10, 2)"
+                            )
+                        )
+                    print("Added distance_miles_one_way to customer_order", file=sys.stderr, flush=True)
+                except Exception as e:
+                    if "already exists" not in str(e).lower():
+                        print(f"Warning adding distance_miles_one_way: {e}", file=sys.stderr, flush=True)
+            order_columns = [col["name"] for col in inspector.get_columns("customer_order")]
             if "fulfillment_method" not in order_columns:
                 try:
                     with engine.begin() as conn:

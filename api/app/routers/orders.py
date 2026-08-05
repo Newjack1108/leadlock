@@ -4,6 +4,7 @@ import secrets
 import uuid
 from html import escape
 from datetime import date, datetime
+from decimal import Decimal
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from fastapi.responses import Response
 from sqlmodel import Session, select
@@ -42,6 +43,7 @@ from app.delivery_location import (
 )
 from app.constants import LIST_PAGE_SIZE_DEFAULT, LIST_PAGE_SIZE_MAX
 from app.delivery_install_amount import sum_delivery_install_ex_vat
+from app.order_route_metrics import resolve_order_route_metrics
 from app.schemas import (
     OrderResponse,
     OrderListResponse,
@@ -289,6 +291,7 @@ def build_order_list_response(
         invoice_number=order.invoice_number,
         xero_invoice_id=order.xero_invoice_id,
         travel_time_hours_one_way=order.travel_time_hours_one_way,
+        distance_miles_one_way=getattr(order, "distance_miles_one_way", None),
         fulfillment_method=getattr(order, "fulfillment_method", QuoteFulfillmentMethod.DELIVERY),
         **delivery_location_response_fields(order),
         payment_link_url=order.payment_link_url,
@@ -401,6 +404,7 @@ def build_order_response(order: Order, order_items: List[OrderItem], session: Se
         xero_invoice_id=order.xero_invoice_id,
         payment_link_url=order.payment_link_url,
         travel_time_hours_one_way=order.travel_time_hours_one_way,
+        distance_miles_one_way=getattr(order, "distance_miles_one_way", None),
         fulfillment_method=getattr(order, "fulfillment_method", QuoteFulfillmentMethod.DELIVERY),
         **delivery_location_response_fields(order),
         is_ninox_origin=is_ninox_origin,
@@ -1308,11 +1312,27 @@ async def send_to_production(
         crm_what3words = (getattr(customer, "what3words", None) or "").strip() or None
         if crm_what3words:
             payload["crm_what3words"] = crm_what3words
-    if (
-        not is_collection
-        and order.travel_time_hours_one_way is not None
-    ):
-        payload["travel_time_hours_round_trip"] = float(order.travel_time_hours_one_way) * 2.0
+    if not is_collection:
+        settings = session.exec(select(CompanySettings).limit(1)).first()
+        factory_pc = (settings.postcode if settings else None) or ""
+        distance_miles, travel_one_way = resolve_order_route_metrics(
+            factory_postcode=factory_pc,
+            customer_postcode=routing_postcode,
+            travel_time_hours_one_way=order.travel_time_hours_one_way,
+            distance_miles_one_way=getattr(order, "distance_miles_one_way", None),
+            average_speed_mph=getattr(settings, "average_speed_mph", None) if settings else None,
+            session=session,
+        )
+        if distance_miles is not None:
+            payload["distance_miles_one_way"] = float(distance_miles)
+            if getattr(order, "distance_miles_one_way", None) is None:
+                order.distance_miles_one_way = Decimal(str(distance_miles))
+                session.add(order)
+        if travel_one_way is not None:
+            payload["travel_time_hours_round_trip"] = float(travel_one_way) * 2.0
+            if order.travel_time_hours_one_way is None:
+                order.travel_time_hours_one_way = Decimal(str(travel_one_way))
+                session.add(order)
 
     url = f"{base_url}/api/webhooks/work-orders"
     headers = {
