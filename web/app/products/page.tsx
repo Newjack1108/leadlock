@@ -26,7 +26,7 @@ import {
 } from '@/components/ui/dialog';
 import { Plus, Edit, Trash2, List, LayoutGrid, FileDown, ChevronDown } from 'lucide-react';
 import Link from 'next/link';
-import api, { getApiErrorDetail } from '@/lib/api';
+import api, { downloadProductsCsv, getApiErrorDetail } from '@/lib/api';
 import { Product, ProductCategory, PRODUCT_SUBCATEGORIES, ProductSubcategory } from '@/lib/types';
 import { CONFIGURATOR_EXTRA_BADGE_CLASS } from '@/lib/productBadges';
 import { buildProductFilterQueryString, formatDateTime } from '@/lib/utils';
@@ -55,6 +55,7 @@ export default function ProductsPage() {
   const [selectedSubcategories, setSelectedSubcategories] = useState<ProductSubcategory[]>([]);
   const [viewMode, setViewMode] = useState<'list' | 'tile'>('list');
   const [exportingPdf, setExportingPdf] = useState(false);
+  const [exportingCsv, setExportingCsv] = useState(false);
   const [tradeOnlyPdf, setTradeOnlyPdf] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -115,6 +116,28 @@ export default function ProductsPage() {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleExportCsv = async () => {
+    try {
+      setExportingCsv(true);
+      await downloadProductsCsv({
+        is_active: true,
+        category: categoryFilter !== 'ALL' ? categoryFilter : undefined,
+        is_extra: extrasFilter !== 'ALL' ? extrasFilter : undefined,
+        subcategories:
+          selectedSubcategories.length > 0 ? [...selectedSubcategories] : undefined,
+      });
+      toast.success('CSV downloaded');
+    } catch (error: unknown) {
+      if ((error as { response?: { status?: number } })?.response?.status === 401) {
+        router.push('/login');
+      } else {
+        toast.error(getApiErrorDetail(error) || 'Failed to export CSV');
+      }
+    } finally {
+      setExportingCsv(false);
     }
   };
 
@@ -321,6 +344,17 @@ export default function ProductsPage() {
               </label>
               <Button
                 type="button"
+                variant="outline"
+                size="sm"
+                className="shrink-0"
+                disabled={exportingCsv}
+                onClick={() => void handleExportCsv()}
+              >
+                <FileDown className="h-4 w-4 mr-2" />
+                {exportingCsv ? 'Exporting…' : 'Download CSV'}
+              </Button>
+              <Button
+                type="button"
                 variant="secondary"
                 size="sm"
                 className="shrink-0"
@@ -363,6 +397,8 @@ export default function ProductsPage() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b bg-muted/50">
+                    <th className="text-left p-3 font-medium whitespace-nowrap">ID</th>
+                    <th className="text-left p-3 font-medium whitespace-nowrap">Prod ID</th>
                     <th className="text-left p-3 font-medium">Name</th>
                     <th className="text-left p-3 font-medium">Category</th>
                     <th className="text-left p-3 font-medium">Price</th>
@@ -379,6 +415,10 @@ export default function ProductsPage() {
                       className="border-b last:border-0 hover:bg-muted/30 cursor-pointer transition-colors"
                       onClick={() => router.push(`/products/${product.id}`)}
                     >
+                      <td className="p-3 text-muted-foreground text-sm tabular-nums">{product.id}</td>
+                      <td className="p-3 text-muted-foreground text-sm tabular-nums">
+                        {product.production_product_id ?? '—'}
+                      </td>
                       <td className="p-3">
                         <div>
                           <span className="font-medium">{product.name}</span>
@@ -451,6 +491,12 @@ export default function ProductsPage() {
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
                       <CardTitle className="text-lg break-words">{product.name}</CardTitle>
+                      <p className="text-xs text-muted-foreground mt-1 tabular-nums">
+                        ID {product.id}
+                        {product.production_product_id != null
+                          ? ` · Prod ${product.production_product_id}`
+                          : ''}
+                      </p>
                       <div className="flex flex-wrap gap-2 mt-2">
                         <Badge className={`shrink-0 ${categoryColors[product.category]}`}>
                           {product.category}

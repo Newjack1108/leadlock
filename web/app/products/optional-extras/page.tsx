@@ -6,17 +6,24 @@ import Header from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { deleteProduct, getApiErrorDetail, getOptionalExtras, getProducts } from '@/lib/api';
+import {
+  deleteProduct,
+  downloadProductsCsv,
+  getApiErrorDetail,
+  getOptionalExtras,
+  getProducts,
+} from '@/lib/api';
 import { Product, ProductCategory } from '@/lib/types';
 import { CONFIGURATOR_EXTRA_BADGE_CLASS } from '@/lib/productBadges';
 import { formatDateTime } from '@/lib/utils';
 import { toast } from 'sonner';
-import { ArrowLeft, Plus, Edit, Package, Trash2 } from 'lucide-react';
+import { ArrowLeft, Plus, Edit, Package, Trash2, FileDown } from 'lucide-react';
 import Link from 'next/link';
 
 export default function OptionalExtrasPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
+  const [exportingCsv, setExportingCsv] = useState(false);
   const [optionalExtras, setOptionalExtras] = useState<Product[]>([]);
   const [productsUsingExtras, setProductsUsingExtras] = useState<Record<number, Product[]>>({});
 
@@ -61,6 +68,22 @@ export default function OptionalExtrasPage() {
     }
   };
 
+  const handleExportCsv = async () => {
+    try {
+      setExportingCsv(true);
+      await downloadProductsCsv({ is_active: true, is_extra: true });
+      toast.success('CSV downloaded');
+    } catch (error: unknown) {
+      if ((error as { response?: { status?: number } })?.response?.status === 401) {
+        router.push('/login');
+      } else {
+        toast.error(getApiErrorDetail(error) || 'Failed to export CSV');
+      }
+    } finally {
+      setExportingCsv(false);
+    }
+  };
+
   const handleDeleteExtra = async (extra: Product) => {
     if (
       !confirm(
@@ -98,7 +121,7 @@ export default function OptionalExtrasPage() {
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Products
           </Button>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
             <div>
               <h1 className="text-3xl font-semibold mb-2">Optional Extras</h1>
               <p className="text-muted-foreground">
@@ -108,12 +131,23 @@ export default function OptionalExtrasPage() {
                 the configurator panel.
               </p>
             </div>
-            <Button asChild>
-              <Link href="/products/optional-extras/create">
-                <Plus className="h-4 w-4 mr-2" />
-                Create Optional Extra
-              </Link>
-            </Button>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={exportingCsv}
+                onClick={() => void handleExportCsv()}
+              >
+                <FileDown className="h-4 w-4 mr-2" />
+                {exportingCsv ? 'Exporting…' : 'Download CSV'}
+              </Button>
+              <Button asChild>
+                <Link href="/products/optional-extras/create">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Optional Extra
+                </Link>
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -140,6 +174,12 @@ export default function OptionalExtrasPage() {
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
                       <CardTitle className="text-lg break-words">{extra.name}</CardTitle>
+                      <p className="text-xs text-muted-foreground mt-1 tabular-nums">
+                        ID {extra.id}
+                        {extra.production_product_id != null
+                          ? ` · Prod ${extra.production_product_id}`
+                          : ''}
+                      </p>
                       <div className="flex flex-wrap gap-2 mt-2">
                         <Badge className={`shrink-0 ${categoryColors[extra.category]}`}>
                           {extra.category}
@@ -197,6 +237,14 @@ export default function OptionalExtrasPage() {
                     <p className="text-sm text-muted-foreground mb-3">{extra.description}</p>
                   )}
                   <div className="space-y-1 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">LeadLock ID:</span>
+                      <span className="tabular-nums">{extra.id}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Production ID:</span>
+                      <span className="tabular-nums">{extra.production_product_id ?? '—'}</span>
+                    </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Price:</span>
                       <span className="font-semibold">£{Number(extra.base_price).toFixed(2)}</span>

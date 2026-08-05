@@ -10,7 +10,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.pool import StaticPool
-from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel import Session, SQLModel, create_engine, select
 
 from app.auth import get_current_user
 from app.database import get_session
@@ -18,6 +18,8 @@ from app.models import (
     Customer,
     Order,
     OrderItem,
+    Product,
+    ProductCategory,
     Quote,
     QuoteFulfillmentMethod,
     QuoteItem,
@@ -492,6 +494,81 @@ def test_send_to_production_omits_what3words_when_unset(client, seeded_session):
     assert res.status_code == 200
     assert "what3words" not in captured["payload"]
     assert "crm_what3words" not in captured["payload"]
+
+
+@patch.dict(os.environ, {"PRODUCTION_APP_API_URL": "https://prod.example", "PRODUCTION_APP_API_KEY": "key"})
+def test_send_to_production_includes_production_product_id(client, seeded_session):
+    """Synced products send production finished-product id so BOM rematch does not rely on name."""
+    session, user, order, customer, quote = seeded_session
+
+    product = Product(
+        name="LeadLock Renamed Configurator Box",
+        category=ProductCategory.CONFIGURATOR,
+        base_price=Decimal("500.00"),
+        unit="Unit",
+        is_active=True,
+        installation_hours=Decimal("2.5"),
+        boxes_per_product=1,
+        production_product_id=4242,
+        configurator_width=Decimal("3.50"),
+        configurator_length=Decimal("3.50"),
+    )
+    session.add(product)
+    session.commit()
+    session.refresh(product)
+
+    line = session.exec(select(OrderItem).where(OrderItem.order_id == order.id)).one()
+    line.product_id = product.id
+    line.description = product.name
+    session.add(line)
+    session.commit()
+
+    captured = {}
+    with patch("app.routers.orders.httpx.AsyncClient", _fake_httpx_capturing(captured)):
+        res = client.post(f"/api/orders/{order.id}/send-to-production")
+
+    assert res.status_code == 200
+    items = captured["payload"]["items"]
+    assert len(items) == 1
+    assert items[0]["product_id"] == 4242
+    assert items[0]["product_name"] == "LeadLock Renamed Configurator Box"
+    assert items[0]["install_hours"] == 2.5
+    assert items[0]["number_of_boxes"] == 1
+
+
+@patch.dict(os.environ, {"PRODUCTION_APP_API_URL": "https://prod.example", "PRODUCTION_APP_API_KEY": "key"})
+def test_send_to_production_omits_product_id_when_not_synced(client, seeded_session):
+    session, user, order, customer, quote = seeded_session
+
+    product = Product(
+        name="Sales-only custom box",
+        category=ProductCategory.CONFIGURATOR,
+        base_price=Decimal("100.00"),
+        unit="Unit",
+        is_active=True,
+        production_product_id=None,
+        configurator_width=Decimal("3.50"),
+        configurator_length=Decimal("3.50"),
+    )
+    session.add(product)
+    session.commit()
+    session.refresh(product)
+
+    line = session.exec(select(OrderItem).where(OrderItem.order_id == order.id)).one()
+    line.product_id = product.id
+    line.description = product.name
+    session.add(line)
+    session.commit()
+
+    captured = {}
+    with patch("app.routers.orders.httpx.AsyncClient", _fake_httpx_capturing(captured)):
+        res = client.post(f"/api/orders/{order.id}/send-to-production")
+
+    assert res.status_code == 200
+    items = captured["payload"]["items"]
+    assert len(items) == 1
+    assert "product_id" not in items[0]
+    assert items[0]["product_name"] == "Sales-only custom box"
 
 
 def test_customer_rejects_invalid_what3words(client, seeded_session):

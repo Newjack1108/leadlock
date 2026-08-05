@@ -682,6 +682,7 @@ export interface Product {
   configurator_per_box?: boolean;
   installation_hours?: number;
   boxes_per_product?: number;
+  production_product_id?: number | null;
   is_production_synced: boolean;
   production_pushed_at?: string | null;
   optional_extras?: Product[];

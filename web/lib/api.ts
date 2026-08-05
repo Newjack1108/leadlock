@@ -1668,6 +1668,38 @@ export const getProducts = async () => {
   return response.data;
 };
 
+export const downloadProductsCsv = async (options?: {
+  category?: string;
+  is_extra?: boolean;
+  is_active?: boolean;
+  subcategories?: string[];
+  allow_in_configurator?: boolean;
+}) => {
+  const params: Record<string, string | boolean | string[]> = {};
+  if (options?.category) params.category = options.category;
+  if (options?.is_extra !== undefined) params.is_extra = options.is_extra;
+  if (options?.is_active !== undefined) params.is_active = options.is_active;
+  if (options?.subcategories?.length) params.subcategory = options.subcategories;
+  if (options?.allow_in_configurator !== undefined) {
+    params.allow_in_configurator = options.allow_in_configurator;
+  }
+  const response = await api.get('/api/products/export.csv', {
+    responseType: 'blob',
+    params: Object.keys(params).length ? params : undefined,
+  });
+  const dateStr = new Date().toISOString().slice(0, 10);
+  const suffix = options?.is_extra === true ? 'extras' : 'products';
+  const blob = new Blob([response.data], { type: 'text/csv' });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', `${suffix}-export-${dateStr}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
+};
+
 export const getProduct = async (productId: number) => {
   const response = await api.get(`/api/products/${productId}`);
   return response.data;

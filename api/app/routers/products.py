@@ -228,6 +228,39 @@ async def get_categories(
     }
 
 
+@router.get("/export.csv")
+async def export_products_csv(
+    category: Optional[ProductCategory] = Query(None),
+    is_extra: Optional[bool] = Query(None),
+    is_active: Optional[bool] = Query(None),
+    subcategory: Optional[List[str]] = Query(None),
+    allow_in_configurator: Optional[bool] = Query(None),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Download products matching list filters as CSV. Register before /{product_id}."""
+    from app.product_export import export_products_to_csv, query_products_for_export
+
+    products = query_products_for_export(
+        session,
+        category=category,
+        is_extra=is_extra,
+        is_active=is_active,
+        subcategory=subcategory,
+        allow_in_configurator=allow_in_configurator,
+    )
+    content = export_products_to_csv(products)
+    date_str = datetime.utcnow().strftime("%Y-%m-%d")
+    suffix = "extras" if is_extra is True else "products"
+    return Response(
+        content=content,
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="{suffix}-export-{date_str}.csv"'
+        },
+    )
+
+
 @router.get("/price-list.pdf")
 async def export_price_list_pdf(
     category: Optional[ProductCategory] = Query(None),

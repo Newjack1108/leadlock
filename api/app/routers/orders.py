@@ -1224,14 +1224,18 @@ async def send_to_production(
             product = session.get(Product, item.product_id)
         install_hours = float(product.installation_hours) if product and product.installation_hours else 0
         number_of_boxes = product.boxes_per_product if product and product.boxes_per_product is not None else 0
-        items_payload.append({
+        line = {
             "product_name": product.name if product else item.description,
             "description": item.description,
             "quantity": float(item.quantity),
             "unit_price": float(item.unit_price),
             "install_hours": install_hours,
             "number_of_boxes": int(number_of_boxes),
-        })
+        }
+        # Production finished-product id (from push-to-sales); preferred over name match for BOM.
+        if product and product.production_product_id is not None:
+            line["product_id"] = int(product.production_product_id)
+        items_payload.append(line)
 
     use_alternate = getattr(order, "use_alternate_delivery_address", False) and not is_collection
     if use_alternate:
