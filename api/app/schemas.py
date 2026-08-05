@@ -2152,6 +2152,7 @@ class OrderItemResponse(BaseModel):
     final_line_total: Decimal
     sort_order: int
     is_custom: bool
+    line_type: Optional[QuoteItemLineType] = None
 
 
 class OrderUpdate(BaseModel):
@@ -2235,6 +2236,8 @@ class OrderResponse(BaseModel):
     delivery_what3words: Optional[str] = None
     payment_link_url: Optional[str] = None
     is_ninox_origin: bool = False
+    delivery_install_ex_vat: Optional[Decimal] = None
+    delivery_install_label: Optional[str] = None
     items: List[OrderItemResponse] = []
     access_sheet: Optional[AccessSheetResponse] = None
     review_hub_url: Optional[str] = None

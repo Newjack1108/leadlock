@@ -1043,6 +1043,7 @@ def create_order_from_quote(quote: Quote, session: Session, created_by_id: int) 
             final_line_total=qi.final_line_total,
             sort_order=qi.sort_order,
             is_custom=qi.is_custom,
+            line_type=getattr(qi, "line_type", None),
         )
         session.add(order_item)
     # Inherit any files attached to the quote so they appear on the order too.

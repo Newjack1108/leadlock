@@ -253,6 +253,63 @@ def _ensure_quote_rejected_by_id_column(engine) -> None:
             print(f"Warning: could not ensure quote.rejected_by_id: {e}", file=sys.stderr, flush=True)
 
 
+def _ensure_orderitem_line_type_column(engine) -> None:
+    """Add line_type to orderitem (DELIVERY / INSTALLATION snapshot from quote)."""
+    import sys
+
+    try:
+        insp = inspect(engine)
+        if not insp.has_table("orderitem"):
+            return
+        cols = [c["name"] for c in insp.get_columns("orderitem")]
+        added = False
+        if "line_type" not in cols:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE orderitem ADD COLUMN line_type VARCHAR"))
+            added = True
+        # Best-effort backfill from linked quote items (dialect-specific)
+        dialect = getattr(engine.dialect, "name", "")
+        with engine.begin() as conn:
+            if dialect == "postgresql":
+                conn.execute(
+                    text(
+                        """
+                        UPDATE orderitem AS oi
+                        SET line_type = qi.line_type
+                        FROM quoteitem AS qi
+                        WHERE oi.quote_item_id = qi.id
+                          AND qi.line_type IS NOT NULL
+                          AND oi.line_type IS NULL
+                        """
+                    )
+                )
+            else:
+                conn.execute(
+                    text(
+                        """
+                        UPDATE orderitem
+                        SET line_type = (
+                            SELECT qi.line_type FROM quoteitem AS qi
+                            WHERE qi.id = orderitem.quote_item_id
+                        )
+                        WHERE quote_item_id IS NOT NULL
+                          AND line_type IS NULL
+                          AND EXISTS (
+                            SELECT 1 FROM quoteitem AS qi
+                            WHERE qi.id = orderitem.quote_item_id
+                              AND qi.line_type IS NOT NULL
+                          )
+                        """
+                    )
+                )
+        if added:
+            print("Added line_type to orderitem table", file=sys.stderr, flush=True)
+    except Exception as e:
+        err = str(e).lower()
+        if "already exists" not in err and "duplicate" not in err:
+            print(f"Warning: could not ensure orderitem.line_type: {e}", file=sys.stderr, flush=True)
+
+
 def _ensure_list_performance_indexes(engine) -> None:
     """Indexes for customer list ordering and unread-count aggregations (Railway public DB latency)."""
     import sys
@@ -1060,6 +1117,7 @@ def create_db_and_tables():
     _ensure_quote_payment_link_url_column(engine)
     _ensure_quote_on_hold_at_column(engine)
     _ensure_quote_rejected_by_id_column(engine)
+    _ensure_orderitem_line_type_column(engine)
     _ensure_dealer_portal_schema(engine)
     _ensure_user_leave_schema(engine)
     _ensure_weekly_planner_schema(engine)

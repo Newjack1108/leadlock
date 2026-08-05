@@ -41,6 +41,7 @@ from app.delivery_location import (
     sync_delivery_location_from_payload,
 )
 from app.constants import LIST_PAGE_SIZE_DEFAULT, LIST_PAGE_SIZE_MAX
+from app.delivery_install_amount import sum_delivery_install_ex_vat
 from app.schemas import (
     OrderResponse,
     OrderListResponse,
@@ -292,6 +293,8 @@ def build_order_list_response(
         **delivery_location_response_fields(order),
         payment_link_url=order.payment_link_url,
         is_ninox_origin=is_ninox_origin,
+        delivery_install_ex_vat=None,
+        delivery_install_label=None,
         items=[],
         access_sheet=access_sheet,
         review_hub_url=None,
@@ -364,6 +367,7 @@ def build_order_response(order: Order, order_items: List[OrderItem], session: Se
     is_returning_for_review = is_returning_customer_for_review(order, session)
     prize_draw_entry = _build_prize_draw_entry_response(order, session)
     sent_at, sent_by_id, sent_by_name = _get_latest_production_send(order.id, session)
+    delivery_install_ex_vat, delivery_install_label = sum_delivery_install_ex_vat(order_items)
 
     return OrderResponse(
         id=order.id,
@@ -400,6 +404,8 @@ def build_order_response(order: Order, order_items: List[OrderItem], session: Se
         fulfillment_method=getattr(order, "fulfillment_method", QuoteFulfillmentMethod.DELIVERY),
         **delivery_location_response_fields(order),
         is_ninox_origin=is_ninox_origin,
+        delivery_install_ex_vat=delivery_install_ex_vat,
+        delivery_install_label=delivery_install_label,
         items=[
             OrderItemResponse(
                 id=item.id,
@@ -414,6 +420,7 @@ def build_order_response(order: Order, order_items: List[OrderItem], session: Se
                 final_line_total=item.final_line_total,
                 sort_order=item.sort_order,
                 is_custom=item.is_custom,
+                line_type=getattr(item, "line_type", None),
             )
             for item in order_items
         ],
@@ -1232,10 +1239,17 @@ async def send_to_production(
             "install_hours": install_hours,
             "number_of_boxes": int(number_of_boxes),
         }
+        item_line_type = getattr(item, "line_type", None)
+        if item_line_type is not None:
+            line["line_type"] = (
+                item_line_type.value if hasattr(item_line_type, "value") else str(item_line_type)
+            )
         # Production finished-product id (from push-to-sales); preferred over name match for BOM.
         if product and product.production_product_id is not None:
             line["product_id"] = int(product.production_product_id)
         items_payload.append(line)
+
+    delivery_install_ex_vat, delivery_install_label = sum_delivery_install_ex_vat(order_items)
 
     use_alternate = getattr(order, "use_alternate_delivery_address", False) and not is_collection
     if use_alternate:
@@ -1281,6 +1295,10 @@ async def send_to_production(
         "balance_amount": float(order.balance_amount),
         "invoice_number": order.invoice_number,
     }
+    if delivery_install_ex_vat is not None:
+        payload["delivery_install_ex_vat"] = float(delivery_install_ex_vat)
+    if delivery_install_label:
+        payload["delivery_install_label"] = delivery_install_label
     if routing_what3words:
         payload["what3words"] = routing_what3words
     if use_alternate:

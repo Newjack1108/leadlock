@@ -1128,6 +1128,7 @@ class OrderItem(SQLModel, table=True):
     final_line_total: Decimal = Field(sa_column=Column(Numeric(10, 2)))
     sort_order: int = Field(default=0)
     is_custom: bool = Field(default=False)
+    line_type: Optional[QuoteItemLineType] = Field(default=None)  # DELIVERY or INSTALLATION snapshot
 
     # Relationships
     order: "Order" = Relationship(back_populates="items")
