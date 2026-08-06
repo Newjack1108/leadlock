@@ -10,13 +10,15 @@ import {
   applyDealerQuoteConfiguration,
   getApiErrorDetail,
   getDealerConfiguratorCatalog,
+  getDealerDiscountPolicy,
   getDealerQuote,
   getDealerQuoteConfiguration,
+  getDiscountTemplates,
   previewDealerConfiguratorConfiguration,
   resetDealerQuoteConfiguration,
   saveDealerQuoteConfiguration,
 } from '@/lib/api';
-import type { Quote } from '@/lib/types';
+import type { DiscountTemplate, Quote } from '@/lib/types';
 import { QuoteStatus } from '@/lib/types';
 import { toast } from 'sonner';
 
@@ -26,6 +28,9 @@ export default function DealerQuoteConfigurePage() {
   const quoteId = Number(params.id);
   const [loading, setLoading] = useState(true);
   const [quote, setQuote] = useState<Quote | null>(null);
+  const [availableDiscounts, setAvailableDiscounts] = useState<DiscountTemplate[]>([]);
+  const [discountsLoading, setDiscountsLoading] = useState(true);
+  const [discountsConfigured, setDiscountsConfigured] = useState(true);
 
   const adapters = useMemo<ConfiguratorShellAdapters>(
     () => ({
@@ -33,7 +38,10 @@ export default function DealerQuoteConfigurePage() {
       getConfiguration: getDealerQuoteConfiguration,
       saveConfiguration: saveDealerQuoteConfiguration,
       preview: previewDealerConfiguratorConfiguration,
-      apply: applyDealerQuoteConfiguration,
+      apply: (id, options) =>
+        applyDealerQuoteConfiguration(id, {
+          discount_template_ids: options?.discount_template_ids,
+        }),
       resetDraftLines: async (id) => {
         await resetDealerQuoteConfiguration(id);
       },
@@ -72,6 +80,40 @@ export default function DealerQuoteConfigurePage() {
     };
   }, [quoteId, router]);
 
+  useEffect(() => {
+    let cancelled = false;
+    const loadDiscounts = async () => {
+      setDiscountsLoading(true);
+      try {
+        const [policy, activeDiscounts] = await Promise.all([
+          getDealerDiscountPolicy(),
+          getDiscountTemplates(true),
+        ]);
+        if (cancelled) return;
+        const allowed = new Set(policy.allowed_discount_template_ids ?? []);
+        setAvailableDiscounts(
+          activeDiscounts.filter((discount: DiscountTemplate) => allowed.has(discount.id))
+        );
+        setDiscountsConfigured(true);
+      } catch (error) {
+        if (cancelled) return;
+        setAvailableDiscounts([]);
+        const detail = getApiErrorDetail(error);
+        const notConfigured = detail.toLowerCase().includes('not configured');
+        setDiscountsConfigured(!notConfigured);
+        if (!notConfigured) {
+          toast.error(detail || 'Could not load dealer discounts');
+        }
+      } finally {
+        if (!cancelled) setDiscountsLoading(false);
+      }
+    };
+    void loadDiscounts();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <DealerPageShell className="max-w-7xl">
       {loading ? (
@@ -86,6 +128,9 @@ export default function DealerQuoteConfigurePage() {
           adapters={adapters}
           backHref={`/dealer/quotes/${quote.id}`}
           afterApplyHref={`/dealer/quotes/${quote.id}`}
+          availableDiscounts={availableDiscounts}
+          discountsLoading={discountsLoading}
+          discountsConfigured={discountsConfigured}
         />
       ) : (
         <Card className="border-primary/15">

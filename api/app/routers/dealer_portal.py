@@ -1,9 +1,9 @@
 import hashlib
 from datetime import datetime
 from decimal import Decimal
-from typing import List
+from typing import List, Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Body, Depends, File, HTTPException, UploadFile
 from fastapi.responses import Response
 from sqlmodel import Session, select
 
@@ -43,6 +43,7 @@ from app.schemas import (
     ConfiguratorPreviewRequest,
     ConfiguratorPreviewResponse,
     DealerAllowedDiscountPolicyResponse,
+    DealerConfiguratorApply,
     DealerConfiguratorDraftCreate,
     DealerDeliveryEstimateInclusion,
     DealerProfileResponse,
@@ -195,11 +196,21 @@ def _finalize_dealer_quote_money(
     quote: Quote,
     quote_items: List[QuoteItem],
     current_user: User,
+    session: Optional[Session] = None,
 ) -> None:
     subtotal = sum((item.line_total for item in quote_items), start=Decimal("0"))
     quote.subtotal = subtotal
     item_discount_total = sum((item.discount_amount for item in quote_items), start=Decimal("0"))
-    quote.discount_total = item_discount_total
+    quote_level_discount = Decimal("0")
+    if session is not None:
+        quote_discounts = session.exec(
+            select(QuoteDiscount).where(QuoteDiscount.quote_id == quote.id)
+        ).all()
+        quote_level_discount = sum(
+            (d.discount_amount for d in quote_discounts if d.quote_item_id is None),
+            start=Decimal("0"),
+        )
+    quote.discount_total = item_discount_total + quote_level_discount
     quote.total_amount = quote.subtotal - quote.discount_total
     total_inc_vat = quote.total_amount * (Decimal("1") + VAT_RATE_DECIMAL)
     commission_pct = Decimal(str(current_user.dealer_commission_pct or 10))
@@ -209,6 +220,48 @@ def _finalize_dealer_quote_money(
     quote.balance_amount = total_inc_vat - quote.deposit_amount
     quote.updated_at = datetime.utcnow()
     quote.revision_hash = _build_quote_revision_hash(quote, quote_items)
+
+
+def _validate_dealer_discount_template_ids(
+    session: Session,
+    dealer_id: int,
+    discount_template_ids: List[int],
+) -> None:
+    if not discount_template_ids:
+        return
+    policy = session.exec(
+        select(DealerDiscountPolicy).where(DealerDiscountPolicy.dealer_id == dealer_id)
+    ).first()
+    if not policy:
+        raise HTTPException(status_code=400, detail="Dealer discount policy not configured")
+    allowed_discount_ids = set(
+        session.exec(
+            select(DealerAllowedDiscount.discount_template_id).where(
+                DealerAllowedDiscount.dealer_id == dealer_id
+            )
+        ).all()
+    )
+    if any(template_id not in allowed_discount_ids for template_id in discount_template_ids):
+        raise HTTPException(status_code=403, detail="One or more discounts are not permitted")
+
+
+def _apply_dealer_discount_templates(
+    session: Session,
+    quote: Quote,
+    quote_items: List[QuoteItem],
+    current_user: User,
+    discount_template_ids: List[int],
+) -> None:
+    for template_id in discount_template_ids:
+        template = session.exec(
+            select(DiscountTemplate).where(
+                DiscountTemplate.id == template_id,
+                DiscountTemplate.is_active == True,
+            )
+        ).first()
+        if not template:
+            raise HTTPException(status_code=404, detail=f"Discount template {template_id} not found")
+        apply_discount_to_quote(quote, template, quote_items, session, current_user)
 
 
 def _placeholder_quote_item(quote_id: int) -> QuoteItem:
@@ -905,6 +958,7 @@ async def save_dealer_quote_configuration(
 @router.post("/quotes/{quote_id}/configuration/apply", response_model=QuoteResponse)
 async def apply_dealer_quote_configuration(
     quote_id: int,
+    body: DealerConfiguratorApply = Body(default_factory=DealerConfiguratorApply),
     session: Session = Depends(get_session),
     current_user: User = Depends(require_dealer_configurator_access),
 ):
@@ -914,6 +968,10 @@ async def apply_dealer_quote_configuration(
     ).first()
     if not record:
         raise HTTPException(status_code=404, detail="Quote configuration not found")
+
+    _validate_dealer_discount_template_ids(
+        session, current_user.dealer_id, body.discount_template_ids
+    )
 
     payload = QuoteConfigurationPayload.model_validate(record.configuration_json or {})
     preview = build_configurator_preview(
@@ -960,7 +1018,17 @@ async def apply_dealer_quote_configuration(
     else:
         quote.fulfillment_method = QuoteFulfillmentMethod.DELIVERY
 
-    _finalize_dealer_quote_money(quote, quote_items, current_user)
+    # Subtotal must be set before discount helpers that read quote.subtotal.
+    quote.subtotal = sum((item.line_total for item in quote_items), start=Decimal("0"))
+    session.add(quote)
+    session.flush()
+    _apply_dealer_discount_templates(
+        session, quote, quote_items, current_user, body.discount_template_ids
+    )
+    quote_items = list(
+        session.exec(select(QuoteItem).where(QuoteItem.quote_id == quote.id).order_by(QuoteItem.sort_order)).all()
+    )
+    _finalize_dealer_quote_money(quote, quote_items, current_user, session=session)
     session.add(quote)
     session.commit()
     session.refresh(quote)

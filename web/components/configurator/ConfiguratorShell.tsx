@@ -40,6 +40,7 @@ import type {
   ConfiguratorDeliveryEstimateInclusion,
   ConfiguratorExtraSelection,
   ConfiguratorPreviewResponse,
+  DiscountTemplate,
   Product,
   Quote,
   QuoteConfigurationPayload,
@@ -47,6 +48,10 @@ import type {
 } from '@/lib/types';
 
 const DELIVERY_LINE_DESCRIPTIONS = new Set(['Delivery only', 'Delivery & Installation']);
+
+export type ConfiguratorApplyOptions = {
+  discount_template_ids?: number[];
+};
 
 export type ConfiguratorShellAdapters = {
   getCatalog: () => Promise<ConfiguratorCatalogResponse>;
@@ -59,7 +64,7 @@ export type ConfiguratorShellAdapters = {
     configuration: QuoteConfigurationPayload,
     options?: { customerPostcode?: string }
   ) => Promise<ConfiguratorPreviewResponse>;
-  apply: (quoteId: number) => Promise<unknown>;
+  apply: (quoteId: number, options?: ConfiguratorApplyOptions) => Promise<unknown>;
   /** Clears quote lines after layout reset. Defaults to staff draft update. */
   resetDraftLines?: (quoteId: number, quote: Quote) => Promise<void>;
 };
@@ -81,6 +86,10 @@ interface ConfiguratorShellProps {
   adapters?: ConfiguratorShellAdapters;
   backHref?: string;
   afterApplyHref?: string;
+  /** Dealer-only: allowed discount templates shown before Apply. */
+  availableDiscounts?: DiscountTemplate[];
+  discountsLoading?: boolean;
+  discountsConfigured?: boolean;
 }
 
 function filterConfiguratorCatalogExtras(
@@ -114,6 +123,9 @@ export default function ConfiguratorShell({
   adapters,
   backHref,
   afterApplyHref,
+  availableDiscounts = [],
+  discountsLoading = false,
+  discountsConfigured = true,
 }: ConfiguratorShellProps) {
   const router = useRouter();
   const apiAdapters = adapters ?? defaultAdapters;
@@ -137,6 +149,7 @@ export default function ConfiguratorShell({
   );
   const [selectedBoxId, setSelectedBoxId] = useState<string | null>(null);
   const [customerPostcode, setCustomerPostcode] = useState<string | null>(null);
+  const [selectedDiscountIds, setSelectedDiscountIds] = useState<number[]>([]);
 
   const productMap = useMemo(() => {
     const rows = [...catalog.items, ...catalog.extras];
@@ -429,7 +442,9 @@ export default function ConfiguratorShell({
       setApplying(true);
       const saved = await apiAdapters.saveConfiguration(quote.id, configuration);
       persistedConfigurationKeyRef.current = stableConfigurationKey(saved.configuration);
-      await apiAdapters.apply(quote.id);
+      await apiAdapters.apply(quote.id, {
+        discount_template_ids: isDealerMode ? selectedDiscountIds : undefined,
+      });
       toast.success('Configurator layout applied to draft quote');
       router.push(resolvedAfterApplyHref);
     } catch (error) {
@@ -635,6 +650,65 @@ export default function ConfiguratorShell({
               />
             </CardContent>
           </Card>
+
+          {isDealerMode ? (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">Discounts</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                {discountsLoading ? (
+                  <p className="text-muted-foreground">Loading dealer discounts…</p>
+                ) : null}
+                {!discountsLoading && !discountsConfigured ? (
+                  <p className="text-muted-foreground">
+                    No discounts configured for your dealer. Contact your admin.
+                  </p>
+                ) : null}
+                {!discountsLoading && discountsConfigured && !availableDiscounts.length ? (
+                  <p className="text-muted-foreground">No active allowed discounts available.</p>
+                ) : null}
+                {!discountsLoading &&
+                  discountsConfigured &&
+                  availableDiscounts.map((discount) => {
+                    const checked = selectedDiscountIds.includes(discount.id);
+                    return (
+                      <label
+                        key={discount.id}
+                        className="flex min-h-11 items-start justify-between gap-3 rounded-md border px-3 py-2"
+                      >
+                        <span className="flex items-start gap-2">
+                          <input
+                            type="checkbox"
+                            className="mt-1 h-4 w-4"
+                            checked={checked}
+                            onChange={(event) =>
+                              setSelectedDiscountIds((prev) =>
+                                event.target.checked
+                                  ? Array.from(new Set([...prev, discount.id]))
+                                  : prev.filter((id) => id !== discount.id)
+                              )
+                            }
+                          />
+                          <span>
+                            <span className="block font-medium">{discount.name}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {discount.discount_type === 'PERCENTAGE'
+                                ? `${discount.discount_value}%`
+                                : `£${discount.discount_value}`}{' '}
+                              off {discount.scope === 'PRODUCT' ? 'building items' : 'entire quote'}
+                            </span>
+                          </span>
+                        </span>
+                      </label>
+                    );
+                  })}
+                <p className="text-xs text-muted-foreground">
+                  Selected discounts are applied when you click Apply to Draft Quote.
+                </p>
+              </CardContent>
+            </Card>
+          ) : null}
 
           <Card>
             <CardHeader className="pb-2">

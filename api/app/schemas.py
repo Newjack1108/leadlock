@@ -2858,6 +2858,12 @@ class DealerConfiguratorDraftCreate(BaseModel):
     valid_until: Optional[datetime] = None
 
 
+class DealerConfiguratorApply(BaseModel):
+    """Optional dealer discounts to apply when converting a configurator layout to quote lines."""
+
+    discount_template_ids: List[int] = Field(default_factory=list)
+
+
 class DealerAllowedDiscountPolicyResponse(BaseModel):
     mode: DealerDiscountMode
     allow_fixed_amount: bool

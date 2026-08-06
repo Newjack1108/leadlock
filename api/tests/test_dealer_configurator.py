@@ -16,6 +16,12 @@ from app.auth import require_dealer_configurator_access, require_dealer_user
 from app.database import get_session
 from app.models import (
     Dealer,
+    DealerAllowedDiscount,
+    DealerDiscountMode,
+    DealerDiscountPolicy,
+    DiscountScope,
+    DiscountTemplate,
+    DiscountType,
     Product,
     ProductCategory,
     User,
@@ -275,3 +281,175 @@ def test_staff_configurator_routes_still_reject_dealers(monkeypatch: pytest.Monk
     client = TestClient(app)
     res = client.get("/api/configurator/catalog")
     assert res.status_code == 403
+
+
+def _seed_dealer_configurator_apply_fixture(engine):
+    with Session(engine) as session:
+        dealer = Dealer(name="Discount Dealer", company_name="Discount Dealer Ltd")
+        session.add(dealer)
+        session.commit()
+        session.refresh(dealer)
+
+        user = User(
+            email="dealer-discount-cfg@example.com",
+            hashed_password="dummy",
+            full_name="Dealer Discount Cfg",
+            role=UserRole.DEALER_USER,
+            dealer_id=dealer.id,
+            dealer_commission_pct=10,
+        )
+        product = Product(
+            name="3m Trade Box",
+            category=ProductCategory.CONFIGURATOR,
+            base_price=Decimal("1000.00"),
+            allow_trade_dealer_sale=True,
+            configurator_width=Decimal("3"),
+            configurator_length=Decimal("3"),
+            configurator_is_starter_box=True,
+        )
+        session.add(user)
+        session.add(product)
+        session.commit()
+        session.refresh(user)
+        session.refresh(product)
+
+        allowed = DiscountTemplate(
+            name="10% off quote",
+            discount_type=DiscountType.PERCENTAGE,
+            discount_value=Decimal("10"),
+            scope=DiscountScope.QUOTE,
+            is_active=True,
+            created_by_id=user.id,
+        )
+        blocked = DiscountTemplate(
+            name="20% not allowed",
+            discount_type=DiscountType.PERCENTAGE,
+            discount_value=Decimal("20"),
+            scope=DiscountScope.QUOTE,
+            is_active=True,
+            created_by_id=user.id,
+        )
+        session.add(allowed)
+        session.add(blocked)
+        session.commit()
+        session.refresh(allowed)
+        session.refresh(blocked)
+
+        session.add(
+            DealerDiscountPolicy(
+                dealer_id=dealer.id,
+                mode=DealerDiscountMode.TEMPLATE,
+                allow_fixed_amount=False,
+                allow_percentage=False,
+            )
+        )
+        session.add(DealerAllowedDiscount(dealer_id=dealer.id, discount_template_id=allowed.id))
+        session.commit()
+
+        dealer_user = SimpleNamespace(
+            id=user.id,
+            dealer_id=user.dealer_id,
+            dealer_commission_pct=user.dealer_commission_pct,
+            role=user.role,
+            full_name=user.full_name,
+        )
+        return {
+            "dealer_user": dealer_user,
+            "product_id": product.id,
+            "allowed_template_id": allowed.id,
+            "blocked_template_id": blocked.id,
+        }
+
+
+def test_dealer_configurator_apply_with_allowed_discount(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("CONFIGURATOR_ENABLED", "true")
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SQLModel.metadata.create_all(engine)
+    fixture = _seed_dealer_configurator_apply_fixture(engine)
+    client = TestClient(_make_dealer_app(engine, fixture["dealer_user"]))
+
+    draft = client.post(
+        "/api/dealer-portal/quotes/configurator-draft",
+        json={"customer_name": "Discount Customer", "customer_postcode": "CW1 1AA"},
+    )
+    assert draft.status_code == 200
+    quote_id = draft.json()["id"]
+
+    save = client.put(
+        f"/api/dealer-portal/quotes/{quote_id}/configuration",
+        json={
+            "schema_version": 1,
+            "name": "Discount layout",
+            "boxes": [
+                {
+                    "id": "box-1",
+                    "product_id": fixture["product_id"],
+                    "x": "0",
+                    "y": "0",
+                    "rotation": 0,
+                }
+            ],
+            "extras": [],
+        },
+    )
+    assert save.status_code == 200
+
+    apply = client.post(
+        f"/api/dealer-portal/quotes/{quote_id}/configuration/apply",
+        json={"discount_template_ids": [fixture["allowed_template_id"]]},
+    )
+    assert apply.status_code == 200
+    body = apply.json()
+    assert Decimal(str(body["subtotal"])) == Decimal("1000.00")
+    assert Decimal(str(body["discount_total"])) == Decimal("100.00")
+    assert Decimal(str(body["total_amount"])) == Decimal("900.00")
+    assert any(d.get("template_id") == fixture["allowed_template_id"] for d in body.get("discounts") or [])
+
+
+def test_dealer_configurator_apply_rejects_disallowed_discount(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("CONFIGURATOR_ENABLED", "true")
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SQLModel.metadata.create_all(engine)
+    fixture = _seed_dealer_configurator_apply_fixture(engine)
+    client = TestClient(_make_dealer_app(engine, fixture["dealer_user"]))
+
+    draft = client.post(
+        "/api/dealer-portal/quotes/configurator-draft",
+        json={"customer_name": "Blocked Discount Customer"},
+    )
+    assert draft.status_code == 200
+    quote_id = draft.json()["id"]
+
+    save = client.put(
+        f"/api/dealer-portal/quotes/{quote_id}/configuration",
+        json={
+            "schema_version": 1,
+            "name": "Blocked layout",
+            "boxes": [
+                {
+                    "id": "box-1",
+                    "product_id": fixture["product_id"],
+                    "x": "0",
+                    "y": "0",
+                    "rotation": 0,
+                }
+            ],
+            "extras": [],
+        },
+    )
+    assert save.status_code == 200
+
+    apply = client.post(
+        f"/api/dealer-portal/quotes/{quote_id}/configuration/apply",
+        json={"discount_template_ids": [fixture["blocked_template_id"]]},
+    )
+    assert apply.status_code == 403
+    assert "not permitted" in apply.json()["detail"].lower()

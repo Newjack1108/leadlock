@@ -1194,8 +1194,13 @@ export const saveDealerQuoteConfiguration = async (
   return response.data as QuoteConfigurationResponse;
 };
 
-export const applyDealerQuoteConfiguration = async (quoteId: number) => {
-  const response = await api.post(`/api/dealer-portal/quotes/${quoteId}/configuration/apply`);
+export const applyDealerQuoteConfiguration = async (
+  quoteId: number,
+  options?: { discount_template_ids?: number[] }
+) => {
+  const response = await api.post(`/api/dealer-portal/quotes/${quoteId}/configuration/apply`, {
+    discount_template_ids: options?.discount_template_ids ?? [],
+  });
   return response.data;
 };
 
