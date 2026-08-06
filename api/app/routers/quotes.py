@@ -2069,6 +2069,8 @@ async def apply_quote_configuration(
     draft_payload.include_spec_sheets = False
     draft_payload.include_specification_sheet = False
     draft_payload.include_available_optional_extras = False
+    # Bootstrap drafts store deposit_amount=0 (50% of £0). Clear so update recalculates 50% of new totals.
+    draft_payload.deposit_amount = None
     if payload.delivery_estimate_inclusion == ConfiguratorDeliveryEstimateInclusion.COLLECTION:
         draft_payload.fulfillment_method = QuoteFulfillmentMethod.COLLECTION
     else:

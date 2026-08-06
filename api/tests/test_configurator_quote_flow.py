@@ -10,6 +10,7 @@ from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
 
 from app.auth import get_current_user, require_configurator_access
+from app.constants import VAT_RATE_DECIMAL
 from app.database import get_session
 from app.models import (
     CompanySettings,
@@ -359,6 +360,11 @@ def test_configurator_catalog_save_preview_and_apply_flow():
     }
     mat_line = next(row for row in applied["items"] if row["description"] == "Rubber Matting")
     assert Decimal(mat_line["quantity"]) == Decimal("1")
+    total_inc_vat = Decimal(str(applied["total_amount"])) * (Decimal("1") + VAT_RATE_DECIMAL)
+    expected_deposit = total_inc_vat * Decimal("0.5")
+    assert Decimal(str(applied["deposit_amount"])) == expected_deposit
+    assert Decimal(str(applied["balance_amount"])) == total_inc_vat - expected_deposit
+    assert Decimal(str(applied["deposit_amount"])) > 0
 
 
 def test_configurator_per_box_extra_quantity_tracks_box_count():
