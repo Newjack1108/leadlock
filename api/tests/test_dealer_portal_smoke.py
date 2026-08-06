@@ -99,7 +99,7 @@ def test_dealer_portal_profile_quote_pdf_smoke(monkeypatch):
         captured.update(kwargs)
         return (b"%PDF-1.4 smoke", False)
 
-    monkeypatch.setattr("app.routers.dealer_portal.generate_quote_pdf_cached", _fake_pdf)
+    monkeypatch.setattr("app.routers.dealer_portal.generate_dealer_quote_pdf_cached", _fake_pdf)
 
     dealer_user_ctx = SimpleNamespace(
         id=user_ctx_data["id"],
@@ -157,7 +157,9 @@ def test_dealer_portal_profile_quote_pdf_smoke(monkeypatch):
     assert pdf.content.startswith(b"%PDF-1.4")
     assert captured["trader_logo_url"] == "/static/products/dealer-smoke.png"
     assert captured["dealer_profile"]["company_name"] == "Smoke Trading"
+    assert "dealer-simple:" in captured["cache_key"]
     assert "profile:" in captured["cache_key"]
+    assert "include_spec_sheets" not in captured
 
 
 def test_dealer_products_and_quote_respect_trade_toggle():

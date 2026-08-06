@@ -1413,3 +1413,382 @@ def generate_quote_pdf_cached(
     pdf_bytes = pdf_buffer.getvalue()
     cache_path.write_bytes(pdf_bytes)
     return (pdf_bytes, False)
+
+
+def _make_dealer_credit_footer_drawer(footer_style: ParagraphStyle):
+    """Minimal footer: Cheshire Stables product credit only (no bank/reg/VAT)."""
+
+    credit = "Cheshire Stables products · Trade quotation"
+
+    def _draw(canvas_obj: canvas.Canvas, doc: SimpleDocTemplate) -> None:
+        canvas_obj.saveState()
+        page_w, _page_h = A4
+        y = 12 * mm
+        canvas_obj.setStrokeColor(colors.HexColor("#e0e0e0"))
+        canvas_obj.setLineWidth(0.5)
+        canvas_obj.line(15 * mm, y + 6 * mm, page_w - 15 * mm, y + 6 * mm)
+        p = Paragraph(escape(credit), footer_style)
+        w, h = p.wrap(page_w - 30 * mm, 10 * mm)
+        p.drawOn(canvas_obj, 15 * mm, y - h + 4 * mm)
+        canvas_obj.restoreState()
+
+    return _draw
+
+
+def generate_dealer_quote_pdf(
+    quote: Quote,
+    customer: Customer,
+    quote_items: list[QuoteItem],
+    dealer_profile: Optional[Dict[str, str]] = None,
+    trader_logo_url: Optional[str] = None,
+    session: Optional[Session] = None,
+    layout: Optional[Any] = None,
+) -> BytesIO:
+    """
+    Slim trade takeaway PDF for dealer portal quotes.
+
+    Dealer branding only — no Cheshire Stables letterhead, bank footer, T&Cs, or spec sheets.
+    """
+    dealer_profile = dealer_profile or {}
+    brand_color = colors.HexColor("#1F6B3A")
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        topMargin=12 * mm,
+        bottomMargin=22 * mm,
+        leftMargin=15 * mm,
+        rightMargin=15 * mm,
+    )
+
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        "DealerPdfTitle",
+        parent=styles["Heading1"],
+        fontSize=20,
+        textColor=brand_color,
+        spaceAfter=4,
+        fontName="Helvetica-Bold",
+    )
+    heading_style = ParagraphStyle(
+        "DealerPdfHeading",
+        parent=styles["Heading2"],
+        fontSize=12,
+        textColor=brand_color,
+        spaceAfter=3,
+        spaceBefore=8,
+        fontName="Helvetica-Bold",
+    )
+    normal_style = ParagraphStyle(
+        "DealerPdfNormal",
+        parent=styles["Normal"],
+        fontSize=9,
+        textColor=colors.HexColor("#555555"),
+        leading=12,
+    )
+    dealer_name_style = ParagraphStyle(
+        "DealerPdfName",
+        parent=styles["Heading1"],
+        fontSize=14,
+        textColor=brand_color,
+        spaceAfter=2,
+        fontName="Helvetica-Bold",
+    )
+    footer_style = ParagraphStyle(
+        "DealerPdfFooter",
+        parent=normal_style,
+        fontSize=8,
+        textColor=colors.HexColor("#888888"),
+        alignment=1,
+    )
+    table_header_style = ParagraphStyle(
+        "DealerPdfTableHeader",
+        parent=styles["Normal"],
+        fontSize=8,
+        textColor=colors.white,
+        fontName="Helvetica-Bold",
+        alignment=0,
+    )
+    table_cell_style = ParagraphStyle(
+        "DealerPdfTableCell",
+        parent=styles["Normal"],
+        fontSize=9,
+        leading=11,
+        textColor=colors.HexColor("#333333"),
+        alignment=0,
+    )
+
+    elements: List[Any] = []
+
+    # Dealer logo header
+    trader_logo_bytes: Optional[bytes] = None
+    if trader_logo_url:
+        try:
+            req = urllib.request.Request(
+                _force_cloudinary_format(trader_logo_url, fmt="png"),
+                headers={"User-Agent": "LeadLock-DealerPDF/1.0"},
+            )
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                raw = resp.read()
+            trader_logo_bytes = _ensure_png_or_jpeg_bytes(raw) or raw
+        except Exception:
+            # Local/static paths (tests / relative uploads)
+            try:
+                local_path = trader_logo_url
+                if local_path.startswith("/"):
+                    candidates = [
+                        Path("web/public") / local_path.lstrip("/"),
+                        Path(local_path.lstrip("/")),
+                        Path(".") / local_path.lstrip("/"),
+                    ]
+                    for candidate in candidates:
+                        if candidate.is_file():
+                            trader_logo_bytes = candidate.read_bytes()
+                            break
+            except Exception:
+                trader_logo_bytes = None
+    if trader_logo_bytes:
+        trader_logo = _image_from_bytes(trader_logo_bytes, width=40 * mm, height=None, max_height=18 * mm)
+        if trader_logo:
+            elements.append(trader_logo)
+            elements.append(Spacer(1, 4))
+
+    prepared_name = (
+        (dealer_profile.get("company_name") or "").strip()
+        or (dealer_profile.get("contact_name") or "").strip()
+        or "Trade Dealer"
+    )
+    elements.append(Paragraph("Prepared by", normal_style))
+    elements.append(Paragraph(escape(prepared_name), dealer_name_style))
+
+    dealer_lines = [
+        dealer_profile.get("contact_name") or "",
+        dealer_profile.get("email") or "",
+        dealer_profile.get("phone") or "",
+        dealer_profile.get("address") or "",
+        f"VAT: {dealer_profile.get('vat_number')}" if dealer_profile.get("vat_number") else "",
+        (
+            f"Registration: {dealer_profile.get('registration_number')}"
+            if dealer_profile.get("registration_number")
+            else ""
+        ),
+        dealer_profile.get("website") or "",
+    ]
+    # Avoid repeating company/contact name already shown as prepared_name
+    for info in dealer_lines:
+        text = (info or "").strip()
+        if not text or text == prepared_name:
+            continue
+        elements.append(Paragraph(escape(text), normal_style))
+    elements.append(Spacer(1, 8))
+
+    elements.append(Paragraph("Trade Quotation", title_style))
+    quote_date = quote.created_at or datetime.utcnow()
+    quote_meta = [
+        [Paragraph("<b>Quote No.</b>", normal_style), Paragraph(escape(quote.quote_number or ""), normal_style)],
+        [
+            Paragraph("<b>Date</b>", normal_style),
+            Paragraph(escape(quote_date.strftime("%d %b %Y")), normal_style),
+        ],
+    ]
+    if quote.valid_until:
+        quote_meta.append(
+            [
+                Paragraph("<b>Valid until</b>", normal_style),
+                Paragraph(escape(quote.valid_until.strftime("%d %b %Y")), normal_style),
+            ]
+        )
+    meta_table = Table(quote_meta, colWidths=[30 * mm, 140 * mm])
+    meta_table.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+                ("TOPPADDING", (0, 0), (-1, -1), 1),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
+            ]
+        )
+    )
+    elements.append(meta_table)
+    elements.append(Spacer(1, 8))
+
+    elements.append(Paragraph("Bill To:", heading_style))
+    customer_info = [
+        customer.name,
+        customer.email or "",
+        customer.phone or "",
+    ]
+    if customer.address_line1 or getattr(customer, "postcode", None):
+        address_parts = [
+            customer.address_line1,
+            getattr(customer, "address_line2", None),
+            getattr(customer, "city", None),
+            getattr(customer, "county", None),
+            getattr(customer, "postcode", None),
+        ]
+        customer_info.append(", ".join([p for p in address_parts if p]))
+    for info in customer_info:
+        if info:
+            elements.append(Paragraph(escape(str(info)), normal_style))
+    elements.append(Spacer(1, 8))
+
+    elements.append(Paragraph("Items:", heading_style))
+    table_data: List[List[Any]] = [
+        [
+            Paragraph("Description", table_header_style),
+            Paragraph("Quantity", table_header_style),
+            Paragraph("Unit Price <font size='6'>(Ex VAT)</font>", table_header_style),
+            Paragraph("Total <font size='6'>(Ex VAT)</font>", table_header_style),
+        ]
+    ]
+    main_items = [i for i in quote_items if getattr(i, "parent_quote_item_id", None) is None]
+    main_items.sort(key=lambda i: getattr(i, "sort_order", 0) or 0)
+    for main_item in main_items:
+        table_data.append(
+            [
+                _pdf_table_paragraph(main_item.description or "", table_cell_style),
+                str(main_item.quantity),
+                format_currency(main_item.unit_price, quote.currency),
+                format_currency(main_item.final_line_total, quote.currency),
+            ]
+        )
+        if getattr(main_item, "id", None) is not None:
+            _append_quote_item_child_rows(
+                table_data, quote_items, main_item.id, 0, quote, table_cell_style
+            )
+
+    subtotal_row_index = len(table_data)
+    table_data.append(["Subtotal (Ex VAT):", "", "", format_currency(quote.subtotal, quote.currency)])
+    discount_row_indices: List[int] = []
+    if quote.discount_total and quote.discount_total > 0:
+        discount_lines: List[Tuple[str, Decimal]] = []
+        if session:
+            discount_lines = aggregate_quote_discount_lines(session, quote.id)
+        if discount_lines:
+            for desc, amt in discount_lines:
+                discount_row_indices.append(len(table_data))
+                table_data.append(
+                    [
+                        _pdf_table_paragraph(f"Discount ({desc}):", table_cell_style),
+                        "",
+                        "",
+                        format_currency(amt, quote.currency),
+                    ]
+                )
+        else:
+            discount_row_indices.append(len(table_data))
+            table_data.append(
+                ["Discount:", "", "", format_currency(quote.discount_total, quote.currency)]
+            )
+    total_ex_vat_row_index = len(table_data)
+    table_data.append(["Total (Ex VAT):", "", "", format_currency(quote.total_amount, quote.currency)])
+    vat_amount = quote.total_amount * VAT_RATE_DECIMAL
+    total_inc_vat = quote.total_amount + vat_amount
+    vat_row_index = len(table_data)
+    table_data.append(["VAT @ 20%:", "", "", format_currency(vat_amount, quote.currency)])
+    total_row_index = len(table_data)
+    table_data.append(["Total (inc VAT):", "", "", format_currency(total_inc_vat, quote.currency)])
+
+    deposit_row_index = None
+    balance_row_index = None
+    if quote.total_amount and quote.total_amount > 0:
+        deposit_row_index = len(table_data)
+        table_data.append(
+            ["Deposit (inc VAT):", "", "", format_currency(quote.deposit_amount or Decimal("0"), quote.currency)]
+        )
+        balance_row_index = len(table_data)
+        table_data.append(
+            ["Balance (inc VAT):", "", "", format_currency(quote.balance_amount or Decimal("0"), quote.currency)]
+        )
+
+    table_style_list = [
+        ("BACKGROUND", (0, 0), (-1, 0), brand_color),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+        ("ALIGN", (1, 0), (1, -1), "CENTER"),
+        ("ALIGN", (2, 0), (-1, -1), "RIGHT"),
+        ("FONTSIZE", (0, 1), (-1, -1), 9),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("LEFTPADDING", (0, 0), (-1, -1), 3),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 3),
+        ("GRID", (0, 0), (-1, total_row_index - 1), 0.5, colors.HexColor("#e0e0e0")),
+        ("LINEBELOW", (0, total_row_index), (-1, total_row_index), 1.5, brand_color),
+        ("SPAN", (0, subtotal_row_index), (2, subtotal_row_index)),
+        ("ALIGN", (0, subtotal_row_index), (2, subtotal_row_index), "RIGHT"),
+        ("FONTNAME", (0, subtotal_row_index), (3, subtotal_row_index), "Helvetica-Bold"),
+        ("SPAN", (0, total_ex_vat_row_index), (2, total_ex_vat_row_index)),
+        ("ALIGN", (0, total_ex_vat_row_index), (2, total_ex_vat_row_index), "RIGHT"),
+        ("SPAN", (0, vat_row_index), (2, vat_row_index)),
+        ("ALIGN", (0, vat_row_index), (2, vat_row_index), "RIGHT"),
+        ("FONTNAME", (0, vat_row_index), (3, vat_row_index), "Helvetica-Bold"),
+        ("SPAN", (0, total_row_index), (2, total_row_index)),
+        ("ALIGN", (0, total_row_index), (2, total_row_index), "RIGHT"),
+        ("FONTNAME", (0, total_row_index), (3, total_row_index), "Helvetica-Bold"),
+    ]
+    for idx in discount_row_indices:
+        table_style_list.append(("SPAN", (0, idx), (2, idx)))
+        table_style_list.append(("ALIGN", (0, idx), (2, idx), "RIGHT"))
+        table_style_list.append(("TEXTCOLOR", (0, idx), (3, idx), colors.red))
+        table_style_list.append(("FONTNAME", (0, idx), (3, idx), "Helvetica-Bold"))
+    if deposit_row_index is not None:
+        table_style_list.append(("SPAN", (0, deposit_row_index), (2, deposit_row_index)))
+        table_style_list.append(("ALIGN", (0, deposit_row_index), (2, deposit_row_index), "RIGHT"))
+        table_style_list.append(("FONTNAME", (0, deposit_row_index), (3, deposit_row_index), "Helvetica-Bold"))
+    if balance_row_index is not None:
+        table_style_list.append(("SPAN", (0, balance_row_index), (2, balance_row_index)))
+        table_style_list.append(("ALIGN", (0, balance_row_index), (2, balance_row_index), "RIGHT"))
+        table_style_list.append(("FONTNAME", (0, balance_row_index), (3, balance_row_index), "Helvetica-Bold"))
+
+    items_table = Table(table_data, colWidths=[90 * mm, 25 * mm, 30 * mm, 35 * mm])
+    items_table.setStyle(TableStyle(table_style_list))
+    elements.append(items_table)
+    elements.append(Spacer(1, 10))
+
+    if layout is None and session is not None:
+        from app.configurator_layout_public import build_layout_for_public_view
+
+        layout = build_layout_for_public_view(session, quote.id)
+    if layout is not None and getattr(layout, "boxes", None):
+        from app.configurator_layout_public import append_layout_pdf_elements
+
+        append_layout_pdf_elements(elements, layout, heading_style, normal_style)
+
+    footer_drawer = _make_dealer_credit_footer_drawer(footer_style)
+    doc.build(elements, onFirstPage=footer_drawer, onLaterPages=footer_drawer)
+    buffer.seek(0)
+    return buffer
+
+
+def generate_dealer_quote_pdf_cached(
+    cache_key: str,
+    quote: Quote,
+    customer: Customer,
+    quote_items: list[QuoteItem],
+    dealer_profile: Optional[Dict[str, str]] = None,
+    trader_logo_url: Optional[str] = None,
+    session: Optional[Session] = None,
+) -> tuple[bytes, bool]:
+    """Filesystem-cached slim dealer quote PDF."""
+    cache_root = Path(tempfile.gettempdir()) / "leadlock_quote_pdf_cache"
+    cache_root.mkdir(parents=True, exist_ok=True)
+    safe_name = hashlib.sha256(cache_key.encode("utf-8")).hexdigest() + ".pdf"
+    cache_path = cache_root / safe_name
+
+    if cache_path.exists():
+        return (cache_path.read_bytes(), True)
+
+    pdf_buffer = generate_dealer_quote_pdf(
+        quote=quote,
+        customer=customer,
+        quote_items=quote_items,
+        dealer_profile=dealer_profile,
+        trader_logo_url=trader_logo_url,
+        session=session,
+    )
+    pdf_bytes = pdf_buffer.getvalue()
+    cache_path.write_bytes(pdf_bytes)
+    return (pdf_bytes, False)

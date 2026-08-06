@@ -35,7 +35,7 @@ from app.models import (
     QuoteStatus,
     User,
 )
-from app.quote_pdf_service import generate_quote_pdf_cached
+from app.quote_pdf_service import generate_dealer_quote_pdf_cached
 from app.routers.quotes import apply_discount_to_quote, build_quote_response, generate_quote_number
 from app.schemas import (
     ConfiguratorCatalogResponse,
@@ -783,14 +783,15 @@ async def download_dealer_quote_pdf(
             ]
         ).encode("utf-8")
     ).hexdigest()
-    cache_key = f"{quote.id}:{revision_hash}:dealer:{current_user.dealer_id}:profile:{dealer_profile_hash}"
-    pdf_bytes, _ = generate_quote_pdf_cached(
+    cache_key = (
+        f"{quote.id}:{revision_hash}:dealer-simple:{current_user.dealer_id}:profile:{dealer_profile_hash}"
+    )
+    pdf_bytes, _ = generate_dealer_quote_pdf_cached(
         cache_key=cache_key,
         quote=quote,
         customer=customer,
         quote_items=quote_items,
         session=session,
-        include_spec_sheets=getattr(quote, "include_spec_sheets", False),
         dealer_profile={
             "company_name": dealer.company_name or dealer.name,
             "contact_name": dealer.contact_name or "",
