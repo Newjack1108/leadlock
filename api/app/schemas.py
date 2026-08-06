@@ -2845,6 +2845,18 @@ class DealerQuoteCreate(BaseModel):
     discount_template_ids: List[int] = Field(default_factory=list)
 
 
+class DealerConfiguratorDraftCreate(BaseModel):
+    """Create an empty dealer draft quote for the dealer configurator flow."""
+
+    customer_name: str
+    customer_email: Optional[str] = None
+    customer_phone: Optional[str] = None
+    customer_address: Optional[str] = None
+    customer_postcode: Optional[str] = None
+    notes: Optional[str] = None
+    valid_until: Optional[datetime] = None
+
+
 class DealerAllowedDiscountPolicyResponse(BaseModel):
     mode: DealerDiscountMode
     allow_fixed_amount: bool

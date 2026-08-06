@@ -25,6 +25,7 @@ import {
   type OutreachSendTargetType,
   type DealerProfileUpdatePayload,
   type DealerQuoteCreatePayload,
+  type DealerConfiguratorDraftCreatePayload,
   type DealerWelcome,
   type FacebookAdvertProfile,
   type QuoteTemperature,
@@ -1156,6 +1157,50 @@ export const getDealerQuotes = async (): Promise<QuoteListPayload> => {
 
 export const createDealerQuote = async (payload: DealerQuoteCreatePayload) => {
   const response = await api.post('/api/dealer-portal/quotes', payload);
+  return response.data;
+};
+
+export const createDealerConfiguratorDraft = async (payload: DealerConfiguratorDraftCreatePayload) => {
+  const response = await api.post('/api/dealer-portal/quotes/configurator-draft', payload);
+  return response.data;
+};
+
+export const getDealerConfiguratorCatalog = async () => {
+  const response = await api.get('/api/dealer-portal/configurator/catalog');
+  return response.data as ConfiguratorCatalogResponse;
+};
+
+export const previewDealerConfiguratorConfiguration = async (
+  configuration: QuoteConfigurationPayload,
+  options?: { customerPostcode?: string }
+) => {
+  const response = await api.post('/api/dealer-portal/configurator/preview', {
+    configuration,
+    customer_postcode: options?.customerPostcode?.trim() || undefined,
+  });
+  return response.data as ConfiguratorPreviewResponse;
+};
+
+export const getDealerQuoteConfiguration = async (quoteId: number) => {
+  const response = await api.get(`/api/dealer-portal/quotes/${quoteId}/configuration`);
+  return response.data as QuoteConfigurationResponse;
+};
+
+export const saveDealerQuoteConfiguration = async (
+  quoteId: number,
+  payload: QuoteConfigurationPayload
+) => {
+  const response = await api.put(`/api/dealer-portal/quotes/${quoteId}/configuration`, payload);
+  return response.data as QuoteConfigurationResponse;
+};
+
+export const applyDealerQuoteConfiguration = async (quoteId: number) => {
+  const response = await api.post(`/api/dealer-portal/quotes/${quoteId}/configuration/apply`);
+  return response.data;
+};
+
+export const resetDealerQuoteConfiguration = async (quoteId: number) => {
+  const response = await api.post(`/api/dealer-portal/quotes/${quoteId}/configuration/reset`);
   return response.data;
 };
 

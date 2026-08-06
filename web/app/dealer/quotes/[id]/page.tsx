@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { downloadDealerQuotePdf, getDealerQuote } from '@/lib/api';
 import type { Quote } from '@/lib/types';
+import { QuoteStatus } from '@/lib/types';
 
 export default function DealerQuoteDetailPage() {
   const params = useParams<{ id: string }>();
@@ -27,12 +29,21 @@ export default function DealerQuoteDetailPage() {
     );
   }
 
+  const isDraft = quote.status === QuoteStatus.DRAFT;
+
   return (
     <main className="container mx-auto px-4 py-6 sm:px-6">
       <Card>
-        <CardHeader className="flex-row items-center justify-between">
+        <CardHeader className="flex-row items-center justify-between gap-3">
           <CardTitle>{quote.quote_number}</CardTitle>
-          <Button onClick={() => downloadDealerQuotePdf(quote.id)}>Download PDF</Button>
+          <div className="flex flex-wrap gap-2">
+            {isDraft && (
+              <Link href={`/dealer/quotes/${quote.id}/configure`}>
+                <Button variant="outline">Configure layout</Button>
+              </Link>
+            )}
+            <Button onClick={() => downloadDealerQuotePdf(quote.id)}>Download PDF</Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
           <p><strong>Customer:</strong> {quote.customer_name}</p>

@@ -7,14 +7,17 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import Response
 from sqlmodel import Session, select
 
-from app.auth import require_dealer_user
+from app.auth import require_dealer_configurator_access, require_dealer_user
 from app.constants import VAT_RATE_DECIMAL
+from app.configurator_service import build_configurator_preview, resolve_quote_customer_postcode
 from app.database import get_session
 from app.image_upload_service import upload_product_image
 from app.delivery_box_count import dealer_quote_delivery_box_count
 from app.delivery_install_service import compute_delivery_install_estimate
 from app.models import (
     CompanySettings,
+    ConfiguratorConnectionProfile,
+    ConfiguratorFrontFace,
     Customer,
     Dealer,
     DealerAllowedDiscount,
@@ -24,6 +27,7 @@ from app.models import (
     ProductCategory,
     ProductOptionalExtra,
     Quote,
+    QuoteConfiguration,
     QuoteDiscount,
     QuoteItem,
     QuoteItemLineType,
@@ -34,16 +38,25 @@ from app.models import (
 from app.quote_pdf_service import generate_quote_pdf_cached
 from app.routers.quotes import apply_discount_to_quote, build_quote_response, generate_quote_number
 from app.schemas import (
+    ConfiguratorCatalogResponse,
+    ConfiguratorDeliveryEstimateInclusion,
+    ConfiguratorPreviewRequest,
+    ConfiguratorPreviewResponse,
     DealerAllowedDiscountPolicyResponse,
+    DealerConfiguratorDraftCreate,
     DealerDeliveryEstimateInclusion,
     DealerProfileResponse,
     DealerProfileUpdate,
     DealerQuoteCreate,
     DealerWelcomeResponse,
     ProductResponse,
+    QuoteConfigurationPayload,
+    QuoteConfigurationResponse,
     QuoteListResponse,
     QuoteResponse,
 )
+
+DRAFT_PLACEHOLDER_DESCRIPTION = "Draft — in progress"
 
 
 router = APIRouter(prefix="/api/dealer-portal", tags=["dealer-portal"])
@@ -116,6 +129,111 @@ def _dealer_to_profile_response(dealer: Dealer) -> DealerProfileResponse:
         logo_url=dealer.logo_url,
         is_active=dealer.is_active,
     )
+
+
+def _build_configurator_product_response(product: Product) -> ProductResponse:
+    payload = {
+        **product.dict(),
+        "configurator_front_face": (
+            ConfiguratorFrontFace(product.configurator_front_face)
+            if isinstance(product.configurator_front_face, str) and product.configurator_front_face
+            else product.configurator_front_face
+        ),
+        "configurator_connection_profile": (
+            ConfiguratorConnectionProfile(product.configurator_connection_profile)
+            if isinstance(product.configurator_connection_profile, str)
+            and product.configurator_connection_profile
+            else product.configurator_connection_profile
+        ),
+        "is_production_synced": product.production_product_id is not None,
+        "optional_extras": None,
+    }
+    return ProductResponse(**payload)
+
+
+def _serialize_quote_configuration(record: QuoteConfiguration) -> QuoteConfigurationResponse:
+    return QuoteConfigurationResponse(
+        quote_id=record.quote_id,
+        version=record.version,
+        configuration=QuoteConfigurationPayload.model_validate(record.configuration_json or {}),
+        created_by_id=record.created_by_id,
+        created_at=record.created_at,
+        updated_at=record.updated_at,
+    )
+
+
+def _get_dealer_draft_quote(session: Session, quote_id: int, current_user: User) -> Quote:
+    quote = session.get(Quote, quote_id)
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    _require_dealer_quote_access(quote, current_user)
+    if quote.status != QuoteStatus.DRAFT:
+        raise HTTPException(status_code=400, detail="Only draft quotes can use the configurator")
+    return quote
+
+
+def _clear_dealer_quote_discounts(session: Session, quote_id: int) -> None:
+    discounts = session.exec(select(QuoteDiscount).where(QuoteDiscount.quote_id == quote_id)).all()
+    for discount in discounts:
+        session.delete(discount)
+
+
+def _replace_dealer_quote_items(session: Session, quote_id: int, items: List[QuoteItem]) -> List[QuoteItem]:
+    existing = session.exec(select(QuoteItem).where(QuoteItem.quote_id == quote_id)).all()
+    for item in existing:
+        session.delete(item)
+    session.flush()
+    for item in items:
+        session.add(item)
+    session.flush()
+    return list(
+        session.exec(select(QuoteItem).where(QuoteItem.quote_id == quote_id).order_by(QuoteItem.sort_order)).all()
+    )
+
+
+def _finalize_dealer_quote_money(
+    quote: Quote,
+    quote_items: List[QuoteItem],
+    current_user: User,
+) -> None:
+    subtotal = sum((item.line_total for item in quote_items), start=Decimal("0"))
+    quote.subtotal = subtotal
+    item_discount_total = sum((item.discount_amount for item in quote_items), start=Decimal("0"))
+    quote.discount_total = item_discount_total
+    quote.total_amount = quote.subtotal - quote.discount_total
+    total_inc_vat = quote.total_amount * (Decimal("1") + VAT_RATE_DECIMAL)
+    commission_pct = Decimal(str(current_user.dealer_commission_pct or 10))
+    quote.deposit_amount = (total_inc_vat * commission_pct / Decimal(100)).quantize(Decimal("0.01"))
+    if quote.deposit_amount > total_inc_vat:
+        quote.deposit_amount = total_inc_vat
+    quote.balance_amount = total_inc_vat - quote.deposit_amount
+    quote.updated_at = datetime.utcnow()
+    quote.revision_hash = _build_quote_revision_hash(quote, quote_items)
+
+
+def _placeholder_quote_item(quote_id: int) -> QuoteItem:
+    return QuoteItem(
+        quote_id=quote_id,
+        product_id=None,
+        description=DRAFT_PLACEHOLDER_DESCRIPTION,
+        quantity=Decimal("1"),
+        unit_price=Decimal("0"),
+        line_total=Decimal("0"),
+        discount_amount=Decimal("0"),
+        final_line_total=Decimal("0"),
+        sort_order=0,
+        is_custom=True,
+    )
+
+
+def _ensure_dealer_trade_sale_products(session: Session, product_ids: List[int]) -> None:
+    for product_id in product_ids:
+        product = session.get(Product, product_id)
+        if not product or not product.is_active or not product.allow_trade_dealer_sale:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Product {product_id} is not available for trade dealer sale",
+            )
 
 
 @router.get("/welcome", response_model=DealerWelcomeResponse)
@@ -560,6 +678,66 @@ async def get_dealer_quote(
     return build_quote_response(quote, list(quote_items), session)
 
 
+@router.post("/quotes/configurator-draft", response_model=QuoteResponse)
+async def create_dealer_configurator_draft(
+    payload: DealerConfiguratorDraftCreate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_dealer_configurator_access),
+):
+    _get_dealer_or_404(session, current_user.dealer_id)
+    customer_name = (payload.customer_name or "").strip()
+    if not customer_name:
+        raise HTTPException(status_code=400, detail="Customer name is required")
+    postcode = (payload.customer_postcode or "").strip() or None
+
+    quote = Quote(
+        customer_id=None,
+        quote_number=generate_quote_number(session),
+        version=1,
+        status=QuoteStatus.DRAFT,
+        subtotal=Decimal("0"),
+        discount_total=Decimal("0"),
+        total_amount=Decimal("0"),
+        deposit_amount=Decimal("0"),
+        balance_amount=Decimal("0"),
+        currency="GBP",
+        valid_until=payload.valid_until,
+        notes=payload.notes,
+        created_by_id=current_user.id,
+        dealer_id=current_user.dealer_id,
+        dealer_customer_name=customer_name,
+        dealer_customer_email=payload.customer_email,
+        dealer_customer_phone=payload.customer_phone,
+        dealer_customer_address=payload.customer_address,
+        dealer_customer_postcode=postcode,
+        fulfillment_method=QuoteFulfillmentMethod.DELIVERY,
+    )
+    session.add(quote)
+    session.commit()
+    session.refresh(quote)
+
+    placeholder = _placeholder_quote_item(quote.id)
+    session.add(placeholder)
+    empty_config = QuoteConfigurationPayload(schema_version=1, name=quote.quote_number, boxes=[], extras=[])
+    session.add(
+        QuoteConfiguration(
+            quote_id=quote.id,
+            version=1,
+            configuration_json=empty_config.model_dump(mode="json"),
+            created_by_id=current_user.id,
+        )
+    )
+    quote_items = [placeholder]
+    _finalize_dealer_quote_money(quote, quote_items, current_user)
+    session.add(quote)
+    session.commit()
+    session.refresh(quote)
+    quote_items = list(
+        session.exec(select(QuoteItem).where(QuoteItem.quote_id == quote.id).order_by(QuoteItem.sort_order)).all()
+    )
+    return build_quote_response(quote, quote_items, session)
+
+
 @router.get("/quotes/{quote_id}/pdf")
 async def download_dealer_quote_pdf(
     quote_id: int,
@@ -631,3 +809,200 @@ async def download_dealer_quote_pdf(
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.get("/configurator/catalog", response_model=ConfiguratorCatalogResponse)
+async def get_dealer_configurator_catalog(
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_dealer_configurator_access),
+):
+    del current_user
+    items = session.exec(
+        select(Product)
+        .where(
+            Product.is_active == True,
+            Product.category == ProductCategory.CONFIGURATOR,
+            Product.is_extra == False,
+            Product.allow_trade_dealer_sale == True,
+        )
+        .order_by(Product.name)
+    ).all()
+    extras = session.exec(
+        select(Product)
+        .where(
+            Product.is_active == True,
+            Product.is_extra == True,
+            Product.allow_in_configurator == True,
+            Product.allow_trade_dealer_sale == True,
+        )
+        .order_by(Product.name)
+    ).all()
+    return ConfiguratorCatalogResponse(
+        items=[_build_configurator_product_response(product) for product in items],
+        extras=[_build_configurator_product_response(product) for product in extras],
+    )
+
+
+@router.post("/configurator/preview", response_model=ConfiguratorPreviewResponse)
+async def preview_dealer_configurator_configuration(
+    body: ConfiguratorPreviewRequest,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_dealer_configurator_access),
+):
+    del current_user
+    return build_configurator_preview(
+        body.configuration,
+        session,
+        customer_postcode=body.customer_postcode,
+    )
+
+
+@router.get("/quotes/{quote_id}/configuration", response_model=QuoteConfigurationResponse)
+async def get_dealer_quote_configuration(
+    quote_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_dealer_configurator_access),
+):
+    quote = _get_dealer_draft_quote(session, quote_id, current_user)
+    record = session.exec(
+        select(QuoteConfiguration).where(QuoteConfiguration.quote_id == quote.id)
+    ).first()
+    if not record:
+        raise HTTPException(status_code=404, detail="Quote configuration not found")
+    return _serialize_quote_configuration(record)
+
+
+@router.put("/quotes/{quote_id}/configuration", response_model=QuoteConfigurationResponse)
+async def save_dealer_quote_configuration(
+    quote_id: int,
+    payload: QuoteConfigurationPayload,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_dealer_configurator_access),
+):
+    quote = _get_dealer_draft_quote(session, quote_id, current_user)
+    record = session.exec(
+        select(QuoteConfiguration).where(QuoteConfiguration.quote_id == quote.id)
+    ).first()
+    if record:
+        record.version += 1
+        record.configuration_json = payload.model_dump(mode="json")
+        record.updated_at = datetime.utcnow()
+        session.add(record)
+    else:
+        record = QuoteConfiguration(
+            quote_id=quote.id,
+            version=1,
+            configuration_json=payload.model_dump(mode="json"),
+            created_by_id=current_user.id,
+        )
+        session.add(record)
+    session.commit()
+    session.refresh(record)
+    return _serialize_quote_configuration(record)
+
+
+@router.post("/quotes/{quote_id}/configuration/apply", response_model=QuoteResponse)
+async def apply_dealer_quote_configuration(
+    quote_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_dealer_configurator_access),
+):
+    quote = _get_dealer_draft_quote(session, quote_id, current_user)
+    record = session.exec(
+        select(QuoteConfiguration).where(QuoteConfiguration.quote_id == quote.id)
+    ).first()
+    if not record:
+        raise HTTPException(status_code=404, detail="Quote configuration not found")
+
+    payload = QuoteConfigurationPayload.model_validate(record.configuration_json or {})
+    preview = build_configurator_preview(
+        payload,
+        session,
+        customer_postcode=resolve_quote_customer_postcode(quote, session),
+    )
+    if not preview.valid:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "Configurator layout has validation errors",
+                "issues": [issue.model_dump(mode="json") for issue in preview.issues],
+            },
+        )
+    if not preview.items:
+        raise HTTPException(status_code=422, detail="Configurator layout generated no quote lines")
+
+    product_ids = [int(line.product_id) for line in preview.items if line.product_id is not None]
+    _ensure_dealer_trade_sale_products(session, product_ids)
+
+    next_items = [
+        QuoteItem(
+            quote_id=quote.id,
+            product_id=line.product_id,
+            description=line.description,
+            quantity=Decimal(str(line.quantity)),
+            unit_price=Decimal(str(line.unit_price)),
+            line_total=(Decimal(str(line.quantity)) * Decimal(str(line.unit_price))).quantize(Decimal("0.01")),
+            discount_amount=Decimal("0"),
+            final_line_total=(Decimal(str(line.quantity)) * Decimal(str(line.unit_price))).quantize(Decimal("0.01")),
+            sort_order=line.sort_order,
+            is_custom=line.is_custom,
+            line_type=line.line_type,
+            include_in_building_discount=line.include_in_building_discount,
+        )
+        for line in preview.items
+    ]
+    _clear_dealer_quote_discounts(session, quote.id)
+    quote_items = _replace_dealer_quote_items(session, quote.id, next_items)
+
+    if payload.delivery_estimate_inclusion == ConfiguratorDeliveryEstimateInclusion.COLLECTION:
+        quote.fulfillment_method = QuoteFulfillmentMethod.COLLECTION
+    else:
+        quote.fulfillment_method = QuoteFulfillmentMethod.DELIVERY
+
+    _finalize_dealer_quote_money(quote, quote_items, current_user)
+    session.add(quote)
+    session.commit()
+    session.refresh(quote)
+    quote_items = list(
+        session.exec(select(QuoteItem).where(QuoteItem.quote_id == quote.id).order_by(QuoteItem.sort_order)).all()
+    )
+    return build_quote_response(quote, quote_items, session)
+
+
+@router.post("/quotes/{quote_id}/configuration/reset", response_model=QuoteResponse)
+async def reset_dealer_quote_configuration(
+    quote_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_dealer_configurator_access),
+):
+    quote = _get_dealer_draft_quote(session, quote_id, current_user)
+    blank = QuoteConfigurationPayload(schema_version=1, name=quote.quote_number, boxes=[], extras=[])
+    record = session.exec(
+        select(QuoteConfiguration).where(QuoteConfiguration.quote_id == quote.id)
+    ).first()
+    if record:
+        record.version += 1
+        record.configuration_json = blank.model_dump(mode="json")
+        record.updated_at = datetime.utcnow()
+        session.add(record)
+    else:
+        session.add(
+            QuoteConfiguration(
+                quote_id=quote.id,
+                version=1,
+                configuration_json=blank.model_dump(mode="json"),
+                created_by_id=current_user.id,
+            )
+        )
+
+    _clear_dealer_quote_discounts(session, quote.id)
+    quote_items = _replace_dealer_quote_items(session, quote.id, [_placeholder_quote_item(quote.id)])
+    quote.fulfillment_method = QuoteFulfillmentMethod.DELIVERY
+    _finalize_dealer_quote_money(quote, quote_items, current_user)
+    session.add(quote)
+    session.commit()
+    session.refresh(quote)
+    quote_items = list(
+        session.exec(select(QuoteItem).where(QuoteItem.quote_id == quote.id).order_by(QuoteItem.sort_order)).all()
+    )
+    return build_quote_response(quote, quote_items, session)

@@ -110,6 +110,9 @@ export default function DealerWelcomePage() {
                   >
                     Download PDF
                   </Button>
+                  <Link href="/dealer/quotes/configure">
+                    <Button variant="outline">Configurator quote</Button>
+                  </Link>
                   <Link href="/dealer/quotes/new">
                     <Button variant="outline">Create quote</Button>
                   </Link>
@@ -121,9 +124,14 @@ export default function DealerWelcomePage() {
                 <p className="text-sm text-muted-foreground">
                   No quotes yet. Create your first quote to start tracking customer proposals.
                 </p>
-                <Link href="/dealer/quotes/new">
-                  <Button>Create your first quote</Button>
-                </Link>
+                <div className="flex flex-wrap gap-3">
+                  <Link href="/dealer/quotes/configure">
+                    <Button>Configurator quote</Button>
+                  </Link>
+                  <Link href="/dealer/quotes/new">
+                    <Button variant="outline">Simple product quote</Button>
+                  </Link>
+                </div>
               </div>
             )}
           </CardContent>
@@ -135,7 +143,7 @@ export default function DealerWelcomePage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Build simple quotes from your approved products and download PDF documents.
+              Build simple quotes from your approved products, or use the configurator for layout-based quotes, then download PDFs.
             </p>
             <p className="text-sm text-muted-foreground">
               Add your logo and company details in Dealer profile — they appear on quote PDFs.
@@ -143,6 +151,9 @@ export default function DealerWelcomePage() {
             <div className="flex flex-wrap gap-3">
               <Link href="/dealer/quotes">
                 <Button>View quotes</Button>
+              </Link>
+              <Link href="/dealer/quotes/configure">
+                <Button variant="outline">Configurator quote</Button>
               </Link>
               <Link href="/dealer/quotes/new">
                 <Button variant="outline">Create quote</Button>

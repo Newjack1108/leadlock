@@ -25,9 +25,14 @@ export default function DealerQuotesPage() {
             Profile
           </Link>
         </div>
-        <Link href="/dealer/quotes/new">
-          <Button>Create quote</Button>
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/dealer/quotes/configure">
+            <Button variant="outline">Configurator quote</Button>
+          </Link>
+          <Link href="/dealer/quotes/new">
+            <Button>Create quote</Button>
+          </Link>
+        </div>
       </div>
       <div className="grid gap-3">
         {quotes.map((quote) => (

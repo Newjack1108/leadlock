@@ -184,6 +184,21 @@ async def require_configurator_access(current_user: User = Depends(get_current_u
     return current_user
 
 
+async def require_dealer_configurator_access(
+    current_user: User = Depends(require_dealer_user),
+) -> User:
+    """Dealer portal configurator: dealers only, gated by global kill switch.
+
+    Staff sales configurator allowlist is intentionally not used here.
+    """
+    if not _env_bool("CONFIGURATOR_ENABLED", default=False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Configurator access is not enabled",
+        )
+    return current_user
+
+
 def get_webhook_api_key(api_key: str = Header(None, alias="X-API-Key")) -> str:
     """Validate webhook API key from header."""
     expected_key = os.getenv("WEBHOOK_API_KEY")

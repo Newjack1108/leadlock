@@ -14,9 +14,10 @@ CONFIGURATOR_ALLOW_DIRECTOR_OVERRIDE=false
 
 ### Behavior
 
-- `CONFIGURATOR_ENABLED=false` blocks everyone.
-- Dealer accounts are always blocked.
-- `CONFIGURATOR_ALLOWED_EMAILS` is a comma-separated allowlist of staff emails.
+- `CONFIGURATOR_ENABLED=false` blocks everyone (staff **and** dealer portal configurator).
+- Dealer accounts are always blocked from the **staff** sales configurator (`/api/configurator`, `/quotes/.../configure`).
+- Dealer portal configurator uses separate `/api/dealer-portal/configurator/*` routes: any valid dealer user can access them when `CONFIGURATOR_ENABLED=true`.
+- `CONFIGURATOR_ALLOWED_EMAILS` is a comma-separated allowlist of staff emails only.
 - Email matching is normalized with trim + lowercase.
 - `CONFIGURATOR_ALLOW_DIRECTOR_OVERRIDE=true` lets directors bypass the allowlist.
 

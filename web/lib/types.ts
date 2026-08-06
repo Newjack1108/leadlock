@@ -2062,6 +2062,16 @@ export interface DealerQuoteCreatePayload {
   discount_template_ids?: number[];
 }
 
+export interface DealerConfiguratorDraftCreatePayload {
+  customer_name: string;
+  customer_email?: string;
+  customer_phone?: string;
+  customer_address?: string;
+  customer_postcode?: string;
+  notes?: string;
+  valid_until?: string;
+}
+
 export interface DealerAllowedDiscountPolicy {
   mode: string;
   allow_fixed_amount: boolean;

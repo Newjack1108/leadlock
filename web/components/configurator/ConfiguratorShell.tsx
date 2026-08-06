@@ -43,12 +43,44 @@ import type {
   Product,
   Quote,
   QuoteConfigurationPayload,
+  QuoteConfigurationResponse,
 } from '@/lib/types';
 
 const DELIVERY_LINE_DESCRIPTIONS = new Set(['Delivery only', 'Delivery & Installation']);
 
+export type ConfiguratorShellAdapters = {
+  getCatalog: () => Promise<ConfiguratorCatalogResponse>;
+  getConfiguration: (quoteId: number) => Promise<QuoteConfigurationResponse>;
+  saveConfiguration: (
+    quoteId: number,
+    payload: QuoteConfigurationPayload
+  ) => Promise<QuoteConfigurationResponse>;
+  preview: (
+    configuration: QuoteConfigurationPayload,
+    options?: { customerPostcode?: string }
+  ) => Promise<ConfiguratorPreviewResponse>;
+  apply: (quoteId: number) => Promise<unknown>;
+  /** Clears quote lines after layout reset. Defaults to staff draft update. */
+  resetDraftLines?: (quoteId: number, quote: Quote) => Promise<void>;
+};
+
+const defaultAdapters: ConfiguratorShellAdapters = {
+  getCatalog: getConfiguratorCatalog,
+  getConfiguration: getQuoteConfiguration,
+  saveConfiguration: saveQuoteConfiguration,
+  preview: previewConfiguratorConfiguration,
+  apply: applyQuoteConfiguration,
+  resetDraftLines: async (quoteId, quote) => {
+    await updateDraftQuote(quoteId, buildPlaceholderOnlyDraftPayloadFromQuote(quote));
+  },
+};
+
 interface ConfiguratorShellProps {
   quote: Quote;
+  /** Defaults to staff sales configurator APIs. Pass dealer adapters for the dealer portal. */
+  adapters?: ConfiguratorShellAdapters;
+  backHref?: string;
+  afterApplyHref?: string;
 }
 
 function filterConfiguratorCatalogExtras(
@@ -77,8 +109,16 @@ function stableConfigurationKey(configuration: QuoteConfigurationPayload): strin
   return JSON.stringify(configuration);
 }
 
-export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
+export default function ConfiguratorShell({
+  quote,
+  adapters,
+  backHref,
+  afterApplyHref,
+}: ConfiguratorShellProps) {
   const router = useRouter();
+  const apiAdapters = adapters ?? defaultAdapters;
+  const resolvedBackHref = backHref ?? `/quotes/${quote.id}`;
+  const resolvedAfterApplyHref = afterApplyHref ?? `/quotes/${quote.id}/edit`;
   const [catalog, setCatalog] = useState<ConfiguratorCatalogResponse>({ items: [], extras: [] });
   const [configuration, setConfiguration] = useState<QuoteConfigurationPayload>(createEmptyConfiguration());
   const [preview, setPreview] = useState<ConfiguratorPreviewResponse | null>(null);
@@ -141,6 +181,9 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
     configuration.extras.length === 0 &&
     draftIsPlaceholderOnly;
 
+  const customerLabel =
+    quote.dealer_customer_name?.trim() || quote.customer_name || 'Draft quote';
+
   useEffect(() => {
     setDraftIsPlaceholderOnly(isPlaceholderOnlyDraftItems(quote.items));
   }, [quote.items]);
@@ -153,8 +196,8 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
       try {
         setLoading(true);
         const [catalogResponse, savedConfiguration] = await Promise.all([
-          getConfiguratorCatalog(),
-          getQuoteConfiguration(quote.id).catch((error) => {
+          apiAdapters.getCatalog(),
+          apiAdapters.getConfiguration(quote.id).catch((error) => {
             if ((error as { response?: { status?: number } })?.response?.status === 404) {
               return null;
             }
@@ -185,6 +228,7 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- adapters identity is stable per page mount
   }, [quote.id, quote.quote_number]);
 
   useEffect(() => {
@@ -224,7 +268,7 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
     const timeoutId = window.setTimeout(async () => {
       try {
         setAutosaveStatus('saving');
-        const saved = await saveQuoteConfiguration(quote.id, configuration);
+        const saved = await apiAdapters.saveConfiguration(quote.id, configuration);
         persistedConfigurationKeyRef.current = stableConfigurationKey(saved.configuration);
         setAutosaveStatus('saved');
       } catch {
@@ -232,13 +276,14 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
       }
     }, 400);
     return () => window.clearTimeout(timeoutId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- adapters identity is stable per page mount
   }, [configuration, layoutLoaded, loading, resetting, applying, saving, quote.id]);
 
   useEffect(() => {
     if (loading) return;
     const timeoutId = window.setTimeout(async () => {
       try {
-        const response = await previewConfiguratorConfiguration(configuration, {
+        const response = await apiAdapters.preview(configuration, {
           customerPostcode: customerPostcode ?? undefined,
         });
         setPreview(response);
@@ -247,6 +292,7 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
       }
     }, 250);
     return () => window.clearTimeout(timeoutId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- adapters identity is stable per page mount
   }, [configuration, loading, customerPostcode]);
 
   const updateConfiguration = (next: QuoteConfigurationPayload) => {
@@ -363,7 +409,7 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
   const handleSave = async () => {
     try {
       setSaving(true);
-      const saved = await saveQuoteConfiguration(quote.id, configuration);
+      const saved = await apiAdapters.saveConfiguration(quote.id, configuration);
       persistedConfigurationKeyRef.current = stableConfigurationKey(saved.configuration);
       setConfiguration(saved.configuration);
       setAutosaveStatus('saved');
@@ -378,11 +424,11 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
   const handleApply = async () => {
     try {
       setApplying(true);
-      const saved = await saveQuoteConfiguration(quote.id, configuration);
+      const saved = await apiAdapters.saveConfiguration(quote.id, configuration);
       persistedConfigurationKeyRef.current = stableConfigurationKey(saved.configuration);
-      await applyQuoteConfiguration(quote.id);
+      await apiAdapters.apply(quote.id);
       toast.success('Configurator layout applied to draft quote');
-      router.push(`/quotes/${quote.id}/edit`);
+      router.push(resolvedAfterApplyHref);
     } catch (error) {
       toast.error(getApiErrorDetail(error) || 'Failed to apply configurator layout');
     } finally {
@@ -402,10 +448,12 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
     const blank = createEmptyConfiguration(quote.quote_number);
     try {
       setResetting(true);
-      await saveQuoteConfiguration(quote.id, blank);
+      await apiAdapters.saveConfiguration(quote.id, blank);
       persistedConfigurationKeyRef.current = stableConfigurationKey(blank);
       try {
-        await updateDraftQuote(quote.id, buildPlaceholderOnlyDraftPayloadFromQuote(quote));
+        if (apiAdapters.resetDraftLines) {
+          await apiAdapters.resetDraftLines(quote.id, quote);
+        }
       } catch (draftError) {
         setConfiguration(blank);
         setSelectedBoxId(null);
@@ -438,7 +486,7 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
         <div className="flex flex-wrap items-center gap-4">
           <ConfiguratorLogo className="h-10" />
           <p className="text-sm text-muted-foreground">
-            {quote.quote_number} · {quote.customer_name || 'Draft quote'}
+            {quote.quote_number} · {customerLabel}
             {autosaveStatus === 'saving' && (
               <span className="ml-2 text-xs">Saving layout…</span>
             )}
@@ -467,7 +515,7 @@ export default function ConfiguratorShell({ quote }: ConfiguratorShellProps) {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" onClick={() => router.push(`/quotes/${quote.id}`)}>
+          <Button variant="outline" size="sm" onClick={() => router.push(resolvedBackHref)}>
             Back to Quote
           </Button>
           <Button
