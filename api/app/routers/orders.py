@@ -1141,6 +1141,43 @@ async def send_access_sheet(
     )
 
 
+@router.delete("/{order_id}/access-sheet", status_code=204)
+async def undo_access_sheet(
+    order_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Remove the access sheet for an order (revokes link and clears any answers)."""
+    order = session.exec(select(Order).where(Order.id == order_id)).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    requests = session.exec(
+        select(AccessSheetRequest).where(AccessSheetRequest.order_id == order_id)
+    ).all()
+    if not requests:
+        raise HTTPException(status_code=404, detail="Access sheet not found")
+
+    was_completed = any(req.completed_at is not None for req in requests)
+    for req in requests:
+        session.delete(req)
+
+    record_order_audit_event(
+        session,
+        event_type=CustomerHistoryEventType.ORDER_ACCESS_SHEET_UNDONE.value,
+        title="Access Sheet Undone",
+        description=(
+            f"Access sheet for order {order.order_number} was undone"
+            + (" (including submitted answers)" if was_completed else "")
+        ),
+        order=order,
+        metadata={"was_completed": was_completed},
+        created_by_id=current_user.id,
+    )
+    session.commit()
+    return Response(status_code=204)
+
+
 def _build_customer_address(customer: Customer) -> str:
     """Build full address string from customer fields."""
     parts = []

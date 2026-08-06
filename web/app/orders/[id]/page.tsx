@@ -20,6 +20,7 @@ import api, {
   fetchOrderPaidInFullInvoiceBlob,
   pushOrderToXero,
   sendAccessSheet,
+  undoAccessSheet,
   sendOrderToProduction,
   getCompanySettings,
 } from '@/lib/api';
@@ -27,7 +28,7 @@ import { CompanySettings, Order, OrderItem, Customer } from '@/lib/types';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { formatDateTime } from '@/lib/utils';
-import { ArrowLeft, ChevronDown, ExternalLink, CheckCircle, Circle, Eye, FileDown, Mail, Upload, Copy, Link2, Send, Trash2, CreditCard } from 'lucide-react';
+import { ArrowLeft, ChevronDown, ExternalLink, CheckCircle, Circle, Eye, FileDown, Mail, Upload, Copy, Link2, Send, Trash2, CreditCard, Undo2 } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -81,6 +82,7 @@ export default function OrderDetailPage() {
   const [updating, setUpdating] = useState<StatusKey | null>(null);
   const [pushingXero, setPushingXero] = useState(false);
   const [sendingAccessSheet, setSendingAccessSheet] = useState(false);
+  const [undoingAccessSheet, setUndoingAccessSheet] = useState(false);
   const [sendingToProduction, setSendingToProduction] = useState(false);
   const [sendReviewRequestOpen, setSendReviewRequestOpen] = useState(false);
   const [companySettings, setCompanySettings] = useState<CompanySettings | null>(null);
@@ -321,6 +323,26 @@ export default function OrderDetailPage() {
     const url = order?.access_sheet?.access_sheet_url;
     if (url) {
       navigator.clipboard.writeText(url).then(() => toast.success('Link copied to clipboard'));
+    }
+  };
+
+  const handleUndoAccessSheet = async () => {
+    if (!order?.access_sheet) return;
+    const completed = order.access_sheet.completed;
+    const warning = completed
+      ? 'Undo this access sheet? The customer link will stop working and their submitted answers will be permanently removed. You can send a new access sheet afterwards. This cannot be undone.'
+      : 'Undo this access sheet? The customer link will stop working. You can send a new access sheet afterwards. This cannot be undone.';
+    if (!window.confirm(warning)) return;
+
+    setUndoingAccessSheet(true);
+    try {
+      await undoAccessSheet(orderId);
+      setOrder((prev) => (prev ? { ...prev, access_sheet: null } : prev));
+      toast.success('Access sheet undone');
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || 'Failed to undo access sheet');
+    } finally {
+      setUndoingAccessSheet(false);
     }
   };
 
@@ -807,11 +829,22 @@ export default function OrderDetailPage() {
                   </Button>
                 ) : order.access_sheet.completed ? (
                   <div className="space-y-4">
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <CheckCircle className="h-4 w-4 text-green-600" />
-                      Completed{' '}
-                      {order.access_sheet.completed_at &&
-                        formatDateTime(order.access_sheet.completed_at)}
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <CheckCircle className="h-4 w-4 text-green-600" />
+                        Completed{' '}
+                        {order.access_sheet.completed_at &&
+                          formatDateTime(order.access_sheet.completed_at)}
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleUndoAccessSheet}
+                        disabled={undoingAccessSheet}
+                      >
+                        <Undo2 className="h-4 w-4 mr-1" />
+                        {undoingAccessSheet ? 'Undoing...' : 'Undo'}
+                      </Button>
                     </div>
                     {order.access_sheet.answers && Object.keys(order.access_sheet.answers).length > 0 && (
                       <div className="border rounded-md divide-y text-sm">
@@ -860,6 +893,15 @@ export default function OrderDetailPage() {
                           <ExternalLink className="h-4 w-4 mr-1" />
                           Open form
                         </a>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleUndoAccessSheet}
+                        disabled={undoingAccessSheet}
+                      >
+                        <Undo2 className="h-4 w-4 mr-1" />
+                        {undoingAccessSheet ? 'Undoing...' : 'Undo'}
                       </Button>
                     </div>
                   </div>

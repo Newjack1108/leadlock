@@ -203,6 +203,48 @@ def test_order_operational_events_appear_in_customer_history(api_client, sqlite_
     assert "ORDER_ACCESS_SHEET_COMPLETED" in event_types
 
 
+def test_undo_access_sheet_removes_sheet_and_records_history(api_client, sqlite_engine):
+    customer_id, quote_id = _seed_accepted_quote(sqlite_engine, "UNDO_AS")
+    ensure = api_client.post(f"/api/quotes/{quote_id}/ensure-order", headers=_auth_headers(sqlite_engine))
+    order_id = ensure.json()["order_id"]
+
+    access_sheet = api_client.post(
+        f"/api/orders/{order_id}/access-sheet/send",
+        headers=_auth_headers(sqlite_engine),
+    )
+    assert access_sheet.status_code == 200
+    token = access_sheet.json()["access_token"]
+
+    submit = api_client.post(
+        f"/api/public/access-sheet/{token}",
+        json={"site_level": "yes", "area_clear": "yes"},
+    )
+    assert submit.status_code == 200
+
+    order_before = api_client.get(f"/api/orders/{order_id}", headers=_auth_headers(sqlite_engine))
+    assert order_before.status_code == 200
+    assert order_before.json()["access_sheet"]["completed"] is True
+
+    undo = api_client.delete(
+        f"/api/orders/{order_id}/access-sheet",
+        headers=_auth_headers(sqlite_engine),
+    )
+    assert undo.status_code == 204
+
+    order_after = api_client.get(f"/api/orders/{order_id}", headers=_auth_headers(sqlite_engine))
+    assert order_after.status_code == 200
+    assert order_after.json()["access_sheet"] is None
+
+    # Old token should no longer work
+    public = api_client.get(f"/api/public/access-sheet/{token}")
+    assert public.status_code == 404
+
+    history = api_client.get(f"/api/customers/{customer_id}/history", headers=_auth_headers(sqlite_engine))
+    assert history.status_code == 200
+    event_types = {event["event_type"] for event in history.json()["events"]}
+    assert "ORDER_ACCESS_SHEET_UNDONE" in event_types
+
+
 def test_mark_installation_completed_updates_order(api_client, sqlite_engine):
     _customer_id, quote_id = _seed_accepted_quote(sqlite_engine, "COMPLETE")
     ensure = api_client.post(f"/api/quotes/{quote_id}/ensure-order", headers=_auth_headers(sqlite_engine))

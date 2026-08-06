@@ -42,6 +42,7 @@ import {
   Star,
   Gift,
   Trophy,
+  Undo2,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -137,6 +138,7 @@ const historyIcons: Record<CustomerHistoryEventType, any> = {
   ORDER_INSTALLATION_UPDATED: CheckCircle,
   ORDER_ACCESS_SHEET_SENT: Send,
   ORDER_ACCESS_SHEET_COMPLETED: CheckCircle,
+  ORDER_ACCESS_SHEET_UNDONE: Undo2,
   ORDER_SENT_TO_PRODUCTION: Send,
   ORDER_XERO_PUSHED: Upload,
   ORDER_PAYMENT_LINK_SENT: CreditCard,
@@ -173,6 +175,7 @@ const historyColors: Record<CustomerHistoryEventType, string> = {
   ORDER_INSTALLATION_UPDATED: 'text-blue-600',
   ORDER_ACCESS_SHEET_SENT: 'text-blue-600',
   ORDER_ACCESS_SHEET_COMPLETED: 'text-green-600',
+  ORDER_ACCESS_SHEET_UNDONE: 'text-orange-600',
   ORDER_SENT_TO_PRODUCTION: 'text-purple-600',
   ORDER_XERO_PUSHED: 'text-blue-600',
   ORDER_PAYMENT_LINK_SENT: 'text-green-600',

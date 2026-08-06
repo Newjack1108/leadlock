@@ -1423,6 +1423,11 @@ export const sendAccessSheet = async (orderId: number): Promise<{
   return response.data;
 };
 
+/** Undo/remove access sheet for order (revokes link and clears answers). Auth required. */
+export const undoAccessSheet = async (orderId: number): Promise<void> => {
+  await api.delete(`/api/orders/${orderId}/access-sheet`);
+};
+
 /** Send order to production app as work order. Auth required. */
 export const sendOrderToProduction = async (orderId: number): Promise<{
   success: boolean;
