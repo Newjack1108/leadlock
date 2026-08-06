@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import ConfiguratorShell, { type ConfiguratorShellAdapters } from '@/components/configurator/ConfiguratorShell';
+import DealerPageShell from '@/components/dealer/DealerPageShell';
 import {
   applyDealerQuoteConfiguration,
   getApiErrorDetail,
@@ -72,9 +73,9 @@ export default function DealerQuoteConfigurePage() {
   }, [quoteId, router]);
 
   return (
-    <main className="container mx-auto px-4 py-6 sm:px-6">
+    <DealerPageShell className="max-w-7xl">
       {loading ? (
-        <Card>
+        <Card className="border-primary/15">
           <CardContent className="py-12 text-center text-muted-foreground">
             Loading configurator...
           </CardContent>
@@ -87,13 +88,15 @@ export default function DealerQuoteConfigurePage() {
           afterApplyHref={`/dealer/quotes/${quote.id}`}
         />
       ) : (
-        <Card>
+        <Card className="border-primary/15">
           <CardContent className="space-y-4 py-12 text-center">
             <p className="text-muted-foreground">Quote not available for configurator use.</p>
-            <Button onClick={() => router.push('/dealer/quotes')}>Back to quotes</Button>
+            <Button size="lg" className="h-12" onClick={() => router.push('/dealer/quotes')}>
+              Back to quotes
+            </Button>
           </CardContent>
         </Card>
       )}
-    </main>
+    </DealerPageShell>
   );
 }

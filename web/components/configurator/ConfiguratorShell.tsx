@@ -117,6 +117,9 @@ export default function ConfiguratorShell({
 }: ConfiguratorShellProps) {
   const router = useRouter();
   const apiAdapters = adapters ?? defaultAdapters;
+  const isDealerMode = Boolean(adapters);
+  const chromeButtonSize = isDealerMode ? 'lg' : 'sm';
+  const chromeButtonClass = isDealerMode ? 'min-h-11 text-sm font-semibold' : undefined;
   const resolvedBackHref = backHref ?? `/quotes/${quote.id}`;
   const resolvedAfterApplyHref = afterApplyHref ?? `/quotes/${quote.id}/edit`;
   const [catalog, setCatalog] = useState<ConfiguratorCatalogResponse>({ items: [], extras: [] });
@@ -515,23 +518,39 @@ export default function ConfiguratorShell({
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" onClick={() => router.push(resolvedBackHref)}>
+          <Button
+            variant="outline"
+            size={chromeButtonSize}
+            className={chromeButtonClass}
+            onClick={() => router.push(resolvedBackHref)}
+          >
             Back to Quote
           </Button>
           <Button
             variant="outline"
-            size="sm"
-            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+            size={chromeButtonSize}
+            className={
+              isDealerMode
+                ? 'min-h-11 text-sm font-semibold text-destructive hover:bg-destructive/10 hover:text-destructive'
+                : 'text-destructive hover:bg-destructive/10 hover:text-destructive'
+            }
             onClick={() => void handleResetDesign()}
             disabled={loading || saving || applying || resetting || isDesignBlank}
           >
             {resetting ? 'Resetting...' : 'Reset design'}
           </Button>
-          <Button variant="secondary" size="sm" onClick={() => void handleSave()} disabled={loading || saving || resetting}>
+          <Button
+            variant="secondary"
+            size={chromeButtonSize}
+            className={chromeButtonClass}
+            onClick={() => void handleSave()}
+            disabled={loading || saving || resetting}
+          >
             {saving ? 'Saving...' : 'Save Layout'}
           </Button>
           <Button
-            size="sm"
+            size={chromeButtonSize}
+            className={chromeButtonClass}
             onClick={() => void handleApply()}
             disabled={loading || applying || resetting || !preview?.valid}
           >

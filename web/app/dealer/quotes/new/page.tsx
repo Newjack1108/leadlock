@@ -7,6 +7,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import DealerBrandStrip from '@/components/dealer/DealerBrandStrip';
+import DealerPageShell from '@/components/dealer/DealerPageShell';
+import DealerSection from '@/components/dealer/DealerSection';
 import {
   createDealerQuote,
   estimateDeliveryInstall,
@@ -23,6 +26,7 @@ import type {
   DiscountTemplate,
   Product,
 } from '@/lib/types';
+import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
 type ProductRow = { product_id: number; quantity: number; selected_extra_ids: number[] };
@@ -296,93 +300,103 @@ export default function NewDealerQuotePage() {
         (inclusion === 'delivery_and_install' && !canPickFull)));
 
   return (
-    <main className="container mx-auto px-4 py-6 sm:px-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Create Dealer Quote</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={onSubmit} className="space-y-5">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <Label htmlFor="customer-name">Customer name</Label>
-                <Input
-                  id="customer-name"
-                  value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor="customer-email">Customer email</Label>
-                <Input
-                  id="customer-email"
-                  type="email"
-                  value={customerEmail}
-                  onChange={(e) => setCustomerEmail(e.target.value)}
-                />
-              </div>
-              <div>
-                <Label htmlFor="customer-phone">Customer phone</Label>
-                <Input
-                  id="customer-phone"
-                  value={customerPhone}
-                  onChange={(e) => setCustomerPhone(e.target.value)}
-                />
-              </div>
-              <div>
-                <Label htmlFor="customer-postcode">Customer / installation postcode</Label>
-                <Input
-                  id="customer-postcode"
-                  value={customerPostcode}
-                  onChange={(e) => setCustomerPostcode(e.target.value)}
-                  placeholder="For delivery & install distance from factory"
-                  autoCapitalize="characters"
-                />
-              </div>
-              <div className="sm:col-span-2">
-                <Label htmlFor="customer-address">Customer address</Label>
-                <Textarea
-                  id="customer-address"
-                  value={customerAddress}
-                  onChange={(e) => setCustomerAddress(e.target.value)}
-                  placeholder="For this PDF only (not saved as CRM customer)"
-                />
+    <DealerPageShell>
+      <div className="space-y-6">
+        <DealerBrandStrip subtitle="Simple product quote" />
+        <form onSubmit={onSubmit} className="space-y-8">
+          <DealerSection
+            title="Customer details"
+            description="These details appear on your Cheshire Stables trade quote PDF."
+          >
+            <div className="rounded-xl border border-primary/15 bg-white p-4 shadow-sm sm:p-5">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="customer-name">Customer name</Label>
+                  <Input
+                    id="customer-name"
+                    className="h-11"
+                    value={customerName}
+                    onChange={(e) => setCustomerName(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="customer-email">Customer email</Label>
+                  <Input
+                    id="customer-email"
+                    type="email"
+                    className="h-11"
+                    value={customerEmail}
+                    onChange={(e) => setCustomerEmail(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="customer-phone">Customer phone</Label>
+                  <Input
+                    id="customer-phone"
+                    className="h-11"
+                    value={customerPhone}
+                    onChange={(e) => setCustomerPhone(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="customer-postcode">Customer / installation postcode</Label>
+                  <Input
+                    id="customer-postcode"
+                    className="h-11"
+                    value={customerPostcode}
+                    onChange={(e) => setCustomerPostcode(e.target.value)}
+                    placeholder="For delivery & install distance from factory"
+                    autoCapitalize="characters"
+                  />
+                </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="customer-address">Customer address</Label>
+                  <Textarea
+                    id="customer-address"
+                    value={customerAddress}
+                    onChange={(e) => setCustomerAddress(e.target.value)}
+                    placeholder="For this PDF only (not saved as CRM customer)"
+                  />
+                </div>
               </div>
             </div>
+          </DealerSection>
 
-            {rows.length > 0 && (
-              <fieldset className="space-y-2 rounded-lg border p-4">
-                <legend className="text-sm font-medium px-1">Fulfillment</legend>
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
+          {rows.length > 0 && (
+            <DealerSection title="Fulfillment">
+              <fieldset className="space-y-3 rounded-xl border border-primary/15 bg-white p-4 shadow-sm">
+                <label className="flex min-h-11 items-center gap-3 text-sm cursor-pointer">
                   <input
                     type="radio"
                     name="fulfillment-dealer"
+                    className="h-4 w-4"
                     checked={inclusion === 'collection'}
                     onChange={() => setInclusion('collection')}
                   />
                   Collection (customer collects from factory)
                 </label>
                 <p className="text-xs text-muted-foreground">
-                  For delivery or delivery & installation lines, enter a postcode below and use the delivery
-                  estimates section.
+                  For delivery or delivery & installation lines, enter a postcode and use the delivery estimates section.
                 </p>
               </fieldset>
-            )}
+            </DealerSection>
+          )}
 
-            {pcTrim && rows.length > 0 && inclusion !== 'collection' && (
-              <Card className="border-muted">
+          {pcTrim && rows.length > 0 && inclusion !== 'collection' && (
+            <DealerSection
+              title="Delivery estimates"
+              description="From factory to this postcode. Pick one option to add a single line to the quote."
+            >
+              <Card className="border-primary/15 shadow-sm">
                 <CardHeader className="py-3">
-                  <CardTitle className="text-base">Delivery estimates (Ex VAT)</CardTitle>
-                  <p className="text-sm text-muted-foreground font-normal">
-                    From factory to this postcode. Pick one option below to add a single line to the quote.
-                  </p>
+                  <CardTitle className="text-base">Ex VAT estimates</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4 pt-0">
                   {estLoading && <p className="text-sm text-muted-foreground">Loading estimates…</p>}
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-md border p-3 text-sm space-y-1">
-                      <p className="font-medium">Delivery only</p>
+                    <div className="rounded-xl border border-primary/10 bg-primary/5 p-4 text-sm space-y-1">
+                      <p className="font-semibold text-primary">Delivery only</p>
                       {estErrDelivery && (
                         <p className="text-destructive text-xs">{estErrDelivery}</p>
                       )}
@@ -390,7 +404,7 @@ export default function NewDealerQuotePage() {
                         <>
                           <p>
                             <span className="text-muted-foreground">Total: </span>
-                            <span className="font-semibold">£{Number(estDeliveryOnly.cost_total).toFixed(2)}</span>
+                            <span className="text-lg font-semibold">£{Number(estDeliveryOnly.cost_total).toFixed(2)}</span>
                           </p>
                           <p className="text-muted-foreground text-xs">
                             {estDeliveryOnly.distance_miles} mi one way · unload labour included in model
@@ -401,8 +415,8 @@ export default function NewDealerQuotePage() {
                         </>
                       )}
                     </div>
-                    <div className="rounded-md border p-3 text-sm space-y-1">
-                      <p className="font-medium">Delivery & installation</p>
+                    <div className="rounded-xl border border-primary/10 bg-white p-4 text-sm space-y-1">
+                      <p className="font-semibold text-primary">Delivery & installation</p>
                       {installHours <= 0 && (
                         <p className="text-muted-foreground text-xs">
                           Add products with installation hours to see this estimate.
@@ -415,7 +429,7 @@ export default function NewDealerQuotePage() {
                         <>
                           <p>
                             <span className="text-muted-foreground">Total: </span>
-                            <span className="font-semibold">£{Number(estFull.cost_total).toFixed(2)}</span>
+                            <span className="text-lg font-semibold">£{Number(estFull.cost_total).toFixed(2)}</span>
                           </p>
                           <p className="text-muted-foreground text-xs">
                             {estFull.fitting_days} fitting day(s) · {installHours.toFixed(1)} install hr (catalog)
@@ -426,23 +440,28 @@ export default function NewDealerQuotePage() {
                   </div>
 
                   <fieldset className="space-y-2">
-                    <legend className="text-sm font-medium">Include on quote</legend>
+                    <legend className="text-sm font-semibold">Include on quote</legend>
                     <div className="flex flex-col gap-2">
-                      <label className="flex items-center gap-2 text-sm cursor-pointer">
+                      <label className="flex min-h-11 items-center gap-3 text-sm cursor-pointer rounded-lg border px-3">
                         <input
                           type="radio"
                           name="delivery-inclusion"
+                          className="h-4 w-4"
                           checked={inclusion === 'none'}
                           onChange={() => setInclusion('none')}
                         />
                         None (products only)
                       </label>
                       <label
-                        className={`flex items-center gap-2 text-sm ${canPickDeliveryOnly ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}
+                        className={cn(
+                          'flex min-h-11 items-center gap-3 text-sm rounded-lg border px-3',
+                          canPickDeliveryOnly ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'
+                        )}
                       >
                         <input
                           type="radio"
                           name="delivery-inclusion"
+                          className="h-4 w-4"
                           checked={inclusion === 'delivery_only'}
                           disabled={!canPickDeliveryOnly}
                           onChange={() => setInclusion('delivery_only')}
@@ -450,11 +469,15 @@ export default function NewDealerQuotePage() {
                         Delivery only line
                       </label>
                       <label
-                        className={`flex items-center gap-2 text-sm ${canPickFull ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}
+                        className={cn(
+                          'flex min-h-11 items-center gap-3 text-sm rounded-lg border px-3',
+                          canPickFull ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'
+                        )}
                       >
                         <input
                           type="radio"
                           name="delivery-inclusion"
+                          className="h-4 w-4"
                           checked={inclusion === 'delivery_and_install'}
                           disabled={!canPickFull}
                           onChange={() => setInclusion('delivery_and_install')}
@@ -465,20 +488,42 @@ export default function NewDealerQuotePage() {
                   </fieldset>
                 </CardContent>
               </Card>
-            )}
+            </DealerSection>
+          )}
 
-            <div className="space-y-2">
-              <Label>Add product</Label>
-              <div className="flex flex-wrap gap-2">
-                {products.map((product) => (
-                  <Button key={product.id} type="button" variant="outline" onClick={() => addProduct(product.id)}>
-                    {product.name}
-                  </Button>
-                ))}
-              </div>
+          <DealerSection
+            title="Products"
+            description="Tap a Cheshire Stables product to add it to the quote."
+          >
+            <div className="grid gap-3 sm:grid-cols-2">
+              {products.map((product) => {
+                const selected = rows.some((r) => r.product_id === product.id);
+                return (
+                  <button
+                    key={product.id}
+                    type="button"
+                    onClick={() => addProduct(product.id)}
+                    disabled={selected}
+                    className={cn(
+                      'min-h-[4.5rem] rounded-xl border px-4 py-3 text-left shadow-sm transition-all',
+                      selected
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'border-primary/20 bg-white hover:border-primary/40 hover:bg-primary/5'
+                    )}
+                  >
+                    <span className="block text-base font-semibold">{product.name}</span>
+                    <span className="mt-1 block text-sm text-muted-foreground">
+                      £{Number(product.base_price).toFixed(2)}
+                      {selected ? ' · Added' : ''}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
+          </DealerSection>
 
-            <div className="space-y-2">
+          <DealerSection title="Quote lines">
+            <div className="space-y-3">
               {rows.map((row) => {
                 const product = products.find((p) => p.id === row.product_id);
                 if (!product) return null;
@@ -491,34 +536,50 @@ export default function NewDealerQuotePage() {
                   0
                 );
                 return (
-                  <div key={row.product_id} className="space-y-3 rounded border p-3">
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1 text-sm">{product.name}</div>
-                      <Input
-                        type="number"
-                        min={1}
-                        className="w-24"
-                        value={row.quantity}
-                        onChange={(e) => updateQty(row.product_id, Math.max(1, Number(e.target.value)))}
-                      />
-                      <div className="w-28 text-right text-sm">
-                        £{(Number(product.base_price) * row.quantity + extrasTotal).toFixed(2)}
+                  <div
+                    key={row.product_id}
+                    className="space-y-3 rounded-xl border border-primary/15 bg-white p-4 shadow-sm"
+                  >
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                      <div className="flex-1 text-base font-semibold">{product.name}</div>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          min={1}
+                          className="h-11 w-24"
+                          value={row.quantity}
+                          onChange={(e) => updateQty(row.product_id, Math.max(1, Number(e.target.value)))}
+                        />
+                        <div className="min-w-[5.5rem] text-right text-base font-semibold">
+                          £{(Number(product.base_price) * row.quantity + extrasTotal).toFixed(2)}
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="h-11 text-destructive"
+                          onClick={() => removeRow(row.product_id)}
+                        >
+                          Remove
+                        </Button>
                       </div>
-                      <Button type="button" variant="ghost" onClick={() => removeRow(row.product_id)}>
-                        Remove
-                      </Button>
                     </div>
                     {!!rowExtras.length && (
-                      <div className="rounded-md border border-dashed px-3 py-2">
-                        <p className="text-xs font-medium text-muted-foreground mb-2">Optional extras</p>
+                      <div className="rounded-lg border border-dashed border-primary/25 px-3 py-2">
+                        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-primary">
+                          Optional extras
+                        </p>
                         <div className="space-y-2">
                           {rowExtras.map((extra) => {
                             const checked = row.selected_extra_ids.includes(extra.id);
                             return (
-                              <label key={extra.id} className="flex items-center justify-between gap-3 text-sm">
-                                <span className="flex items-center gap-2">
+                              <label
+                                key={extra.id}
+                                className="flex min-h-11 items-center justify-between gap-3 rounded-md px-1 text-sm"
+                              >
+                                <span className="flex items-center gap-3">
                                   <input
                                     type="checkbox"
+                                    className="h-4 w-4"
                                     checked={checked}
                                     onChange={(e) => toggleExtra(row.product_id, extra.id, e.target.checked)}
                                   />
@@ -539,67 +600,79 @@ export default function NewDealerQuotePage() {
                   </div>
                 );
               })}
-              {!rows.length && <p className="text-sm text-muted-foreground">Select at least one product.</p>}
+              {!rows.length && (
+                <p className="rounded-xl border border-dashed border-primary/30 bg-white px-4 py-6 text-center text-sm text-muted-foreground">
+                  Select at least one product above.
+                </p>
+              )}
             </div>
+          </DealerSection>
 
-            <div className="space-y-2">
-              <Label>Available discounts</Label>
-              <div className="space-y-2 rounded border p-3">
-                {discountsLoading && (
-                  <p className="text-sm text-muted-foreground">Loading dealer discounts...</p>
-                )}
+          <DealerSection title="Discounts">
+            <div className="space-y-2 rounded-xl border border-primary/15 bg-white p-4 shadow-sm">
+              {discountsLoading && (
+                <p className="text-sm text-muted-foreground">Loading dealer discounts...</p>
+              )}
 
-                {!discountsLoading && !discountsConfigured && (
-                  <p className="text-sm text-muted-foreground">
-                    No discounts configured for your dealer. Contact your admin.
-                  </p>
-                )}
+              {!discountsLoading && !discountsConfigured && (
+                <p className="text-sm text-muted-foreground">
+                  No discounts configured for your dealer. Contact your admin.
+                </p>
+              )}
 
-                {!discountsLoading && discountsConfigured && !availableDiscounts.length && (
-                  <p className="text-sm text-muted-foreground">No active allowed discounts available.</p>
-                )}
+              {!discountsLoading && discountsConfigured && !availableDiscounts.length && (
+                <p className="text-sm text-muted-foreground">No active allowed discounts available.</p>
+              )}
 
-                {!discountsLoading &&
-                  discountsConfigured &&
-                  availableDiscounts.map((discount) => {
-                    const checked = selectedDiscountIds.includes(discount.id);
-                    return (
-                      <label key={discount.id} className="flex items-center justify-between gap-3 text-sm">
-                        <span className="flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={(e) =>
-                              setSelectedDiscountIds((prev) =>
-                                e.target.checked
-                                  ? Array.from(new Set([...prev, discount.id]))
-                                  : prev.filter((id) => id !== discount.id)
-                              )
-                            }
-                          />
-                          {discount.name}
-                        </span>
-                        <span className="text-muted-foreground">
-                          {discount.discount_type === 'PERCENTAGE'
-                            ? `${discount.discount_value}%`
-                            : `£${discount.discount_value}`}{' '}
-                          off {discount.scope === 'PRODUCT' ? 'building items' : 'entire quote'}
-                        </span>
-                      </label>
-                    );
-                  })}
-              </div>
+              {!discountsLoading &&
+                discountsConfigured &&
+                availableDiscounts.map((discount) => {
+                  const checked = selectedDiscountIds.includes(discount.id);
+                  return (
+                    <label
+                      key={discount.id}
+                      className="flex min-h-11 items-center justify-between gap-3 rounded-lg border px-3 text-sm"
+                    >
+                      <span className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4"
+                          checked={checked}
+                          onChange={(e) =>
+                            setSelectedDiscountIds((prev) =>
+                              e.target.checked
+                                ? Array.from(new Set([...prev, discount.id]))
+                                : prev.filter((id) => id !== discount.id)
+                            )
+                          }
+                        />
+                        {discount.name}
+                      </span>
+                      <span className="text-muted-foreground">
+                        {discount.discount_type === 'PERCENTAGE'
+                          ? `${discount.discount_value}%`
+                          : `£${discount.discount_value}`}{' '}
+                        off {discount.scope === 'PRODUCT' ? 'building items' : 'entire quote'}
+                      </span>
+                    </label>
+                  );
+                })}
             </div>
+          </DealerSection>
 
-            <div className="flex items-center justify-between border-t pt-4">
-              <p className="text-sm font-medium">Estimated subtotal: £{total.toFixed(2)}</p>
-              <Button type="submit" disabled={submitBlocked}>
+          <div className="sticky bottom-3 z-10 rounded-xl border border-primary/20 bg-white/95 p-4 shadow-lg backdrop-blur">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-base font-semibold">
+                Estimated subtotal:{' '}
+                <span className="text-xl text-primary">£{total.toFixed(2)}</span>
+              </p>
+              <Button type="submit" size="lg" className="h-12 w-full text-base sm:w-auto sm:min-w-[12rem]" disabled={submitBlocked}>
                 {saving ? 'Creating...' : 'Create quote'}
               </Button>
             </div>
-          </form>
-        </CardContent>
-      </Card>
-    </main>
+          </div>
+        </form>
+      </div>
+    </DealerPageShell>
   );
 }

@@ -24,6 +24,7 @@ import {
   Menu,
   ImageIcon,
   LayoutGrid,
+  Home,
 } from 'lucide-react';
 import api from '@/lib/api';
 import {
@@ -218,8 +219,19 @@ export default function Header() {
   const mobileNavLinkClass =
     'flex w-full min-h-11 items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground';
 
+  const dealerNavBtnClass = (active: boolean) =>
+    cn(
+      'min-h-11 px-4 text-sm font-semibold',
+      active ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+    );
+
   return (
-    <header className="border-b border-border bg-card shadow-sm">
+    <header
+      className={cn(
+        'border-b border-border bg-card shadow-sm',
+        isDealer && 'border-primary/20'
+      )}
+    >
       <div className="container mx-auto flex items-center justify-between px-4 py-0 sm:px-6">
         <Logo
           disableLink={isCloser}
@@ -227,34 +239,36 @@ export default function Header() {
           size="header"
         />
         {/* Desktop nav */}
-        <nav className="hidden lg:flex items-center gap-4">
+        <nav className="hidden lg:flex items-center gap-3">
           {isDealer ? (
             <>
             <Link href="/dealer">
               <Button
                 variant={pathname === '/dealer' ? 'default' : 'ghost'}
-                size="sm"
-                className={
-                  pathname === '/dealer'
-                    ? 'text-primary-foreground'
-                    : 'text-muted-foreground hover:text-foreground'
-                }
+                size="lg"
+                className={dealerNavBtnClass(pathname === '/dealer')}
               >
-                <LayoutDashboard className="h-4 w-4 mr-2" />
-                Dealer Portal
+                <Home className="h-5 w-5 mr-2" />
+                Home
+              </Button>
+            </Link>
+            <Link href="/dealer/quotes">
+              <Button
+                variant={pathname?.startsWith('/dealer/quotes') ? 'default' : 'ghost'}
+                size="lg"
+                className={dealerNavBtnClass(Boolean(pathname?.startsWith('/dealer/quotes')))}
+              >
+                <FileText className="h-5 w-5 mr-2" />
+                Quotes
               </Button>
             </Link>
             <Link href="/dealer/profile">
               <Button
                 variant={pathname?.startsWith('/dealer/profile') ? 'default' : 'ghost'}
-                size="sm"
-                className={
-                  pathname?.startsWith('/dealer/profile')
-                    ? 'text-primary-foreground'
-                    : 'text-muted-foreground hover:text-foreground'
-                }
+                size="lg"
+                className={dealerNavBtnClass(Boolean(pathname?.startsWith('/dealer/profile')))}
               >
-                <User className="h-4 w-4 mr-2" />
+                <User className="h-5 w-5 mr-2" />
                 Profile
               </Button>
             </Link>
@@ -607,12 +621,28 @@ export default function Header() {
                       onClick={closeMobile}
                       className={cn(
                         mobileNavLinkClass,
+                        'min-h-12 text-base',
                         pathname === '/dealer' && 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground'
                       )}
                     >
                       <span className="flex items-center gap-2">
-                        <LayoutDashboard className="h-4 w-4 shrink-0" />
-                        Dealer Portal
+                        <Home className="h-5 w-5 shrink-0" />
+                        Home
+                      </span>
+                    </Link>
+                    <Link
+                      href="/dealer/quotes"
+                      onClick={closeMobile}
+                      className={cn(
+                        mobileNavLinkClass,
+                        'min-h-12 text-base',
+                        pathname?.startsWith('/dealer/quotes') &&
+                          'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground'
+                      )}
+                    >
+                      <span className="flex items-center gap-2">
+                        <FileText className="h-5 w-5 shrink-0" />
+                        Quotes
                       </span>
                     </Link>
                     <Link
@@ -620,12 +650,13 @@ export default function Header() {
                       onClick={closeMobile}
                       className={cn(
                         mobileNavLinkClass,
+                        'min-h-12 text-base',
                         pathname?.startsWith('/dealer/profile') &&
                           'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground'
                       )}
                     >
                       <span className="flex items-center gap-2">
-                        <User className="h-4 w-4 shrink-0" />
+                        <User className="h-5 w-5 shrink-0" />
                         Profile
                       </span>
                     </Link>

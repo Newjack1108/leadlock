@@ -4,10 +4,12 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import DealerBrandStrip from '@/components/dealer/DealerBrandStrip';
+import DealerPageShell from '@/components/dealer/DealerPageShell';
+import DealerSection from '@/components/dealer/DealerSection';
 import { createDealerConfiguratorDraft, getApiErrorDetail } from '@/lib/api';
 import { toast } from 'sonner';
 
@@ -48,20 +50,22 @@ export default function DealerConfiguratorStartPage() {
   };
 
   return (
-    <main className="container mx-auto max-w-2xl px-4 py-6 sm:px-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Start configurator quote</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Enter customer details, then design the layout. Add a postcode if you need delivery estimates.
-          </p>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
+    <DealerPageShell narrow>
+      <div className="space-y-6">
+        <DealerBrandStrip subtitle="Configurator quote" />
+        <DealerSection
+          title="Customer details"
+          description="Enter customer details, then design the Cheshire Stables layout. Add a postcode for delivery estimates."
+        >
+          <form
+            onSubmit={handleSubmit}
+            className="space-y-4 rounded-xl border border-primary/15 bg-white p-4 shadow-sm sm:p-5"
+          >
             <div className="space-y-2">
               <Label htmlFor="customer_name">Customer name</Label>
               <Input
                 id="customer_name"
+                className="h-11"
                 value={customerName}
                 onChange={(e) => setCustomerName(e.target.value)}
                 required
@@ -74,6 +78,7 @@ export default function DealerConfiguratorStartPage() {
                 <Input
                   id="customer_email"
                   type="email"
+                  className="h-11"
                   value={customerEmail}
                   onChange={(e) => setCustomerEmail(e.target.value)}
                   disabled={saving}
@@ -83,6 +88,7 @@ export default function DealerConfiguratorStartPage() {
                 <Label htmlFor="customer_phone">Phone</Label>
                 <Input
                   id="customer_phone"
+                  className="h-11"
                   value={customerPhone}
                   onChange={(e) => setCustomerPhone(e.target.value)}
                   disabled={saving}
@@ -103,6 +109,7 @@ export default function DealerConfiguratorStartPage() {
               <Label htmlFor="customer_postcode">Postcode</Label>
               <Input
                 id="customer_postcode"
+                className="h-11"
                 value={customerPostcode}
                 onChange={(e) => setCustomerPostcode(e.target.value)}
                 disabled={saving}
@@ -119,19 +126,25 @@ export default function DealerConfiguratorStartPage() {
                 rows={2}
               />
             </div>
-            <div className="flex flex-wrap gap-3">
-              <Button type="submit" disabled={saving}>
+            <div className="flex flex-col gap-2 pt-2 sm:flex-row">
+              <Button type="submit" size="lg" className="h-12 w-full text-base sm:flex-1" disabled={saving}>
                 {saving ? 'Starting…' : 'Open configurator'}
               </Button>
-              <Link href="/dealer/quotes/new">
-                <Button type="button" variant="outline" disabled={saving}>
+              <Link href="/dealer/quotes/new" className="sm:flex-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  className="h-12 w-full border-primary/30 text-base"
+                  disabled={saving}
+                >
                   Simple product quote instead
                 </Button>
               </Link>
             </div>
           </form>
-        </CardContent>
-      </Card>
-    </main>
+        </DealerSection>
+      </div>
+    </DealerPageShell>
   );
 }

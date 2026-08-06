@@ -7,6 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
+import DealerBrandStrip from '@/components/dealer/DealerBrandStrip';
+import DealerPageShell from '@/components/dealer/DealerPageShell';
 import { getDealerProfile, updateDealerProfile, uploadDealerLogo } from '@/lib/api';
 import type { DealerProfile } from '@/lib/types';
 import type { AxiosError } from 'axios';
@@ -92,20 +94,22 @@ export default function DealerProfilePage() {
 
   if (initialLoad) {
     return (
-      <main className="container mx-auto px-4 py-6 sm:px-6 text-sm text-muted-foreground">
-        Loading profile...
-      </main>
+      <DealerPageShell>
+        <p className="text-sm text-muted-foreground">Loading profile...</p>
+      </DealerPageShell>
     );
   }
 
   if (loadError && !profile) {
     return (
-      <main className="container mx-auto px-4 py-6 sm:px-6 space-y-4">
-        <p className="text-sm text-destructive">{loadError}</p>
-        <Button type="button" variant="outline" onClick={() => void fetchProfile()}>
-          Retry
-        </Button>
-      </main>
+      <DealerPageShell>
+        <div className="space-y-4">
+          <p className="text-sm text-destructive">{loadError}</p>
+          <Button type="button" variant="outline" size="lg" className="h-11" onClick={() => void fetchProfile()}>
+            Retry
+          </Button>
+        </div>
+      </DealerPageShell>
     );
   }
 
@@ -114,17 +118,18 @@ export default function DealerProfilePage() {
   }
 
   return (
-    <main className="container mx-auto px-4 py-6 sm:px-6">
-      <div className="mx-auto w-full max-w-4xl">
-      <Card>
+    <DealerPageShell>
+      <div className="space-y-6">
+        <DealerBrandStrip subtitle="Your trading details on Cheshire Stables quotes" />
+      <Card className="border-primary/15 shadow-sm">
         <CardHeader>
-          <CardTitle>Dealer Profile</CardTitle>
+          <CardTitle>Dealer profile</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={onSave} className="space-y-5">
             <div className="space-y-1">
               <p className="text-sm text-muted-foreground">
-                Keep your trading details up to date for quote PDFs and customer-facing documents.
+                Shown on Cheshire Stables quote PDFs and customer-facing documents.
               </p>
             </div>
 
@@ -133,6 +138,7 @@ export default function DealerProfilePage() {
                 <Label htmlFor="dealer-name">Dealer name</Label>
                 <Input
                   id="dealer-name"
+                  className="h-11"
                   value={profile.name || ''}
                   onChange={(e) => update('name', e.target.value)}
                 />
@@ -141,6 +147,7 @@ export default function DealerProfilePage() {
                 <Label htmlFor="dealer-company-name">Company / trading name</Label>
                 <Input
                   id="dealer-company-name"
+                  className="h-11"
                   value={profile.company_name || ''}
                   onChange={(e) => update('company_name', e.target.value)}
                 />
@@ -149,6 +156,7 @@ export default function DealerProfilePage() {
                 <Label htmlFor="dealer-contact-name">Primary contact name</Label>
                 <Input
                   id="dealer-contact-name"
+                  className="h-11"
                   value={profile.contact_name || ''}
                   onChange={(e) => update('contact_name', e.target.value)}
                 />
@@ -158,6 +166,7 @@ export default function DealerProfilePage() {
                 <Input
                   id="dealer-email"
                   type="email"
+                  className="h-11"
                   value={profile.email || ''}
                   onChange={(e) => update('email', e.target.value)}
                 />
@@ -166,6 +175,7 @@ export default function DealerProfilePage() {
                 <Label htmlFor="dealer-phone">Phone</Label>
                 <Input
                   id="dealer-phone"
+                  className="h-11"
                   value={profile.phone || ''}
                   onChange={(e) => update('phone', e.target.value)}
                 />
@@ -174,6 +184,7 @@ export default function DealerProfilePage() {
                 <Label htmlFor="dealer-website">Website</Label>
                 <Input
                   id="dealer-website"
+                  className="h-11"
                   value={profile.website || ''}
                   onChange={(e) => update('website', e.target.value)}
                 />
@@ -182,6 +193,7 @@ export default function DealerProfilePage() {
                 <Label htmlFor="dealer-vat-number">VAT number</Label>
                 <Input
                   id="dealer-vat-number"
+                  className="h-11"
                   value={profile.vat_number || ''}
                   onChange={(e) => update('vat_number', e.target.value)}
                 />
@@ -190,6 +202,7 @@ export default function DealerProfilePage() {
                 <Label htmlFor="dealer-registration-number">Company registration number</Label>
                 <Input
                   id="dealer-registration-number"
+                  className="h-11"
                   value={profile.registration_number || ''}
                   onChange={(e) => update('registration_number', e.target.value)}
                 />
@@ -221,7 +234,7 @@ export default function DealerProfilePage() {
                     className="max-h-24 w-full max-w-[220px] object-contain rounded border bg-muted p-1"
                   />
                   <a
-                    className="text-sm text-blue-600 underline shrink-0"
+                    className="text-sm font-medium text-primary underline shrink-0"
                     href={profile.logo_url}
                     target="_blank"
                     rel="noreferrer"
@@ -233,7 +246,7 @@ export default function DealerProfilePage() {
               {uploading && <p className="text-sm text-muted-foreground">Uploading logo...</p>}
             </div>
             <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-              <Button type="submit" disabled={saving} className="w-full sm:w-auto">
+              <Button type="submit" size="lg" disabled={saving} className="h-12 w-full text-base sm:w-auto sm:min-w-[10rem]">
                 {saving ? 'Saving...' : 'Save profile'}
               </Button>
             </div>
@@ -241,6 +254,6 @@ export default function DealerProfilePage() {
         </CardContent>
       </Card>
       </div>
-    </main>
+    </DealerPageShell>
   );
 }
