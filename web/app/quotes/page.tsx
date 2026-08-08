@@ -415,6 +415,15 @@ function QuotesPageContent() {
     try {
       setCancellingDraft(true);
       await cancelDraftQuote(quotePendingCancel.id);
+      if (quotePendingCancel.customer_id != null && quotePendingCancel.lead_id != null) {
+        try {
+          sessionStorage.removeItem(
+            `ll-quote-create-${quotePendingCancel.customer_id}-${quotePendingCancel.lead_id}`
+          );
+        } catch {
+          /* ignore */
+        }
+      }
       toast.success('Draft quote cancelled.');
       setCancelDialogOpen(false);
       setQuotePendingCancel(null);

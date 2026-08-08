@@ -723,7 +723,17 @@ function CreateQuoteContent() {
           );
           window.setTimeout(() => markClean(), 0);
         } catch {
-          if (!cancelled) toast.error('Failed to load draft');
+          if (cancelled) return;
+          // Stale/cancelled draft ids in the URL or sessionStorage must not keep
+          // Configure layout pointing at a missing quote.
+          toast.error('Draft not found — starting a new draft.');
+          try {
+            sessionStorage.removeItem(draftStorageKey);
+          } catch {
+            /* ignore */
+          }
+          setDraftQuoteId(null);
+          router.replace(`/quotes/create?customer_id=${customerId}&lead_id=${leadId}`);
         }
       })();
       return () => {
@@ -951,8 +961,13 @@ function CreateQuoteContent() {
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back to Customer
             </Button>
-            {activeDraftQuoteId ? (
-              <DraftConfiguratorLink quoteId={activeDraftQuoteId} variant="outline" size="sm" />
+            {draftQuoteId ? (
+              <DraftConfiguratorLink
+                quoteId={draftQuoteId}
+                variant="outline"
+                size="sm"
+                returnHref={`/quotes/create?customer_id=${customerId}&lead_id=${leadId}&draft_id=${draftQuoteId}`}
+              />
             ) : null}
           </div>
           <div>
@@ -982,7 +997,15 @@ function CreateQuoteContent() {
 
         <form onSubmit={handleSubmit}>
           <div className="space-y-6">
-            <DraftConfiguratorCallout quoteId={activeDraftQuoteId} items={items} />
+            <DraftConfiguratorCallout
+              quoteId={draftQuoteId}
+              items={items}
+              returnHref={
+                draftQuoteId && customerId && leadId
+                  ? `/quotes/create?customer_id=${customerId}&lead_id=${leadId}&draft_id=${draftQuoteId}`
+                  : null
+              }
+            />
 
             {/* Quote Items */}
             <Card>

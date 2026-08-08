@@ -16,6 +16,14 @@ interface DraftConfiguratorLinkProps {
   size?: VariantProps<typeof buttonVariants>['size'];
   className?: string;
   label?: string;
+  /** When set, configure page Back returns here instead of the quote detail. */
+  returnHref?: string | null;
+}
+
+function configureHref(quoteId: number, returnHref?: string | null): string {
+  const path = `/quotes/${quoteId}/configure`;
+  if (!returnHref) return path;
+  return `${path}?return=${encodeURIComponent(returnHref)}`;
 }
 
 export default function DraftConfiguratorLink({
@@ -24,6 +32,7 @@ export default function DraftConfiguratorLink({
   size,
   className,
   label,
+  returnHref,
 }: DraftConfiguratorLinkProps) {
   const [canAccess, setCanAccess] = useState(false);
   const [savedBoxCount, setSavedBoxCount] = useState(0);
@@ -69,7 +78,7 @@ export default function DraftConfiguratorLink({
 
   return (
     <Button variant={variant} size={size} className={cn(className)} asChild>
-      <Link href={`/quotes/${quoteId}/configure`} title={title}>
+      <Link href={configureHref(quoteId, returnHref)} title={title}>
         <LayoutGrid className="h-4 w-4" />
         {resolvedLabel}
       </Link>

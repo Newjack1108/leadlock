@@ -729,6 +729,13 @@ function EditQuoteContent() {
     try {
       setCancelling(true);
       await cancelDraftQuote(quoteId);
+      if (quote?.customer_id != null && quote?.lead_id != null) {
+        try {
+          sessionStorage.removeItem(`ll-quote-create-${quote.customer_id}-${quote.lead_id}`);
+        } catch {
+          /* ignore */
+        }
+      }
       toast.success('Draft quote cancelled.');
       setCancelDialogOpen(false);
       router.push('/quotes');

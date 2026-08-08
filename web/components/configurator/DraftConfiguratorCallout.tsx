@@ -12,9 +12,15 @@ import { isPlaceholderOnlyDraftItems } from '@/lib/quoteDraftPayload';
 interface DraftConfiguratorCalloutProps {
   quoteId: number | null;
   items: Array<{ description: string; quantity?: number; unit_price?: number }>;
+  /** When set, configure page Back returns here instead of the quote detail. */
+  returnHref?: string | null;
 }
 
-export default function DraftConfiguratorCallout({ quoteId, items }: DraftConfiguratorCalloutProps) {
+export default function DraftConfiguratorCallout({
+  quoteId,
+  items,
+  returnHref,
+}: DraftConfiguratorCalloutProps) {
   const [canAccess, setCanAccess] = useState(false);
 
   useEffect(() => {
@@ -35,6 +41,10 @@ export default function DraftConfiguratorCallout({ quoteId, items }: DraftConfig
     return null;
   }
 
+  const href = returnHref
+    ? `/quotes/${quoteId}/configure?return=${encodeURIComponent(returnHref)}`
+    : `/quotes/${quoteId}/configure`;
+
   return (
     <Card className="border-primary/30 bg-primary/5">
       <CardContent className="flex flex-wrap items-center justify-between gap-4 py-4">
@@ -43,7 +53,7 @@ export default function DraftConfiguratorCallout({ quoteId, items }: DraftConfig
           and finish the quote.
         </p>
         <Button variant="default" className="shrink-0" asChild>
-          <Link href={`/quotes/${quoteId}/configure`}>
+          <Link href={href}>
             <LayoutGrid className="h-4 w-4" />
             Configure layout
           </Link>
