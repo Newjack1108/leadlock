@@ -37,11 +37,9 @@ export default function DraftConfiguratorLink({
         const allowed = Boolean(me.can_access_configurator);
         setCanAccess(allowed);
         if (!allowed) return;
-        return getQuoteConfiguration(quoteId).catch((error) => {
-          if ((error as { response?: { status?: number } })?.response?.status === 404) {
-            return null;
-          }
-          throw error;
+        return getQuoteConfiguration(quoteId).catch(() => {
+          // 404 or probe failure: keep access; label falls back to "Configure layout".
+          return null;
         });
       })
       .then((saved) => {
@@ -52,6 +50,7 @@ export default function DraftConfiguratorLink({
         setHasSavedLayout(boxes > 0 || extras > 0);
       })
       .catch(() => {
+        // Auth failure only — do not hide the link when the layout probe fails.
         if (!cancelled) {
           setCanAccess(false);
           setHasSavedLayout(false);
