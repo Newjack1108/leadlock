@@ -155,6 +155,43 @@ def apply_qualified_to_quoted_transition_for_customer(
             )
 
 
+def transition_customer_leads_on_quote_accepted(
+    customer_id: Optional[int],
+    session: Session,
+    current_user_id: int,
+) -> None:
+    """Promote linked leads to WON when a quote is accepted.
+
+    Create-from-lead drafts defer QUALIFIED→QUOTED until finish/send. Accepting a
+    draft (or any quote) must still win the lead, so QUALIFIED is stepped through
+    QUOTED then WON for a clear status history.
+    """
+    if not customer_id:
+        return
+    from app.workflow import auto_transition_lead_status, find_leads_by_customer_id
+
+    leads = find_leads_by_customer_id(customer_id, session)
+    for lead in leads:
+        if lead.status == LeadStatus.QUALIFIED:
+            auto_transition_lead_status(
+                lead.id,
+                LeadStatus.QUOTED,
+                session,
+                current_user_id,
+                "Automatic transition: Quote accepted (deferred quoted)",
+            )
+            # Refresh local status after commit-less in-session update
+            lead.status = LeadStatus.QUOTED
+        if lead.status == LeadStatus.QUOTED:
+            auto_transition_lead_status(
+                lead.id,
+                LeadStatus.WON,
+                session,
+                current_user_id,
+                "Automatic transition: Quote accepted",
+            )
+
+
 def _transition_customer_leads_to_quoted_after_send(
     customer_id: Optional[int],
     session: Session,
@@ -1693,15 +1730,10 @@ async def mark_opportunity_won(
         dismiss_open_reminders_for_quote(session, quote.id)
     session.commit()
     session.refresh(quote)
-    if quote.customer_id and old_status != QuoteStatus.ACCEPTED:
-        from app.workflow import auto_transition_lead_status, find_leads_by_customer_id
-        leads = find_leads_by_customer_id(quote.customer_id, session)
-        for lead in leads:
-            if lead.status == LeadStatus.QUOTED:
-                auto_transition_lead_status(
-                    lead.id, LeadStatus.WON, session, current_user.id,
-                    "Automatic transition: Quote accepted"
-                )
+    if old_status != QuoteStatus.ACCEPTED:
+        transition_customer_leads_on_quote_accepted(
+            quote.customer_id, session, current_user.id
+        )
     statement = select(QuoteItem).where(QuoteItem.quote_id == quote.id).order_by(QuoteItem.sort_order)
     quote_items = session.exec(statement).all()
     return build_quote_response(quote, quote_items, session)
@@ -3211,22 +3243,16 @@ async def update_quote(
     session.commit()
     session.refresh(quote)
     
-    # QUOTED → WON/LOST: Transition lead when quote status changed to ACCEPTED or REJECTED
+    # Lead WON/LOST when quote is accepted or rejected.
+    # Accept also heals deferred QUALIFIED→QUOTED from create-from-lead drafts.
     if quote.customer_id and (quote.status == QuoteStatus.ACCEPTED or quote.status == QuoteStatus.REJECTED):
-        from app.workflow import auto_transition_lead_status, find_leads_by_customer_id
-        leads = find_leads_by_customer_id(quote.customer_id, session)
-        
         if quote.status == QuoteStatus.ACCEPTED and old_status != QuoteStatus.ACCEPTED:
-            for lead in leads:
-                if lead.status == LeadStatus.QUOTED:
-                    auto_transition_lead_status(
-                        lead.id,
-                        LeadStatus.WON,
-                        session,
-                        current_user.id,
-                        "Automatic transition: Quote accepted"
-                    )
+            transition_customer_leads_on_quote_accepted(
+                quote.customer_id, session, current_user.id
+            )
         elif quote.status == QuoteStatus.REJECTED and old_status != QuoteStatus.REJECTED:
+            from app.workflow import auto_transition_lead_status, find_leads_by_customer_id
+            leads = find_leads_by_customer_id(quote.customer_id, session)
             for lead in leads:
                 if lead.status == LeadStatus.QUOTED:
                     auto_transition_lead_status(
