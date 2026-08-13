@@ -17,7 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Lock, Unlock, Clock, Search, Plus, Eye, MessageCircleReply, Trash2 } from 'lucide-react';
+import { Lock, Unlock, Clock, Search, Plus, Eye, MessageCircleReply, Trash2, CheckCircle } from 'lucide-react';
 import api, { getDataSummary } from '@/lib/api';
 import { formatDateTime } from '@/lib/utils';
 import { Lead, LeadStatus, LeadType, LeadSource, QuoteTemperature } from '@/lib/types';
@@ -502,6 +502,9 @@ function LeadsPageContent() {
                       <td className="p-3 text-muted-foreground">{lead.postcode || '—'}</td>
                       <td className="p-3">
                         <Badge className={statusColors[lead.status]}>
+                          {lead.status === LeadStatus.QUALIFIED && (
+                            <CheckCircle className="h-3 w-3 mr-1 shrink-0" />
+                          )}
                           {lead.status.replace('_', ' ')}
                         </Badge>
                       </td>
@@ -557,6 +560,9 @@ function LeadsPageContent() {
                             </Badge>
                           )}
                           <Badge className={statusColors[lead.status]}>
+                            {lead.status === LeadStatus.QUALIFIED && (
+                              <CheckCircle className="h-3 w-3 mr-1 shrink-0" />
+                            )}
                             {lead.status.replace('_', ' ')}
                           </Badge>
                           <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">

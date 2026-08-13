@@ -82,6 +82,31 @@ const activityColors: Record<ActivityType, string> = {
   NOTE: 'text-muted-foreground',
 };
 
+const statusColors: Record<LeadStatus, string> = {
+  NEW: 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300',
+  CONTACT_ATTEMPTED: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-300',
+  ENGAGED: 'bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300',
+  QUALIFIED: 'bg-primary/10 text-primary',
+  QUOTED: 'bg-secondary/10 text-secondary',
+  WON: 'bg-success/10 text-success',
+  LOST: 'bg-destructive/10 text-destructive',
+  CLOSED: 'bg-slate-200 text-slate-800 dark:bg-slate-500/20 dark:text-slate-300',
+};
+
+/** Statuses where the Qualify action still applies (not already qualified or beyond). */
+const PRE_QUALIFY_STATUSES: LeadStatus[] = [
+  LeadStatus.NEW,
+  LeadStatus.CONTACT_ATTEMPTED,
+  LeadStatus.ENGAGED,
+];
+
+/** Statuses that show the Qualified done-state button. */
+const QUALIFIED_DONE_STATUSES: LeadStatus[] = [
+  LeadStatus.QUALIFIED,
+  LeadStatus.QUOTED,
+  LeadStatus.WON,
+];
+
 export default function LeadDetailPage() {
   const router = useRouter();
   const params = useParams();
@@ -227,6 +252,7 @@ export default function LeadDetailPage() {
   const handleQualify = async () => {
     if (!allowedTransitions.includes('QUALIFIED')) return;
     if (!lead) return;
+    if (!PRE_QUALIFY_STATUSES.includes(lead.status)) return;
     if (!leadFieldsAllowQualify(lead.lead_source, lead.lead_type)) {
       toast.error(qualifyFieldsMessage(lead.lead_source, lead.lead_type));
       return;
@@ -243,7 +269,9 @@ export default function LeadDetailPage() {
         phone: phoneTrim || null,
         postcode: postcodeTrim || null,
       });
-      await api.post(`/api/leads/${leadId}/transition`, { new_status: 'QUALIFIED' });
+      const response = await api.post(`/api/leads/${leadId}/transition`, { new_status: 'QUALIFIED' });
+      setLead(response.data);
+      setAllowedTransitions((prev) => prev.filter((t) => t !== 'QUALIFIED'));
       toast.success('Lead qualified');
       router.push('/leads?status=QUALIFIED');
     } catch (error: any) {
@@ -378,6 +406,9 @@ export default function LeadDetailPage() {
   const isNinoxLead = lead.customer?.source_system === 'Ninox';
   const canQualifyFields = leadFieldsAllowQualify(lead.lead_source, lead.lead_type);
   const qualifyFieldsHint = qualifyFieldsMessage(lead.lead_source, lead.lead_type);
+  const canQualify =
+    allowedTransitions.includes('QUALIFIED') &&
+    PRE_QUALIFY_STATUSES.includes(lead.status);
 
   return (
     <div className="min-h-screen">
@@ -406,7 +437,7 @@ export default function LeadDetailPage() {
                 <div className="flex items-center justify-between">
                   <CardTitle>Lead Information</CardTitle>
                   <div className="flex items-center gap-2">
-                    {allowedTransitions.includes('QUALIFIED') && lead.status !== LeadStatus.QUALIFIED && (
+                    {canQualify && (
                       <Button
                         size="sm"
                         onClick={handleQualify}
@@ -416,6 +447,17 @@ export default function LeadDetailPage() {
                       >
                         <CheckCircle className="h-4 w-4" />
                         {qualifyLoading ? 'Qualifying...' : 'Qualify'}
+                      </Button>
+                    )}
+                    {QUALIFIED_DONE_STATUSES.includes(lead.status) && (
+                      <Button
+                        size="sm"
+                        disabled
+                        className="gap-1 bg-success/15 text-success border border-success/30 hover:bg-success/15 disabled:opacity-100"
+                        title="This lead has already been qualified"
+                      >
+                        <CheckCircle className="h-4 w-4" />
+                        Qualified
                       </Button>
                     )}
                     {allowedTransitions.includes('CLOSED') && lead.status === LeadStatus.QUALIFIED && (
@@ -469,7 +511,10 @@ export default function LeadDetailPage() {
                       <FileText className="h-4 w-4" />
                       {handoverLoading ? 'Generating...' : 'Handover PDF'}
                     </Button>
-                    <Badge className="bg-primary/20 text-primary">
+                    <Badge className={statusColors[lead.status]}>
+                      {lead.status === LeadStatus.QUALIFIED && (
+                        <CheckCircle className="h-3 w-3 mr-1 shrink-0" />
+                      )}
                       {lead.status.replace('_', ' ')}
                     </Badge>
                   </div>
