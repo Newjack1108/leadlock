@@ -34,9 +34,13 @@ from app.models import (
 )
 from app.auth import get_current_user, require_role
 from app.schemas import (
-    LeadCreate, LeadUpdate, LeadResponse, LeadListResponse, StatusTransitionRequest,
+    LeadCreate, LeadUpdate, LeadCustomerReassignRequest, LeadResponse, LeadListResponse, StatusTransitionRequest,
     ActivityCreate, ActivityResponse, StatusHistoryResponse, CustomerResponse, customer_to_response, QuoteResponse,
     FacebookAdvertProfileResponse,
+)
+from app.lead_customer_reassign import (
+    create_customer_from_lead_unmatched,
+    reassign_lead_owned_records,
 )
 from app.workflow import (
     can_transition,
@@ -105,14 +109,88 @@ def generate_customer_number(session: Session) -> str:
     return f"CUST-{year}-{next_num:03d}"
 
 
-def _find_customer_by_normalized_phone(session: Session, phone: Optional[str]) -> Optional[Customer]:
+def _norm_email(value: Optional[str]) -> str:
+    return (value or "").strip().lower()
+
+
+def _norm_person_name(value: Optional[str]) -> str:
+    return " ".join((value or "").strip().lower().split())
+
+
+def _values_agree(left: str, right: str) -> bool:
+    return bool(left) and bool(right) and left == right
+
+
+def _values_conflict(left: str, right: str) -> bool:
+    return bool(left) and bool(right) and left != right
+
+
+def customer_identity_allows_link(customer: Customer, lead: Lead) -> bool:
+    """True when this lead should reuse the customer instead of creating another.
+
+    Link when email and phone both agree, or when name plus one contact field
+    agree. Any filled contact field that disagrees is a conflict and blocks the link.
+    """
+    name_agree = _values_agree(_norm_person_name(customer.name), _norm_person_name(lead.name))
+    email_agree = _values_agree(_norm_email(customer.email), _norm_email(lead.email))
+    phone_agree = _values_agree(
+        normalize_phone(customer.phone or ""),
+        normalize_phone(lead.phone or ""),
+    )
+    email_conflict = _values_conflict(_norm_email(customer.email), _norm_email(lead.email))
+    phone_conflict = _values_conflict(
+        normalize_phone(customer.phone or ""),
+        normalize_phone(lead.phone or ""),
+    )
+
+    if email_agree and phone_agree:
+        return True
+    if name_agree and email_agree and not phone_conflict:
+        return True
+    if name_agree and phone_agree and not email_conflict:
+        return True
+    return False
+
+
+def _iter_customers_matching_email(session: Session, email: Optional[str]):
+    email_norm = _norm_email(email)
+    if not email_norm:
+        return
+    statement = select(Customer).where(func.lower(Customer.email) == email_norm)
+    yield from session.exec(statement).all()
+
+
+def _iter_customers_matching_phone(session: Session, phone: Optional[str]):
+    raw = (phone or "").strip()
     norm = normalize_phone(phone or "")
-    if not norm:
-        return None
-    statement = select(Customer).where(Customer.phone.isnot(None))
-    for c in session.exec(statement).all():
-        if c.phone and normalize_phone(c.phone) == norm:
-            return c
+    if not raw and not norm:
+        return
+    seen_ids = set()
+    if norm:
+        statement = select(Customer).where(Customer.phone.isnot(None))
+        for customer in session.exec(statement).all():
+            if not customer.id or customer.id in seen_ids:
+                continue
+            if customer.phone and normalize_phone(customer.phone) == norm:
+                seen_ids.add(customer.id)
+                yield customer
+    if raw:
+        statement = select(Customer).where(Customer.phone == phone)
+        for customer in session.exec(statement).all():
+            if not customer.id or customer.id in seen_ids:
+                continue
+            seen_ids.add(customer.id)
+            yield customer
+
+
+def find_linkable_customer(session: Session, lead: Lead) -> Optional[Customer]:
+    """Return an existing customer that is safe to auto-link, or None."""
+    for customer in _iter_customers_matching_email(session, lead.email):
+        if customer_identity_allows_link(customer, lead):
+            return customer
+    for customer in _iter_customers_matching_phone(session, lead.phone):
+        if customer_identity_allows_link(customer, lead):
+            return customer
     return None
 
 
@@ -166,38 +244,17 @@ def _has_ready_on_create_outreach_rule_for_status(session: Session, status: Lead
 
 def find_or_create_customer(lead: Lead, session: Session) -> Customer:
     """
-    Find existing customer by email or phone, or create new customer from lead.
-    Returns the Customer instance.
+    Find an existing customer when identity agrees, or create a new customer from the lead.
+
+    Auto-link only when email and phone both match, or when name plus one contact
+    field match with no conflicting email/phone. Otherwise create a new customer.
     """
-    # Try to find existing customer by email
-    if lead.email:
-        statement = select(Customer).where(Customer.email == lead.email)
-        customer = session.exec(statement).first()
-        if customer:
-            _merge_lead_into_customer_if_sparse(customer, lead, session)
-            return customer
-    
-    # Try to find existing customer by phone (normalized match, then raw)
-    if lead.phone:
-        customer = _find_customer_by_normalized_phone(session, lead.phone)
-        if not customer:
-            statement = select(Customer).where(Customer.phone == lead.phone)
-            customer = session.exec(statement).first()
-        if customer:
-            _merge_lead_into_customer_if_sparse(customer, lead, session)
-            return customer
-    
-    # Create new customer from lead data
-    customer = Customer(
-        customer_number=generate_customer_number(session),
-        name=lead.name,
-        email=lead.email,
-        wrong_email_address=bool(getattr(lead, "wrong_email_address", False)),
-        phone=lead.phone,
-        postcode=lead.postcode,
-        customer_since=datetime.utcnow()
-    )
-    session.add(customer)
+    customer = find_linkable_customer(session, lead)
+    if customer:
+        _merge_lead_into_customer_if_sparse(customer, lead, session)
+        return customer
+
+    customer = create_customer_from_lead_unmatched(session, lead)
     session.commit()
     session.refresh(customer)
     return customer
@@ -1105,6 +1162,53 @@ async def get_lead_customer(
         raise HTTPException(status_code=404, detail="Customer not found")
     
     return customer_to_response(customer)
+
+
+@router.post("/{lead_id}/reassign-customer", response_model=LeadResponse)
+async def reassign_lead_customer(
+    lead_id: int,
+    body: LeadCustomerReassignRequest,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(
+        require_role([UserRole.DIRECTOR, UserRole.SALES_MANAGER, UserRole.CLOSER])
+    ),
+):
+    """Unlink this lead from the current customer and attach a new or existing one.
+
+    Omit ``customer_id`` to create a new customer from the lead (does not match
+    existing records). Quotes, orders, layout invites, and reminders owned by
+    this lead move with it. The previous customer's other records are left as-is.
+    """
+    lead = session.exec(select(Lead).where(Lead.id == lead_id)).first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    if body.customer_id is not None:
+        new_customer = session.get(Customer, body.customer_id)
+        if not new_customer:
+            raise HTTPException(status_code=404, detail="Customer not found")
+    else:
+        new_customer = create_customer_from_lead_unmatched(session, lead)
+
+    if lead.customer_id == new_customer.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "error": "ALREADY_LINKED",
+                "message": "This lead is already linked to that customer.",
+            },
+        )
+
+    reassign_lead_owned_records(session, lead, new_customer, actor_id=current_user.id)
+
+    if lead.status == LeadStatus.QUALIFIED:
+        from app.workflow import auto_create_opportunity
+
+        auto_create_opportunity(new_customer.id, lead.id, session, current_user.id)
+
+    session.commit()
+    session.refresh(lead)
+    return enrich_lead_response(lead, session, current_user)
 
 
 @router.get("/{lead_id}/quotes", response_model=List[QuoteResponse])

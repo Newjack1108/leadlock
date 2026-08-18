@@ -20,6 +20,7 @@ import {
   type DealerDiscountPolicyAdminPayload,
   type DealerDiscountPolicyAdminResponse,
   type DealerAllowedDiscountPolicy,
+  type Lead,
   type LeadHandoverPdfOptions,
   type OutreachSendListResponse,
   type OutreachSendTargetType,
@@ -1667,6 +1668,13 @@ export const getCustomerQuotes = async (customerId: number) => {
 export const getLeadQuotes = async (leadId: number) => {
   const response = await api.get(`/api/leads/${leadId}/quotes`);
   return response.data;
+};
+
+export const reassignLeadCustomer = async (leadId: number, customerId?: number) => {
+  const response = await api.post(`/api/leads/${leadId}/reassign-customer`, {
+    customer_id: customerId ?? null,
+  });
+  return response.data as Lead;
 };
 
 export const downloadLeadHandoverPdf = async (leadId: number, options?: LeadHandoverPdfOptions) => {

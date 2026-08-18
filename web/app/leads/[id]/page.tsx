@@ -39,6 +39,7 @@ import {
   FileText,
   DoorClosed,
   Trash2,
+  Link2Off,
 } from 'lucide-react';
 import api, { downloadLeadHandoverPdf, getLeadQuotes, listFacebookAdverts } from '@/lib/api';
 import { formatDateTime, formatActivityTypeLabel } from '@/lib/utils';
@@ -46,6 +47,7 @@ import { Lead, Activity, ActivityType, LeadStatus, Timeframe, LeadType, LeadSour
 import { toast } from 'sonner';
 import NinoxBadge from '@/components/NinoxBadge';
 import SendConfiguratorLinkDialog from '@/components/configurator/SendConfiguratorLinkDialog';
+import ChangeLeadCustomerDialog from '@/components/ChangeLeadCustomerDialog';
 import { canRemoveSpamLead } from '@/lib/leadSpam';
 import {
   leadFieldsAllowQualify,
@@ -133,6 +135,7 @@ export default function LeadDetailPage() {
   const [userRole, setUserRole] = useState<string | null>(null);
   const [removeSpamLoading, setRemoveSpamLoading] = useState(false);
   const [handoverLoading, setHandoverLoading] = useState(false);
+  const [changeCustomerOpen, setChangeCustomerOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -799,12 +802,20 @@ export default function LeadDetailPage() {
                   <CardTitle>Customer Profile</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="mb-4 p-3 bg-muted rounded-md">
+                  <div className="mb-4 p-3 bg-muted rounded-md space-y-1">
                     <div className="text-sm font-medium">Customer Number</div>
                     <div className="text-lg font-semibold">{lead.customer.customer_number}</div>
+                    <div className="text-sm">{lead.customer.name}</div>
+                    <div className="text-xs text-muted-foreground">{lead.customer.email || 'No email'}</div>
+                    <div className="text-xs text-muted-foreground">{lead.customer.phone || 'No phone'}</div>
                     <div className="text-xs text-muted-foreground mt-1">
                       Customer since: {new Date(lead.customer.customer_since).toLocaleDateString('en-GB')}
                     </div>
+                    {(lead.customer.name || '').trim().toLowerCase() !== (lead.name || '').trim().toLowerCase() && (
+                      <p className="text-xs text-amber-700 dark:text-amber-400 pt-1">
+                        This customer’s name does not match the lead. Use Change customer if they are not the same person.
+                      </p>
+                    )}
                   </div>
                   <div className="flex flex-col gap-2">
                     <Button
@@ -814,6 +825,16 @@ export default function LeadDetailPage() {
                     >
                       View Customer Profile →
                     </Button>
+                    {['DIRECTOR', 'SALES_MANAGER', 'CLOSER'].includes(userRole || '') && (
+                      <Button
+                        variant="outline"
+                        onClick={() => setChangeCustomerOpen(true)}
+                        className="w-full"
+                      >
+                        <Link2Off className="h-4 w-4 mr-2" />
+                        Change customer
+                      </Button>
+                    )}
                     <Button
                       variant="outline"
                       onClick={() => setConfigureLinkOpen(true)}
@@ -1030,6 +1051,17 @@ export default function LeadDetailPage() {
             customerName={lead.customer.name ?? lead.name}
           />
         )}
+
+        <ChangeLeadCustomerDialog
+          open={changeCustomerOpen}
+          onOpenChange={setChangeCustomerOpen}
+          lead={lead}
+          onDone={(updated) => {
+            setLead(updated);
+            fetchActivities();
+            fetchQuotesFromLead();
+          }}
+        />
       </main>
     </div>
   );

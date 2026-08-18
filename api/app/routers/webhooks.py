@@ -58,7 +58,7 @@ from app.auth import get_webhook_api_key, get_product_import_api_key, get_produc
 from app.routers.settings import get_company_settings
 from app.workflow import check_sla_overdue
 from app.lead_create_utils import lead_create_to_model_fields
-from app.routers.leads import enrich_lead_response, find_or_create_customer
+from app.routers.leads import enrich_lead_response, find_linkable_customer, find_or_create_customer
 from app.sms_service import (
     validate_twilio_webhook,
     normalize_phone,
@@ -1088,18 +1088,13 @@ async def facebook_leadgen_webhook(request: Request, session: Session = Depends(
             print(f"Facebook Lead Ads: failed to fetch lead {leadgen_id}: {err}", file=sys.stderr, flush=True)
             continue
         data = _leadgen_field_map_to_lead_data(field_map)
-        # Optionally match existing customer by email or phone
-        customer = None
-        if data.get("email"):
-            stmt = select(Customer).where(Customer.email == data["email"])
-            customer = session.exec(stmt).first()
-        if not customer and data.get("phone"):
-            from app.sms_service import normalize_phone as norm
-            stmt = select(Customer).where(Customer.phone.isnot(None))
-            for c in session.exec(stmt).all():
-                if c.phone and norm(c.phone) == norm(data["phone"]):
-                    customer = c
-                    break
+        probe = Lead(
+            name=data["name"],
+            email=data.get("email"),
+            phone=data.get("phone"),
+            postcode=data.get("postcode"),
+        )
+        customer = find_linkable_customer(session, probe)
         if not customer:
             num_stmt = select(Customer).where(Customer.customer_number.like(f"CUST-{year}-%"))
             existing = list(session.exec(num_stmt).all())

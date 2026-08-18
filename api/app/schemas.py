@@ -824,6 +824,11 @@ class CustomerLeadCreate(BaseModel):
     scope_notes: Optional[str] = None
 
 
+class LeadCustomerReassignRequest(BaseModel):
+    """Link this lead to an existing customer, or omit customer_id to create a new one from the lead."""
+    customer_id: Optional[int] = None
+
+
 class LeadUpdate(BaseModel):
     name: Optional[str] = None
     email: Optional[str] = None
