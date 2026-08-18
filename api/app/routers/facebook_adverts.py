@@ -33,8 +33,9 @@ async def list_facebook_adverts(
 async def create_facebook_advert(
     advert_data: FacebookAdvertProfileCreate,
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_role([UserRole.DIRECTOR])),
+    current_user: User = Depends(require_role([UserRole.DIRECTOR, UserRole.MARKETING])),
 ):
+    del current_user
     advert = FacebookAdvertProfile(**advert_data.dict())
     session.add(advert)
     session.commit()
@@ -47,7 +48,7 @@ async def update_facebook_advert(
     advert_id: int,
     advert_data: FacebookAdvertProfileUpdate,
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_role([UserRole.DIRECTOR])),
+    current_user: User = Depends(require_role([UserRole.DIRECTOR, UserRole.MARKETING])),
 ):
     statement = select(FacebookAdvertProfile).where(FacebookAdvertProfile.id == advert_id)
     advert = session.exec(statement).first()

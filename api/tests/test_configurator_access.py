@@ -7,7 +7,7 @@ import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
-from app.auth import get_current_user, has_configurator_access, require_configurator_access
+from app.auth import get_current_user, get_current_user_base, has_configurator_access, require_configurator_access
 from app.models import User, UserRole
 from app.routers import auth, configurator
 
@@ -30,6 +30,15 @@ def test_has_configurator_access_accepts_allowlisted_staff(monkeypatch: pytest.M
     user = _make_user(email="Kelvin@example.com", role=UserRole.CLOSER)
 
     assert has_configurator_access(user) is True
+
+
+def test_has_configurator_access_rejects_marketing_even_if_allowlisted(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("CONFIGURATOR_ENABLED", "true")
+    monkeypatch.setenv("CONFIGURATOR_ALLOWED_EMAILS", "ads@example.com")
+
+    user = _make_user(email="ads@example.com", role=UserRole.MARKETING)
+
+    assert has_configurator_access(user) is False
 
 
 def test_has_configurator_access_rejects_dealer_even_if_allowlisted(monkeypatch: pytest.MonkeyPatch):
@@ -60,7 +69,7 @@ def test_auth_me_includes_computed_configurator_access(monkeypatch: pytest.Monke
 
     app = FastAPI()
     app.include_router(auth.router)
-    app.dependency_overrides[get_current_user] = lambda: _make_user(email="kelvin@example.com")
+    app.dependency_overrides[get_current_user_base] = lambda: _make_user(email="kelvin@example.com")
     client = TestClient(app)
 
     response = client.get("/api/auth/me")

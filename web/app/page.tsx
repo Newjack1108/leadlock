@@ -37,7 +37,9 @@ export default function Home() {
             ? '/closer-dashboard'
             : role === 'DEALER_ADMIN' || role === 'DEALER_USER'
               ? '/dealer'
-              : '/leads';
+              : role === 'MARKETING'
+                ? '/dashboard'
+                : '/leads';
         window.location.replace(path);
       } catch {
         if (!cancelled) {

@@ -357,9 +357,9 @@ async def export_price_list_pdf(
 @router.post("/upload-image")
 async def upload_image(
     file: UploadFile = File(...),
-    current_user: User = Depends(require_role(PRODUCT_EDITOR_ROLES))
+    current_user: User = Depends(require_role([*PRODUCT_EDITOR_ROLES, UserRole.MARKETING]))
 ):
-    """Upload a product image. DIRECTOR and CLOSER."""
+    """Upload a product or advert image. DIRECTOR, CLOSER, and MARKETING."""
     try:
         image_url = await upload_product_image(file)
         return {"image_url": image_url}

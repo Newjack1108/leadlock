@@ -22,7 +22,7 @@ import { listUsers, createUser, updateUser, deactivateUser } from '@/lib/api';
 import { UserList } from '@/lib/types';
 import { toast } from 'sonner';
 
-const ROLES = ['DIRECTOR', 'SALES_MANAGER', 'CLOSER', 'DEALER_ADMIN', 'DEALER_USER'] as const;
+const ROLES = ['DIRECTOR', 'SALES_MANAGER', 'CLOSER', 'MARKETING', 'DEALER_ADMIN', 'DEALER_USER'] as const;
 const DEALER_ROLES = new Set(['DEALER_ADMIN', 'DEALER_USER']);
 
 export default function UsersPage() {
@@ -388,7 +388,8 @@ export default function UsersPage() {
                   ))}
                 </select>
                 <p className="text-xs text-muted-foreground">
-                  Director: full access. Sales Manager: can approve discounts. Closer: standard access. Dealer roles: require dealer ID and commission.
+                  Director: full access. Sales Manager: can approve discounts. Closer: quotes and closing.
+                  Marketing: ads, inbound leads, and website QA (read-only pipeline). Dealer roles: require dealer ID and commission.
                 </p>
               </div>
               {DEALER_ROLES.has(formData.role) && (

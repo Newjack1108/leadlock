@@ -32,6 +32,7 @@ import {
 } from '@/components/ui/select';
 import NinoxBadge from '@/components/NinoxBadge';
 import { canRemoveSpamLead } from '@/lib/leadSpam';
+import { isMarketingRole } from '@/lib/roles';
 import {
   STAFF_SELECTABLE_LEAD_SOURCES,
   SELECTABLE_LEAD_TYPES,
@@ -368,6 +369,7 @@ function LeadsPageContent() {
   };
 
   const isCloser = userRole === 'CLOSER';
+  const isMarketing = isMarketingRole(userRole);
   const statusTabs: (LeadStatus | 'ALL')[] = isCloser ? CLOSER_STATUS_TABS : ['ALL', ...Object.values(LeadStatus)];
   const totalPages = Math.max(1, Math.ceil(total / LEADS_PAGE_SIZE));
 
@@ -417,12 +419,14 @@ function LeadsPageContent() {
                 ))}
               </SelectContent>
             </Select>
+            {!isMarketing && (
             <Button
               variant={myLeadsOnly ? 'default' : 'outline'}
               onClick={() => setMyLeadsOnly(!myLeadsOnly)}
             >
               My Leads
             </Button>
+            )}
             <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
               <input
                 type="checkbox"
@@ -432,6 +436,7 @@ function LeadsPageContent() {
               />
               Include archived
             </label>
+            {!isMarketing && (
             <Button
               onClick={() => setCreateDialogOpen(true)}
               className="bg-primary hover:bg-primary/90"
@@ -439,6 +444,7 @@ function LeadsPageContent() {
               <Plus className="h-4 w-4 mr-2" />
               Create Lead
             </Button>
+            )}
           </div>
 
           {/* Status Tabs */}

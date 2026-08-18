@@ -2,10 +2,11 @@ from datetime import datetime, timedelta, date, timezone
 from typing import Optional
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from fastapi import Depends, HTTPException, status, Header
+from fastapi import Depends, HTTPException, Request, status, Header
 from fastapi.security import OAuth2PasswordBearer
 from sqlmodel import Session, select
 from app.database import get_session
+from app.marketing_access import marketing_may_access
 from app.models import User, UserRole
 import os
 
@@ -110,6 +111,7 @@ def get_current_user_base(
 
 
 def get_current_user(
+    request: Request,
     token: str = Depends(oauth2_scheme),
     session: Session = Depends(get_session),
 ) -> User:
@@ -119,6 +121,11 @@ def get_current_user(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=leave_forbidden_detail(user),
+        )
+    if user.role == UserRole.MARKETING and not marketing_may_access(request.method, request.url.path):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This area is not available for marketing accounts",
         )
     return user
 
@@ -167,7 +174,7 @@ async def require_non_dealer_user(current_user: User = Depends(get_current_user)
 def has_configurator_access(user: User) -> bool:
     if not _env_bool("CONFIGURATOR_ENABLED", default=False):
         return False
-    if user.role in (UserRole.DEALER_ADMIN, UserRole.DEALER_USER):
+    if user.role in (UserRole.DEALER_ADMIN, UserRole.DEALER_USER, UserRole.MARKETING):
         return False
     if _env_bool("CONFIGURATOR_ALLOW_DIRECTOR_OVERRIDE", default=False) and user.role == UserRole.DIRECTOR:
         return True

@@ -49,6 +49,7 @@ import NinoxBadge from '@/components/NinoxBadge';
 import SendConfiguratorLinkDialog from '@/components/configurator/SendConfiguratorLinkDialog';
 import ChangeLeadCustomerDialog from '@/components/ChangeLeadCustomerDialog';
 import { canRemoveSpamLead } from '@/lib/leadSpam';
+import { isMarketingRole } from '@/lib/roles';
 import {
   leadFieldsAllowQualify,
   qualifyFieldsMessage,
@@ -156,10 +157,15 @@ export default function LeadDetailPage() {
     if (leadId) {
       fetchLead();
       fetchActivities();
-      fetchQuotesFromLead();
       fetchAdvertProfiles();
     }
   }, [leadId]);
+
+  useEffect(() => {
+    if (leadId && userRole && !isMarketingRole(userRole)) {
+      fetchQuotesFromLead();
+    }
+  }, [leadId, userRole]);
 
   const fetchLead = async () => {
     try {
@@ -361,6 +367,7 @@ export default function LeadDetailPage() {
   };
 
   const handleUpdateLead = async (field: string, value: any) => {
+    if (isMarketingRole(userRole)) return;
     try {
       const response = await api.patch(`/api/leads/${leadId}`, {
         [field]: value,
@@ -407,9 +414,11 @@ export default function LeadDetailPage() {
   }
 
   const isNinoxLead = lead.customer?.source_system === 'Ninox';
+  const isMarketing = isMarketingRole(userRole);
   const canQualifyFields = leadFieldsAllowQualify(lead.lead_source, lead.lead_type);
   const qualifyFieldsHint = qualifyFieldsMessage(lead.lead_source, lead.lead_type);
   const canQualify =
+    !isMarketing &&
     allowedTransitions.includes('QUALIFIED') &&
     PRE_QUALIFY_STATUSES.includes(lead.status);
 
@@ -429,6 +438,11 @@ export default function LeadDetailPage() {
               Lead added <span className="font-medium text-foreground">{formatDateTime(lead.created_at)}</span>
             </span>
           </p>
+          {isMarketing && (
+            <p className="mt-3 text-sm text-muted-foreground">
+              Marketing view is read-only. You can confirm inbound leads and advert tagging, but sales actions stay with the sales team.
+            </p>
+          )}
         </div>
 
         <div className="space-y-6">
@@ -503,6 +517,7 @@ export default function LeadDetailPage() {
                         {removeSpamLoading ? 'Removing...' : 'Remove spam'}
                       </Button>
                     )}
+                    {!isMarketing && (
                     <Button
                       size="sm"
                       variant="outline"
@@ -514,6 +529,7 @@ export default function LeadDetailPage() {
                       <FileText className="h-4 w-4" />
                       {handoverLoading ? 'Generating...' : 'Handover PDF'}
                     </Button>
+                    )}
                     <Badge className={statusColors[lead.status]}>
                       {lead.status === LeadStatus.QUALIFIED && (
                         <CheckCircle className="h-3 w-3 mr-1 shrink-0" />
@@ -524,6 +540,7 @@ export default function LeadDetailPage() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
+                <fieldset disabled={isMarketing} className="space-y-4 min-w-0">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label>Email</Label>
@@ -725,10 +742,12 @@ export default function LeadDetailPage() {
                     rows={2}
                   />
                 </div>
+                </fieldset>
               </CardContent>
             </Card>
 
             {/* Right: Contact cards stacked */}
+            {!isMarketing && (
             <div className="flex flex-col gap-4 md:w-80 md:flex-shrink-0 md:min-h-0">
               <Card className="flex-1 min-h-0 flex flex-col">
                 <CardHeader>
@@ -793,6 +812,7 @@ export default function LeadDetailPage() {
                 </CardContent>
               </Card>
             </div>
+            )}
           </div>
 
             {/* Customer Link Card */}
@@ -818,6 +838,8 @@ export default function LeadDetailPage() {
                     )}
                   </div>
                   <div className="flex flex-col gap-2">
+                    {!isMarketing && (
+                    <>
                     <Button
                       variant="outline"
                       onClick={() => router.push(`/customers/${lead.customer!.id}`)}
@@ -850,13 +872,15 @@ export default function LeadDetailPage() {
                         Create Quote
                       </Button>
                     )}
+                    </>
+                    )}
                   </div>
                 </CardContent>
               </Card>
             )}
 
             {/* Quotes from this Lead */}
-            {lead.customer && (
+            {!isMarketing && lead.customer && (
               <Card>
                 <CardHeader>
                   <div className="flex items-center gap-2">
@@ -898,7 +922,7 @@ export default function LeadDetailPage() {
             )}
 
             {/* Quote Lock Card */}
-            {lead.status === LeadStatus.QUALIFIED && lead.customer && (
+            {!isMarketing && lead.status === LeadStatus.QUALIFIED && lead.customer && (
               <QuoteLockCard 
                 customer={lead.customer} 
                 quoteLocked={lead.quote_locked}

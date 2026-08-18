@@ -30,6 +30,7 @@ import api, {
 } from '@/lib/api';
 import { DashboardStats, StaleSummary, CompanySettings, UnreadSmsSummary, UnreadMessengerSummary, LeadLocationItem, DiscountTemplate, DashboardCommunicationTotals, FacebookLeadConversionReport, FacebookLeadConversionRow, DashboardPresetPeriod, DateRangeQueryParams } from '@/lib/types';
 import { getInstallationLeadTimeRows, hasAnyInstallationLeadTime } from '@/lib/companyLeadTimeDisplay';
+import { isMarketingRole } from '@/lib/roles';
 import { toast } from 'sonner';
 import { TrendingUp, Users, CheckCircle2, Trophy, Bell, ArrowRight, Clock, MessageSquare, FileDown, BarChart3, Target, MessageCircle, Calendar, DoorClosed, LayoutDashboard, ChevronDown, ChevronUp } from 'lucide-react';
 import StatusPieChart from '@/components/StatusPieChart';
@@ -174,6 +175,28 @@ export default function DashboardPage() {
         return;
       }
 
+      if (isMarketingRole(role)) {
+        const [statsRes, locationsRes, facebookReportRes] = await Promise.all([
+          getDashboardStats(activeDateParams).catch((err: unknown) => {
+            setLoadError('Dashboard stats could not be loaded. Try All Time or check API logs.');
+            console.error('getDashboardStats failed', err);
+            return null;
+          }),
+          getLeadLocations(activeDateParams).catch(() => []),
+          getFacebookLeadConversionReport(activeDateParams).catch(() => null),
+        ]);
+        setStats(statsRes);
+        setStaleSummary(null);
+        setCompanySettings(null);
+        setUnreadSms({ count: 0, messages: [] });
+        setUnreadMessenger({ count: 0, messages: [] });
+        setLeadLocations(Array.isArray(locationsRes) ? locationsRes : []);
+        setActiveDiscounts([]);
+        setCommunicationTotals(null);
+        setFacebookLeadReport(facebookReportRes);
+        return;
+      }
+
       const [
         statsRes,
         staleRes,
@@ -308,6 +331,11 @@ export default function DashboardPage() {
 
   const liveGiveaways = activeDiscounts.filter((discount) => discount.is_giveaway).length;
   const liveSpecialOffers = activeDiscounts.filter((discount) => !discount.is_giveaway).length;
+  const isMarketing = isMarketingRole(userRole);
+  const quotesAcceptedHref = isMarketing ? '/leads?status=WON' : '/quotes?status=ACCEPTED';
+  const quotesSentHref = isMarketing ? '/leads?status=QUOTED' : '/quotes?status=SENT';
+  const quotesRejectedHref = isMarketing ? '/leads?status=LOST' : '/quotes?status=REJECTED';
+  const quotesClosedHref = isMarketing ? '/leads?status=CLOSED' : '/quotes?lifecycle=closed';
   const totalInteractions = communicationTotals?.total ?? 0;
   const emailTotal = communicationTotals ? communicationTotals.email.sent + communicationTotals.email.received : 0;
   const smsTotal = communicationTotals ? communicationTotals.sms.sent + communicationTotals.sms.received : 0;
@@ -391,7 +419,7 @@ export default function DashboardPage() {
         )}
 
         {/* Installation lead times – clear indicator for sales */}
-        {hasAnyInstallationLeadTime(companySettings) && (
+        {!isMarketing && hasAnyInstallationLeadTime(companySettings) && (
           <div className="mb-8 grid grid-cols-1 gap-4 lg:grid-cols-2">
             <Card className="border-primary/30 bg-primary/5">
               <CardContent className="py-4">
@@ -480,7 +508,7 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
-          <Link href="/quotes?status=ACCEPTED" className="block">
+          <Link href={quotesAcceptedHref} className="block">
             <Card className="cursor-pointer transition-colors hover:border-primary/50">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Won</CardTitle>
@@ -594,7 +622,7 @@ export default function DashboardPage() {
               </CardContent>
             </Card>
           </Link>
-          <Link href="/quotes?status=SENT" className="block">
+          <Link href={quotesSentHref} className="block">
             <Card className="cursor-pointer transition-colors hover:border-primary/50 h-full">
               <CardHeader>
                 <CardTitle className="text-lg">Quoted</CardTitle>
@@ -607,7 +635,7 @@ export default function DashboardPage() {
               </CardContent>
             </Card>
           </Link>
-          <Link href="/quotes?status=ACCEPTED" className="block">
+          <Link href={quotesAcceptedHref} className="block">
             <Card className="cursor-pointer transition-colors hover:border-primary/50 h-full">
               <CardHeader>
                 <CardTitle className="text-lg">Won</CardTitle>
@@ -620,7 +648,7 @@ export default function DashboardPage() {
               </CardContent>
             </Card>
           </Link>
-          <Link href="/quotes?status=REJECTED" className="block">
+          <Link href={quotesRejectedHref} className="block">
             <Card className="cursor-pointer transition-colors hover:border-primary/50 h-full">
               <CardHeader>
                 <CardTitle className="text-lg">Lost</CardTitle>
@@ -633,7 +661,7 @@ export default function DashboardPage() {
               </CardContent>
             </Card>
           </Link>
-          <Link href="/quotes?lifecycle=closed" className="block">
+          <Link href={quotesClosedHref} className="block">
             <Card className="cursor-pointer transition-colors hover:border-primary/50 h-full">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-lg">Closed</CardTitle>
@@ -652,14 +680,17 @@ export default function DashboardPage() {
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
               <BarChart3 className="h-5 w-5" />
-              Sales Reports
+              {isMarketing ? 'Marketing Reports' : 'Sales Reports'}
             </CardTitle>
             <p className="text-sm text-muted-foreground">
-              Download PDF reports to assist sales analysis
+              {isMarketing
+                ? 'Download source performance to check ads and website conversion'
+                : 'Download PDF reports to assist sales analysis'}
             </p>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+              {!isMarketing && (
               <div className="flex flex-col p-4 rounded-lg border border-border">
                 <div className="flex items-center gap-2 mb-2">
                   <Target className="h-4 w-4 text-primary" />
@@ -678,6 +709,7 @@ export default function DashboardPage() {
                   Download PDF
                 </Button>
               </div>
+              )}
               <div className="flex flex-col p-4 rounded-lg border border-border">
                 <div className="flex items-center gap-2 mb-2">
                   <BarChart3 className="h-4 w-4 text-primary" />
@@ -696,6 +728,8 @@ export default function DashboardPage() {
                   Download PDF
                 </Button>
               </div>
+              {!isMarketing && (
+              <>
               <div className="flex flex-col p-4 rounded-lg border border-border">
                 <div className="flex items-center gap-2 mb-2">
                   <Users className="h-4 w-4 text-primary" />
@@ -753,6 +787,8 @@ export default function DashboardPage() {
                   Download PDF
                 </Button>
               </div>
+              </>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -1182,10 +1218,11 @@ export default function DashboardPage() {
           <SubmittedConfiguratorInvitesCard />
         </div>
 
-        {/* Reminders List */}
+        {!isMarketing && (
         <div className="mb-8">
           <ReminderList limit={5} showActions={true} />
         </div>
+        )}
 
       </main>
     </div>

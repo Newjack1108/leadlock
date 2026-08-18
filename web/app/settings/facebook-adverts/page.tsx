@@ -9,7 +9,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { FacebookAdvertProfile } from '@/lib/types';
-import { createFacebookAdvert, listFacebookAdverts, updateFacebookAdvert } from '@/lib/api';
+import { createFacebookAdvert, listFacebookAdverts, updateFacebookAdvert, getAuthMe } from '@/lib/api';
+import { canManageFacebookAdverts } from '@/lib/roles';
 import { toast } from 'sonner';
 import { Pencil, Plus, Save } from 'lucide-react';
 import ImageUpload from '@/components/ImageUpload';
@@ -32,13 +33,32 @@ export default function FacebookAdvertsPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [allowed, setAllowed] = useState(false);
   const [profiles, setProfiles] = useState<FacebookAdvertProfile[]>([]);
   const [editingProfileId, setEditingProfileId] = useState<number | null>(null);
   const [formData, setFormData] = useState<FormState>(emptyForm);
 
   useEffect(() => {
-    fetchProfiles();
-  }, []);
+    const load = async () => {
+      try {
+        const me = await getAuthMe();
+        if (!canManageFacebookAdverts(me.role)) {
+          router.push('/dashboard');
+          return;
+        }
+        setAllowed(true);
+        await fetchProfiles();
+      } catch (error: any) {
+        if (error.response?.status === 401) {
+          router.push('/login');
+        } else {
+          toast.error('Failed to load Facebook adverts');
+          setLoading(false);
+        }
+      }
+    };
+    void load();
+  }, [router]);
 
   const fetchProfiles = async () => {
     try {
@@ -116,7 +136,7 @@ export default function FacebookAdvertsPage() {
     }
   };
 
-  if (loading) {
+  if (loading || !allowed) {
     return (
       <div className="min-h-screen">
         <Header />

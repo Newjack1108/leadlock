@@ -27,6 +27,7 @@ import {
   Home,
 } from 'lucide-react';
 import api from '@/lib/api';
+import { canManageFacebookAdverts, isMarketingRole } from '@/lib/roles';
 import {
   getAuthMe,
   getStaleSummary,
@@ -159,6 +160,15 @@ export default function Header() {
       setConfiguratorSubmissionsCount(0);
       return;
     }
+    if (isMarketingRole(userRole)) {
+      setReminderCount(0);
+      setUnreadMessagesCount(0);
+      setPendingDiscountCount(0);
+      setNewQualifiedDashboardCount(0);
+      fetchNewLeadsCount();
+      fetchConfiguratorSubmissionsCount();
+      return;
+    }
     fetchReminderCount();
     fetchNewLeadsCount();
     fetchUnreadMessagesCount();
@@ -212,6 +222,9 @@ export default function Header() {
   const isDirector = userRole === 'DIRECTOR';
   const isCloser = userRole === 'CLOSER';
   const isDealer = userRole === 'DEALER_ADMIN' || userRole === 'DEALER_USER';
+  const isMarketing = isMarketingRole(userRole);
+  const isSalesStaff = !isDealer && !isMarketing;
+  const canManageAdverts = canManageFacebookAdverts(userRole);
   const canApproveDiscounts = userRole === 'DIRECTOR' || userRole === 'SALES_MANAGER';
   const quotesNavActive = Boolean(pathname?.startsWith('/quotes'));
   const configuratorNavActive = Boolean(pathname?.startsWith('/configurator'));
@@ -309,6 +322,42 @@ export default function Header() {
                 )}
               </Link>
             </>
+          ) : isMarketing ? (
+            <>
+              <Link href="/dashboard">
+                <Button
+                  variant={pathname?.startsWith('/dashboard') ? 'default' : 'ghost'}
+                  size="sm"
+                  className={
+                    pathname?.startsWith('/dashboard')
+                      ? 'text-primary-foreground'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }
+                >
+                  <LayoutDashboard className="h-4 w-4 mr-2" />
+                  Dashboard
+                </Button>
+              </Link>
+              <Link href="/leads" className="relative">
+                <Button
+                  variant={pathname?.startsWith('/leads') ? 'default' : 'ghost'}
+                  size="sm"
+                  className={
+                    pathname?.startsWith('/leads')
+                      ? 'text-primary-foreground'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }
+                >
+                  <Users className="h-4 w-4 mr-2" />
+                  Leads
+                </Button>
+                {newLeadsCount > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-red-500 text-white text-xs font-semibold flex items-center justify-center">
+                    {newLeadsCount > 99 ? '99+' : newLeadsCount}
+                  </span>
+                )}
+              </Link>
+            </>
           ) : (
             <Link href="/leads" className="relative">
               <Button
@@ -330,7 +379,7 @@ export default function Header() {
               )}
             </Link>
           )}
-          {!isDealer && <div className="relative">
+          {isSalesStaff && <div className="relative">
             <Link href="/customers">
               <Button
                 variant={pathname?.startsWith('/customers') ? 'default' : 'ghost'}
@@ -359,7 +408,7 @@ export default function Header() {
               </button>
             )}
           </div>}
-          {!isDealer && <Link href="/quotes">
+          {isSalesStaff && <Link href="/quotes">
             <Button
               variant={quotesNavActive ? 'default' : 'ghost'}
               size="sm"
@@ -394,7 +443,7 @@ export default function Header() {
               )}
             </Link>
           )}
-          {!isDealer && <Link href="/orders">
+          {isSalesStaff && <Link href="/orders">
             <Button
               variant={pathname?.startsWith('/orders') ? 'default' : 'ghost'}
               size="sm"
@@ -424,7 +473,7 @@ export default function Header() {
               </Button>
             </Link>
           )}
-          {!isDealer && <Link href="/reminders" className="relative">
+          {isSalesStaff && <Link href="/reminders" className="relative">
             <Button
               variant={pathname?.startsWith('/reminders') ? 'default' : 'ghost'}
               size="sm"
@@ -443,7 +492,7 @@ export default function Header() {
               </span>
             )}
           </Link>}
-          {!isDealer && (
+          {isSalesStaff && (
             <Link href="/weekly-plan">
               <Button
                 variant={pathname?.startsWith('/weekly-plan') ? 'default' : 'ghost'}
@@ -459,7 +508,7 @@ export default function Header() {
               </Button>
             </Link>
           )}
-          {!isDealer && <Link href="/sales-documents">
+          {isSalesStaff && <Link href="/sales-documents">
             <Button
               variant={pathname?.startsWith('/sales-documents') ? 'default' : 'ghost'}
               size="sm"
@@ -473,7 +522,7 @@ export default function Header() {
               Documents
             </Button>
           </Link>}
-          {!isDealer && !isCloser && (
+          {isSalesStaff && !isCloser && (
             <Link href="/discount-requests" className="relative">
               <Button
                 variant={pathname?.startsWith('/discount-requests') ? 'default' : 'ghost'}
@@ -515,6 +564,14 @@ export default function Header() {
                   </DropdownMenuItem>
                 </Link>
               )}
+              {canManageAdverts && (
+                <Link href="/settings/facebook-adverts">
+                  <DropdownMenuItem className="cursor-pointer">
+                    <ImageIcon className="h-4 w-4 mr-2" />
+                    Facebook Adverts
+                  </DropdownMenuItem>
+                </Link>
+              )}
               {isDirector && (
                 <>
                   <Link href="/settings/users">
@@ -527,12 +584,6 @@ export default function Header() {
                     <DropdownMenuItem className="cursor-pointer">
                       <Settings className="h-4 w-4 mr-2" />
                       Company Settings
-                    </DropdownMenuItem>
-                  </Link>
-                  <Link href="/settings/facebook-adverts">
-                    <DropdownMenuItem className="cursor-pointer">
-                      <ImageIcon className="h-4 w-4 mr-2" />
-                      Facebook Adverts
                     </DropdownMenuItem>
                   </Link>
                   <Link href="/settings/email-templates">
@@ -691,6 +742,36 @@ export default function Header() {
                       <BadgePill count={closerQualifiedBadgeCount} />
                     </Link>
                   </>
+                ) : isMarketing ? (
+                  <>
+                    <Link
+                      href="/dashboard"
+                      onClick={closeMobile}
+                      className={cn(
+                        mobileNavLinkClass,
+                        pathname?.startsWith('/dashboard') && 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground'
+                      )}
+                    >
+                      <span className="flex items-center gap-2">
+                        <LayoutDashboard className="h-4 w-4 shrink-0" />
+                        Dashboard
+                      </span>
+                    </Link>
+                    <Link
+                      href="/leads"
+                      onClick={closeMobile}
+                      className={cn(
+                        mobileNavLinkClass,
+                        pathname?.startsWith('/leads') && 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground'
+                      )}
+                    >
+                      <span className="flex items-center gap-2">
+                        <Users className="h-4 w-4 shrink-0" />
+                        Leads
+                      </span>
+                      <BadgePill count={newLeadsCount} />
+                    </Link>
+                  </>
                 ) : (
                   <Link
                     href="/leads"
@@ -708,7 +789,7 @@ export default function Header() {
                   </Link>
                 )}
 
-                {!isDealer && <div className="flex flex-col gap-1">
+                {isSalesStaff && <div className="flex flex-col gap-1">
                   <Link
                     href="/customers"
                     onClick={closeMobile}
@@ -737,7 +818,7 @@ export default function Header() {
                   )}
                 </div>}
 
-                {!isDealer && <Link
+                {isSalesStaff && <Link
                   href="/quotes"
                   onClick={closeMobile}
                   className={cn(
@@ -767,7 +848,7 @@ export default function Header() {
                     <BadgePill count={configuratorSubmissionsCount} />
                   </Link>
                 )}
-                {!isDealer && <Link
+                {isSalesStaff && <Link
                   href="/orders"
                   onClick={closeMobile}
                   className={cn(
@@ -795,7 +876,7 @@ export default function Header() {
                     </span>
                   </Link>
                 )}
-                {!isDealer && <Link
+                {isSalesStaff && <Link
                   href="/reminders"
                   onClick={closeMobile}
                   className={cn(
@@ -809,7 +890,7 @@ export default function Header() {
                   </span>
                   <BadgePill count={reminderCount} />
                 </Link>}
-                {!isDealer && (
+                {isSalesStaff && (
                   <Link
                     href="/weekly-plan"
                     onClick={closeMobile}
@@ -825,7 +906,7 @@ export default function Header() {
                     </span>
                   </Link>
                 )}
-                {!isDealer && <Link
+                {isSalesStaff && <Link
                   href="/sales-documents"
                   onClick={closeMobile}
                   className={cn(
@@ -838,7 +919,7 @@ export default function Header() {
                     Documents
                   </span>
                 </Link>}
-                {!isDealer && !isCloser && (
+                {isSalesStaff && !isCloser && (
                   <Link
                     href="/discount-requests"
                     onClick={closeMobile}
@@ -875,6 +956,21 @@ export default function Header() {
                     </span>
                   </Link>
                 )}
+                {canManageAdverts && (
+                  <Link
+                    href="/settings/facebook-adverts"
+                    onClick={closeMobile}
+                    className={cn(
+                      mobileNavLinkClass,
+                      pathname?.startsWith('/settings/facebook-adverts') && 'bg-accent'
+                    )}
+                  >
+                    <span className="flex items-center gap-2">
+                      <ImageIcon className="h-4 w-4 shrink-0" />
+                      Facebook Adverts
+                    </span>
+                  </Link>
+                )}
                 {isDirector && (
                   <>
                     <Link
@@ -901,19 +997,6 @@ export default function Header() {
                       <span className="flex items-center gap-2">
                         <Settings className="h-4 w-4 shrink-0" />
                         Company Settings
-                      </span>
-                    </Link>
-                    <Link
-                      href="/settings/facebook-adverts"
-                      onClick={closeMobile}
-                      className={cn(
-                        mobileNavLinkClass,
-                        pathname?.startsWith('/settings/facebook-adverts') && 'bg-accent'
-                      )}
-                    >
-                      <span className="flex items-center gap-2">
-                        <ImageIcon className="h-4 w-4 shrink-0" />
-                        Facebook Adverts
                       </span>
                     </Link>
                     <Link
