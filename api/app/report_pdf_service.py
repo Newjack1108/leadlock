@@ -963,17 +963,18 @@ def generate_facebook_lead_conversion_pdf(
         reverse=True,
     )
 
-    recent_table_data = [["Lead", "Advert", "Accepted", "Revenue", "Days"]]
+    recent_table_data = [["Lead", "Postcode", "Advert", "Accepted", "Revenue", "Days"]]
     for row in converted_rows[:8]:
         accepted = _coerce_datetime(row.get("accepted_at")) or _coerce_datetime(row.get("order_created_at"))
         recent_table_data.append([
             Paragraph(str(row.get("lead_name", "") or "—"), table_cell),
+            Paragraph(str(row.get("postcode", "") or "—"), table_cell),
             Paragraph(str(row.get("advert_profile_name", "") or "—"), table_cell),
             accepted.strftime("%d %b %Y") if accepted else "—",
             format_currency(row.get("order_amount", 0)),
             f"{row.get('days_to_convert', 0):.1f}" if row.get("days_to_convert") is not None else "—",
         ])
-    recent_table = Table(recent_table_data, colWidths=[38 * mm, 50 * mm, 30 * mm, 28 * mm, 16 * mm], repeatRows=1)
+    recent_table = Table(recent_table_data, colWidths=[32 * mm, 22 * mm, 42 * mm, 26 * mm, 26 * mm, 16 * mm], repeatRows=1)
     recent_table.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), FACEBOOK_REPORT_COLORS[3]),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
@@ -987,7 +988,7 @@ def generate_facebook_lead_conversion_pdf(
         ("RIGHTPADDING", (0, 0), (-1, -1), 6),
         ("TOPPADDING", (0, 0), (-1, -1), 6),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-        ("ALIGN", (2, 1), (-1, -1), "CENTER"),
+        ("ALIGN", (3, 1), (-1, -1), "CENTER"),
     ]))
     flowables.append(recent_table)
 

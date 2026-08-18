@@ -87,6 +87,7 @@ def _add_lead(
     advert_id: int | None = None,
     status: LeadStatus = LeadStatus.NEW,
     product_interest: str | None = None,
+    postcode: str | None = None,
 ) -> Lead:
     lead = Lead(
         name=name,
@@ -95,6 +96,7 @@ def _add_lead(
         lead_type=LeadType.UNKNOWN,
         facebook_advert_profile_id=advert_id,
         product_interest=product_interest,
+        postcode=postcode,
         created_at=created_at,
         updated_at=created_at,
     )
@@ -400,3 +402,24 @@ def test_all_time_view_keeps_matching_period_and_cohort(api_client, sqlite_engin
     assert summary["cohort_converted_leads"] == 1
     assert summary["cohort_conversion_rate"] == 50.0
     assert summary["conversion_rate"] == summary["period_conversion_rate"]
+
+
+def test_report_includes_lead_postcode(api_client, sqlite_engine):
+    week_mid = datetime(2026, 6, 10, 12, 0, 0)
+
+    with Session(sqlite_engine) as session:
+        _add_lead(session, name="With Postcode", created_at=week_mid, postcode="CW1 1AA")
+        _add_lead(session, name="Without Postcode", created_at=week_mid, postcode="  ")
+
+    params = {"start_date": "2026-06-08", "end_date": "2026-06-14"}
+    response = api_client.get("/api/reports/facebook-lead-conversion", params=params)
+    assert response.status_code == 200
+    by_name = {row["lead_name"]: row for row in response.json()["rows"]}
+    assert by_name["With Postcode"]["postcode"] == "CW1 1AA"
+    assert by_name["Without Postcode"]["postcode"] is None
+
+    csv_response = api_client.get("/api/reports/facebook-lead-conversion.csv", params=params)
+    assert csv_response.status_code == 200
+    csv_text = csv_response.text
+    assert "Postcode" in csv_text.splitlines()[0]
+    assert "CW1 1AA" in csv_text

@@ -553,6 +553,7 @@ export interface FacebookLeadConversionRow {
   lead_name: string;
   email?: string | null;
   phone?: string | null;
+  postcode?: string | null;
   lead_status: string;
   lead_source: string;
   advert_profile_name: string;

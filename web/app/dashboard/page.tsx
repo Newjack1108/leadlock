@@ -974,6 +974,7 @@ export default function DashboardPage() {
                             <th className="p-3 text-left font-medium">Lead date</th>
                             <th className="p-3 text-left font-medium">Accepted</th>
                             <th className="p-3 text-left font-medium">Lead</th>
+                            <th className="p-3 text-left font-medium">Postcode</th>
                             <th className="p-3 text-left font-medium">Advert</th>
                             <th className="p-3 text-left font-medium">Product type</th>
                             <th className="p-3 text-left font-medium">Quote</th>
@@ -997,6 +998,7 @@ export default function DashboardPage() {
                                   {!row.created_in_period && row.converted_in_period ? ' • Prior lead' : ''}
                                 </div>
                               </td>
+                              <td className="p-3 whitespace-nowrap">{row.postcode || '—'}</td>
                               <td className="p-3">{row.advert_profile_name}</td>
                               <td className="p-3">
                                 <div>{row.product_type}</div>

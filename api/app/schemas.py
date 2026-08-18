@@ -1081,6 +1081,7 @@ class FacebookLeadConversionRow(BaseModel):
     lead_name: str
     email: Optional[str] = None
     phone: Optional[str] = None
+    postcode: Optional[str] = None
     lead_status: str
     lead_source: str
     advert_profile_name: str
