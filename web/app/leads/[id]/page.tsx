@@ -6,7 +6,7 @@ import Image from 'next/image';
 import Header from '@/components/Header';
 import QuoteLockCard from '@/components/QuoteLockCard';
 import ComposeEmailDialog from '@/components/ComposeEmailDialog';
-import CallNotesDialog from '@/components/CallNotesDialog';
+import { useCallSession } from '@/components/CallSessionProvider';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -114,6 +114,7 @@ export default function LeadDetailPage() {
   const router = useRouter();
   const params = useParams();
   const leadId = parseInt(params.id as string);
+  const { openCall, registerCallLoggedListener } = useCallSession();
 
   const [lead, setLead] = useState<Lead | null>(null);
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -126,7 +127,6 @@ export default function LeadDetailPage() {
   const [closeOtherNotes, setCloseOtherNotes] = useState('');
   const [closeLoading, setCloseLoading] = useState(false);
   const [composeEmailOpen, setComposeEmailOpen] = useState(false);
-  const [callNotesDialogOpen, setCallNotesDialogOpen] = useState(false);
   const [ensureCustomerLoading, setEnsureCustomerLoading] = useState(false);
   const [quotesFromLead, setQuotesFromLead] = useState<any[]>([]);
   const [quotesLoading, setQuotesLoading] = useState(false);
@@ -196,6 +196,14 @@ export default function LeadDetailPage() {
     }
   };
 
+  useEffect(() => {
+    return registerCallLoggedListener((loggedCustomerId) => {
+      if (!lead?.customer || lead.customer.id !== loggedCustomerId) return;
+      void fetchLead();
+      void fetchActivities();
+    });
+  }, [lead?.customer?.id, leadId, registerCallLoggedListener]);
+
   const fetchQuotesFromLead = async () => {
     setQuotesLoading(true);
     try {
@@ -255,7 +263,13 @@ export default function LeadDetailPage() {
 
   const handleCallClick = async () => {
     const updated = await ensureCustomerThen();
-    if (updated?.customer && updated.phone) setCallNotesDialogOpen(true);
+    if (updated?.customer && updated.phone) {
+      openCall({
+        customerId: updated.customer.id,
+        customerName: updated.name,
+        phone: updated.phone,
+      });
+    }
   };
 
   const handleQualify = async () => {
@@ -1045,20 +1059,6 @@ export default function LeadDetailPage() {
             open={composeEmailOpen}
             onOpenChange={setComposeEmailOpen}
             customer={lead.customer}
-            onSuccess={() => {
-              fetchLead();
-              fetchActivities();
-            }}
-          />
-        )}
-
-        {lead.customer && lead.phone && (
-          <CallNotesDialog
-            open={callNotesDialogOpen}
-            onOpenChange={setCallNotesDialogOpen}
-            customerId={lead.customer.id}
-            customerName={lead.name}
-            phone={lead.phone}
             onSuccess={() => {
               fetchLead();
               fetchActivities();

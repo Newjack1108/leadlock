@@ -78,7 +78,7 @@ import { STAFF_SELECTABLE_LEAD_SOURCES, SELECTABLE_LEAD_TYPES } from '@/lib/lead
 import SendQuoteEmailDialog from '@/components/SendQuoteEmailDialog';
 import SendConfiguratorLinkDialog from '@/components/configurator/SendConfiguratorLinkDialog';
 import ComposeEmailDialog from '@/components/ComposeEmailDialog';
-import CallNotesDialog from '@/components/CallNotesDialog';
+import { useCallSession } from '@/components/CallSessionProvider';
 import AddManualActivityDialog from '@/components/AddManualActivityDialog';
 import CreateTaskDialog from '@/components/CreateTaskDialog';
 import NinoxBadge from '@/components/NinoxBadge';
@@ -193,6 +193,7 @@ export default function CustomerDetailPage() {
   const router = useRouter();
   const params = useParams();
   const customerId = parseInt(params.id as string);
+  const { openCall, registerCallLoggedListener } = useCallSession();
 
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -217,8 +218,6 @@ export default function CustomerDetailPage() {
   const [configureLinkOpen, setConfigureLinkOpen] = useState(false);
   const [selectedQuoteId, setSelectedQuoteId] = useState<number | null>(null);
   const [composeEmailDialogOpen, setComposeEmailDialogOpen] = useState(false);
-  const [callNotesDialogOpen, setCallNotesDialogOpen] = useState(false);
-  const [callNotesPhone, setCallNotesPhone] = useState('');
   const [manualActivityDialogOpen, setManualActivityDialogOpen] = useState(false);
   const [createTaskDialogOpen, setCreateTaskDialogOpen] = useState(false);
   const [expandedActivityNotes, setExpandedActivityNotes] = useState<Record<number, boolean>>({});
@@ -296,6 +295,14 @@ export default function CustomerDetailPage() {
       console.error('Failed to load history');
     }
   };
+
+  useEffect(() => {
+    return registerCallLoggedListener((loggedCustomerId) => {
+      if (loggedCustomerId !== customerId) return;
+      void fetchHistory();
+      void fetchActivities();
+    });
+  }, [customerId, registerCallLoggedListener]);
 
   const fetchLeads = async () => {
     try {
@@ -666,8 +673,11 @@ export default function CustomerDetailPage() {
                             className="shrink-0"
                             title="Call"
                             onClick={() => {
-                              setCallNotesPhone(customer.phone!);
-                              setCallNotesDialogOpen(true);
+                              openCall({
+                                customerId,
+                                customerName: customer.name,
+                                phone: customer.phone!,
+                              });
                             }}
                           >
                             <Phone className="h-4 w-4" />
@@ -693,8 +703,11 @@ export default function CustomerDetailPage() {
                             className="shrink-0"
                             title="Call alternative number"
                             onClick={() => {
-                              setCallNotesPhone(customer.alternative_phone!);
-                              setCallNotesDialogOpen(true);
+                              openCall({
+                                customerId,
+                                customerName: customer.name,
+                                phone: customer.alternative_phone!,
+                              });
                             }}
                           >
                             <Phone className="h-4 w-4" />
@@ -1430,20 +1443,6 @@ export default function CustomerDetailPage() {
             setTimeout(() => {
               checkQuotePrerequisites();
             }, 200);
-          }}
-        />
-      )}
-
-      {customer && callNotesPhone && (
-        <CallNotesDialog
-          open={callNotesDialogOpen}
-          onOpenChange={setCallNotesDialogOpen}
-          customerId={customerId}
-          customerName={customer.name}
-          phone={callNotesPhone}
-          onSuccess={() => {
-            fetchHistory();
-            fetchActivities();
           }}
         />
       )}

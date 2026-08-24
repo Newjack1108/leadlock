@@ -27,7 +27,7 @@ import {
 import { ArrowLeft, Save, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
 import api, { patchQuote } from '@/lib/api';
 import { Quote, OpportunityStage, LossCategory, Customer, QuoteTemperature } from '@/lib/types';
-import CallNotesDialog from '@/components/CallNotesDialog';
+import { useCallSession } from '@/components/CallSessionProvider';
 import { toast } from 'sonner';
 
 const stageColors: Record<OpportunityStage, string> = {
@@ -44,6 +44,7 @@ export default function OpportunityDetailPage() {
   const router = useRouter();
   const params = useParams();
   const quoteId = parseInt(params.id as string);
+  const { openCall } = useCallSession();
 
   const [opportunity, setOpportunity] = useState<Quote | null>(null);
   const [customer, setCustomer] = useState<Customer | null>(null);
@@ -51,7 +52,6 @@ export default function OpportunityDetailPage() {
   const [saving, setSaving] = useState(false);
   const [wonDialogOpen, setWonDialogOpen] = useState(false);
   const [lostDialogOpen, setLostDialogOpen] = useState(false);
-  const [callNotesOpen, setCallNotesOpen] = useState(false);
   const [formData, setFormData] = useState({
     opportunity_stage: undefined as OpportunityStage | undefined,
     close_probability: undefined as number | undefined,
@@ -453,7 +453,13 @@ export default function OpportunityDetailPage() {
                       <button
                         type="button"
                         className="text-primary hover:underline text-left"
-                        onClick={() => setCallNotesOpen(true)}
+                        onClick={() =>
+                          openCall({
+                            customerId: customer.id,
+                            customerName: customer.name,
+                            phone: customer.phone!,
+                          })
+                        }
                       >
                         {customer.phone}
                       </button>
@@ -545,15 +551,6 @@ export default function OpportunityDetailPage() {
           </DialogContent>
         </Dialog>
 
-        {customer && customer.phone && (
-          <CallNotesDialog
-            open={callNotesOpen}
-            onOpenChange={setCallNotesOpen}
-            customerId={customer.id}
-            customerName={customer.name}
-            phone={customer.phone}
-          />
-        )}
       </main>
     </div>
   );

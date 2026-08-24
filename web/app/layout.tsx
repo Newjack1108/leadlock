@@ -4,6 +4,7 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import LoginGreeting from "@/components/LoginGreeting";
 import TaskAssignmentPopup from "@/components/TaskAssignmentPopup";
+import CallSessionProvider from "@/components/CallSessionProvider";
 import AreaBackgroundWrapper from "@/components/AreaBackgroundWrapper";
 import Footer from "@/components/Footer";
 
@@ -80,13 +81,15 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background`}
       >
         <AreaBackgroundWrapper>
-          <div className="flex min-h-screen flex-col">
-            <div className="flex-1">{children}</div>
-            <Footer />
-          </div>
-          <Toaster />
-          <LoginGreeting />
-          <TaskAssignmentPopup />
+          <CallSessionProvider>
+            <div className="flex min-h-screen flex-col">
+              <div className="flex-1">{children}</div>
+              <Footer />
+            </div>
+            <Toaster />
+            <LoginGreeting />
+            <TaskAssignmentPopup />
+          </CallSessionProvider>
         </AreaBackgroundWrapper>
       </body>
     </html>

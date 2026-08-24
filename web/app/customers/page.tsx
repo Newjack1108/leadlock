@@ -8,10 +8,9 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { getApiBaseUrl, getApiErrorDetail, getCustomers, getDataSummary, getUnreadCountsByCustomer } from '@/lib/api';
 import { Customer } from '@/lib/types';
-import { getTelUrl } from '@/lib/utils';
 import { toast } from 'sonner';
 import { Search, ChevronRight, X } from 'lucide-react';
-import CallNotesDialog from '@/components/CallNotesDialog';
+import { useCallSession } from '@/components/CallSessionProvider';
 import NinoxBadge from '@/components/NinoxBadge';
 import { parsePageFromSearchParams, saveCustomersListReturnUrl } from '@/lib/customersList';
 import TestCustomerBadge from '@/components/TestCustomerBadge';
@@ -21,6 +20,7 @@ const CUSTOMERS_PAGE_SIZE = 50;
 function CustomersPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { openCall } = useCallSession();
   const hasUnreadFilter = searchParams.get('has_unread') === '1';
   const smsOptedOutFilter = searchParams.get('sms_opted_out') === '1';
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -33,8 +33,6 @@ function CustomersPageContent() {
   const [fetchState, setFetchState] = useState<'idle' | 'ok' | 'error'>('idle');
   const [fetchErrorDetail, setFetchErrorDetail] = useState<string | null>(null);
   const [dbSummaryCustomers, setDbSummaryCustomers] = useState<number | null>(null);
-  const [callNotesOpen, setCallNotesOpen] = useState(false);
-  const [callNotesCustomer, setCallNotesCustomer] = useState<{ id: number; name: string; phone: string } | null>(null);
   const resetPageDepsRef = useRef({ searchApplied, smsOptedOutFilter, hasUnreadFilter });
 
   useEffect(() => {
@@ -328,8 +326,11 @@ function CustomersPageContent() {
                             className="text-primary hover:underline text-left"
                             onClick={(e) => {
                               e.preventDefault();
-                              setCallNotesCustomer({ id: customer.id, name: customer.name, phone: customer.phone! });
-                              setCallNotesOpen(true);
+                              openCall({
+                                customerId: customer.id,
+                                customerName: customer.name,
+                                phone: customer.phone!,
+                              });
                             }}
                           >
                             {customer.phone}
@@ -399,15 +400,6 @@ function CustomersPageContent() {
         )}
       </main>
 
-      {callNotesCustomer && (
-        <CallNotesDialog
-          open={callNotesOpen}
-          onOpenChange={setCallNotesOpen}
-          customerId={callNotesCustomer.id}
-          customerName={callNotesCustomer.name}
-          phone={callNotesCustomer.phone}
-        />
-      )}
     </div>
   );
 }

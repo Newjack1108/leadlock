@@ -25,7 +25,7 @@ import {
 } from '@/lib/quoteCopy';
 import SendQuoteEmailDialog from '@/components/SendQuoteEmailDialog';
 import SendPaymentLinkDialog from '@/components/SendPaymentLinkDialog';
-import CallNotesDialog from '@/components/CallNotesDialog';
+import { useCallSession } from '@/components/CallSessionProvider';
 import FilesCard from '@/components/FilesCard';
 import { toast } from 'sonner';
 import Link from 'next/link';
@@ -70,6 +70,7 @@ export default function QuoteDetailPage() {
   const router = useRouter();
   const params = useParams();
   const quoteId = parseInt(params.id as string);
+  const { openCall, registerCallLoggedListener } = useCallSession();
 
   const [quote, setQuote] = useState<Quote | null>(null);
   const [customer, setCustomer] = useState<Customer | null>(null);
@@ -80,7 +81,6 @@ export default function QuoteDetailPage() {
   const [specSheetExpanded, setSpecSheetExpanded] = useState(false);
   const [discountRequests, setDiscountRequests] = useState<DiscountRequest[]>([]);
   const [requestDialogOpen, setRequestDialogOpen] = useState(false);
-  const [callNotesOpen, setCallNotesOpen] = useState(false);
   const [accepting, setAccepting] = useState(false);
   const [repairingOrder, setRepairingOrder] = useState(false);
   const [lostDialogOpen, setLostDialogOpen] = useState(false);
@@ -139,6 +139,13 @@ export default function QuoteDetailPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    return registerCallLoggedListener((loggedCustomerId) => {
+      if (!customer || customer.id !== loggedCustomerId) return;
+      void fetchQuote();
+    });
+  }, [customer?.id, quoteId, registerCallLoggedListener]);
 
   const handleMarkLost = async () => {
     if (!lossReason || !lossCategory) {
@@ -1088,7 +1095,13 @@ export default function QuoteDetailPage() {
                         <button
                           type="button"
                           className="text-sm text-primary hover:underline text-left"
-                          onClick={() => setCallNotesOpen(true)}
+                          onClick={() =>
+                            openCall({
+                              customerId: customer.id,
+                              customerName: customer.name,
+                              phone: customer.phone!,
+                            })
+                          }
                         >
                           {customer.phone}
                         </button>
@@ -1262,17 +1275,6 @@ export default function QuoteDetailPage() {
           onSuccess={() => {
             fetchQuote();
           }}
-        />
-      )}
-
-      {customer && customer.phone && (
-        <CallNotesDialog
-          open={callNotesOpen}
-          onOpenChange={setCallNotesOpen}
-          customerId={customer.id}
-          customerName={customer.name}
-          phone={customer.phone}
-          onSuccess={() => fetchQuote()}
         />
       )}
     </div>
