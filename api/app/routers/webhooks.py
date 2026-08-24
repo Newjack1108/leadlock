@@ -58,6 +58,7 @@ from app.auth import get_webhook_api_key, get_product_import_api_key, get_produc
 from app.routers.settings import get_company_settings
 from app.workflow import check_sla_overdue
 from app.lead_create_utils import lead_create_to_model_fields
+from app.lead_dedupe_service import apply_inbound_duplicate_handling
 from app.routers.leads import enrich_lead_response, find_linkable_customer, find_or_create_customer
 from app.sms_service import (
     validate_twilio_webhook,
@@ -178,6 +179,13 @@ async def create_lead_webhook(
         session.add(status_history)
         session.commit()
 
+    session.refresh(lead)
+    if not changed_by_id:
+        try:
+            changed_by_id = get_system_user_id(session)
+        except Exception:
+            changed_by_id = None
+    apply_inbound_duplicate_handling(session, lead, changed_by_id)
     session.refresh(lead)
     from app.customer_outreach_service import try_customer_outreach_for_new_lead
 

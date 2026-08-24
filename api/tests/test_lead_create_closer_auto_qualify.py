@@ -168,18 +168,8 @@ def test_director_create_new_lead_links_customer_when_on_create_outreach_rule_ex
     assert data["customer_id"] is not None
 
 
-def test_duplicate_lead_auto_closes_and_sends_duplicate_sms(api_client, sqlite_engine, monkeypatch):
-    sms_bodies: list[str] = []
-
-    def fake_send_sms(_to_phone: str, body: str):
-        sms_bodies.append(body)
-        return True, f"SM_{len(sms_bodies)}", None
-
-    monkeypatch.setattr("app.customer_outreach_service.send_sms", fake_send_sms)
-    monkeypatch.setattr(
-        "app.customer_outreach_service.get_twilio_config",
-        lambda: ("sid", "token", "+441234567890"),
-    )
+def test_staff_create_lead_does_not_auto_close_matching_contact(api_client, sqlite_engine, monkeypatch):
+    """Create Lead in-app is an intentional new enquiry, even if contact details already exist."""
     monkeypatch.setenv("LEAD_DEDUPE_ENABLED", "true")
 
     with Session(sqlite_engine) as session:
@@ -193,46 +183,6 @@ def test_duplicate_lead_auto_closes_and_sends_duplicate_sms(api_client, sqlite_e
         )
         session.add(company)
         session.commit()
-        session.refresh(company)
-
-        welcome_template = SmsTemplate(
-            name="On create",
-            body_template="Welcome {{ customer.name }}",
-            created_by_id=director.id,
-        )
-        duplicate_template = SmsTemplate(
-            name="Duplicate Lead Notice",
-            body_template=(
-                "Thanks for your enquiry. We've linked it to your existing request "
-                "(Lead #{{ duplicate.primary_lead_id }})."
-            ),
-            created_by_id=director.id,
-        )
-        session.add(welcome_template)
-        session.add(duplicate_template)
-        session.commit()
-        session.refresh(welcome_template)
-        session.refresh(duplicate_template)
-
-        company.duplicate_sms_template_id = duplicate_template.id
-        session.add(company)
-        session.commit()
-
-        rule = ReminderRule(
-            rule_name="NEW_LEAD_ON_CREATE_SMS_DUPLICATE_TEST",
-            entity_type="LEAD",
-            status=LeadStatus.NEW.value,
-            threshold_minutes=1,
-            check_type="STATUS_DURATION",
-            is_active=True,
-            priority=ReminderPriority.MEDIUM,
-            suggested_action=SuggestedAction.FOLLOW_UP,
-            customer_outreach_channel=CustomerOutreachChannel.SMS.value,
-            customer_outreach_sms_template_id=welcome_template.id,
-            customer_outreach_on_lead_create=True,
-        )
-        session.add(rule)
-        session.commit()
 
     first = api_client.post(
         "/api/leads",
@@ -240,6 +190,7 @@ def test_duplicate_lead_auto_closes_and_sends_duplicate_sms(api_client, sqlite_e
         json={
             "name": "Repeat Person",
             "lead_source": LeadSource.WEBSITE.value,
+            "lead_type": LeadType.STABLES.value,
             "email": "repeat@example.com",
             "phone": "+447700900111",
             "postcode": "CW1 1AA",
@@ -247,14 +198,15 @@ def test_duplicate_lead_auto_closes_and_sends_duplicate_sms(api_client, sqlite_e
     )
     assert first.status_code == 200, first.text
     first_data = first.json()
-    first_id = first_data["id"]
+    assert first_data["status"] == LeadStatus.NEW.value
 
     second = api_client.post(
         "/api/leads",
         headers={"Authorization": f"Bearer {token}"},
         json={
             "name": "Repeat Person",
-            "lead_source": LeadSource.WEBSITE.value,
+            "lead_source": LeadSource.BLC_WEBSITE.value,
+            "lead_type": LeadType.CABINS.value,
             "email": "repeat@example.com",
             "phone": "+447700900111",
             "postcode": "CW1 1AA",
@@ -262,7 +214,8 @@ def test_duplicate_lead_auto_closes_and_sends_duplicate_sms(api_client, sqlite_e
     )
     assert second.status_code == 200, second.text
     second_data = second.json()
-    assert second_data["is_duplicate"] is True
-    assert second_data["primary_lead_id"] == first_id
-    assert second_data["status"] == LeadStatus.CLOSED.value
-    assert any("existing request" in body for body in sms_bodies)
+    assert second_data["is_duplicate"] is False
+    assert second_data["status"] == LeadStatus.NEW.value
+    assert second_data["lead_source"] == LeadSource.BLC_WEBSITE.value
+    assert second_data["lead_type"] == LeadType.CABINS.value
+    assert second_data["id"] != first_data["id"]

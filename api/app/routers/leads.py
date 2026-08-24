@@ -69,15 +69,9 @@ from app.lead_qualify_rules import (
     staff_may_set_lead_type,
 )
 from datetime import datetime
-import os
 from app.sms_service import normalize_phone
-from app.lead_dedupe_service import detect_duplicate_for_lead
 
 router = APIRouter(prefix="/api/leads", tags=["leads"])
-
-
-def _lead_dedupe_enabled() -> bool:
-    return (os.getenv("LEAD_DEDUPE_ENABLED", "true").strip().lower() not in {"0", "false", "no", "off"})
 
 
 def generate_customer_number(session: Session) -> str:
@@ -762,39 +756,6 @@ async def create_lead(
         )
         session.add(status_history)
         session.commit()
-
-        duplicate_match = detect_duplicate_for_lead(session, lead) if _lead_dedupe_enabled() else None
-        if duplicate_match and duplicate_match.is_duplicate:
-            lead.is_duplicate = True
-            lead.primary_lead_id = duplicate_match.primary_lead_id
-            lead.duplicate_confidence = duplicate_match.confidence
-            lead.duplicate_reason = duplicate_match.reason
-            lead.duplicate_matched_fields = duplicate_match.matched_fields
-            lead.duplicate_detected_at = datetime.utcnow()
-            session.add(lead)
-            session.commit()
-            session.refresh(lead)
-
-            company_settings = session.exec(select(CompanySettings).limit(1)).first()
-            should_auto_close = True if not company_settings else bool(company_settings.auto_close_duplicate_leads)
-            if should_auto_close and lead.status != LeadStatus.CLOSED:
-                old_status = lead.status
-                lead.status = LeadStatus.CLOSED
-                lead.updated_at = datetime.utcnow()
-                session.add(lead)
-                session.add(
-                    StatusHistory(
-                        lead_id=lead.id,
-                        old_status=old_status,
-                        new_status=LeadStatus.CLOSED,
-                        changed_by_id=current_user.id,
-                        override_reason=(
-                            f"Duplicate enquiry linked to lead #{duplicate_match.primary_lead_id}"
-                        ),
-                    )
-                )
-                session.commit()
-                session.refresh(lead)
 
         session.refresh(lead)
         from app.customer_outreach_service import try_customer_outreach_for_new_lead
