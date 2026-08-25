@@ -25,6 +25,7 @@ export function getGreetingLabelForHour(hour: number): string {
 export function loginGreetingPathShouldSuppress(pathname: string | null): boolean {
   if (!pathname) return true;
   if (pathname === '/' || pathname === '/login' || pathname === '/on-leave') return true;
+  if (pathname === '/data-deletion' || pathname === '/privacy') return true;
   if (pathname.startsWith('/quotes/view/')) return true;
   if (pathname.startsWith('/orders/view/')) return true;
   if (pathname.startsWith('/access-sheet/')) return true;

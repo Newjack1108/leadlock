@@ -69,6 +69,21 @@ Set these in your API environment (e.g. Railway):
 - **Profile:** The app uses `first_name` and `last_name` from the Graph API to name new Lead/Customer records when an unknown user messages.
 - **Phone fallback (optional):** To match unknown Messenger senders to existing contacts by phone, the app may request the sender’s phone from the profile API. This can require additional permissions (e.g. `user_phone_number`) and is not guaranteed to be returned for all users. If unavailable, only PSID matching and new-user creation apply.
 
+### 5b. Meta App Dashboard – Privacy Policy and User Data Deletion
+
+Meta requires public HTTPS URLs for apps that access user data. LeadLock uses **instructions URLs** (not a signed data-deletion callback), because there is no Facebook Login — only Messenger and Lead Ads.
+
+After the frontend is deployed, set these in **Meta App Dashboard → Settings → Basic**:
+
+| Field | URL |
+|-------|-----|
+| **Privacy Policy URL** | `https://www.csgbsales.co.uk/privacy` |
+| **User Data Deletion** (instructions URL) | `https://www.csgbsales.co.uk/data-deletion` |
+
+Local equivalents while developing: `http://localhost:3000/privacy` and `http://localhost:3000/data-deletion`. Meta requires HTTPS for the live app settings.
+
+The data-deletion page explains how people can email `cheshirestables@csgbsales.co.uk` to request removal of Lead Ad / Messenger data from LeadLock. Staff delete matching customer/lead/Messenger records in the CRM.
+
 ### 6. Testing
 
 1. Set `FACEBOOK_VERIFY_TOKEN` and `FACEBOOK_PAGE_ACCESS_TOKEN` in your API environment.

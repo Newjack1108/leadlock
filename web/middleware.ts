@@ -12,8 +12,16 @@ export function middleware(request: NextRequest) {
   const isPublicConfigure =
     request.nextUrl.pathname === '/configure' ||
     request.nextUrl.pathname.startsWith('/configure/');
+  const isDataDeletionPage = request.nextUrl.pathname === '/data-deletion';
+  const isPrivacyPage = request.nextUrl.pathname === '/privacy';
   const isPublicPage =
-    isLoginPage || isPublicQuoteView || isPublicOrderView || isPublicAccessSheet || isPublicConfigure;
+    isLoginPage ||
+    isPublicQuoteView ||
+    isPublicOrderView ||
+    isPublicAccessSheet ||
+    isPublicConfigure ||
+    isDataDeletionPage ||
+    isPrivacyPage;
 
   // If no token and trying to access protected route, redirect to login
   // Note: We also check token in client-side, this is just a basic check
