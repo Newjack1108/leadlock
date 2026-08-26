@@ -1530,6 +1530,18 @@ def create_db_and_tables():
                     error_str = str(e).lower()
                     if "already exists" not in error_str and "duplicate" not in error_str:
                         print(f"Error adding messenger_psid to customer: {e}", file=sys.stderr, flush=True)
+            customer_columns = [col['name'] for col in inspector.get_columns("customer")]
+            if "messenger_page_id" not in customer_columns:
+                print("Adding messenger_page_id column to customer table...", file=sys.stderr, flush=True)
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE customer ADD COLUMN messenger_page_id VARCHAR(64)"))
+                        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_customer_messenger_page_id ON customer (messenger_page_id)"))
+                    print("Added messenger_page_id column to customer table", file=sys.stderr, flush=True)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(f"Error adding messenger_page_id to customer: {e}", file=sys.stderr, flush=True)
             if "source_system" not in customer_columns:
                 print("Adding source_system column to customer table...", file=sys.stderr, flush=True)
                 try:

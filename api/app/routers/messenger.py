@@ -64,15 +64,20 @@ async def send_messenger(
             status_code=400,
             detail="No Messenger PSID; set to_psid or link customer via Facebook (messenger_psid)",
         )
-    success, mid, error = send_messenger_message(to_psid, data.body)
+    success, mid, error = send_messenger_message(
+        to_psid,
+        data.body,
+        page_id=getattr(customer, "messenger_page_id", None),
+    )
     if not success:
         raise HTTPException(status_code=500, detail=error or "Failed to send Messenger message")
     now = datetime.utcnow()
+    page_id = getattr(customer, "messenger_page_id", None) or ""
     msg = MessengerMessage(
         customer_id=data.customer_id,
         lead_id=None,
         direction=MessengerDirection.SENT,
-        from_psid="",  # Page PSID not stored for SENT in v1; recipient is the user
+        from_psid=page_id,  # Facebook Page ID when known; empty for legacy customers
         to_psid=to_psid,
         body=data.body,
         facebook_mid=mid,

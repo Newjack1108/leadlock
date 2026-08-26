@@ -300,6 +300,7 @@ export interface Customer {
   created_at: string;
   updated_at: string;
   messenger_psid?: string | null;
+  messenger_page_id?: string | null;
   source_system?: string | null;
 }
 

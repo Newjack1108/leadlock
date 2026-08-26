@@ -1,26 +1,71 @@
 """
 Facebook Messenger service: send messages, fetch user profile, parse webhook payloads.
 """
+import json
 import os
 import sys
 import httpx
-from typing import Optional, List, Any
-from datetime import datetime
+from typing import Optional, List, Any, Dict
 
 GRAPH_API_BASE = "https://graph.facebook.com/v21.0"
 LEAD_ADS_GRAPH_API_BASE = "https://graph.facebook.com/v26.0"
 
 
 def get_page_access_token() -> Optional[str]:
-    """Return the Messenger Page Access Token from environment."""
+    """Return the default Messenger Page Access Token from environment."""
     return os.getenv("FACEBOOK_PAGE_ACCESS_TOKEN")
+
+
+def _parse_messenger_page_token_map() -> Dict[str, str]:
+    """Parse FACEBOOK_MESSENGER_PAGE_TOKENS JSON map of page_id -> page access token."""
+    raw = (os.getenv("FACEBOOK_MESSENGER_PAGE_TOKENS") or "").strip()
+    if not raw:
+        return {}
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        print(
+            "WARNING: FACEBOOK_MESSENGER_PAGE_TOKENS is not valid JSON; ignoring map",
+            file=sys.stderr,
+            flush=True,
+        )
+        return {}
+    if not isinstance(data, dict):
+        print(
+            "WARNING: FACEBOOK_MESSENGER_PAGE_TOKENS must be a JSON object; ignoring map",
+            file=sys.stderr,
+            flush=True,
+        )
+        return {}
+    out: Dict[str, str] = {}
+    for key, value in data.items():
+        page_id = str(key).strip()
+        token = str(value).strip() if value is not None else ""
+        if page_id and token:
+            out[page_id] = token
+    return out
+
+
+def get_messenger_page_token(page_id: Optional[str] = None) -> Optional[str]:
+    """Return the Page access token for a Messenger Page ID.
+
+    Prefers FACEBOOK_MESSENGER_PAGE_TOKENS[page_id] when page_id is set.
+    Falls back to FACEBOOK_PAGE_ACCESS_TOKEN for single-Page setups and legacy rows
+    without messenger_page_id.
+    """
+    page_key = str(page_id).strip() if page_id is not None else ""
+    if page_key:
+        mapped = _parse_messenger_page_token_map().get(page_key)
+        if mapped:
+            return mapped
+    return get_page_access_token()
 
 
 def get_leads_access_token() -> Optional[str]:
     """Return the Lead Ads access token, preferring FACEBOOK_LEADS_ACCESS_TOKEN.
 
     Falls back to FACEBOOK_PAGE_ACCESS_TOKEN for backward-compatible rollout.
-    Messenger must continue using get_page_access_token() / FACEBOOK_PAGE_ACCESS_TOKEN.
+    Messenger must continue using get_page_access_token() / get_messenger_page_token().
     """
     token = os.getenv("FACEBOOK_LEADS_ACCESS_TOKEN")
     if token:
@@ -41,13 +86,23 @@ def send_messenger_message(
     recipient_psid: str,
     body: str,
     page_access_token: Optional[str] = None,
+    page_id: Optional[str] = None,
 ) -> tuple[bool, Optional[str], Optional[str]]:
     """
     Send a text message via Facebook Graph API.
     Returns (success, message_id, error_message).
     """
-    token = page_access_token or get_page_access_token()
+    token = page_access_token or get_messenger_page_token(page_id)
     if not token:
+        if page_id:
+            return (
+                False,
+                None,
+                (
+                    f"Facebook Messenger not configured for page_id={page_id} "
+                    "(set FACEBOOK_MESSENGER_PAGE_TOKENS or FACEBOOK_PAGE_ACCESS_TOKEN)"
+                ),
+            )
         return False, None, "Facebook Messenger not configured (missing FACEBOOK_PAGE_ACCESS_TOKEN)"
 
     url = f"{GRAPH_API_BASE}/me/messages"
@@ -73,13 +128,14 @@ def send_messenger_message(
 def get_user_profile(
     psid: str,
     page_access_token: Optional[str] = None,
+    page_id: Optional[str] = None,
 ) -> tuple[bool, Optional[str], Optional[str], Optional[str], Optional[str]]:
     """
     Fetch user profile (first_name, last_name, optional phone) from Graph API.
     Phone may require user_phone_number permission and might not be returned.
     Returns (success, first_name, last_name, phone, error_message).
     """
-    token = page_access_token or get_page_access_token()
+    token = page_access_token or get_messenger_page_token(page_id)
     if not token:
         return False, None, None, None, "Facebook Messenger not configured"
 
@@ -165,12 +221,14 @@ def fetch_leadgen_lead(
 def parse_webhook_payload(body: dict) -> List[dict]:
     """
     Extract messaging events from Facebook webhook payload.
-    Returns a list of event dicts, each with: sender_id (PSID), text, mid, timestamp (optional).
+    Returns a list of event dicts, each with: sender_id (PSID), text, mid,
+    timestamp (optional), page_id (from entry.id when present).
     Handles 'message' and 'postback' (postback payload as text).
     """
     events = []
     entries = body.get("entry", [])
     for entry in entries:
+        page_id = _optional_graph_str(entry.get("id"))
         for messaging in entry.get("messaging", []):
             sender_id = messaging.get("sender", {}).get("id")
             if not sender_id:
@@ -188,6 +246,7 @@ def parse_webhook_payload(body: dict) -> List[dict]:
                         "text": text,
                         "mid": mid,
                         "timestamp": timestamp,
+                        "page_id": page_id,
                     })
                 # Skip attachments in v1
 
@@ -200,6 +259,7 @@ def parse_webhook_payload(body: dict) -> List[dict]:
                         "text": payload,
                         "mid": None,
                         "timestamp": timestamp,
+                        "page_id": page_id,
                     })
 
     return events

@@ -183,6 +183,7 @@ class Customer(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     messenger_psid: Optional[str] = Field(default=None, unique=True, index=True)  # Facebook Page-Scoped ID for Messenger
+    messenger_page_id: Optional[str] = Field(default=None, index=True)  # Facebook Page ID that owns the PSID / conversation
     source_system: Optional[str] = None  # e.g. "Ninox" for CSV imports from old system
     
     # Relationships

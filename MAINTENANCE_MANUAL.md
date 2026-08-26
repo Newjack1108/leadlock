@@ -92,7 +92,8 @@ Background worker in `main.py` evaluates the same stale conditions as reminder r
 
 ### Facebook Messenger
 
-- `FACEBOOK_PAGE_ACCESS_TOKEN`, `FACEBOOK_VERIFY_TOKEN`, `FACEBOOK_ACTIVITY_USER_ID` — see `FACEBOOK_MESSENGER_SETUP.md`
+- `FACEBOOK_PAGE_ACCESS_TOKEN`, `FACEBOOK_MESSENGER_PAGE_TOKENS`, `FACEBOOK_VERIFY_TOKEN` — see `FACEBOOK_MESSENGER_SETUP.md`
+- Lead Ads (separate): `FACEBOOK_LEADS_ACCESS_TOKEN`
 
 ### Media & maps
 

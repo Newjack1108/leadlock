@@ -71,7 +71,6 @@ from app.sms_bot_service import BOT_HANDOVER_MESSAGE, generate_bot_reply, should
 from app.messenger_service import (
     parse_webhook_payload,
     get_user_profile,
-    get_page_access_token,
     get_leads_access_token,
     fetch_leadgen_lead,
 )
@@ -909,6 +908,7 @@ async def facebook_messenger_webhook(request: Request, session: Session = Depend
         sender_psid = ev["sender_id"]
         text = ev.get("text", "")
         mid = ev.get("mid")
+        page_id = ev.get("page_id")
         if not text:
             continue
         customer = None
@@ -923,7 +923,10 @@ async def facebook_messenger_webhook(request: Request, session: Session = Depend
                 customer = session.get(Customer, lead.customer_id)
         if not customer:
             # Phone fallback: get profile (with optional phone), match by normalized phone
-            ok, first_name, last_name, profile_phone, err = get_user_profile(sender_psid, get_page_access_token())
+            ok, first_name, last_name, profile_phone, err = get_user_profile(
+                sender_psid,
+                page_id=page_id,
+            )
             if profile_phone:
                 from_normalized = normalize_phone(profile_phone)
                 if from_normalized:
@@ -941,6 +944,8 @@ async def facebook_messenger_webhook(request: Request, session: Session = Depend
                                 break
                     if customer:
                         customer.messenger_psid = sender_psid
+                        if page_id:
+                            customer.messenger_page_id = page_id
                         session.add(customer)
                         if lead:
                             lead.messenger_psid = sender_psid
@@ -965,12 +970,14 @@ async def facebook_messenger_webhook(request: Request, session: Session = Depend
                     customer_number=customer_number,
                     name=name,
                     messenger_psid=sender_psid,
+                    messenger_page_id=page_id,
                     customer_since=now,
                 )
                 session.add(customer)
                 session.flush()
                 lead = Lead(
                     name=name,
+                    description=text,
                     lead_source=LeadSource.FACEBOOK,
                     messenger_psid=sender_psid,
                     customer_id=customer.id,
@@ -978,12 +985,19 @@ async def facebook_messenger_webhook(request: Request, session: Session = Depend
                 session.add(lead)
                 session.flush()
                 new_leads_for_outreach.append(lead)
+        elif page_id and not getattr(customer, "messenger_page_id", None):
+            customer.messenger_page_id = page_id
+            session.add(customer)
+        elif page_id and customer.messenger_page_id and customer.messenger_page_id != page_id:
+            # Keep the latest Page that messaged; PSIDs are page-scoped so this is rare.
+            customer.messenger_page_id = page_id
+            session.add(customer)
         msg = MessengerMessage(
             customer_id=customer.id,
             lead_id=lead.id if lead else None,
             direction=MessengerDirection.RECEIVED,
             from_psid=sender_psid,
-            to_psid=None,
+            to_psid=page_id,
             body=text,
             facebook_mid=mid,
             received_at=now,

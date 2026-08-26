@@ -381,6 +381,7 @@ class CustomerResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     messenger_psid: Optional[str] = None
+    messenger_page_id: Optional[str] = None
     source_system: Optional[str] = None
 
 
@@ -410,6 +411,7 @@ def customer_to_response(customer: Customer) -> CustomerResponse:
         created_at=customer.created_at,
         updated_at=customer.updated_at,
         messenger_psid=customer.messenger_psid,
+        messenger_page_id=getattr(customer, "messenger_page_id", None),
         source_system=customer.source_system,
     )
 
