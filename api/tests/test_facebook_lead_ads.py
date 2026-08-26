@@ -286,6 +286,49 @@ def test_fetch_leadgen_lead_returns_advert_metadata_separately_from_form_fields(
     assert payload["ad_id"] == "123456789"
 
 
+def test_fetch_leadgen_lead_retries_without_advert_fields_when_graph_rejects_them(monkeypatch, capsys):
+    monkeypatch.setenv("FACEBOOK_LEADS_ACCESS_TOKEN", "leads-token")
+    calls = []
+
+    def handler(method, url, params, json=None):
+        fields = params.get("fields")
+        calls.append(fields)
+        if "ad_id" in fields or "ad_name" in fields:
+            return _FakeResponse(
+                status_code=400,
+                payload={"error": {"message": "Tried accessing nonexisting field (ad_name)"}},
+            )
+        return _FakeResponse(
+            payload={
+                "id": "123",
+                "field_data": [
+                    {"name": "Name", "values": ["Kelvin Newman"]},
+                    {"name": "email", "values": ["test@example.com"]},
+                ],
+            }
+        )
+
+    with patch("app.messenger_service.httpx.Client", return_value=_FakeClient(handler)):
+        ok, payload, err = fetch_leadgen_lead("123")
+
+    assert ok is True
+    assert err is None
+    assert calls == [
+        "id,created_time,field_data,ad_id,ad_name",
+        "id,created_time,field_data",
+    ]
+    assert payload["field_map"] == {
+        "Name": "Kelvin Newman",
+        "email": "test@example.com",
+    }
+    assert payload["ad_name"] is None
+    assert payload["ad_id"] is None
+    logged = capsys.readouterr().err
+    assert "retrying without ad_id/ad_name" in logged
+    assert "Tried accessing nonexisting field (ad_name)" in logged
+    assert "leads-token" not in logged
+
+
 def test_messenger_send_uses_page_token_not_leads_token(monkeypatch):
     monkeypatch.setenv("FACEBOOK_LEADS_ACCESS_TOKEN", "leads-token")
     monkeypatch.setenv("FACEBOOK_PAGE_ACCESS_TOKEN", "messenger-token")

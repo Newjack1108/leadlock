@@ -1150,6 +1150,7 @@ async def facebook_leadgen_webhook(request: Request, session: Session = Depends(
         return Response(status_code=200)
     events = _parse_leadgen_events(body)
     if not events:
+        print("Facebook Lead Ads webhook: no leadgen events in payload", file=sys.stderr, flush=True)
         return Response(status_code=200)
     activity_user_id = _get_activity_user_id(session)
     token = get_leads_access_token()
@@ -1167,6 +1168,13 @@ async def facebook_leadgen_webhook(request: Request, session: Session = Depends(
     created_lead_ids: list[int] = []
     for ev in events:
         leadgen_id = ev["leadgen_id"]
+        print(
+            "Facebook Lead Ads: received event "
+            f"leadgen_id={leadgen_id} page_id={ev.get('page_id')} "
+            f"form_id={ev.get('form_id')}",
+            file=sys.stderr,
+            flush=True,
+        )
         ok, payload, err = fetch_leadgen_lead(leadgen_id, token)
         field_map = (payload or {}).get("field_map") if payload else None
         if not ok or not field_map:

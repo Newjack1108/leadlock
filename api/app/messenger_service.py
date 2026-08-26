@@ -9,6 +9,8 @@ from typing import Optional, List, Any, Dict
 
 GRAPH_API_BASE = "https://graph.facebook.com/v21.0"
 LEAD_ADS_GRAPH_API_BASE = "https://graph.facebook.com/v26.0"
+LEADGEN_FIELDS_WITH_ADVERT = "id,created_time,field_data,ad_id,ad_name"
+LEADGEN_FIELDS_CORE = "id,created_time,field_data"
 
 
 def get_page_access_token() -> Optional[str]:
@@ -170,6 +172,18 @@ def _optional_graph_str(value: Any) -> Optional[str]:
     return text or None
 
 
+def _graph_get_leadgen(client: httpx.Client, leadgen_id: str, token: str, fields: str) -> tuple[Optional[dict], Optional[str]]:
+    """GET a Leadgen object. Returns (json, error_message). Never logs the token."""
+    url = f"{LEAD_ADS_GRAPH_API_BASE}/{leadgen_id}"
+    params = {"fields": fields, "access_token": token}
+    resp = client.get(url, params=params)
+    data = resp.json()
+    if resp.status_code != 200:
+        error_msg = data.get("error", {}).get("message", resp.text)
+        return None, error_msg
+    return data, None
+
+
 def fetch_leadgen_lead(
     leadgen_id: str,
     page_access_token: Optional[str] = None,
@@ -183,24 +197,27 @@ def fetch_leadgen_lead(
     field_map is form answers only. ad_name/ad_id are optional advert metadata
     from the same lead object (not a second Marketing API call). Test leads
     often omit them; that is not an error.
+
+    If Meta rejects ad_id/ad_name (common without ads_management), retry the
+    same leadgen request without those fields so the lead is still created.
     """
     token = page_access_token or get_leads_access_token()
     if not token:
         return False, None, "Facebook Lead Ads not configured (missing FACEBOOK_LEADS_ACCESS_TOKEN)"
 
-    url = f"{LEAD_ADS_GRAPH_API_BASE}/{leadgen_id}"
-    params = {
-        "fields": "id,created_time,field_data,ad_id,ad_name",
-        "access_token": token,
-    }
-
     try:
         with httpx.Client(timeout=10.0) as client:
-            resp = client.get(url, params=params)
-            data = resp.json()
-            if resp.status_code != 200:
-                error_msg = data.get("error", {}).get("message", resp.text)
-                return False, None, error_msg
+            data, err = _graph_get_leadgen(client, leadgen_id, token, LEADGEN_FIELDS_WITH_ADVERT)
+            if data is None:
+                print(
+                    "Facebook Lead Ads: advert metadata unavailable; "
+                    f"retrying without ad_id/ad_name leadgen_id={leadgen_id} error={err}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                data, err = _graph_get_leadgen(client, leadgen_id, token, LEADGEN_FIELDS_CORE)
+            if data is None:
+                return False, None, err
             field_data = data.get("field_data") or []
             field_map: dict[str, str] = {}
             for item in field_data:
