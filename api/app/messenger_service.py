@@ -2,16 +2,39 @@
 Facebook Messenger service: send messages, fetch user profile, parse webhook payloads.
 """
 import os
+import sys
 import httpx
 from typing import Optional, List, Any
 from datetime import datetime
 
 GRAPH_API_BASE = "https://graph.facebook.com/v21.0"
+LEAD_ADS_GRAPH_API_BASE = "https://graph.facebook.com/v26.0"
 
 
 def get_page_access_token() -> Optional[str]:
-    """Return the Page Access Token from environment."""
+    """Return the Messenger Page Access Token from environment."""
     return os.getenv("FACEBOOK_PAGE_ACCESS_TOKEN")
+
+
+def get_leads_access_token() -> Optional[str]:
+    """Return the Lead Ads access token, preferring FACEBOOK_LEADS_ACCESS_TOKEN.
+
+    Falls back to FACEBOOK_PAGE_ACCESS_TOKEN for backward-compatible rollout.
+    Messenger must continue using get_page_access_token() / FACEBOOK_PAGE_ACCESS_TOKEN.
+    """
+    token = os.getenv("FACEBOOK_LEADS_ACCESS_TOKEN")
+    if token:
+        return token
+
+    fallback = os.getenv("FACEBOOK_PAGE_ACCESS_TOKEN")
+    if fallback:
+        print(
+            "WARNING: FACEBOOK_LEADS_ACCESS_TOKEN not set; "
+            "using legacy FACEBOOK_PAGE_ACCESS_TOKEN for Lead Ads",
+            file=sys.stderr,
+            flush=True,
+        )
+    return fallback
 
 
 def send_messenger_message(
@@ -83,21 +106,37 @@ def get_user_profile(
         return False, None, None, None, str(e)
 
 
+def _optional_graph_str(value: Any) -> Optional[str]:
+    """Return a stripped string, or None if the Graph field is missing/blank."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
 def fetch_leadgen_lead(
     leadgen_id: str,
     page_access_token: Optional[str] = None,
 ) -> tuple[bool, Optional[dict], Optional[str]]:
     """
     Fetch lead form data from Graph API by leadgen_id.
-    Returns (success, field_map, error_message).
-    field_map is a dict of field name -> value (e.g. full_name, email, phone_number, etc.).
-    """
-    token = page_access_token or get_page_access_token()
-    if not token:
-        return False, None, "Facebook not configured (missing FACEBOOK_PAGE_ACCESS_TOKEN)"
 
-    url = f"{GRAPH_API_BASE}/{leadgen_id}"
-    params = {"fields": "id,created_time,field_data", "access_token": token}
+    Returns (success, payload, error_message).
+    payload is:
+      {"field_map": dict, "ad_name": Optional[str], "ad_id": Optional[str]}
+    field_map is form answers only. ad_name/ad_id are optional advert metadata
+    from the same lead object (not a second Marketing API call). Test leads
+    often omit them; that is not an error.
+    """
+    token = page_access_token or get_leads_access_token()
+    if not token:
+        return False, None, "Facebook Lead Ads not configured (missing FACEBOOK_LEADS_ACCESS_TOKEN)"
+
+    url = f"{LEAD_ADS_GRAPH_API_BASE}/{leadgen_id}"
+    params = {
+        "fields": "id,created_time,field_data,ad_id,ad_name",
+        "access_token": token,
+    }
 
     try:
         with httpx.Client(timeout=10.0) as client:
@@ -113,7 +152,12 @@ def fetch_leadgen_lead(
                 values = item.get("values") or []
                 if name is not None and values:
                     field_map[name] = str(values[0]).strip() if values[0] is not None else ""
-            return True, field_map, None
+            payload = {
+                "field_map": field_map,
+                "ad_name": _optional_graph_str(data.get("ad_name")),
+                "ad_id": _optional_graph_str(data.get("ad_id")),
+            }
+            return True, payload, None
     except Exception as e:
         return False, None, str(e)
 

@@ -72,6 +72,7 @@ from app.messenger_service import (
     parse_webhook_payload,
     get_user_profile,
     get_page_access_token,
+    get_leads_access_token,
     fetch_leadgen_lead,
 )
 from app.system_user_service import get_system_user_id
@@ -1035,24 +1036,80 @@ def _parse_leadgen_events(body: dict) -> list[dict]:
     return events
 
 
-def _leadgen_field_map_to_lead_data(field_map: dict) -> dict:
+def _normalise_leadgen_field_map(field_map: dict) -> dict[str, str]:
+    """Strip whitespace and lowercase Facebook field names so mapping is case-insensitive."""
+    normalised: dict[str, str] = {}
+    for raw_key, value in (field_map or {}).items():
+        if raw_key is None:
+            continue
+        key = str(raw_key).strip().lower()
+        if not key or key in normalised:
+            continue
+        normalised[key] = value
+    return normalised
+
+
+def _leadgen_advert_description_lines(ad_name: Optional[str] = None, ad_id: Optional[str] = None) -> list[str]:
+    """Build optional Facebook Advert / Ad ID lines. Missing metadata is omitted, not an error."""
+    lines: list[str] = []
+    name = (str(ad_name).strip() if ad_name is not None else "")
+    ident = (str(ad_id).strip() if ad_id is not None else "")
+    if name:
+        lines.append(f"Facebook Advert: {name}")
+    if ident:
+        lines.append(f"Facebook Ad ID: {ident}")
+    return lines
+
+
+def _leadgen_field_map_to_lead_data(
+    field_map: dict,
+    ad_name: Optional[str] = None,
+    ad_id: Optional[str] = None,
+) -> dict:
     """Map Facebook Lead Ad field_data to LeadLock name, email, phone, postcode, description."""
-    # Common Meta field names
+    fields = _normalise_leadgen_field_map(field_map)
+    # Common Meta field names (normalised to lowercase)
     name = (
-        field_map.get("full_name") or
-        " ".join(filter(None, [field_map.get("first_name"), field_map.get("last_name")])) or
-        field_map.get("name")
+        fields.get("full_name") or
+        " ".join(filter(None, [fields.get("first_name"), fields.get("last_name")])) or
+        fields.get("name")
     )
-    if not name or not name.strip():
+    if not name or not str(name).strip():
         name = "Facebook Lead"
-    email = (field_map.get("email") or "").strip() or None
-    phone = (field_map.get("phone_number") or field_map.get("phone") or "").strip() or None
-    postcode = (field_map.get("postcode") or field_map.get("zip") or field_map.get("zip_code") or "").strip() or None
+    email = (fields.get("email") or "").strip() or None
+    phone = (fields.get("phone_number") or fields.get("phone") or "").strip() or None
+    postcode = (
+        fields.get("postcode")
+        or fields.get("post_code")
+        or fields.get("zip")
+        or fields.get("zip_code")
+        or ""
+    ).strip() or None
     # Use known keys for description; then any remaining custom keys
-    known = {"full_name", "first_name", "last_name", "name", "email", "phone_number", "phone", "postcode", "zip", "zip_code", "city", "state"}
-    extra = [f"{k}: {v}" for k, v in field_map.items() if k not in known and v]
-    description = "\n".join(extra) if extra else None
-    return {"name": name.strip(), "email": email, "phone": phone, "postcode": postcode, "description": description}
+    known = {
+        "full_name",
+        "first_name",
+        "last_name",
+        "name",
+        "email",
+        "phone_number",
+        "phone",
+        "postcode",
+        "post_code",
+        "zip",
+        "zip_code",
+        "city",
+        "state",
+    }
+    extra = [f"{k}: {v}" for k, v in fields.items() if k not in known and v]
+    header = _leadgen_advert_description_lines(ad_name=ad_name, ad_id=ad_id)
+    parts: list[str] = []
+    if header:
+        parts.append("\n".join(header))
+    if extra:
+        parts.append("\n".join(extra))
+    description = "\n\n".join(parts) if parts else None
+    return {"name": str(name).strip(), "email": email, "phone": phone, "postcode": postcode, "description": description}
 
 
 @router.get("/facebook/leadgen")
@@ -1081,9 +1138,14 @@ async def facebook_leadgen_webhook(request: Request, session: Session = Depends(
     if not events:
         return Response(status_code=200)
     activity_user_id = _get_activity_user_id(session)
-    token = get_page_access_token()
+    token = get_leads_access_token()
     if not token:
-        print("Facebook Lead Ads webhook: FACEBOOK_PAGE_ACCESS_TOKEN not set", file=sys.stderr, flush=True)
+        print(
+            "Facebook Lead Ads webhook: FACEBOOK_LEADS_ACCESS_TOKEN not set "
+            "(and no legacy FACEBOOK_PAGE_ACCESS_TOKEN fallback)",
+            file=sys.stderr,
+            flush=True,
+        )
         return Response(status_code=200)
     from datetime import date
     now = datetime.utcnow()
@@ -1091,11 +1153,28 @@ async def facebook_leadgen_webhook(request: Request, session: Session = Depends(
     created_lead_ids: list[int] = []
     for ev in events:
         leadgen_id = ev["leadgen_id"]
-        ok, field_map, err = fetch_leadgen_lead(leadgen_id, token)
+        ok, payload, err = fetch_leadgen_lead(leadgen_id, token)
+        field_map = (payload or {}).get("field_map") if payload else None
         if not ok or not field_map:
-            print(f"Facebook Lead Ads: failed to fetch lead {leadgen_id}: {err}", file=sys.stderr, flush=True)
+            print(
+                "Facebook Lead Ads: failed to fetch lead "
+                f"leadgen_id={leadgen_id} page_id={ev.get('page_id')} "
+                f"form_id={ev.get('form_id')} error={err}",
+                file=sys.stderr,
+                flush=True,
+            )
             continue
-        data = _leadgen_field_map_to_lead_data(field_map)
+        ad_name = payload.get("ad_name")
+        ad_id = payload.get("ad_id")
+        print(
+            "Facebook Lead Ads: fetched lead "
+            f"leadgen_id={leadgen_id} page_id={ev.get('page_id')} "
+            f"form_id={ev.get('form_id')} "
+            f"ad_id={ad_id or '-'} ad_name={ad_name or '-'}",
+            file=sys.stderr,
+            flush=True,
+        )
+        data = _leadgen_field_map_to_lead_data(field_map, ad_name=ad_name, ad_id=ad_id)
         probe = Lead(
             name=data["name"],
             email=data.get("email"),
