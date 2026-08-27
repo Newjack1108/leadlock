@@ -1104,6 +1104,41 @@ def _ensure_userrole_marketing(engine) -> None:
             print(f"Warning: could not add userrole value MARKETING: {exc}", file=sys.stderr, flush=True)
 
 
+def _ensure_activitytype_messenger_values(engine) -> None:
+    """Allow Messenger/WhatsApp activity types on PostgreSQL activitytype enum."""
+    import sys
+
+    try:
+        inspector = inspect(engine)
+        if not inspector.has_table("activity"):
+            return
+        for value in (
+            "WHATSAPP_SENT",
+            "WHATSAPP_RECEIVED",
+            "MESSENGER_SENT",
+            "MESSENGER_RECEIVED",
+        ):
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text(f"ALTER TYPE activitytype ADD VALUE IF NOT EXISTS '{value}'"))
+                print(f"Ensured activitytype enum value: {value}", file=sys.stderr, flush=True)
+            except Exception as exc:
+                error_str = str(exc).lower()
+                if (
+                    "already exists" not in error_str
+                    and "does not exist" not in error_str
+                    and "sqlite" not in error_str
+                    and "unknown type" not in error_str
+                ):
+                    print(
+                        f"Warning: could not add activitytype value {value}: {exc}",
+                        file=sys.stderr,
+                        flush=True,
+                    )
+    except Exception as exc:
+        print(f"Warning: could not ensure activitytype messenger values: {exc}", file=sys.stderr, flush=True)
+
+
 def _ensure_user_leave_schema(engine) -> None:
     """Add on_leave / leave_until columns for temporary holiday lock."""
     import sys
@@ -1142,6 +1177,7 @@ def create_db_and_tables():
     _ensure_orderitem_line_type_column(engine)
     _ensure_dealer_portal_schema(engine)
     _ensure_userrole_marketing(engine)
+    _ensure_activitytype_messenger_values(engine)
     _ensure_user_leave_schema(engine)
     _ensure_weekly_planner_schema(engine)
     _ensure_weekly_plan_template_schema(engine)
