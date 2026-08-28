@@ -437,7 +437,7 @@ def test_lead_is_created_when_advert_metadata_is_absent(capsys):
     from sqlmodel import Session, SQLModel, create_engine, select
 
     from app.database import get_session
-    from app.models import Lead, LeadSource
+    from app.models import Lead, LeadSource, LeadType
     from app.routers import webhooks as webhooks_router
 
     engine = create_engine(
@@ -499,6 +499,7 @@ def test_lead_is_created_when_advert_metadata_is_absent(capsys):
         lead = session.exec(select(Lead)).first()
     assert lead is not None
     assert lead.lead_source == LeadSource.FACEBOOK
+    assert lead.lead_type == LeadType.STABLES
     assert lead.name == "Kelvin Newman"
     assert lead.email == "test@example.com"
     assert lead.phone == "07123456789"

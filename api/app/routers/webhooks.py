@@ -1237,6 +1237,7 @@ async def facebook_leadgen_webhook(request: Request, session: Session = Depends(
             postcode=data.get("postcode"),
             description=data.get("description"),
             lead_source=LeadSource.FACEBOOK,
+            lead_type=LeadType.STABLES,
             customer_id=customer.id,
         )
         session.add(lead)
