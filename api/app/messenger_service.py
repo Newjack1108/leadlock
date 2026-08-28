@@ -172,6 +172,27 @@ def _optional_graph_str(value: Any) -> Optional[str]:
     return text or None
 
 
+def _join_leadgen_field_values(values: Any) -> str:
+    """Join all Facebook field_data values so multi-part answers are not truncated.
+
+    Meta may return several entries in `values` (e.g. building type + size).
+    Historically only values[0] was kept, which dropped later parts.
+    """
+    if values is None:
+        return ""
+    if not isinstance(values, (list, tuple)):
+        text = str(values).strip()
+        return text
+    parts: list[str] = []
+    for item in values:
+        if item is None:
+            continue
+        text = str(item).strip()
+        if text:
+            parts.append(text)
+    return ", ".join(parts)
+
+
 def _graph_get_leadgen(client: httpx.Client, leadgen_id: str, token: str, fields: str) -> tuple[Optional[dict], Optional[str]]:
     """GET a Leadgen object. Returns (json, error_message). Never logs the token."""
     url = f"{LEAD_ADS_GRAPH_API_BASE}/{leadgen_id}"
@@ -223,8 +244,11 @@ def fetch_leadgen_lead(
             for item in field_data:
                 name = item.get("name")
                 values = item.get("values") or []
-                if name is not None and values:
-                    field_map[name] = str(values[0]).strip() if values[0] is not None else ""
+                if name is None:
+                    continue
+                joined = _join_leadgen_field_values(values)
+                if joined:
+                    field_map[name] = joined
             payload = {
                 "field_map": field_map,
                 "ad_name": _optional_graph_str(data.get("ad_name")),

@@ -164,21 +164,45 @@ Use the **same** `FACEBOOK_VERIFY_TOKEN` as for Messenger when configuring this 
      - `POST /{page-id}/subscribed_apps?subscribed_fields=leadgen&access_token=...`
    - Or ensure your Page has the app installed and the Page subscription includes **leadgen**.
 
+### System user and ad account (required for advert name)
+
+Use a **never-expiring system-user token** (e.g. **CSGB Lead Sync**) generated on the **LeadLock Ads** app. In Meta Business settings → Users → System users → that user:
+
+1. Assign **both Pages** (CSGB Group and Cheshire Stables).
+2. Assign the **Ad account** that runs the Lead Ads (Pages alone are not enough for `ad_id` / `ad_name`).
+3. Generate a new token on **LeadLock Ads** with the permissions below, then set **only** Railway `FACEBOOK_LEADS_ACCESS_TOKEN` to that value.
+4. Do **not** change `FACEBOOK_PAGE_ACCESS_TOKEN` or `FACEBOOK_MESSENGER_PAGE_TOKENS`.
+
 ### Token permissions (Lead Ads)
 
 The token used as `FACEBOOK_LEADS_ACCESS_TOKEN` must have:
 
 - **leads_retrieval** – required to fetch lead form data by `leadgen_id`
-- **pages_manage_metadata** / **pages_show_list** / **pages_read_engagement** – often required for Page webhooks and subscription
+- **pages_manage_metadata** / **pages_show_list** / **pages_read_engagement** – Page webhooks and subscription
+- **business_management** – Business Manager / asset access
+- **ads_management** – required for Graph to return `ad_id` / `ad_name` on the lead
+- **pages_manage_ads** – also required for ad-level fields on leads (without it Graph often returns form answers with `ad_id` / `ad_name` omitted, not an error)
 
 ### Behaviour
 
 - **Verification:** GET with `hub.mode=subscribe` and matching `hub.verify_token` returns `hub.challenge`.
-- **Incoming lead:** POST body contains `object: "page"` and `entry[].changes[]` with `field: "leadgen"` and `value.leadgen_id`. LeadLock fetches the lead from the Graph API (`GET /{leadgen_id}?fields=id,created_time,field_data,ad_id,ad_name`), maps fields to Lead/Customer, creates or matches a Customer by email/phone, creates a Lead with `lead_source=FACEBOOK`, and adds a NOTE activity “Lead from Facebook Lead Ad form”.
+- **Incoming lead:** POST body contains `object: "page"` and `entry[].changes[]` with `field: "leadgen"` and `value.leadgen_id` (Meta may also send `ad_id` on the webhook). LeadLock fetches the lead from Graph API v26.0 (`GET /{leadgen_id}?fields=id,created_time,field_data,ad_id,ad_name`). If Meta rejects the advert fields, it retries with form fields only so the lead is still created. Prefer Graph `ad_name` / `ad_id`; if Graph omits `ad_id`, fall back to the webhook `ad_id`. Map fields to Lead/Customer (case-insensitive), create a Lead with `lead_source=FACEBOOK` and `lead_type=STABLES`, and add a NOTE activity “Lead from Facebook Lead Ad form”. When advert metadata is present, the Lead description starts with `Facebook Advert:` / `Facebook Ad ID:` then custom form questions.
+
+### Troubleshooting advert name
+
+| Log / symptom | Meaning | Fix |
+|---------------|---------|-----|
+| `fetched lead ... ad_id=- ad_name=-` (no retry warning) | Graph returned form data but stripped advert fields | System user needs **ad account** access; regenerate token with **ads_management** and **pages_manage_ads**; update only `FACEBOOK_LEADS_ACCESS_TOKEN` |
+| `advert metadata unavailable; retrying without ad_id/ad_name` | Graph rejected advert fields | Same permission / asset fix as above |
+| Lead has `Facebook Ad ID:` but no `Facebook Advert:` | Webhook supplied `ad_id`; Graph still omitted `ad_name` | Token / ad-account access still short for `ad_name` |
+| Meta Lead Ads Testing Tool | Often has no `ad_id` / `ad_name` | Expected; use a real ad click for advert metadata |
+
+Existing leads are not updated automatically. Do not replay webhooks (duplicates).
 
 ### Testing Lead Ads
 
-1. Set `FACEBOOK_VERIFY_TOKEN` and `FACEBOOK_LEADS_ACCESS_TOKEN` in your API.
+1. Set `FACEBOOK_VERIFY_TOKEN` and `FACEBOOK_LEADS_ACCESS_TOKEN` in your API (system-user token with the permissions above).
 2. In Meta App → Webhooks → Page, add the leadgen callback URL and verify.
 3. Subscribe to **leadgen** and install the app on your Page (see above).
-4. Create a test Lead Ad or use Meta’s test lead tool; submit a lead. The lead should appear in LeadLock as a new Lead (and Customer) with source FACEBOOK.
+4. Create a test Lead Ad or use Meta’s test lead tool; submit a lead. The lead should appear in LeadLock as a new Lead (and Customer) with source FACEBOOK and type STABLES.
+5. For advert name, use a **real** form fill from a live ad (not the testing tool). Railway should log `ad_name=` with a real name, and the Lead description should start with `Facebook Advert:` / `Facebook Ad ID:`.

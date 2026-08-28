@@ -5,7 +5,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
 from sqlmodel import Session, select
-from typing import Optional
+from typing import Optional, Any
 
 # Production `product_type` -> Product.is_extra (see import_product_webhook). Matching is case-insensitive.
 # Extras: optional_extra / extra. Main catalogue: product plus line labels (e.g. Stable) from production salesProductType.
@@ -1104,6 +1104,63 @@ def _leadgen_advert_description_lines(ad_name: Optional[str] = None, ad_id: Opti
     return lines
 
 
+def _format_leadgen_answer_value(value: Any) -> str:
+    """Keep Facebook answers intact; lightly humanise snake_case option keys."""
+    text = str(value).strip() if value is not None else ""
+    if not text:
+        return ""
+    # e.g. field_shelter -> Field shelter; leave "12x14" / mixed text alone
+    if " " not in text and "_" in text:
+        text = text.replace("_", " ").strip()
+        if text:
+            text = text[0].upper() + text[1:]
+    return text
+
+
+def _leadgen_custom_description_lines(field_map: dict) -> list[str]:
+    """Build description lines for every non-contact Facebook form answer.
+
+    Preserves original Facebook question labels and order. Contact fields are
+    omitted so they are not duplicated in the description.
+    """
+    known = {
+        "full_name",
+        "first_name",
+        "last_name",
+        "name",
+        "email",
+        "phone_number",
+        "phone",
+        "postcode",
+        "post_code",
+        "zip",
+        "zip_code",
+        "city",
+        "state",
+    }
+    lines: list[str] = []
+    seen: set[str] = set()
+    for raw_key, raw_value in (field_map or {}).items():
+        if raw_key is None:
+            continue
+        key = str(raw_key).strip().lower()
+        if not key or key in known or key in seen:
+            continue
+        seen.add(key)
+        # Multi-part answers may already be joined with ", "
+        if isinstance(raw_value, str) and ", " in raw_value:
+            formatted = ", ".join(
+                _format_leadgen_answer_value(part) for part in raw_value.split(", ") if part.strip()
+            )
+        else:
+            formatted = _format_leadgen_answer_value(raw_value)
+        if not formatted:
+            continue
+        label = str(raw_key).strip()
+        lines.append(f"{label}: {formatted}")
+    return lines
+
+
 def _leadgen_field_map_to_lead_data(
     field_map: dict,
     ad_name: Optional[str] = None,
@@ -1128,23 +1185,7 @@ def _leadgen_field_map_to_lead_data(
         or fields.get("zip_code")
         or ""
     ).strip() or None
-    # Use known keys for description; then any remaining custom keys
-    known = {
-        "full_name",
-        "first_name",
-        "last_name",
-        "name",
-        "email",
-        "phone_number",
-        "phone",
-        "postcode",
-        "post_code",
-        "zip",
-        "zip_code",
-        "city",
-        "state",
-    }
-    extra = [f"{k}: {v}" for k, v in fields.items() if k not in known and v]
+    extra = _leadgen_custom_description_lines(field_map)
     header = _leadgen_advert_description_lines(ad_name=ad_name, ad_id=ad_id)
     parts: list[str] = []
     if header:
@@ -1229,7 +1270,8 @@ async def facebook_leadgen_webhook(request: Request, session: Session = Depends(
             f"form_id={ev.get('form_id')} "
             f"ad_id={ad_id or '-'} ad_name={ad_name or '-'} "
             f"graph_ad_id={_optional_leadgen_str(graph_ad_id) or '-'} "
-            f"webhook_ad_id={_optional_leadgen_str(webhook_ad_id) or '-'}",
+            f"webhook_ad_id={_optional_leadgen_str(webhook_ad_id) or '-'} "
+            f"field_count={len(field_map)}",
             file=sys.stderr,
             flush=True,
         )

@@ -93,7 +93,7 @@ Background worker in `main.py` evaluates the same stale conditions as reminder r
 ### Facebook Messenger
 
 - `FACEBOOK_PAGE_ACCESS_TOKEN`, `FACEBOOK_MESSENGER_PAGE_TOKENS`, `FACEBOOK_VERIFY_TOKEN` — see `FACEBOOK_MESSENGER_SETUP.md`
-- Lead Ads (separate): `FACEBOOK_LEADS_ACCESS_TOKEN`
+- Lead Ads (separate): `FACEBOOK_LEADS_ACCESS_TOKEN` — system-user token on LeadLock Ads with `leads_retrieval`, `ads_management`, and `pages_manage_ads`; system user must have Pages **and** the Ad account assigned (see Lead Ads section in `FACEBOOK_MESSENGER_SETUP.md`)
 
 ### Media & maps
 

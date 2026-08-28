@@ -10,6 +10,7 @@ from app.messenger_service import (
     get_page_access_token,
     get_user_profile,
     send_messenger_message,
+    _join_leadgen_field_values,
 )
 from app.routers.webhooks import (
     _leadgen_field_map_to_lead_data,
@@ -164,6 +165,71 @@ def test_no_advert_lines_when_graph_and_webhook_omit_advert_fields():
     assert data["description"] == CUSTOM_DESCRIPTION
     assert "Facebook Advert:" not in data["description"]
     assert "Facebook Ad ID:" not in data["description"]
+
+
+def test_join_leadgen_field_values_keeps_all_parts():
+    assert _join_leadgen_field_values(["Field shelter", "12x14"]) == "Field shelter, 12x14"
+    assert _join_leadgen_field_values(["field_shelter"]) == "field_shelter"
+    assert _join_leadgen_field_values([None, "  ", "12x14"]) == "12x14"
+    assert _join_leadgen_field_values([]) == ""
+
+
+def test_multipart_facebook_answer_is_kept_in_full():
+    data = _leadgen_field_map_to_lead_data(
+        {
+            **CSGB_GROUP_FIELDS,
+            "what_type_of_building_are_you_interested_in?": "Field shelter, 12x14",
+        }
+    )
+    for key, value in EXPECTED_CORE_LEAD.items():
+        assert data[key] == value
+    assert (
+        "what_type_of_building_are_you_interested_in?: Field shelter, 12x14"
+        in data["description"]
+    )
+
+
+def test_snake_case_option_and_size_question_both_kept():
+    data = _leadgen_field_map_to_lead_data(
+        {
+            **CSGB_GROUP_FIELDS,
+            "what_type_of_building_are_you_interested_in?": "field_shelter",
+            "which_size_do_you_require?": "12x14",
+        }
+    )
+    assert (
+        "what_type_of_building_are_you_interested_in?: Field shelter"
+        in data["description"]
+    )
+    assert "which_size_do_you_require?: 12x14" in data["description"]
+
+
+def test_fetch_leadgen_lead_joins_all_field_values(monkeypatch):
+    monkeypatch.setenv("FACEBOOK_LEADS_ACCESS_TOKEN", "leads-token")
+
+    def handler(method, url, params, json=None):
+        return _FakeResponse(
+            payload={
+                "id": "123",
+                "field_data": [
+                    {
+                        "name": "what_type_of_building_are_you_interested_in?",
+                        "values": ["Field shelter", "12x14"],
+                    },
+                    {"name": "email", "values": ["a@b.c"]},
+                ],
+            }
+        )
+
+    with patch("app.messenger_service.httpx.Client", return_value=_FakeClient(handler)):
+        ok, payload, err = fetch_leadgen_lead("123")
+
+    assert ok is True
+    assert err is None
+    assert payload["field_map"]["what_type_of_building_are_you_interested_in?"] == (
+        "Field shelter, 12x14"
+    )
+    assert payload["field_map"]["email"] == "a@b.c"
 
 
 def test_cheshire_stables_style_fields_map_to_leadlock():
@@ -600,7 +666,7 @@ def test_lead_is_created_when_advert_metadata_is_absent(capsys):
     assert lead.description == CUSTOM_DESCRIPTION
     err = capsys.readouterr().err
     assert "leadgen_id=123" in err
-    assert "ad_id=- ad_name=- graph_ad_id=- webhook_ad_id=-" in err
+    assert "ad_id=- ad_name=- graph_ad_id=- webhook_ad_id=- field_count=" in err
     assert "leads-token" not in err
 
 
