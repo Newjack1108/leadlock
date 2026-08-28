@@ -5,6 +5,7 @@ from unittest.mock import patch
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 
 from app.messenger_service import (
+    fetch_ad_name,
     fetch_leadgen_lead,
     get_leads_access_token,
     get_page_access_token,
@@ -670,7 +671,7 @@ def test_lead_is_created_when_advert_metadata_is_absent(capsys):
     assert "leads-token" not in err
 
 
-def _post_leadgen_webhook(webhook_body, fetch_payload):
+def _post_leadgen_webhook(webhook_body, fetch_payload, fetch_ad_name_return=None, track_ad_name_calls=None):
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
     from sqlalchemy.pool import StaticPool
@@ -695,12 +696,22 @@ def _post_leadgen_webhook(webhook_body, fetch_payload):
     app.include_router(webhooks_router.router)
     app.dependency_overrides[get_session] = _override_session
 
+    def _fetch_ad_name(ad_id, token=None):
+        if track_ad_name_calls is not None:
+            track_ad_name_calls.append({"ad_id": ad_id, "token": token})
+        if fetch_ad_name_return is None:
+            return None, "ad object not available"
+        return fetch_ad_name_return
+
     with patch(
         "app.routers.webhooks.get_leads_access_token",
         return_value="leads-token",
     ), patch(
         "app.routers.webhooks.fetch_leadgen_lead",
         return_value=(True, fetch_payload, None),
+    ), patch(
+        "app.routers.webhooks.fetch_ad_name",
+        side_effect=_fetch_ad_name,
     ), patch(
         "app.customer_outreach_service.try_customer_outreach_for_new_lead",
         return_value=None,
@@ -721,9 +732,11 @@ def test_created_lead_prefers_graph_ad_id_and_ad_name_over_webhook(capsys):
         "ad_name": "Stables Carousel - August Offer",
         "ad_id": "111",
     }
+    ad_name_calls = []
     response, lead = _post_leadgen_webhook(
         _leadgen_webhook_body(ad_id="999"),
         fetch_payload,
+        track_ad_name_calls=ad_name_calls,
     )
     assert response.status_code == 200
     assert lead is not None
@@ -735,6 +748,7 @@ def test_created_lead_prefers_graph_ad_id_and_ad_name_over_webhook(capsys):
         "\n"
         f"{CUSTOM_DESCRIPTION}"
     )
+    assert ad_name_calls == []
     err = capsys.readouterr().err
     assert "ad_id=111 ad_name=Stables Carousel - August Offer graph_ad_id=111 webhook_ad_id=999" in err
     assert "leads-token" not in err
@@ -748,9 +762,12 @@ def test_created_lead_uses_webhook_ad_id_when_graph_omits_ad_id(capsys):
         "ad_name": None,
         "ad_id": None,
     }
+    ad_name_calls = []
     response, lead = _post_leadgen_webhook(
         _leadgen_webhook_body(ad_id="120330000000"),
         fetch_payload,
+        fetch_ad_name_return=(None, "Unsupported get request"),
+        track_ad_name_calls=ad_name_calls,
     )
     assert response.status_code == 200
     assert lead is not None
@@ -759,6 +776,80 @@ def test_created_lead_uses_webhook_ad_id_when_graph_omits_ad_id(capsys):
     assert lead.description.startswith("Facebook Ad ID: 120330000000\n\n")
     assert "Facebook Advert:" not in lead.description
     assert CUSTOM_DESCRIPTION in lead.description
+    assert len(ad_name_calls) == 1
+    assert ad_name_calls[0]["ad_id"] == "120330000000"
+    assert ad_name_calls[0]["token"] == "leads-token"
     err = capsys.readouterr().err
     assert "ad_id=120330000000 ad_name=- graph_ad_id=- webhook_ad_id=120330000000" in err
+    assert "ad_name lookup failed ad_id=120330000000 error=Unsupported get request" in err
     assert "leads-token" not in err
+
+
+def test_created_lead_resolves_ad_name_via_ad_object_when_graph_omits_it(capsys):
+    from app.models import LeadSource, LeadType
+
+    fetch_payload = {
+        "field_map": {**CSGB_GROUP_FIELDS, **CUSTOM_FORM_FIELDS},
+        "ad_name": None,
+        "ad_id": None,
+    }
+    ad_name_calls = []
+    response, lead = _post_leadgen_webhook(
+        _leadgen_webhook_body(ad_id="120330000000"),
+        fetch_payload,
+        fetch_ad_name_return=("Stables Carousel - August Offer", None),
+        track_ad_name_calls=ad_name_calls,
+    )
+    assert response.status_code == 200
+    assert lead is not None
+    assert lead.lead_source == LeadSource.FACEBOOK
+    assert lead.lead_type == LeadType.STABLES
+    assert lead.description == (
+        "Facebook Advert: Stables Carousel - August Offer\n"
+        "Facebook Ad ID: 120330000000\n"
+        "\n"
+        f"{CUSTOM_DESCRIPTION}"
+    )
+    assert len(ad_name_calls) == 1
+    assert ad_name_calls[0]["ad_id"] == "120330000000"
+    err = capsys.readouterr().err
+    assert "ad_name resolved via ad object ad_id=120330000000" in err
+    assert "ad_id=120330000000 ad_name=Stables Carousel - August Offer" in err
+    assert "leads-token" not in err
+
+
+def test_fetch_ad_name_uses_leads_token_and_v26(monkeypatch):
+    monkeypatch.setenv("FACEBOOK_LEADS_ACCESS_TOKEN", "leads-token")
+    monkeypatch.setenv("FACEBOOK_PAGE_ACCESS_TOKEN", "messenger-token")
+    captured = {}
+
+    def handler(method, url, params, json=None):
+        captured["url"] = url
+        captured["params"] = params
+        return _FakeResponse(payload={"id": "120330000000", "name": "Ad Name From Meta"})
+
+    with patch("app.messenger_service.httpx.Client", return_value=_FakeClient(handler)):
+        name, err = fetch_ad_name("120330000000")
+
+    assert err is None
+    assert name == "Ad Name From Meta"
+    assert captured["url"].endswith("/120330000000")
+    assert "/v26.0/" in captured["url"]
+    assert captured["params"]["fields"] == "name"
+    assert captured["params"]["access_token"] == "leads-token"
+
+
+def test_fetch_ad_name_returns_error_without_raising(monkeypatch):
+    monkeypatch.setenv("FACEBOOK_LEADS_ACCESS_TOKEN", "leads-token")
+
+    def handler(method, url, params, json=None):
+        return _FakeResponse(
+            status_code=400,
+            payload={"error": {"message": "Unsupported get request"}},
+        )
+
+    with patch("app.messenger_service.httpx.Client", return_value=_FakeClient(handler)):
+        name, err = fetch_ad_name("120330000000")
+
+    assert name is None
+    assert err == "Unsupported get request"

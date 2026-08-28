@@ -73,6 +73,7 @@ from app.messenger_service import (
     get_user_profile,
     get_leads_access_token,
     fetch_leadgen_lead,
+    fetch_ad_name,
 )
 from app.system_user_service import get_system_user_id
 from app.order_audit import record_order_audit_event
@@ -1264,6 +1265,23 @@ async def facebook_leadgen_webhook(request: Request, session: Session = Depends(
             graph_ad_id=graph_ad_id,
             webhook_ad_id=webhook_ad_id,
         )
+        if ad_id and not ad_name:
+            looked_up_name, name_err = fetch_ad_name(ad_id, token)
+            if looked_up_name:
+                ad_name = looked_up_name
+                print(
+                    "Facebook Lead Ads: ad_name resolved via ad object "
+                    f"ad_id={ad_id}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+            else:
+                print(
+                    "Facebook Lead Ads: ad_name lookup failed "
+                    f"ad_id={ad_id} error={name_err}",
+                    file=sys.stderr,
+                    flush=True,
+                )
         print(
             "Facebook Lead Ads: fetched lead "
             f"leadgen_id={leadgen_id} page_id={ev.get('page_id')} "

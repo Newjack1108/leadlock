@@ -205,6 +205,37 @@ def _graph_get_leadgen(client: httpx.Client, leadgen_id: str, token: str, fields
     return data, None
 
 
+def fetch_ad_name(
+    ad_id: str,
+    page_access_token: Optional[str] = None,
+) -> tuple[Optional[str], Optional[str]]:
+    """Fetch an ad's name from Graph API by ad_id (Lead Ads v26.0).
+
+    Returns (ad_name, error_message). Missing/blank name is not fatal for lead creation.
+    Never logs the access token.
+    """
+    ident = _optional_graph_str(ad_id)
+    if not ident:
+        return None, "missing ad_id"
+
+    token = page_access_token or get_leads_access_token()
+    if not token:
+        return None, "Facebook Lead Ads not configured (missing FACEBOOK_LEADS_ACCESS_TOKEN)"
+
+    url = f"{LEAD_ADS_GRAPH_API_BASE}/{ident}"
+    params = {"fields": "name", "access_token": token}
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            resp = client.get(url, params=params)
+            data = resp.json()
+            if resp.status_code != 200:
+                error_msg = data.get("error", {}).get("message", resp.text)
+                return None, error_msg
+            return _optional_graph_str(data.get("name")), None
+    except Exception as e:
+        return None, str(e)
+
+
 def fetch_leadgen_lead(
     leadgen_id: str,
     page_access_token: Optional[str] = None,
