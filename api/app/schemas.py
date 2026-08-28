@@ -1404,6 +1404,7 @@ class ProductImportPayload(BaseModel):
     product_type: Optional[str] = None  # e.g. "extra" vs "product"; maps to Product.is_extra
     category: Optional[str] = None  # Optional explicit LeadLock category: stables|sheds|cabins
     parent_product_id: Optional[int] = None  # Production main product id when this row is an optional extra; links via ProductOptionalExtra
+    gross_margin_pct: Optional[Decimal] = None  # Per-product override; when set, used instead of company product_import_gross_margin_pct
 
     @field_validator("product_type", mode="before")
     @classmethod
@@ -1448,6 +1449,15 @@ class ProductImportPayload(BaseModel):
     def number_of_boxes_non_negative(cls, v: Decimal) -> Decimal:
         if v < 0:
             raise ValueError("number_of_boxes must be >= 0")
+        return v
+
+    @field_validator("gross_margin_pct")
+    @classmethod
+    def gross_margin_pct_range(cls, v: Optional[Decimal]) -> Optional[Decimal]:
+        if v is None:
+            return None
+        if v < 0 or v >= 100:
+            raise ValueError("gross_margin_pct must be >= 0 and < 100")
         return v
 
 

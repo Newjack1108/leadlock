@@ -268,7 +268,11 @@ def upsert_product_from_import(session: Session, payload: ProductImportPayload) 
     # Map payload to Product fields: cost ex VAT from production
     cost_ex_vat = payload.price_ex_vat
     settings = get_company_settings(session)
-    margin_pct = getattr(settings, "product_import_gross_margin_pct", None) if settings else None
+    # Per-product override from production takes precedence over company default
+    if payload.gross_margin_pct is not None:
+        margin_pct = payload.gross_margin_pct
+    else:
+        margin_pct = getattr(settings, "product_import_gross_margin_pct", None) if settings else None
     if margin_pct is not None and Decimal("0") < margin_pct < Decimal("100"):
         # RRP = Cost / (1 - margin%/100)
         divisor = Decimal("1") - (margin_pct / 100)

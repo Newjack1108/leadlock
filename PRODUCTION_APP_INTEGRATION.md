@@ -211,6 +211,23 @@ Auth: Bearer `PRODUCT_IMPORT_API_KEY` or `WEBHOOK_API_KEY`. Independent of work-
 
 Production configures `SALES_APP_API_URL` to the single-product URL (`…/api/webhooks/products`) and derives the batch path as `…/products/batch`. Bulk push from production only includes active products already in `product_sales_sync` (optional filters: cost changed since last push, production category).
 
+### Product payload fields
+
+| Field | Required | Notes |
+|-------|----------|--------|
+| `product_id` | Recommended | Production finished-product id (upsert key) |
+| `name` | Yes | |
+| `description` | No | |
+| `price_ex_vat` | Yes | Manufacturing cost ex VAT from production |
+| `install_hours` | Yes | |
+| `number_of_boxes` | Yes | |
+| `product_type` | No | e.g. `extra` for optional extras; otherwise stables/sheds/cabins/other |
+| `category` | No | LeadLock category: `stables` \| `sheds` \| `cabins` |
+| `parent_product_id` | No | Links optional extra to a main product |
+| `gross_margin_pct` | No | Per-product gross margin % (0–99.99). When set, overrides company `product_import_gross_margin_pct`. Omit to use the company default. `0` means sell at cost. |
+
+RRP is calculated as `cost / (1 − margin%/100)` when `0 < margin < 100`. If margin is omitted / blank / `0`, RRP equals cost.
+
 ---
 
 ## Reverse direction (install status)

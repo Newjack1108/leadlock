@@ -1475,7 +1475,7 @@ export default function CompanySettingsPage() {
             <div className="rounded-lg p-4 bg-indigo-50/30 dark:bg-indigo-950/20 border-l-4 border-l-indigo-200 dark:border-l-indigo-800 mt-6 space-y-4">
               <h3 className="text-lg font-medium">Product import from production</h3>
               <p className="text-sm text-muted-foreground">
-                Applied when products are pushed from production. Cost ex VAT × (1 / (1 - margin%)) = RRP. Leave blank to use cost as RRP.
+                Applied when products are pushed from production. Cost ex VAT × (1 / (1 - margin%)) = RRP. Leave blank to use cost as RRP. Individual products can override this in the production product editor.
               </p>
               <div className="space-y-2">
                 <Label htmlFor="product_import_gross_margin_pct">Gross margin % (RRP mark-up)</Label>
