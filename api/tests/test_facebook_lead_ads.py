@@ -11,7 +11,11 @@ from app.messenger_service import (
     get_user_profile,
     send_messenger_message,
 )
-from app.routers.webhooks import _leadgen_field_map_to_lead_data
+from app.routers.webhooks import (
+    _leadgen_field_map_to_lead_data,
+    _parse_leadgen_events,
+    _resolve_leadgen_advert_metadata,
+)
 
 
 CHESHIRE_STABLES_FIELDS = {
@@ -74,6 +78,92 @@ class _FakeClient:
 
     def post(self, url, json=None, params=None):
         return self._handler("POST", url, params, json)
+
+
+def _leadgen_webhook_body(ad_id=None, include_ad_id_key=True):
+    value = {
+        "leadgen_id": "123",
+        "page_id": "456",
+        "form_id": "789",
+        "created_time": 1710000000,
+    }
+    if include_ad_id_key:
+        value["ad_id"] = ad_id
+    return {
+        "object": "page",
+        "entry": [{"changes": [{"field": "leadgen", "value": value}]}],
+    }
+
+
+def test_parse_leadgen_events_captures_webhook_ad_id():
+    events = _parse_leadgen_events(_leadgen_webhook_body(ad_id="120330000000"))
+    assert len(events) == 1
+    assert events[0]["leadgen_id"] == "123"
+    assert events[0]["page_id"] == "456"
+    assert events[0]["form_id"] == "789"
+    assert events[0]["ad_id"] == "120330000000"
+
+
+def test_parse_leadgen_events_ad_id_is_optional_and_coerced():
+    missing = _parse_leadgen_events(_leadgen_webhook_body(include_ad_id_key=False))
+    assert missing[0]["ad_id"] is None
+
+    blank = _parse_leadgen_events(_leadgen_webhook_body(ad_id="   "))
+    assert blank[0]["ad_id"] is None
+
+    numeric = _parse_leadgen_events(_leadgen_webhook_body(ad_id=120330000000))
+    assert numeric[0]["ad_id"] == "120330000000"
+
+
+def test_graph_ad_id_and_ad_name_preferred_over_webhook_ad_id():
+    ad_name, ad_id = _resolve_leadgen_advert_metadata(
+        graph_ad_name="Stables Carousel - August Offer",
+        graph_ad_id="111",
+        webhook_ad_id="999",
+    )
+    data = _leadgen_field_map_to_lead_data(CSGB_GROUP_FIELDS, ad_name=ad_name, ad_id=ad_id)
+    for key, value in EXPECTED_CORE_LEAD.items():
+        assert data[key] == value
+    assert data["description"] == (
+        "Facebook Advert: Stables Carousel - August Offer\n"
+        "Facebook Ad ID: 111"
+    )
+
+
+def test_webhook_ad_id_fills_facebook_ad_id_when_graph_omits_ad_id():
+    ad_name, ad_id = _resolve_leadgen_advert_metadata(
+        graph_ad_name=None,
+        graph_ad_id=None,
+        webhook_ad_id="120330000000",
+    )
+    data = _leadgen_field_map_to_lead_data(
+        {**CSGB_GROUP_FIELDS, **CUSTOM_FORM_FIELDS},
+        ad_name=ad_name,
+        ad_id=ad_id,
+    )
+    for key, value in EXPECTED_CORE_LEAD.items():
+        assert data[key] == value
+    assert data["description"].startswith("Facebook Ad ID: 120330000000\n\n")
+    assert "Facebook Advert:" not in data["description"]
+    assert CUSTOM_DESCRIPTION in data["description"]
+
+
+def test_no_advert_lines_when_graph_and_webhook_omit_advert_fields():
+    ad_name, ad_id = _resolve_leadgen_advert_metadata(
+        graph_ad_name=None,
+        graph_ad_id=None,
+        webhook_ad_id=None,
+    )
+    data = _leadgen_field_map_to_lead_data(
+        {**CHESHIRE_STABLES_FIELDS, **CUSTOM_FORM_FIELDS},
+        ad_name=ad_name,
+        ad_id=ad_id,
+    )
+    for key, value in EXPECTED_CORE_LEAD.items():
+        assert data[key] == value
+    assert data["description"] == CUSTOM_DESCRIPTION
+    assert "Facebook Advert:" not in data["description"]
+    assert "Facebook Ad ID:" not in data["description"]
 
 
 def test_cheshire_stables_style_fields_map_to_leadlock():
@@ -404,6 +494,7 @@ def test_failed_lead_fetch_log_includes_ids_not_token(capsys):
                             "leadgen_id": "123",
                             "page_id": "456",
                             "form_id": "789",
+                            "ad_id": "120330000000",
                         },
                     }
                 ]
@@ -428,6 +519,8 @@ def test_failed_lead_fetch_log_includes_ids_not_token(capsys):
     assert "form_id=789" in err
     assert "error=Invalid OAuth access token" in err
     assert "leads-token" not in err
+    assert "webhook_ad_id=" not in err
+    assert "graph_ad_id=" not in err
 
 
 def test_lead_is_created_when_advert_metadata_is_absent(capsys):
@@ -507,6 +600,99 @@ def test_lead_is_created_when_advert_metadata_is_absent(capsys):
     assert lead.description == CUSTOM_DESCRIPTION
     err = capsys.readouterr().err
     assert "leadgen_id=123" in err
-    assert "ad_id=-" in err
-    assert "ad_name=-" in err
+    assert "ad_id=- ad_name=- graph_ad_id=- webhook_ad_id=-" in err
+    assert "leads-token" not in err
+
+
+def _post_leadgen_webhook(webhook_body, fetch_payload):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from sqlalchemy.pool import StaticPool
+    from sqlmodel import Session, SQLModel, create_engine, select
+
+    from app.database import get_session
+    from app.models import Lead
+    from app.routers import webhooks as webhooks_router
+
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SQLModel.metadata.create_all(engine)
+
+    def _override_session():
+        with Session(engine) as session:
+            yield session
+
+    app = FastAPI()
+    app.include_router(webhooks_router.router)
+    app.dependency_overrides[get_session] = _override_session
+
+    with patch(
+        "app.routers.webhooks.get_leads_access_token",
+        return_value="leads-token",
+    ), patch(
+        "app.routers.webhooks.fetch_leadgen_lead",
+        return_value=(True, fetch_payload, None),
+    ), patch(
+        "app.customer_outreach_service.try_customer_outreach_for_new_lead",
+        return_value=None,
+    ):
+        client = TestClient(app)
+        response = client.post("/api/webhooks/facebook/leadgen", json=webhook_body)
+
+    with Session(engine) as session:
+        lead = session.exec(select(Lead)).first()
+    return response, lead
+
+
+def test_created_lead_prefers_graph_ad_id_and_ad_name_over_webhook(capsys):
+    from app.models import LeadSource, LeadType
+
+    fetch_payload = {
+        "field_map": {**CSGB_GROUP_FIELDS, **CUSTOM_FORM_FIELDS},
+        "ad_name": "Stables Carousel - August Offer",
+        "ad_id": "111",
+    }
+    response, lead = _post_leadgen_webhook(
+        _leadgen_webhook_body(ad_id="999"),
+        fetch_payload,
+    )
+    assert response.status_code == 200
+    assert lead is not None
+    assert lead.lead_source == LeadSource.FACEBOOK
+    assert lead.lead_type == LeadType.STABLES
+    assert lead.description == (
+        "Facebook Advert: Stables Carousel - August Offer\n"
+        "Facebook Ad ID: 111\n"
+        "\n"
+        f"{CUSTOM_DESCRIPTION}"
+    )
+    err = capsys.readouterr().err
+    assert "ad_id=111 ad_name=Stables Carousel - August Offer graph_ad_id=111 webhook_ad_id=999" in err
+    assert "leads-token" not in err
+
+
+def test_created_lead_uses_webhook_ad_id_when_graph_omits_ad_id(capsys):
+    from app.models import LeadSource, LeadType
+
+    fetch_payload = {
+        "field_map": {**CSGB_GROUP_FIELDS, **CUSTOM_FORM_FIELDS},
+        "ad_name": None,
+        "ad_id": None,
+    }
+    response, lead = _post_leadgen_webhook(
+        _leadgen_webhook_body(ad_id="120330000000"),
+        fetch_payload,
+    )
+    assert response.status_code == 200
+    assert lead is not None
+    assert lead.lead_source == LeadSource.FACEBOOK
+    assert lead.lead_type == LeadType.STABLES
+    assert lead.description.startswith("Facebook Ad ID: 120330000000\n\n")
+    assert "Facebook Advert:" not in lead.description
+    assert CUSTOM_DESCRIPTION in lead.description
+    err = capsys.readouterr().err
+    assert "ad_id=120330000000 ad_name=- graph_ad_id=- webhook_ad_id=120330000000" in err
     assert "leads-token" not in err

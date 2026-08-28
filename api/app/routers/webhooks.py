@@ -1033,8 +1033,21 @@ async def facebook_messenger_webhook(request: Request, session: Session = Depend
 
 # --- Facebook Lead Ads webhook ---
 
+def _optional_leadgen_str(value) -> Optional[str]:
+    """Return a stripped string, or None if the webhook/Graph field is missing/blank."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
 def _parse_leadgen_events(body: dict) -> list[dict]:
-    """Extract leadgen events from Meta webhook payload. Returns list of {leadgen_id, page_id, form_id, created_time}."""
+    """Extract leadgen events from Meta webhook payload.
+
+    Returns list of {leadgen_id, page_id, form_id, created_time, ad_id}.
+    ad_id is optional: Meta may include it on the webhook even when Graph omits ad_name.
+    Missing advert metadata is not an error.
+    """
     if body.get("object") != "page":
         return []
     events = []
@@ -1050,8 +1063,20 @@ def _parse_leadgen_events(body: dict) -> list[dict]:
                     "page_id": value.get("page_id"),
                     "form_id": value.get("form_id"),
                     "created_time": value.get("created_time"),
+                    "ad_id": _optional_leadgen_str(value.get("ad_id")),
                 })
     return events
+
+
+def _resolve_leadgen_advert_metadata(
+    graph_ad_name=None,
+    graph_ad_id=None,
+    webhook_ad_id=None,
+) -> tuple[Optional[str], Optional[str]]:
+    """Prefer Graph ad_name/ad_id; fall back to webhook ad_id only if Graph omitted ad_id."""
+    ad_name = _optional_leadgen_str(graph_ad_name)
+    ad_id = _optional_leadgen_str(graph_ad_id) or _optional_leadgen_str(webhook_ad_id)
+    return ad_name, ad_id
 
 
 def _normalise_leadgen_field_map(field_map: dict) -> dict[str, str]:
@@ -1190,13 +1215,21 @@ async def facebook_leadgen_webhook(request: Request, session: Session = Depends(
                 flush=True,
             )
             continue
-        ad_name = payload.get("ad_name")
-        ad_id = payload.get("ad_id")
+        graph_ad_name = payload.get("ad_name")
+        graph_ad_id = payload.get("ad_id")
+        webhook_ad_id = ev.get("ad_id")
+        ad_name, ad_id = _resolve_leadgen_advert_metadata(
+            graph_ad_name=graph_ad_name,
+            graph_ad_id=graph_ad_id,
+            webhook_ad_id=webhook_ad_id,
+        )
         print(
             "Facebook Lead Ads: fetched lead "
             f"leadgen_id={leadgen_id} page_id={ev.get('page_id')} "
             f"form_id={ev.get('form_id')} "
-            f"ad_id={ad_id or '-'} ad_name={ad_name or '-'}",
+            f"ad_id={ad_id or '-'} ad_name={ad_name or '-'} "
+            f"graph_ad_id={_optional_leadgen_str(graph_ad_id) or '-'} "
+            f"webhook_ad_id={_optional_leadgen_str(webhook_ad_id) or '-'}",
             file=sys.stderr,
             flush=True,
         )
