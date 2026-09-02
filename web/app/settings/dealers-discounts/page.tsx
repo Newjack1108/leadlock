@@ -46,7 +46,7 @@ export default function DealerDiscountSettingsPage() {
         const me = await api.get('/api/auth/me');
         const role = me.data?.role ?? null;
         setUserRole(role);
-        if (role !== 'DIRECTOR') {
+        if (role !== 'DIRECTOR' && role !== 'VIEWER') {
           setLoading(false);
           return;
         }
@@ -67,7 +67,7 @@ export default function DealerDiscountSettingsPage() {
   }, []);
 
   useEffect(() => {
-    if (!selectedDealerId || userRole !== 'DIRECTOR') return;
+    if (!selectedDealerId || (userRole !== 'DIRECTOR' && userRole !== 'VIEWER')) return;
     let cancelled = false;
     const loadPolicy = async () => {
       try {
@@ -126,7 +126,7 @@ export default function DealerDiscountSettingsPage() {
     }
   };
 
-  if (userRole !== null && userRole !== 'DIRECTOR') {
+  if (userRole !== null && userRole !== 'DIRECTOR' && userRole !== 'VIEWER') {
     return (
       <div className="min-h-screen">
         <Header />
@@ -138,6 +138,8 @@ export default function DealerDiscountSettingsPage() {
       </div>
     );
   }
+
+  const canEdit = userRole === 'DIRECTOR';
 
   return (
     <div className="min-h-screen">
@@ -202,7 +204,7 @@ export default function DealerDiscountSettingsPage() {
                             e.target.value === '' ? null : Number(e.target.value),
                         }))
                       }
-                      disabled={!selectedDealerId || saving}
+                      disabled={!canEdit || !selectedDealerId || saving}
                     />
                   </div>
                   <div className="space-y-2">
@@ -218,7 +220,7 @@ export default function DealerDiscountSettingsPage() {
                           max_discount_amount: e.target.value === '' ? null : Number(e.target.value),
                         }))
                       }
-                      disabled={!selectedDealerId || saving}
+                      disabled={!canEdit || !selectedDealerId || saving}
                     />
                   </div>
                 </div>
@@ -231,7 +233,7 @@ export default function DealerDiscountSettingsPage() {
                       onChange={(e) =>
                         setPolicy((prev) => ({ ...prev, allow_percentage: e.target.checked }))
                       }
-                      disabled={!selectedDealerId || saving}
+                      disabled={!canEdit || !selectedDealerId || saving}
                     />
                     Allow percentage discounts
                   </label>
@@ -242,7 +244,7 @@ export default function DealerDiscountSettingsPage() {
                       onChange={(e) =>
                         setPolicy((prev) => ({ ...prev, allow_fixed_amount: e.target.checked }))
                       }
-                      disabled={!selectedDealerId || saving}
+                      disabled={!canEdit || !selectedDealerId || saving}
                     />
                     Allow fixed amount discounts
                   </label>
@@ -272,7 +274,7 @@ export default function DealerDiscountSettingsPage() {
                           type="checkbox"
                           checked={checked}
                           onChange={(e) => toggleAllowedDiscount(discount.id, e.target.checked)}
-                          disabled={!selectedDealerId || saving}
+                          disabled={!canEdit || !selectedDealerId || saving}
                         />
                         {discount.name}
                       </span>
@@ -288,11 +290,13 @@ export default function DealerDiscountSettingsPage() {
               </CardContent>
             </Card>
 
-            <div className="flex justify-end">
-              <Button onClick={savePolicy} disabled={!selectedDealerId || saving}>
-                {saving ? 'Saving...' : 'Save dealer discount policy'}
-              </Button>
-            </div>
+            {canEdit && (
+              <div className="flex justify-end">
+                <Button onClick={savePolicy} disabled={!selectedDealerId || saving}>
+                  {saving ? 'Saving...' : 'Save dealer discount policy'}
+                </Button>
+              </div>
+            )}
           </>
         )}
       </main>

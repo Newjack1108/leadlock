@@ -8,6 +8,7 @@ from sqlmodel import Session, select
 from app.database import get_session
 from app.marketing_access import marketing_may_access
 from app.models import User, UserRole
+from app.viewer_access import viewer_may_access
 import os
 
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
@@ -127,17 +128,29 @@ def get_current_user(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="This area is not available for marketing accounts",
         )
+    if user.role == UserRole.VIEWER and not viewer_may_access(request.method, request.url.path):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This account is read-only",
+        )
     return user
 
 
 def require_role(allowed_roles: list[UserRole]):
-    async def role_checker(current_user: User = Depends(get_current_user)):
-        if current_user.role not in allowed_roles:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Insufficient permissions"
-            )
-        return current_user
+    async def role_checker(
+        request: Request,
+        current_user: User = Depends(get_current_user),
+    ):
+        if current_user.role in allowed_roles:
+            return current_user
+        # Viewers may read director/manager-gated GET endpoints; mutations already blocked.
+        method = (request.method or "GET").upper()
+        if current_user.role == UserRole.VIEWER and method in ("GET", "HEAD", "OPTIONS"):
+            return current_user
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions"
+        )
     return role_checker
 
 

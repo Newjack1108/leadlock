@@ -1116,26 +1116,32 @@ def backfill_prize_draw_congratulations_templates(session: Session) -> None:
         print("Backfilled prize draw congratulations templates", file=sys.stderr, flush=True)
 
 
-def _ensure_userrole_marketing(engine) -> None:
-    """Allow MARKETING on the PostgreSQL userrole enum (no-op on SQLite)."""
+def _ensure_userrole_enum_values(engine) -> None:
+    """Allow MARKETING/VIEWER on the PostgreSQL userrole enum (no-op on SQLite)."""
     import sys
 
-    try:
-        inspector = inspect(engine)
-        if not inspector.has_table("user"):
-            return
-        with engine.begin() as conn:
-            conn.execute(text("ALTER TYPE userrole ADD VALUE IF NOT EXISTS 'MARKETING'"))
-        print("Ensured userrole enum value: MARKETING", file=sys.stderr, flush=True)
-    except Exception as exc:
-        error_str = str(exc).lower()
-        if (
-            "already exists" not in error_str
-            and "does not exist" not in error_str
-            and "sqlite" not in error_str
-            and "unknown type" not in error_str
-        ):
-            print(f"Warning: could not add userrole value MARKETING: {exc}", file=sys.stderr, flush=True)
+    for value in ("MARKETING", "VIEWER"):
+        try:
+            inspector = inspect(engine)
+            if not inspector.has_table("user"):
+                return
+            with engine.begin() as conn:
+                conn.execute(text(f"ALTER TYPE userrole ADD VALUE IF NOT EXISTS '{value}'"))
+            print(f"Ensured userrole enum value: {value}", file=sys.stderr, flush=True)
+        except Exception as exc:
+            error_str = str(exc).lower()
+            if (
+                "already exists" not in error_str
+                and "does not exist" not in error_str
+                and "sqlite" not in error_str
+                and "unknown type" not in error_str
+            ):
+                print(f"Warning: could not add userrole value {value}: {exc}", file=sys.stderr, flush=True)
+
+
+def _ensure_userrole_marketing(engine) -> None:
+    """Back-compat alias used by older call sites."""
+    _ensure_userrole_enum_values(engine)
 
 
 def _ensure_activitytype_messenger_values(engine) -> None:
@@ -1211,7 +1217,7 @@ def create_db_and_tables():
     _ensure_quote_rejected_by_id_column(engine)
     _ensure_orderitem_line_type_column(engine)
     _ensure_dealer_portal_schema(engine)
-    _ensure_userrole_marketing(engine)
+    _ensure_userrole_enum_values(engine)
     _ensure_activitytype_messenger_values(engine)
     _ensure_user_leave_schema(engine)
     _ensure_weekly_planner_schema(engine)

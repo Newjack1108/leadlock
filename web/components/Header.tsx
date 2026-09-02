@@ -27,7 +27,7 @@ import {
   Home,
 } from 'lucide-react';
 import api from '@/lib/api';
-import { canManageFacebookAdverts, isMarketingRole } from '@/lib/roles';
+import { canManageFacebookAdverts, isMarketingRole, isViewerRole } from '@/lib/roles';
 import {
   getAuthMe,
   getStaleSummary,
@@ -221,11 +221,13 @@ export default function Header() {
 
   const isDirector = userRole === 'DIRECTOR';
   const isCloser = userRole === 'CLOSER';
+  const isViewer = isViewerRole(userRole);
   const isDealer = userRole === 'DEALER_ADMIN' || userRole === 'DEALER_USER';
   const isMarketing = isMarketingRole(userRole);
   const isSalesStaff = !isDealer && !isMarketing;
   const canManageAdverts = canManageFacebookAdverts(userRole);
   const canApproveDiscounts = userRole === 'DIRECTOR' || userRole === 'SALES_MANAGER';
+  const canOpenDirectorSettings = isDirector || isViewer;
   const quotesNavActive = Boolean(pathname?.startsWith('/quotes'));
   const configuratorNavActive = Boolean(pathname?.startsWith('/configurator'));
 
@@ -239,6 +241,7 @@ export default function Header() {
     );
 
   return (
+    <>
     <header
       className={cn(
         'border-b border-border bg-card shadow-sm',
@@ -572,20 +575,24 @@ export default function Header() {
                   </DropdownMenuItem>
                 </Link>
               )}
-              {isDirector && (
+              {canOpenDirectorSettings && (
                 <>
-                  <Link href="/settings/users">
-                    <DropdownMenuItem className="cursor-pointer">
-                      <Users className="h-4 w-4 mr-2" />
-                      Users
-                    </DropdownMenuItem>
-                  </Link>
-                  <Link href="/settings/company">
-                    <DropdownMenuItem className="cursor-pointer">
-                      <Settings className="h-4 w-4 mr-2" />
-                      Company Settings
-                    </DropdownMenuItem>
-                  </Link>
+                  {isDirector && (
+                    <Link href="/settings/users">
+                      <DropdownMenuItem className="cursor-pointer">
+                        <Users className="h-4 w-4 mr-2" />
+                        Users
+                      </DropdownMenuItem>
+                    </Link>
+                  )}
+                  {isDirector && (
+                    <Link href="/settings/company">
+                      <DropdownMenuItem className="cursor-pointer">
+                        <Settings className="h-4 w-4 mr-2" />
+                        Company Settings
+                      </DropdownMenuItem>
+                    </Link>
+                  )}
                   <Link href="/settings/email-templates">
                     <DropdownMenuItem className="cursor-pointer">
                       <Mail className="h-4 w-4 mr-2" />
@@ -971,34 +978,38 @@ export default function Header() {
                     </span>
                   </Link>
                 )}
-                {isDirector && (
+                {canOpenDirectorSettings && (
                   <>
-                    <Link
-                      href="/settings/users"
-                      onClick={closeMobile}
-                      className={cn(
-                        mobileNavLinkClass,
-                        pathname?.startsWith('/settings/users') && 'bg-accent'
-                      )}
-                    >
-                      <span className="flex items-center gap-2">
-                        <Users className="h-4 w-4 shrink-0" />
-                        Users
-                      </span>
-                    </Link>
-                    <Link
-                      href="/settings/company"
-                      onClick={closeMobile}
-                      className={cn(
-                        mobileNavLinkClass,
-                        pathname?.startsWith('/settings/company') && 'bg-accent'
-                      )}
-                    >
-                      <span className="flex items-center gap-2">
-                        <Settings className="h-4 w-4 shrink-0" />
-                        Company Settings
-                      </span>
-                    </Link>
+                    {isDirector && (
+                      <Link
+                        href="/settings/users"
+                        onClick={closeMobile}
+                        className={cn(
+                          mobileNavLinkClass,
+                          pathname?.startsWith('/settings/users') && 'bg-accent'
+                        )}
+                      >
+                        <span className="flex items-center gap-2">
+                          <Users className="h-4 w-4 shrink-0" />
+                          Users
+                        </span>
+                      </Link>
+                    )}
+                    {isDirector && (
+                      <Link
+                        href="/settings/company"
+                        onClick={closeMobile}
+                        className={cn(
+                          mobileNavLinkClass,
+                          pathname?.startsWith('/settings/company') && 'bg-accent'
+                        )}
+                      >
+                        <span className="flex items-center gap-2">
+                          <Settings className="h-4 w-4 shrink-0" />
+                          Company Settings
+                        </span>
+                      </Link>
+                    )}
                     <Link
                       href="/settings/email-templates"
                       onClick={closeMobile}
@@ -1125,5 +1136,13 @@ export default function Header() {
         </div>
       </div>
     </header>
+    {isViewer && (
+      <div className="border-b border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
+        <div className="container mx-auto px-4 sm:px-6 py-2 text-sm">
+          Read-only account — you can view LeadLock, but nothing can be changed. Users and Company Settings are hidden.
+        </div>
+      </div>
+    )}
+    </>
   );
 }

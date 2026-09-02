@@ -23,6 +23,7 @@ WORKFLOW_TRANSITIONS = {
         LeadStatus.QUALIFIED: [LeadStatus.QUOTED, LeadStatus.CLOSED],
         LeadStatus.QUOTED: [LeadStatus.WON, LeadStatus.LOST],
     },
+    UserRole.VIEWER: {},
 }
 
 # Engagement proof activity types

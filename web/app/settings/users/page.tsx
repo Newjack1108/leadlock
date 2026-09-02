@@ -22,7 +22,7 @@ import { listUsers, createUser, updateUser, deactivateUser } from '@/lib/api';
 import { UserList } from '@/lib/types';
 import { toast } from 'sonner';
 
-const ROLES = ['DIRECTOR', 'SALES_MANAGER', 'CLOSER', 'MARKETING', 'DEALER_ADMIN', 'DEALER_USER'] as const;
+const ROLES = ['DIRECTOR', 'SALES_MANAGER', 'CLOSER', 'MARKETING', 'VIEWER', 'DEALER_ADMIN', 'DEALER_USER'] as const;
 const DEALER_ROLES = new Set(['DEALER_ADMIN', 'DEALER_USER']);
 
 export default function UsersPage() {
