@@ -525,6 +525,9 @@ export default function SendQuoteEmailDialog({
                 placeholder="Add a custom message that will be appended to the email template..."
                 rows={4}
               />
+              <p className="text-xs text-muted-foreground">
+                Line breaks and spacing in this field are preserved in the email.
+              </p>
             </div>
 
             <div className="space-y-2">

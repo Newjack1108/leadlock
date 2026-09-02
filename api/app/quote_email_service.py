@@ -3,6 +3,7 @@ Service for sending quote emails (online view link; optional file attachments).
 """
 from typing import Optional, Tuple, Dict, Any, List
 from datetime import datetime
+from html import escape
 from jinja2 import Template
 from sqlmodel import Session, select
 from app.models import Quote, QuoteTemplate, Customer, CompanySettings, Order
@@ -11,6 +12,19 @@ from app.customer_view_links import customer_view_path_segment
 from app.email_service import send_email
 from app.constants import VAT_RATE_DECIMAL
 from decimal import Decimal
+
+
+def format_custom_message_for_email_html(custom_message: Optional[str]) -> Optional[str]:
+    """Escape and convert newlines/spaces so pasted layout survives HTML email."""
+    if not custom_message:
+        return custom_message
+    text = custom_message.replace("\r\n", "\n").replace("\r", "\n")
+    text = escape(text)
+    text = text.replace("\t", "    ")
+    # Preserve consecutive spaces (HTML collapses them otherwise).
+    while "  " in text:
+        text = text.replace("  ", " &nbsp;")
+    return text.replace("\n", "<br>\n")
 
 
 def get_sample_quote_preview_data() -> Dict[str, Any]:
@@ -129,9 +143,15 @@ def send_quote_email(
         subject_template = Template(quote_template.email_subject_template)
         body_template = Template(quote_template.email_body_template)
         
-        # Render email templates
+        # Render email templates — format newlines for HTML body only (not subject)
         subject = render_email_template(subject_template, quote, customer, company_settings, custom_message)
-        body_html = render_email_template(body_template, quote, customer, company_settings, custom_message)
+        body_html = render_email_template(
+            body_template,
+            quote,
+            customer,
+            company_settings,
+            format_custom_message_for_email_html(custom_message),
+        )
 
         has_order = session.exec(select(Order).where(Order.quote_id == quote.id)).first() is not None
         link_label = "View your order online" if has_order else "View your quote online"
