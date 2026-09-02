@@ -223,23 +223,20 @@ def _ensure_default_payment_link_url_column(engine) -> None:
         if not insp.has_table("companysettings"):
             return
         cols = [c["name"] for c in insp.get_columns("companysettings")]
-        added = False
         if "default_payment_link_url" not in cols:
             with engine.begin() as conn:
                 conn.execute(
                     text("ALTER TABLE companysettings ADD COLUMN default_payment_link_url VARCHAR(2048)")
                 )
-            added = True
             print("Added default_payment_link_url to companysettings", file=sys.stderr, flush=True)
-        if added:
-            with engine.begin() as conn:
-                conn.execute(
-                    text(
-                        "UPDATE companysettings SET default_payment_link_url = :url "
-                        "WHERE default_payment_link_url IS NULL OR TRIM(default_payment_link_url) = ''"
-                    ),
-                    {"url": DEFAULT_PAYPAL_PAYMENT_LINK},
-                )
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "UPDATE companysettings SET default_payment_link_url = :url "
+                    "WHERE default_payment_link_url IS NULL OR TRIM(default_payment_link_url) = ''"
+                ),
+                {"url": DEFAULT_PAYPAL_PAYMENT_LINK},
+            )
     except Exception as e:
         err = str(e).lower()
         if "already exists" not in err and "duplicate" not in err:

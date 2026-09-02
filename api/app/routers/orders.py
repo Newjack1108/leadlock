@@ -1,3 +1,4 @@
+import asyncio
 import os
 import re
 import secrets
@@ -72,7 +73,7 @@ from app.order_delete import delete_order_cascade
 from app.order_audit import record_order_audit_event
 from app.payment_link_service import (
     validate_payment_url,
-    company_default_payment_url,
+    resolve_payment_url,
     payment_link_template_context,
     default_payment_sms_body,
     default_payment_email_subject,
@@ -706,13 +707,11 @@ async def send_order_payment_link(
     quote = session.exec(select(Quote).where(Quote.id == order.quote_id)).first()
     lead_id = quote.lead_id if quote else None
     company_settings = session.exec(select(CompanySettings).limit(1)).first()
-    raw_url = (
-        (req.payment_url or "").strip()
-        or (order.payment_link_url or "").strip()
-        or company_default_payment_url(company_settings)
+    raw_url = resolve_payment_url(
+        req.payment_url,
+        order.payment_link_url,
+        company_settings,
     )
-    if not raw_url:
-        raise HTTPException(status_code=400, detail="Payment URL is required")
     try:
         payment_url = validate_payment_url(raw_url)
     except ValueError as e:
@@ -828,7 +827,8 @@ async def send_order_payment_link(
             body_html = default_payment_email_html(order, payment_url)
         body_text = _html_to_plain(body_html) if body_html else None
 
-        success, message_id, error, sent_html, sent_text = send_email(
+        success, message_id, error, sent_html, sent_text = await asyncio.to_thread(
+            send_email,
             to_email=to_email,
             subject=subject,
             body_html=body_html,

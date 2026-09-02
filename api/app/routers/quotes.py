@@ -88,7 +88,7 @@ from app.email_template_service import render_email_template
 from app.sms_template_service import render_sms_template
 from app.payment_link_service import (
     validate_payment_url,
-    company_default_payment_url,
+    resolve_payment_url,
     quote_payment_link_template_context,
     default_quote_payment_sms_body,
     default_quote_payment_email_subject,
@@ -2704,13 +2704,11 @@ async def send_quote_payment_link(
         raise HTTPException(status_code=404, detail="Customer not found")
 
     company_settings = session.exec(select(CompanySettings).limit(1)).first()
-    raw_url = (
-        (req.payment_url or "").strip()
-        or (getattr(quote, "payment_link_url", None) or "").strip()
-        or company_default_payment_url(company_settings)
+    raw_url = resolve_payment_url(
+        req.payment_url,
+        getattr(quote, "payment_link_url", None),
+        company_settings,
     )
-    if not raw_url:
-        raise HTTPException(status_code=400, detail="Payment URL is required")
     try:
         payment_url = validate_payment_url(raw_url)
     except ValueError as e:
@@ -2832,7 +2830,8 @@ async def send_quote_payment_link(
             body_html = default_quote_payment_email_html(quote, payment_url)
         body_text = _html_to_plain(body_html) if body_html else None
 
-        success, message_id, error, sent_html, sent_text = send_email(
+        success, message_id, error, sent_html, sent_text = await asyncio.to_thread(
+            send_email,
             to_email=to_email,
             subject=subject,
             body_html=body_html,

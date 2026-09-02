@@ -99,11 +99,7 @@ export default function SendPaymentLinkDialog(props: SendPaymentLinkDialogProps)
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const url = paymentUrl.trim();
-    if (!url) {
-      toast.error('Payment URL is required');
-      return;
-    }
-    if (!url.startsWith('https://')) {
+    if (url && !url.startsWith('https://')) {
       toast.error('Payment URL must start with https://');
       return;
     }
@@ -116,7 +112,7 @@ export default function SendPaymentLinkDialog(props: SendPaymentLinkDialogProps)
     try {
       const payload = {
         channel,
-        payment_url: url,
+        payment_url: url || undefined,
         to_email: channel === 'email' ? toEmail.trim() : undefined,
         to_phone: channel === 'sms' ? toPhone.trim() || undefined : undefined,
         subject: channel === 'email' ? subject.trim() || undefined : undefined,
@@ -190,18 +186,15 @@ export default function SendPaymentLinkDialog(props: SendPaymentLinkDialogProps)
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="payment_url">
-              Payment URL <span className="text-destructive">*</span>
-            </Label>
+            <Label htmlFor="payment_url">Payment URL</Label>
             <div className="flex flex-col sm:flex-row gap-2">
               <Input
                 id="payment_url"
                 type="url"
                 value={paymentUrl}
                 onChange={(e) => setPaymentUrl(e.target.value)}
-                placeholder="https://..."
+                placeholder="Leave blank to send the company PayPal page"
                 className="font-mono text-sm"
-                required
               />
               <Button
                 type="button"
@@ -212,10 +205,17 @@ export default function SendPaymentLinkDialog(props: SendPaymentLinkDialogProps)
                 Use PayPal
               </Button>
             </div>
-            {isPayPalPaymentLink(paymentUrl) && (
+            {isPayPalPaymentLink(paymentUrl) ? (
               <p className="text-xs text-muted-foreground">
                 This is the company PayPal payment page. Customers can pay from that link.
               </p>
+            ) : (
+              !paymentUrl.trim() && (
+                <p className="text-xs text-muted-foreground">
+                  Leave blank to send the company PayPal payment page, or paste another pay-by-link
+                  URL.
+                </p>
+              )
             )}
           </div>
 
@@ -373,7 +373,7 @@ export default function SendPaymentLinkDialog(props: SendPaymentLinkDialogProps)
             <Button type="submit" disabled={loading}>
               {loading
                 ? 'Sending…'
-                : `Send ${isPayPalPaymentLink(paymentUrl) ? 'PayPal' : 'payment'} link by ${channel}`}
+                : `Send ${isPayPalPaymentLink(paymentUrl) || !paymentUrl.trim() ? 'PayPal' : 'payment'} link by ${channel}`}
             </Button>
           </DialogFooter>
         </form>

@@ -162,7 +162,9 @@ def test_send_payment_link_invalid_url(api_client, sqlite_engine):
     assert "https" in resp.json()["detail"].lower()
 
 
-def test_send_payment_link_missing_url(api_client, sqlite_engine):
+@patch.dict(os.environ, {"TWILIO_PHONE_NUMBER": "+441111111111"})
+@patch("app.routers.orders.send_sms", return_value=(True, "SM-PAY-DEFAULT", None))
+def test_send_payment_link_missing_url_uses_paypal(_mock_sms, api_client, sqlite_engine):
     quote_id = _seed_order(sqlite_engine)
     order_id = _order_id(api_client, sqlite_engine, quote_id)
     headers = _auth_headers(sqlite_engine)
@@ -172,7 +174,12 @@ def test_send_payment_link_missing_url(api_client, sqlite_engine):
         headers=headers,
         json={"channel": "sms"},
     )
-    assert resp.status_code == 400
+    assert resp.status_code == 200
+
+    with Session(sqlite_engine) as session:
+        sms = session.exec(select(SmsMessage)).first()
+        assert sms is not None
+        assert "https://www.paypal.com/ncp/payment/HM6Y7ZSG5SYQ6" in sms.body
 
 
 @patch.dict(os.environ, {"TWILIO_PHONE_NUMBER": "+441111111111"})
@@ -301,3 +308,42 @@ def test_send_payment_link_email_success(_mock_send, _mock_cfg, api_client, sqli
         ).first()
         assert audit is not None
         assert audit.details["payment_url"] == payment_url
+
+
+@patch("app.routers.orders.is_email_configured", return_value=True)
+@patch(
+    "app.routers.orders.send_email",
+    return_value=(True, "msg-pay-paypal", None, "<p>Pay</p>", "Pay"),
+)
+def test_send_payment_link_email_uses_paypal_when_url_omitted(
+    _mock_send, _mock_cfg, api_client, sqlite_engine
+):
+    quote_id = _seed_order(sqlite_engine)
+    order_id = _order_id(api_client, sqlite_engine, quote_id)
+    headers = _auth_headers(sqlite_engine)
+    paypal = "https://www.paypal.com/ncp/payment/HM6Y7ZSG5SYQ6"
+
+    resp = api_client.post(
+        f"/api/orders/{order_id}/send-payment-link",
+        headers=headers,
+        json={
+            "channel": "email",
+            "to_email": "pay@example.com",
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.json()["channel"] == "email"
+
+    _mock_send.assert_called_once()
+    html = _mock_send.call_args.kwargs["body_html"]
+    assert paypal in html
+
+    with Session(sqlite_engine) as session:
+        audit = session.exec(
+            select(OrderAuditEvent).where(
+                OrderAuditEvent.order_id == order_id,
+                OrderAuditEvent.event_type == "ORDER_PAYMENT_LINK_SENT",
+            )
+        ).first()
+        assert audit is not None
+        assert audit.details["payment_url"] == paypal

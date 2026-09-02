@@ -30,6 +30,20 @@ def company_default_payment_url(company_settings: Optional[CompanySettings]) -> 
     return (getattr(company_settings, "default_payment_link_url", None) or "").strip()
 
 
+def resolve_payment_url(
+    requested: Optional[str],
+    saved: Optional[str],
+    company_settings: Optional[CompanySettings],
+) -> str:
+    """Requested URL, else saved, else company default, else the built-in PayPal page."""
+    return (
+        (requested or "").strip()
+        or (saved or "").strip()
+        or company_default_payment_url(company_settings)
+        or DEFAULT_PAYPAL_PAYMENT_LINK
+    )
+
+
 def payment_link_template_context(order: Order, payment_url: str) -> Dict:
     """Jinja context for payment-link SMS/email templates."""
     return {

@@ -1399,7 +1399,9 @@ export const sendOrderPaymentLink = async (
     save_link_on_order?: boolean;
   }
 ) => {
-  const response = await api.post(`/api/orders/${orderId}/send-payment-link`, data);
+  const response = await api.post(`/api/orders/${orderId}/send-payment-link`, data, {
+    timeout: EMAIL_AND_UPLOAD_TIMEOUT_MS,
+  });
   return response.data as { message: string; channel: string };
 };
 
@@ -1416,7 +1418,9 @@ export const sendQuotePaymentLink = async (
     save_link_on_quote?: boolean;
   }
 ) => {
-  const response = await api.post(`/api/quotes/${quoteId}/send-payment-link`, data);
+  const response = await api.post(`/api/quotes/${quoteId}/send-payment-link`, data, {
+    timeout: EMAIL_AND_UPLOAD_TIMEOUT_MS,
+  });
   return response.data as { message: string; channel: string };
 };
 
