@@ -63,6 +63,19 @@ def _add_user(session: Session, email: str, role: UserRole) -> User:
     return user
 
 
+def _add_unread_sms(session: Session, customer_id: int, phone: str) -> None:
+    session.add(
+        SmsMessage(
+            customer_id=customer_id,
+            direction=SmsDirection.RECEIVED,
+            from_phone=phone,
+            to_phone="+441234567890",
+            body="Thanks for the message",
+            received_at=datetime.utcnow(),
+        )
+    )
+
+
 def _seed_unread_scenario(session: Session):
     closer = _add_user(session, "closer-unread@example.com", UserRole.CLOSER)
     director = _add_user(session, "director-unread@example.com", UserRole.DIRECTOR)
@@ -95,23 +108,14 @@ def _seed_unread_scenario(session: Session):
         (new_customer, "+447700900101"),
         (qual_customer, "+447700900102"),
     ):
-        session.add(
-            SmsMessage(
-                customer_id=customer.id,
-                direction=SmsDirection.RECEIVED,
-                from_phone=phone,
-                to_phone="+441234567890",
-                body="Thanks for the message",
-                received_at=datetime.utcnow(),
-            )
-        )
+        _add_unread_sms(session, customer.id, phone)
     session.commit()
-    return closer, director, qual_customer.id
+    return closer, director, new_customer.id, qual_customer.id
 
 
 def test_closer_unread_sms_excludes_pre_qual_only_customers(api_client, sqlite_engine):
     with Session(sqlite_engine) as session:
-        closer, director, qual_customer_id = _seed_unread_scenario(session)
+        closer, director, _, qual_customer_id = _seed_unread_scenario(session)
         closer_token = create_access_token(data={"sub": closer.email})
         director_token = create_access_token(data={"sub": director.email})
 
@@ -135,7 +139,7 @@ def test_closer_unread_sms_excludes_pre_qual_only_customers(api_client, sqlite_e
 
 def test_closer_unread_by_customer_and_has_unread_list(api_client, sqlite_engine):
     with Session(sqlite_engine) as session:
-        closer, _, qual_customer_id = _seed_unread_scenario(session)
+        closer, _, _, qual_customer_id = _seed_unread_scenario(session)
         closer_token = create_access_token(data={"sub": closer.email})
 
     by_customer_res = api_client.get(
@@ -157,3 +161,95 @@ def test_closer_unread_by_customer_and_has_unread_list(api_client, sqlite_engine
     items = customers_res.json()["items"]
     assert len(items) == 1
     assert items[0]["id"] == qual_customer_id
+
+
+def test_closer_unread_channels_hides_pre_qual_only_customer(api_client, sqlite_engine):
+    with Session(sqlite_engine) as session:
+        closer, director, new_customer_id, qual_customer_id = _seed_unread_scenario(session)
+        closer_token = create_access_token(data={"sub": closer.email})
+        director_token = create_access_token(data={"sub": director.email})
+
+    closer_pre = api_client.get(
+        f"/api/customers/{new_customer_id}/unread-channels",
+        headers={"Authorization": f"Bearer {closer_token}"},
+    )
+    assert closer_pre.status_code == 200, closer_pre.text
+    assert closer_pre.json() == {"sms_unread": 0, "messenger_unread": 0, "email_unread": 0}
+
+    closer_qual = api_client.get(
+        f"/api/customers/{qual_customer_id}/unread-channels",
+        headers={"Authorization": f"Bearer {closer_token}"},
+    )
+    assert closer_qual.status_code == 200, closer_qual.text
+    assert closer_qual.json()["sms_unread"] == 1
+
+    director_pre = api_client.get(
+        f"/api/customers/{new_customer_id}/unread-channels",
+        headers={"Authorization": f"Bearer {director_token}"},
+    )
+    assert director_pre.status_code == 200, director_pre.text
+    assert director_pre.json()["sms_unread"] == 1
+
+
+def test_closer_sees_unread_for_mixed_new_and_qualified_customer(api_client, sqlite_engine):
+    with Session(sqlite_engine) as session:
+        closer = _add_user(session, "closer-mixed@example.com", UserRole.CLOSER)
+        mixed = Customer(
+            customer_number="C-MIXED-UNREAD",
+            name="Mixed Pipeline Customer",
+            phone="+447700900103",
+        )
+        session.add(mixed)
+        session.commit()
+        session.refresh(mixed)
+
+        session.add(
+            Lead(
+                name="Still New Lead",
+                status=LeadStatus.NEW,
+                customer_id=mixed.id,
+                assigned_to_id=closer.id,
+            )
+        )
+        session.add(
+            Lead(
+                name="Qualified Sibling Lead",
+                status=LeadStatus.QUALIFIED,
+                customer_id=mixed.id,
+                assigned_to_id=closer.id,
+            )
+        )
+        _add_unread_sms(session, mixed.id, "+447700900103")
+        session.commit()
+        mixed_id = mixed.id
+        closer_token = create_access_token(data={"sub": closer.email})
+
+    unread_sms = api_client.get(
+        "/api/dashboard/unread-sms",
+        headers={"Authorization": f"Bearer {closer_token}"},
+    )
+    assert unread_sms.status_code == 200, unread_sms.text
+    assert unread_sms.json()["count"] == 1
+    assert unread_sms.json()["messages"][0]["customer_id"] == mixed_id
+
+    by_customer = api_client.get(
+        "/api/dashboard/unread-by-customer",
+        headers={"Authorization": f"Bearer {closer_token}"},
+    )
+    assert by_customer.status_code == 200, by_customer.text
+    assert by_customer.json() == [{"customer_id": mixed_id, "unread_count": 1}]
+
+    has_unread = api_client.get(
+        "/api/customers",
+        params={"has_unread": True},
+        headers={"Authorization": f"Bearer {closer_token}"},
+    )
+    assert has_unread.status_code == 200, has_unread.text
+    assert [item["id"] for item in has_unread.json()["items"]] == [mixed_id]
+
+    channels = api_client.get(
+        f"/api/customers/{mixed_id}/unread-channels",
+        headers={"Authorization": f"Bearer {closer_token}"},
+    )
+    assert channels.status_code == 200, channels.text
+    assert channels.json()["sms_unread"] == 1

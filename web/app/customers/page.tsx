@@ -64,6 +64,11 @@ function CustomersPageContent() {
       setFetchErrorDetail(null);
       const searchValue = searchApplied.trim() || undefined;
       const summaryPromise = getDataSummary().catch(() => null);
+      const unreadPromise = getUnreadCountsByCustomer()
+        .then((unreadRes) =>
+          Object.fromEntries((unreadRes || []).map((d) => [d.customer_id, d.unread_count]))
+        )
+        .catch(() => null);
 
       const customersData = await getCustomers({
         search: searchValue,
@@ -75,8 +80,11 @@ function CustomersPageContent() {
       });
       setCustomers(customersData.items ?? []);
 
-      const summary = await summaryPromise;
+      const [summary, unreadMap] = await Promise.all([summaryPromise, unreadPromise]);
       setDbSummaryCustomers(summary?.customers ?? null);
+      if (unreadMap) {
+        setUnreadByCustomer(unreadMap);
+      }
 
       const listTotal = typeof customersData.total === 'number' ? customersData.total : 0;
       const summaryTotal = summary?.customers ?? 0;
@@ -88,21 +96,6 @@ function CustomersPageContent() {
             : listTotal
       );
       setFetchState('ok');
-
-      const loadUnreadBadges = () => {
-        void getUnreadCountsByCustomer()
-          .then((unreadRes) =>
-            setUnreadByCustomer(
-              Object.fromEntries((unreadRes || []).map((d) => [d.customer_id, d.unread_count]))
-            )
-          )
-          .catch(() => setUnreadByCustomer({}));
-      };
-      if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
-        window.requestIdleCallback(loadUnreadBadges, { timeout: 2500 });
-      } else {
-        setTimeout(loadUnreadBadges, 100);
-      }
     } catch (error: unknown) {
       setFetchState('error');
       setFetchErrorDetail(getApiErrorDetail(error));

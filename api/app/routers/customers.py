@@ -33,7 +33,7 @@ from app.models import (
 )
 from app.models import LeadType, LeadSource
 from app.auth import get_current_user
-from app.closer_pipeline import customer_in_closer_pipeline_exists
+from app.closer_pipeline import CLOSER_PIPELINE_STATUSES, customer_in_closer_pipeline_exists
 from app.models import UserRole
 from app.sms_quote_keyword_service import CLOSE_LOSS_REASON
 from app.schemas import (
@@ -214,6 +214,16 @@ async def get_customer_unread_channels(
     customer = session.get(Customer, customer_id)
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
+
+    if current_user.role == UserRole.CLOSER:
+        pipeline_lead = session.exec(
+            select(Lead.id).where(
+                Lead.customer_id == customer_id,
+                Lead.status.in_(CLOSER_PIPELINE_STATUSES),
+            )
+        ).first()
+        if pipeline_lead is None:
+            return CustomerUnreadChannels(sms_unread=0, messenger_unread=0, email_unread=0)
 
     sms_count = session.exec(
         select(func.count(SmsMessage.id)).where(
