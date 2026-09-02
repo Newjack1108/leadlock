@@ -253,3 +253,87 @@ def test_closer_sees_unread_for_mixed_new_and_qualified_customer(api_client, sql
     )
     assert channels.status_code == 200, channels.text
     assert channels.json()["sms_unread"] == 1
+
+
+def test_closer_sees_unread_after_qualify_restores_previously_read_replies(api_client, sqlite_engine):
+    """Pre-qualify replies marked read become unread indicators once the lead is QUALIFIED."""
+    from app.models import LeadSource, LeadType
+    from app.workflow import auto_transition_lead_status
+
+    with Session(sqlite_engine) as session:
+        closer = _add_user(session, "closer-restore-unread@example.com", UserRole.CLOSER)
+        director = _add_user(session, "director-restore-unread@example.com", UserRole.DIRECTOR)
+        customer = Customer(
+            customer_number="C-RESTORE-UNREAD",
+            name="Restore Unread Customer",
+            phone="+447700900104",
+        )
+        session.add(customer)
+        session.commit()
+        session.refresh(customer)
+
+        lead = Lead(
+            name="Pre-qual then Qualify",
+            status=LeadStatus.ENGAGED,
+            lead_source=LeadSource.REFERRAL,
+            lead_type=LeadType.STABLES,
+            customer_id=customer.id,
+            assigned_to_id=director.id,
+        )
+        session.add(lead)
+        session.add(
+            SmsMessage(
+                customer_id=customer.id,
+                direction=SmsDirection.RECEIVED,
+                from_phone="+447700900104",
+                to_phone="+441234567890",
+                body="Reply before qualify",
+                received_at=datetime.utcnow(),
+                read_at=datetime.utcnow(),
+            )
+        )
+        session.commit()
+        session.refresh(lead)
+        closer_token = create_access_token(data={"sub": closer.email})
+        customer_id = customer.id
+        lead_id = lead.id
+        director_id = director.id
+
+    before = api_client.get(
+        "/api/dashboard/unread-sms",
+        headers={"Authorization": f"Bearer {closer_token}"},
+    )
+    assert before.status_code == 200, before.text
+    assert before.json()["count"] == 0
+
+    with Session(sqlite_engine) as session:
+        ok = auto_transition_lead_status(
+            lead_id,
+            LeadStatus.QUALIFIED,
+            session,
+            director_id,
+            reason="Test qualify restores unread",
+        )
+        assert ok is True
+
+    after = api_client.get(
+        "/api/dashboard/unread-sms",
+        headers={"Authorization": f"Bearer {closer_token}"},
+    )
+    assert after.status_code == 200, after.text
+    assert after.json()["count"] == 1
+    assert after.json()["messages"][0]["customer_id"] == customer_id
+
+    by_customer = api_client.get(
+        "/api/dashboard/unread-by-customer",
+        headers={"Authorization": f"Bearer {closer_token}"},
+    )
+    assert by_customer.status_code == 200, by_customer.text
+    assert by_customer.json() == [{"customer_id": customer_id, "unread_count": 1}]
+
+    channels = api_client.get(
+        f"/api/customers/{customer_id}/unread-channels",
+        headers={"Authorization": f"Bearer {closer_token}"},
+    )
+    assert channels.status_code == 200, channels.text
+    assert channels.json()["sms_unread"] == 1

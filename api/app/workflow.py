@@ -1,5 +1,20 @@
 from typing import Dict, List, Optional, Set
-from app.models import LeadStatus, UserRole, ActivityType, Timeframe, Lead, Activity, Customer, CompanySettings
+from app.models import (
+    LeadStatus,
+    UserRole,
+    ActivityType,
+    Timeframe,
+    Lead,
+    Activity,
+    Customer,
+    CompanySettings,
+    Email,
+    EmailDirection,
+    SmsMessage,
+    SmsDirection,
+    MessengerMessage,
+    MessengerDirection,
+)
 from sqlmodel import Session, select
 from datetime import datetime, timedelta
 from decimal import Decimal
@@ -231,6 +246,40 @@ def check_sla_overdue(lead: Lead, session: Session) -> Optional[str]:
     return None
 
 
+def restore_inbound_unread_for_customer_on_qualify(
+    session: Session, customer_id: Optional[int]
+) -> int:
+    """
+    Clear read_at on received SMS, Messenger, and email for this customer.
+
+    Pre-qualify replies are often marked read when staff open the thread before
+    QUALIFIED. Restoring unread on qualify so closers see pipeline indicators.
+    """
+    if not customer_id:
+        return 0
+
+    cleared = 0
+    for model, direction in (
+        (SmsMessage, SmsDirection.RECEIVED),
+        (MessengerMessage, MessengerDirection.RECEIVED),
+        (Email, EmailDirection.RECEIVED),
+    ):
+        rows = list(
+            session.exec(
+                select(model).where(
+                    model.customer_id == customer_id,
+                    model.direction == direction,
+                    model.read_at.isnot(None),
+                )
+            ).all()
+        )
+        for row in rows:
+            row.read_at = None
+            session.add(row)
+            cleared += 1
+    return cleared
+
+
 def sync_customer_contact_from_lead_on_qualify(session: Session, lead: Lead) -> None:
     """
     Copy lead contact fields onto the linked customer when the lead is (or becomes) qualified.
@@ -330,6 +379,7 @@ def auto_transition_lead_status(
 
     if new_status == LeadStatus.QUALIFIED:
         sync_customer_contact_from_lead_on_qualify(session, lead)
+        restore_inbound_unread_for_customer_on_qualify(session, lead.customer_id)
 
     # Create status history record
     from app.models import StatusHistory
