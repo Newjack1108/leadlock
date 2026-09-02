@@ -20,7 +20,6 @@ import {
   sendQuotePaymentLink,
   getEmailTemplates,
   getSmsTemplates,
-  getCompanySettings,
   getApiErrorDetail,
 } from '@/lib/api';
 import { Customer, Order, Quote, EmailTemplate, SmsTemplate } from '@/lib/types';
@@ -71,7 +70,7 @@ export default function SendPaymentLinkDialog(props: SendPaymentLinkDialogProps)
   useEffect(() => {
     if (!open) return;
     setChannel('email');
-    setPaymentUrl(paymentLinkUrl?.trim() || PAYPAL_PAYMENT_LINK);
+    setPaymentUrl(paymentLinkUrl?.trim() || '');
     setSaveLink(true);
     setToEmail(customer.email || '');
     setToPhone(customer.phone || '');
@@ -83,21 +82,13 @@ export default function SendPaymentLinkDialog(props: SendPaymentLinkDialogProps)
     const loadTemplates = async () => {
       setLoadingTemplates(true);
       try {
-        const [emails, sms, settings] = await Promise.all([
-          getEmailTemplates(),
-          getSmsTemplates(),
-          getCompanySettings().catch(() => null),
-        ]);
+        const [emails, sms] = await Promise.all([getEmailTemplates(), getSmsTemplates()]);
         setEmailTemplates(emails);
         setSmsTemplates(sms);
-        const savedUrl = paymentLinkUrl?.trim() || '';
-        const companyUrl = settings?.default_payment_link_url?.trim() || '';
-        setPaymentUrl(savedUrl || companyUrl || PAYPAL_PAYMENT_LINK);
       } catch {
         toast.error('Failed to load templates');
         setEmailTemplates([]);
         setSmsTemplates([]);
-        setPaymentUrl(paymentLinkUrl?.trim() || PAYPAL_PAYMENT_LINK);
       } finally {
         setLoadingTemplates(false);
       }
@@ -208,7 +199,7 @@ export default function SendPaymentLinkDialog(props: SendPaymentLinkDialogProps)
                 type="url"
                 value={paymentUrl}
                 onChange={(e) => setPaymentUrl(e.target.value)}
-                placeholder={PAYPAL_PAYMENT_LINK}
+                placeholder="https://..."
                 className="font-mono text-sm"
                 required
               />
