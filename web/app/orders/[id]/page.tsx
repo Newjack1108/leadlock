@@ -595,7 +595,7 @@ export default function OrderDetailPage() {
                     onClick={() => setSendPaymentLinkOpen(true)}
                   >
                     <CreditCard className="h-4 w-4 mr-2" />
-                    Send PayPal link
+                    Send Payment link
                   </Button>
                 )}
                 <div className="flex flex-wrap gap-2 pt-2">

@@ -159,7 +159,7 @@ export default function SendPaymentLinkDialog(props: SendPaymentLinkDialogProps)
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CreditCard className="h-5 w-5" />
-            Send PayPal link
+            Send Payment link
           </DialogTitle>
           <DialogDescription>
             Send the company PayPal payment page, or paste another pay-by-link URL, for{' '}
