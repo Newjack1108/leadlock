@@ -22,6 +22,7 @@ import api, {
   revealCompanyBankDetails,
 } from '@/lib/api';
 import { CompanySettings, EmailTemplate, InstallationLeadTime, SmsBotMode, SmsTemplate } from '@/lib/types';
+import { PAYPAL_PAYMENT_LINK } from '@/lib/paymentLink';
 import { toast } from 'sonner';
 
 type WeekdayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
@@ -121,6 +122,7 @@ export default function CompanySettingsPage() {
     bank_account_name: '',
     account_number: '',
     sort_code: '',
+    default_payment_link_url: PAYPAL_PAYMENT_LINK,
     require_engagement_proof: false,
     duplicate_sms_template_id: '' as string,
     duplicate_sms_cooldown_days: '7',
@@ -239,6 +241,7 @@ export default function CompanySettingsPage() {
         bank_account_name: response.data.bank_account_name || '',
         account_number: response.data.account_number || '',
         sort_code: response.data.sort_code || '',
+        default_payment_link_url: response.data.default_payment_link_url || PAYPAL_PAYMENT_LINK,
         require_engagement_proof: response.data.require_engagement_proof ?? false,
         duplicate_sms_template_id:
           response.data.duplicate_sms_template_id != null
@@ -388,6 +391,7 @@ export default function CompanySettingsPage() {
             : parseInt(formData.duplicate_sms_template_id, 10),
         duplicate_sms_cooldown_days: duplicateCooldownVal,
         auto_close_duplicate_leads: formData.auto_close_duplicate_leads,
+        default_payment_link_url: formData.default_payment_link_url.trim() || null,
         review_request_delay_days: reviewDelayVal,
         review_google_url: formData.review_google_url.trim() || null,
         review_facebook_url: formData.review_facebook_url.trim() || null,
@@ -1372,6 +1376,24 @@ export default function CompanySettingsPage() {
                     placeholder={settings?.sort_code_set ? 'Saved (masked)' : 'e.g. 12-34-56'}
                     disabled={saving}
                   />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="default_payment_link_url">PayPal / payment link</Label>
+                  <Input
+                    id="default_payment_link_url"
+                    type="url"
+                    value={formData.default_payment_link_url}
+                    onChange={(e) =>
+                      setFormData({ ...formData, default_payment_link_url: e.target.value })
+                    }
+                    placeholder={PAYPAL_PAYMENT_LINK}
+                    className="font-mono text-sm"
+                    disabled={saving}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Pre-filled when staff send a payment link from a quote or order. Defaults to the
+                    company PayPal page.
+                  </p>
                 </div>
               </div>
             </div>

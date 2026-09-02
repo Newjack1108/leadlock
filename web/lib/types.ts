@@ -757,6 +757,7 @@ export interface CompanySettings {
   sort_code?: string;
   account_number_set?: boolean;
   sort_code_set?: boolean;
+  default_payment_link_url?: string | null;
   require_engagement_proof?: boolean;
   review_request_delay_days?: number;
   review_google_url?: string | null;

@@ -439,7 +439,7 @@ export default function QuoteDetailPage() {
                   {customer && (
                     <DropdownMenuItem onClick={() => setSendPaymentLinkOpen(true)}>
                       <CreditCard className="h-4 w-4 mr-2" />
-                      Send payment link
+                      Send PayPal link
                     </DropdownMenuItem>
                   )}
                   {quote.status === 'SENT' && (

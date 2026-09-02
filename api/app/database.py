@@ -213,6 +213,43 @@ def _ensure_quote_payment_link_url_column(engine) -> None:
             print(f"Warning: could not ensure quote.payment_link_url: {e}", file=sys.stderr, flush=True)
 
 
+def _ensure_default_payment_link_url_column(engine) -> None:
+    """Add company default PayPal/pay-by-link URL and seed it when missing."""
+    import sys
+    from app.payment_link_service import DEFAULT_PAYPAL_PAYMENT_LINK
+
+    try:
+        insp = inspect(engine)
+        if not insp.has_table("companysettings"):
+            return
+        cols = [c["name"] for c in insp.get_columns("companysettings")]
+        added = False
+        if "default_payment_link_url" not in cols:
+            with engine.begin() as conn:
+                conn.execute(
+                    text("ALTER TABLE companysettings ADD COLUMN default_payment_link_url VARCHAR(2048)")
+                )
+            added = True
+            print("Added default_payment_link_url to companysettings", file=sys.stderr, flush=True)
+        if added:
+            with engine.begin() as conn:
+                conn.execute(
+                    text(
+                        "UPDATE companysettings SET default_payment_link_url = :url "
+                        "WHERE default_payment_link_url IS NULL OR TRIM(default_payment_link_url) = ''"
+                    ),
+                    {"url": DEFAULT_PAYPAL_PAYMENT_LINK},
+                )
+    except Exception as e:
+        err = str(e).lower()
+        if "already exists" not in err and "duplicate" not in err:
+            print(
+                f"Warning: could not ensure companysettings.default_payment_link_url: {e}",
+                file=sys.stderr,
+                flush=True,
+            )
+
+
 def _ensure_quote_on_hold_at_column(engine) -> None:
     """Add on_hold_at to quote (customer SMS HOLD keyword)."""
     import sys
@@ -1172,6 +1209,7 @@ def create_db_and_tables():
     _ensure_facebook_advert_schema(engine)
     _ensure_archive_columns(engine)
     _ensure_quote_payment_link_url_column(engine)
+    _ensure_default_payment_link_url_column(engine)
     _ensure_quote_on_hold_at_column(engine)
     _ensure_quote_rejected_by_id_column(engine)
     _ensure_orderitem_line_type_column(engine)
@@ -1929,6 +1967,7 @@ def create_db_and_tables():
                     "review_prize_draw_congratulations_email_template_id": "INTEGER REFERENCES emailtemplate(id)",
                     "review_prize_draw_congratulations_banner_url": "VARCHAR(2048)",
                     "weekly_plan_max_items": "INTEGER DEFAULT 100 NOT NULL",
+                    "default_payment_link_url": "VARCHAR(2048)",
                 }
                 for col_name, col_type in review_company_cols.items():
                     if col_name not in company_columns:

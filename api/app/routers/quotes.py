@@ -88,6 +88,7 @@ from app.email_template_service import render_email_template
 from app.sms_template_service import render_sms_template
 from app.payment_link_service import (
     validate_payment_url,
+    company_default_payment_url,
     quote_payment_link_template_context,
     default_quote_payment_sms_body,
     default_quote_payment_email_subject,
@@ -2702,7 +2703,12 @@ async def send_quote_payment_link(
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
 
-    raw_url = (req.payment_url or "").strip() or (getattr(quote, "payment_link_url", None) or "").strip()
+    company_settings = session.exec(select(CompanySettings).limit(1)).first()
+    raw_url = (
+        (req.payment_url or "").strip()
+        or (getattr(quote, "payment_link_url", None) or "").strip()
+        or company_default_payment_url(company_settings)
+    )
     if not raw_url:
         raise HTTPException(status_code=400, detail="Payment URL is required")
     try:
@@ -2714,7 +2720,6 @@ async def send_quote_payment_link(
         quote.payment_link_url = payment_url
         session.add(quote)
 
-    company_settings = session.exec(select(CompanySettings).limit(1)).first()
     template_ctx = quote_payment_link_template_context(quote, payment_url)
     custom_body = (req.body or "").strip()
 

@@ -541,6 +541,7 @@ class CompanySettings(SQLModel, table=True):
     bank_account_name: Optional[str] = None  # Name on the account (payee for BACS)
     account_number: Optional[str] = None
     sort_code: Optional[str] = None
+    default_payment_link_url: Optional[str] = Field(default=None)  # Company PayPal / pay-by-link URL sent to customers
     require_engagement_proof: bool = Field(default=False)  # When True, customers need engagement (SMS/email/WhatsApp/call) before quoting
     # Post-installation review request settings
     review_request_delay_days: int = Field(default=3)

@@ -72,6 +72,7 @@ from app.order_delete import delete_order_cascade
 from app.order_audit import record_order_audit_event
 from app.payment_link_service import (
     validate_payment_url,
+    company_default_payment_url,
     payment_link_template_context,
     default_payment_sms_body,
     default_payment_email_subject,
@@ -702,7 +703,14 @@ async def send_order_payment_link(
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
 
-    raw_url = (req.payment_url or "").strip() or (order.payment_link_url or "").strip()
+    quote = session.exec(select(Quote).where(Quote.id == order.quote_id)).first()
+    lead_id = quote.lead_id if quote else None
+    company_settings = session.exec(select(CompanySettings).limit(1)).first()
+    raw_url = (
+        (req.payment_url or "").strip()
+        or (order.payment_link_url or "").strip()
+        or company_default_payment_url(company_settings)
+    )
     if not raw_url:
         raise HTTPException(status_code=400, detail="Payment URL is required")
     try:
@@ -714,9 +722,6 @@ async def send_order_payment_link(
         order.payment_link_url = payment_url
         session.add(order)
 
-    quote = session.exec(select(Quote).where(Quote.id == order.quote_id)).first()
-    lead_id = quote.lead_id if quote else None
-    company_settings = session.exec(select(CompanySettings).limit(1)).first()
     template_ctx = payment_link_template_context(order, payment_url)
     custom_body = (req.body or "").strip()
 

@@ -27,6 +27,7 @@ from app.models import (
     SmsMessage,
     User,
     UserRole,
+    CompanySettings,
 )
 from app.routers import orders as orders_router
 from app.routers import quotes as quotes_router
@@ -172,6 +173,38 @@ def test_send_payment_link_missing_url(api_client, sqlite_engine):
         json={"channel": "sms"},
     )
     assert resp.status_code == 400
+
+
+@patch.dict(os.environ, {"TWILIO_PHONE_NUMBER": "+441111111111"})
+@patch("app.routers.orders.send_sms", return_value=(True, "SM-PAY-PAYPAL", None))
+def test_send_payment_link_uses_company_paypal_default(_mock_sms, api_client, sqlite_engine):
+    quote_id = _seed_order(sqlite_engine)
+    order_id = _order_id(api_client, sqlite_engine, quote_id)
+    paypal = "https://www.paypal.com/ncp/payment/HM6Y7ZSG5SYQ6"
+    with Session(sqlite_engine) as session:
+        user = session.exec(select(User).where(User.email == "payment-link@example.com")).first()
+        assert user is not None
+        session.add(
+            CompanySettings(
+                company_name="Test Co",
+                default_payment_link_url=paypal,
+                updated_by_id=user.id,
+            )
+        )
+        session.commit()
+    headers = _auth_headers(sqlite_engine)
+
+    resp = api_client.post(
+        f"/api/orders/{order_id}/send-payment-link",
+        headers=headers,
+        json={"channel": "sms"},
+    )
+    assert resp.status_code == 200
+
+    with Session(sqlite_engine) as session:
+        sms = session.exec(select(SmsMessage)).first()
+        assert sms is not None
+        assert paypal in sms.body
 
 
 def test_send_payment_link_missing_phone(api_client, sqlite_engine):

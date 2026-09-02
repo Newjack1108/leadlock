@@ -20,9 +20,11 @@ import {
   sendQuotePaymentLink,
   getEmailTemplates,
   getSmsTemplates,
+  getCompanySettings,
   getApiErrorDetail,
 } from '@/lib/api';
 import { Customer, Order, Quote, EmailTemplate, SmsTemplate } from '@/lib/types';
+import { PAYPAL_PAYMENT_LINK, isPayPalPaymentLink } from '@/lib/paymentLink';
 import { toast } from 'sonner';
 import { Mail, MessageSquare, CreditCard } from 'lucide-react';
 
@@ -69,7 +71,7 @@ export default function SendPaymentLinkDialog(props: SendPaymentLinkDialogProps)
   useEffect(() => {
     if (!open) return;
     setChannel('email');
-    setPaymentUrl(paymentLinkUrl?.trim() || '');
+    setPaymentUrl(paymentLinkUrl?.trim() || PAYPAL_PAYMENT_LINK);
     setSaveLink(true);
     setToEmail(customer.email || '');
     setToPhone(customer.phone || '');
@@ -81,13 +83,21 @@ export default function SendPaymentLinkDialog(props: SendPaymentLinkDialogProps)
     const loadTemplates = async () => {
       setLoadingTemplates(true);
       try {
-        const [emails, sms] = await Promise.all([getEmailTemplates(), getSmsTemplates()]);
+        const [emails, sms, settings] = await Promise.all([
+          getEmailTemplates(),
+          getSmsTemplates(),
+          getCompanySettings().catch(() => null),
+        ]);
         setEmailTemplates(emails);
         setSmsTemplates(sms);
+        const savedUrl = paymentLinkUrl?.trim() || '';
+        const companyUrl = settings?.default_payment_link_url?.trim() || '';
+        setPaymentUrl(savedUrl || companyUrl || PAYPAL_PAYMENT_LINK);
       } catch {
         toast.error('Failed to load templates');
         setEmailTemplates([]);
         setSmsTemplates([]);
+        setPaymentUrl(paymentLinkUrl?.trim() || PAYPAL_PAYMENT_LINK);
       } finally {
         setLoadingTemplates(false);
       }
@@ -158,10 +168,10 @@ export default function SendPaymentLinkDialog(props: SendPaymentLinkDialogProps)
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CreditCard className="h-5 w-5" />
-            Send payment link
+            Send PayPal link
           </DialogTitle>
           <DialogDescription>
-            Paste the pay-by-link URL from your payment provider, then send it to the customer for{' '}
+            Send the company PayPal payment page, or paste another pay-by-link URL, for{' '}
             {documentLabel} {documentNumber}.
           </DialogDescription>
         </DialogHeader>
@@ -192,15 +202,30 @@ export default function SendPaymentLinkDialog(props: SendPaymentLinkDialogProps)
             <Label htmlFor="payment_url">
               Payment URL <span className="text-destructive">*</span>
             </Label>
-            <Input
-              id="payment_url"
-              type="url"
-              value={paymentUrl}
-              onChange={(e) => setPaymentUrl(e.target.value)}
-              placeholder="https://..."
-              className="font-mono text-sm"
-              required
-            />
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Input
+                id="payment_url"
+                type="url"
+                value={paymentUrl}
+                onChange={(e) => setPaymentUrl(e.target.value)}
+                placeholder={PAYPAL_PAYMENT_LINK}
+                className="font-mono text-sm"
+                required
+              />
+              <Button
+                type="button"
+                variant={isPayPalPaymentLink(paymentUrl) ? 'default' : 'outline'}
+                onClick={() => setPaymentUrl(PAYPAL_PAYMENT_LINK)}
+                className="shrink-0"
+              >
+                Use PayPal
+              </Button>
+            </div>
+            {isPayPalPaymentLink(paymentUrl) && (
+              <p className="text-xs text-muted-foreground">
+                This is the company PayPal payment page. Customers can pay from that link.
+              </p>
+            )}
           </div>
 
           <div className="flex items-center space-x-2">
@@ -355,7 +380,9 @@ export default function SendPaymentLinkDialog(props: SendPaymentLinkDialogProps)
               Cancel
             </Button>
             <Button type="submit" disabled={loading}>
-              {loading ? 'Sending…' : `Send payment link by ${channel}`}
+              {loading
+                ? 'Sending…'
+                : `Send ${isPayPalPaymentLink(paymentUrl) ? 'PayPal' : 'payment'} link by ${channel}`}
             </Button>
           </DialogFooter>
         </form>

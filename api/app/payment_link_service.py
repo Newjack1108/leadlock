@@ -1,10 +1,11 @@
 """Validation and template context for external payment links."""
-from typing import Dict
+from typing import Dict, Optional
 from urllib.parse import urlparse
 
-from app.models import Order, Quote
+from app.models import CompanySettings, Order, Quote
 
 MAX_PAYMENT_URL_LENGTH = 2048
+DEFAULT_PAYPAL_PAYMENT_LINK = "https://www.paypal.com/ncp/payment/HM6Y7ZSG5SYQ6"
 
 
 def validate_payment_url(url: str) -> str:
@@ -20,6 +21,13 @@ def validate_payment_url(url: str) -> str:
     if not parsed.netloc:
         raise ValueError("Payment URL is not valid")
     return cleaned
+
+
+def company_default_payment_url(company_settings: Optional[CompanySettings]) -> str:
+    """Company PayPal/pay-by-link URL, if configured."""
+    if company_settings is None:
+        return ""
+    return (getattr(company_settings, "default_payment_link_url", None) or "").strip()
 
 
 def payment_link_template_context(order: Order, payment_url: str) -> Dict:

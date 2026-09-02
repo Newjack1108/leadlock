@@ -1560,6 +1560,7 @@ class CompanySettingsCreate(BaseModel):
     bank_account_name: Optional[str] = None
     account_number: Optional[str] = None
     sort_code: Optional[str] = None
+    default_payment_link_url: Optional[str] = None
     require_engagement_proof: Optional[bool] = None
     review_request_delay_days: Optional[int] = 3
     review_google_url: Optional[str] = None
@@ -1632,6 +1633,7 @@ class CompanySettingsUpdate(BaseModel):
     bank_account_name: Optional[str] = None
     account_number: Optional[str] = None
     sort_code: Optional[str] = None
+    default_payment_link_url: Optional[str] = None
     require_engagement_proof: Optional[bool] = None
     review_request_delay_days: Optional[int] = None
     review_google_url: Optional[str] = None
@@ -1712,6 +1714,7 @@ class CompanySettingsResponse(BaseModel):
     sort_code: Optional[str] = None
     account_number_set: bool = False
     sort_code_set: bool = False
+    default_payment_link_url: Optional[str] = None
     require_engagement_proof: Optional[bool] = None
     review_request_delay_days: int = 3
     review_google_url: Optional[str] = None
