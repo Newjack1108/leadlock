@@ -1,4 +1,4 @@
-"""CLOSER unread indicators only include customers with pipeline leads (QUALIFIED+)."""
+"""CLOSER unread indicators exclude pre-qualify-only customers; include QUALIFIED+ including LOST/CLOSED."""
 import os
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
@@ -337,3 +337,81 @@ def test_closer_sees_unread_after_qualify_restores_previously_read_replies(api_c
     )
     assert channels.status_code == 200, channels.text
     assert channels.json()["sms_unread"] == 1
+
+
+def test_closer_sees_unread_for_lost_and_closed_customers(api_client, sqlite_engine):
+    """CLOSE replies move leads to LOST; closers must still see those unread SMS like directors."""
+    with Session(sqlite_engine) as session:
+        closer = _add_user(session, "closer-lost-closed@example.com", UserRole.CLOSER)
+        director = _add_user(session, "director-lost-closed@example.com", UserRole.DIRECTOR)
+
+        lost_customer = Customer(
+            customer_number="C-LOST-UNREAD",
+            name="Lost Pipeline Customer",
+            phone="+447700900105",
+        )
+        closed_customer = Customer(
+            customer_number="C-CLOSED-UNREAD",
+            name="Closed Pipeline Customer",
+            phone="+447700900106",
+        )
+        session.add(lost_customer)
+        session.add(closed_customer)
+        session.commit()
+        session.refresh(lost_customer)
+        session.refresh(closed_customer)
+
+        session.add(
+            Lead(
+                name="Lost after CLOSE",
+                status=LeadStatus.LOST,
+                customer_id=lost_customer.id,
+                assigned_to_id=closer.id,
+            )
+        )
+        session.add(
+            Lead(
+                name="Closed lead",
+                status=LeadStatus.CLOSED,
+                customer_id=closed_customer.id,
+                assigned_to_id=closer.id,
+            )
+        )
+        _add_unread_sms(session, lost_customer.id, "+447700900105")
+        _add_unread_sms(session, closed_customer.id, "+447700900106")
+        session.commit()
+        closer_token = create_access_token(data={"sub": closer.email})
+        director_token = create_access_token(data={"sub": director.email})
+        lost_id = lost_customer.id
+        closed_id = closed_customer.id
+
+    closer_res = api_client.get(
+        "/api/dashboard/unread-sms",
+        headers={"Authorization": f"Bearer {closer_token}"},
+    )
+    assert closer_res.status_code == 200, closer_res.text
+    closer_ids = {m["customer_id"] for m in closer_res.json()["messages"]}
+    assert closer_res.json()["count"] == 2
+    assert closer_ids == {lost_id, closed_id}
+
+    by_customer = api_client.get(
+        "/api/dashboard/unread-by-customer",
+        headers={"Authorization": f"Bearer {closer_token}"},
+    )
+    assert by_customer.status_code == 200, by_customer.text
+    assert {row["customer_id"] for row in by_customer.json()} == {lost_id, closed_id}
+
+    for customer_id in (lost_id, closed_id):
+        channels = api_client.get(
+            f"/api/customers/{customer_id}/unread-channels",
+            headers={"Authorization": f"Bearer {closer_token}"},
+        )
+        assert channels.status_code == 200, channels.text
+        assert channels.json()["sms_unread"] == 1
+
+    director_res = api_client.get(
+        "/api/dashboard/unread-sms",
+        headers={"Authorization": f"Bearer {director_token}"},
+    )
+    assert director_res.status_code == 200, director_res.text
+    assert director_res.json()["count"] == 2

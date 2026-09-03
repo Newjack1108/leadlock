@@ -8,6 +8,8 @@ CLOSER_PIPELINE_STATUSES = (
     LeadStatus.QUALIFIED,
     LeadStatus.QUOTED,
     LeadStatus.WON,
+    LeadStatus.LOST,
+    LeadStatus.CLOSED,
 )
 
 
