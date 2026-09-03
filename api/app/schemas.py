@@ -2690,9 +2690,9 @@ class CustomerHistoryEventType(str, Enum):
 
 class ReviewPrizeDrawEntryListItem(BaseModel):
     id: int
-    order_id: int
-    order_number: str
-    customer_id: int
+    order_id: Optional[int] = None
+    order_number: str = ""
+    customer_id: Optional[int] = None
     customer_name: str
     platforms_claimed: List[str]
     status: str
@@ -2701,6 +2701,7 @@ class ReviewPrizeDrawEntryListItem(BaseModel):
     rejection_note: Optional[str] = None
     reviewed_at: Optional[datetime] = None
     reviewed_by_name: Optional[str] = None
+    is_manual: bool = False
 
 
 class ReviewPrizeDrawEntriesResponse(BaseModel):
@@ -2712,6 +2713,11 @@ class ReviewPrizeDrawRejectRequest(BaseModel):
     note: Optional[str] = None
 
 
+class ReviewPrizeDrawAddManualRequest(BaseModel):
+    month: str
+    names: List[str]
+
+
 class ReviewPrizeDrawPickWinnerRequest(BaseModel):
     month: str
 
@@ -2719,6 +2725,10 @@ class ReviewPrizeDrawPickWinnerRequest(BaseModel):
 class ReviewPrizeDrawResetWinnerResponse(BaseModel):
     success: bool
     month: str
+
+
+class ReviewPrizeDrawDeleteEntryResponse(BaseModel):
+    success: bool
 
 
 class ReviewPrizeDrawSendCongratulationsRequest(BaseModel):
@@ -2730,11 +2740,12 @@ class ReviewPrizeDrawSendCongratulationsRequest(BaseModel):
 class ReviewPrizeDrawWinnerResponse(BaseModel):
     month: str
     entry_id: int
-    order_id: int
-    order_number: str
-    customer_id: int
+    order_id: Optional[int] = None
+    order_number: str = ""
+    customer_id: Optional[int] = None
     customer_name: str
     platforms_claimed: List[str]
+    is_manual: bool = False
     picked_at: datetime
     picked_by_id: int
     picked_by_name: Optional[str] = None

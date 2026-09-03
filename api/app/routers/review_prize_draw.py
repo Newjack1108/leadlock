@@ -1,13 +1,12 @@
 """Staff API for monthly review prize draw."""
-from typing import List, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlmodel import Session, select
+from sqlmodel import Session
 
-from app.auth import get_current_user, require_role
+from app.auth import require_role
 from app.database import get_session
 from app.models import (
-    Customer,
     Order,
     ReviewPrizeDrawEntry,
     ReviewPrizeDrawEntryStatus,
@@ -16,8 +15,12 @@ from app.models import (
     UserRole,
 )
 from app.review_prize_draw_service import (
+    add_manual_entries,
     approve_entry,
+    delete_manual_entry,
+    entry_display_name,
     get_winner_for_month,
+    is_manual_entry,
     list_entries,
     pick_random_winner,
     reject_entry,
@@ -25,6 +28,8 @@ from app.review_prize_draw_service import (
     send_congratulations_to_winner,
 )
 from app.schemas import (
+    ReviewPrizeDrawAddManualRequest,
+    ReviewPrizeDrawDeleteEntryResponse,
     ReviewPrizeDrawEntriesResponse,
     ReviewPrizeDrawEntryListItem,
     ReviewPrizeDrawPickWinnerRequest,
@@ -38,8 +43,7 @@ router = APIRouter(prefix="/api/review-prize-draw", tags=["review-prize-draw"])
 
 
 def _entry_to_list_item(entry: ReviewPrizeDrawEntry, session: Session) -> ReviewPrizeDrawEntryListItem:
-    order = session.get(Order, entry.order_id)
-    customer = session.get(Customer, entry.customer_id)
+    order = session.get(Order, entry.order_id) if entry.order_id else None
     reviewed_by_name = None
     if entry.reviewed_by_id:
         reviewer = session.get(User, entry.reviewed_by_id)
@@ -49,7 +53,7 @@ def _entry_to_list_item(entry: ReviewPrizeDrawEntry, session: Session) -> Review
         order_id=entry.order_id,
         order_number=order.order_number if order else "",
         customer_id=entry.customer_id,
-        customer_name=customer.name if customer else "",
+        customer_name=entry_display_name(entry, session),
         platforms_claimed=entry.platforms_claimed or [],
         status=entry.status.value if entry.status else "",
         submitted_at=entry.submitted_at,
@@ -57,13 +61,13 @@ def _entry_to_list_item(entry: ReviewPrizeDrawEntry, session: Session) -> Review
         rejection_note=entry.rejection_note,
         reviewed_at=entry.reviewed_at,
         reviewed_by_name=reviewed_by_name,
+        is_manual=is_manual_entry(entry),
     )
 
 
 def _winner_to_response(winner: ReviewPrizeDrawWinner, session: Session) -> ReviewPrizeDrawWinnerResponse:
     entry = session.get(ReviewPrizeDrawEntry, winner.entry_id)
-    order = session.get(Order, entry.order_id) if entry else None
-    customer = session.get(Customer, entry.customer_id) if entry else None
+    order = session.get(Order, entry.order_id) if entry and entry.order_id else None
     picker = session.get(User, winner.picked_by_id)
     sent_by_name = None
     if winner.congratulations_sent_by_id:
@@ -72,11 +76,12 @@ def _winner_to_response(winner: ReviewPrizeDrawWinner, session: Session) -> Revi
     return ReviewPrizeDrawWinnerResponse(
         month=winner.month,
         entry_id=winner.entry_id,
-        order_id=entry.order_id if entry else 0,
+        order_id=entry.order_id if entry else None,
         order_number=order.order_number if order else "",
-        customer_id=entry.customer_id if entry else 0,
-        customer_name=customer.name if customer else "",
+        customer_id=entry.customer_id if entry else None,
+        customer_name=entry_display_name(entry, session) if entry else "",
         platforms_claimed=entry.platforms_claimed or [] if entry else [],
+        is_manual=is_manual_entry(entry) if entry else False,
         picked_at=winner.picked_at,
         picked_by_id=winner.picked_by_id,
         picked_by_name=picker.full_name if picker else None,
@@ -115,6 +120,45 @@ async def get_prize_draw_entries(
         entries=[_entry_to_list_item(e, session) for e in entries],
         approved_count=approved_count,
     )
+
+
+@router.post("/entries/manual", response_model=ReviewPrizeDrawEntriesResponse)
+async def add_manual_prize_draw_entries(
+    body: ReviewPrizeDrawAddManualRequest,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_role([UserRole.DIRECTOR])),
+):
+    created, err = add_manual_entries(body.names, body.month, current_user, session)
+    if err or created is None:
+        raise HTTPException(status_code=400, detail=err or "Could not add names")
+    session.commit()
+    for entry in created:
+        session.refresh(entry)
+    pool_month = created[0].entry_month if created else body.month
+    approved_count = len(
+        list_entries(
+            session,
+            entry_month=pool_month,
+            status=ReviewPrizeDrawEntryStatus.APPROVED,
+        )
+    )
+    return ReviewPrizeDrawEntriesResponse(
+        entries=[_entry_to_list_item(e, session) for e in created],
+        approved_count=approved_count,
+    )
+
+
+@router.delete("/entries/{entry_id}", response_model=ReviewPrizeDrawDeleteEntryResponse)
+async def delete_manual_prize_draw_entry(
+    entry_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_role([UserRole.DIRECTOR])),
+):
+    success, err = delete_manual_entry(entry_id, session)
+    if not success:
+        raise HTTPException(status_code=400, detail=err)
+    session.commit()
+    return ReviewPrizeDrawDeleteEntryResponse(success=True)
 
 
 @router.post("/entries/{entry_id}/approve", response_model=ReviewPrizeDrawEntryListItem)

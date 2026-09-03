@@ -8,8 +8,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Textarea } from '@/components/ui/textarea';
 import {
+  addManualReviewPrizeDrawEntries,
   approveReviewPrizeDrawEntry,
+  deleteManualReviewPrizeDrawEntry,
+  getApiErrorDetail,
   getReviewPrizeDrawEntries,
   getReviewPrizeDrawWinner,
   pickReviewPrizeDrawWinner,
@@ -18,7 +22,7 @@ import {
 } from '@/lib/api';
 import { ReviewPrizeDrawEntryListItem, ReviewPrizeDrawWinner } from '@/lib/types';
 import SendPrizeDrawCongratulationsDialog from '@/components/SendPrizeDrawCongratulationsDialog';
-import { Gift, Send, Trophy } from 'lucide-react';
+import { Gift, Plus, Send, Trash2, Trophy } from 'lucide-react';
 import { toast } from 'sonner';
 
 function currentMonthValue() {
@@ -39,6 +43,8 @@ export default function ReviewPrizeDrawPage() {
   const [resetting, setResetting] = useState(false);
   const [congratsDialogOpen, setCongratsDialogOpen] = useState(false);
   const [busyId, setBusyId] = useState<number | null>(null);
+  const [manualNames, setManualNames] = useState('');
+  const [addingNames, setAddingNames] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -139,6 +145,50 @@ export default function ReviewPrizeDrawPage() {
     }
   };
 
+  const handleAddManualNames = async () => {
+    const names = manualNames
+      .split('\n')
+      .map((name) => name.trim())
+      .filter(Boolean);
+    if (names.length === 0) {
+      toast.error('Enter at least one name');
+      return;
+    }
+
+    try {
+      setAddingNames(true);
+      const result = await addManualReviewPrizeDrawEntries(month, names);
+      const added = result.entries?.length ?? names.length;
+      toast.success(added === 1 ? `Added ${result.entries[0].customer_name}` : `Added ${added} names`);
+      setManualNames('');
+      if (statusFilter === 'PENDING' || statusFilter === 'REJECTED') {
+        setStatusFilter('ALL');
+      } else {
+        await load();
+      }
+    } catch (error: unknown) {
+      toast.error(getApiErrorDetail(error) || 'Failed to add names');
+    } finally {
+      setAddingNames(false);
+    }
+  };
+
+  const handleRemoveManual = async (entry: ReviewPrizeDrawEntryListItem) => {
+    const confirmed = window.confirm(`Remove ${entry.customer_name} from the ${month} draw?`);
+    if (!confirmed) return;
+
+    try {
+      setBusyId(entry.id);
+      await deleteManualReviewPrizeDrawEntry(entry.id);
+      toast.success(`Removed ${entry.customer_name}`);
+      await load();
+    } catch (error: unknown) {
+      toast.error(getApiErrorDetail(error) || 'Failed to remove name');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -205,7 +255,9 @@ export default function ReviewPrizeDrawPage() {
               <div className="rounded-md border p-4 space-y-1">
                 <p className="font-medium">{winner.customer_name}</p>
                 <p className="text-sm text-muted-foreground">
-                  Order {winner.order_number} · {winner.platforms_claimed.join(', ')}
+                  {winner.is_manual
+                    ? 'Manually added'
+                    : `Order ${winner.order_number}${(winner.platforms_claimed || []).length ? ` · ${winner.platforms_claimed.join(', ')}` : ''}`}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   Picked {new Date(winner.picked_at).toLocaleString('en-GB')}
@@ -236,14 +288,16 @@ export default function ReviewPrizeDrawPage() {
               </Button>
               {winner ? (
                 <>
-                  <Button
-                    variant="secondary"
-                    onClick={() => setCongratsDialogOpen(true)}
-                    disabled={picking || resetting}
-                  >
-                    <Send className="h-4 w-4 mr-1" />
-                    {winner.congratulations_sent_at ? 'Resend congratulations' : 'Send congratulations'}
-                  </Button>
+                  {!winner.is_manual ? (
+                    <Button
+                      variant="secondary"
+                      onClick={() => setCongratsDialogOpen(true)}
+                      disabled={picking || resetting}
+                    >
+                      <Send className="h-4 w-4 mr-1" />
+                      {winner.congratulations_sent_at ? 'Resend congratulations' : 'Send congratulations'}
+                    </Button>
+                  ) : null}
                   <Button
                     variant="outline"
                     onClick={() => void handleResetWinner()}
@@ -263,8 +317,35 @@ export default function ReviewPrizeDrawPage() {
         <Card>
           <CardHeader>
             <CardTitle>Entries {loading ? '' : `(${entries.length})`}</CardTitle>
+            <CardDescription>
+              Add extra names to this month&apos;s approved pool. They are included when you pick a
+              winner. One name per line.
+            </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
+            <form
+              className="flex flex-col sm:flex-row gap-2 sm:items-end"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void handleAddManualNames();
+              }}
+            >
+              <div className="space-y-2 flex-1 min-w-0">
+                <Label htmlFor="manual-names">Add names</Label>
+                <Textarea
+                  id="manual-names"
+                  value={manualNames}
+                  onChange={(e) => setManualNames(e.target.value)}
+                  placeholder={"Jane Smith\nJohn Doe"}
+                  rows={2}
+                  disabled={addingNames}
+                />
+              </div>
+              <Button type="submit" disabled={addingNames || !manualNames.trim()}>
+                <Plus className="h-4 w-4 mr-1" />
+                {addingNames ? 'Adding…' : 'Add to draw'}
+              </Button>
+            </form>
             {loading ? (
               <p className="text-muted-foreground text-sm">Loading…</p>
             ) : entries.length === 0 ? (
@@ -276,13 +357,18 @@ export default function ReviewPrizeDrawPage() {
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-medium">{entry.customer_name}</span>
                       <Badge variant="outline">{entry.status}</Badge>
+                      {entry.is_manual ? <Badge variant="secondary">Manual</Badge> : null}
                       {entry.entry_month ? (
                         <span className="text-xs text-muted-foreground">Pool: {entry.entry_month}</span>
                       ) : null}
                     </div>
-                    <p className="text-sm text-muted-foreground">
-                      Order {entry.order_number} · {(entry.platforms_claimed || []).join(', ')}
-                    </p>
+                    {entry.is_manual ? (
+                      <p className="text-sm text-muted-foreground">Manually added</p>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        Order {entry.order_number} · {(entry.platforms_claimed || []).join(', ')}
+                      </p>
+                    )}
                     {entry.submitted_at ? (
                       <p className="text-xs text-muted-foreground">
                         Submitted {new Date(entry.submitted_at).toLocaleString('en-GB')}
@@ -307,6 +393,17 @@ export default function ReviewPrizeDrawPage() {
                         </Button>
                       </div>
                     ) : null}
+                    {entry.is_manual ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={busyId === entry.id}
+                        onClick={() => void handleRemoveManual(entry)}
+                      >
+                        <Trash2 className="h-4 w-4 mr-1" />
+                        Remove
+                      </Button>
+                    ) : null}
                   </div>
                 ))}
               </div>
@@ -314,7 +411,7 @@ export default function ReviewPrizeDrawPage() {
           </CardContent>
         </Card>
       </main>
-      {winner ? (
+      {winner && !winner.is_manual ? (
         <SendPrizeDrawCongratulationsDialog
           open={congratsDialogOpen}
           onOpenChange={setCongratsDialogOpen}

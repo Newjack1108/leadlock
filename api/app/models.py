@@ -1057,10 +1057,14 @@ class ReviewPrizeDrawEntryStatus(str, Enum):
 
 
 class ReviewPrizeDrawEntry(SQLModel, table=True):
-    """Customer self-declared review platforms for monthly prize draw (staff-approved)."""
+    """Customer self-declared review platforms for monthly prize draw (staff-approved).
+
+    Staff can also add manual names (no order/customer) which are approved immediately.
+    """
     id: Optional[int] = Field(default=None, primary_key=True)
-    order_id: int = Field(foreign_key="customer_order.id", index=True)
-    customer_id: int = Field(foreign_key="customer.id", index=True)
+    order_id: Optional[int] = Field(default=None, foreign_key="customer_order.id", index=True)
+    customer_id: Optional[int] = Field(default=None, foreign_key="customer.id", index=True)
+    manual_name: Optional[str] = Field(default=None, max_length=255)
     access_token: str = Field(unique=True, index=True)
     platforms_claimed: List[str] = Field(default_factory=list, sa_column=Column(JSON))
     status: ReviewPrizeDrawEntryStatus = Field(default=ReviewPrizeDrawEntryStatus.PENDING, index=True)
@@ -1071,7 +1075,7 @@ class ReviewPrizeDrawEntry(SQLModel, table=True):
     entry_month: Optional[str] = Field(default=None, index=True)  # YYYY-MM set on approval
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
-    order: "Order" = Relationship(back_populates="review_prize_draw_entries")
+    order: Optional["Order"] = Relationship(back_populates="review_prize_draw_entries")
     customer: Optional["Customer"] = Relationship()
     reviewed_by: Optional["User"] = Relationship()
 

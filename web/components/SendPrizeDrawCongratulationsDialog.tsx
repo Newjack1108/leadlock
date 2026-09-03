@@ -43,6 +43,11 @@ export default function SendPrizeDrawCongratulationsDialog({
     setChannel('sms');
     setCustomer(null);
 
+    if (!winner.customer_id) {
+      setLoadingCustomer(false);
+      return;
+    }
+
     const load = async () => {
       setLoadingCustomer(true);
       try {

@@ -21,9 +21,11 @@ from app.models import (
     UserRole,
 )
 from app.review_prize_draw_service import (
+    add_manual_entries,
     approve_entry,
     build_prize_draw_celebration_banner_url,
     build_prize_draw_congratulations_context,
+    delete_manual_entry,
     ensure_prize_draw_entry,
     get_winner_for_month,
     list_entries,
@@ -580,3 +582,115 @@ def test_backfill_congratulations_sms_adds_celebration_emojis(sqlite_engine):
 
         assert "🎉" in stale_sms.body_template
         assert "🏆" in stale_sms.body_template
+
+
+def test_add_manual_entries_are_approved_for_month(sqlite_engine):
+    with Session(sqlite_engine) as session:
+        settings, _order = _seed(session)
+        user = session.get(User, settings.updated_by_id)
+        month = datetime.utcnow().strftime("%Y-%m")
+
+        created, err = add_manual_entries(
+            ["  Jane Smith  ", "Jane Smith", "Bob Jones", ""],
+            month,
+            user,
+            session,
+        )
+        session.commit()
+
+        assert err is None
+        assert created is not None
+        assert [e.manual_name for e in created] == ["Jane Smith", "Bob Jones"]
+        assert all(e.status == ReviewPrizeDrawEntryStatus.APPROVED for e in created)
+        assert all(e.entry_month == month for e in created)
+        assert all(e.order_id is None for e in created)
+
+        listed = list_entries(session, submitted_month=month)
+        listed_names = {e.manual_name for e in listed}
+        assert listed_names == {"Jane Smith", "Bob Jones"}
+
+        pool = list_entries(
+            session,
+            entry_month=month,
+            status=ReviewPrizeDrawEntryStatus.APPROVED,
+        )
+        assert {e.id for e in pool} == {e.id for e in created}
+
+
+def test_add_manual_entries_rejects_empty_and_bad_month(sqlite_engine):
+    with Session(sqlite_engine) as session:
+        settings, _order = _seed(session)
+        user = session.get(User, settings.updated_by_id)
+
+        created, err = add_manual_entries(["  "], "2026-09", user, session)
+        assert created is None
+        assert "at least one name" in (err or "").lower()
+
+        created, err = add_manual_entries(["Ada"], "2026-13", user, session)
+        assert created is None
+        assert "yyyy-mm" in (err or "").lower()
+
+
+def test_pick_random_winner_can_select_manual_entry(sqlite_engine):
+    with Session(sqlite_engine) as session:
+        settings, _order = _seed(session)
+        user = session.get(User, settings.updated_by_id)
+        month = datetime.utcnow().strftime("%Y-%m")
+
+        created, err = add_manual_entries(["Manual Winner"], month, user, session)
+        session.commit()
+        assert err is None
+        assert created is not None
+
+        winner, pick_err = pick_random_winner(month, user, session)
+        session.commit()
+        assert pick_err is None
+        assert winner.entry_id == created[0].id
+
+
+def test_delete_manual_entry_and_block_winner_delete(sqlite_engine):
+    with Session(sqlite_engine) as session:
+        settings, order = _seed(session)
+        user = session.get(User, settings.updated_by_id)
+        month = datetime.utcnow().strftime("%Y-%m")
+
+        created, err = add_manual_entries(["Removable", "Winner Name"], month, user, session)
+        session.commit()
+        assert err is None
+        removable, winner_entry = created
+
+        success, delete_err = delete_manual_entry(removable.id, session)
+        session.commit()
+        assert success is True
+        assert delete_err is None
+        assert session.get(ReviewPrizeDrawEntry, removable.id) is None
+
+        winner, pick_err = pick_random_winner(month, user, session)
+        session.commit()
+        assert pick_err is None
+        assert winner.entry_id == winner_entry.id
+
+        blocked, blocked_err = delete_manual_entry(winner_entry.id, session)
+        assert blocked is False
+        assert "winner" in (blocked_err or "").lower()
+
+        customer_entry = ensure_prize_draw_entry(order, session)
+        session.commit()
+        blocked_customer, customer_err = delete_manual_entry(customer_entry.id, session)
+        assert blocked_customer is False
+        assert "manually added" in (customer_err or "").lower()
+
+
+def test_send_congratulations_rejects_manual_winner(sqlite_engine):
+    with Session(sqlite_engine) as session:
+        settings, _order = _seed(session)
+        user = session.get(User, settings.updated_by_id)
+        month = datetime.utcnow().strftime("%Y-%m")
+        add_manual_entries(["No Contact"], month, user, session)
+        session.commit()
+        pick_random_winner(month, user, session)
+        session.commit()
+
+        updated, err = send_congratulations_to_winner(month, user, session, channel="email")
+        assert updated is None
+        assert "manually added" in (err or "").lower()

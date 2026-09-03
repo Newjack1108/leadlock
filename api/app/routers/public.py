@@ -549,6 +549,8 @@ def get_review_prize_context(
     entry = get_entry_by_token(session, token)
     if not entry:
         raise HTTPException(status_code=404, detail="Prize draw entry not found")
+    if not entry.order_id:
+        raise HTTPException(status_code=404, detail="Prize draw entry not found")
 
     order = session.get(Order, entry.order_id)
     if not order:

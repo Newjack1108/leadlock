@@ -1469,8 +1469,9 @@ def create_db_and_tables():
                     conn.execute(text("""
                         CREATE TABLE IF NOT EXISTS reviewprizedrawentry (
                             id SERIAL PRIMARY KEY,
-                            order_id INTEGER NOT NULL REFERENCES customer_order(id),
-                            customer_id INTEGER NOT NULL REFERENCES customer(id),
+                            order_id INTEGER REFERENCES customer_order(id),
+                            customer_id INTEGER REFERENCES customer(id),
+                            manual_name VARCHAR(255),
                             access_token VARCHAR(255) NOT NULL UNIQUE,
                             platforms_claimed JSONB DEFAULT '[]',
                             status VARCHAR(16) NOT NULL DEFAULT 'PENDING',
@@ -1551,6 +1552,34 @@ def create_db_and_tables():
                                 file=sys.stderr,
                                 flush=True,
                             )
+
+        if inspector.has_table("reviewprizedrawentry"):
+            prize_entry_columns = [col["name"] for col in inspector.get_columns("reviewprizedrawentry")]
+            if "manual_name" not in prize_entry_columns:
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE reviewprizedrawentry ADD COLUMN manual_name VARCHAR(255)"))
+                    print("Added manual_name to reviewprizedrawentry", file=sys.stderr, flush=True)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "already exists" not in error_str and "duplicate" not in error_str:
+                        print(
+                            f"Error adding manual_name to reviewprizedrawentry: {e}",
+                            file=sys.stderr,
+                            flush=True,
+                        )
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text("ALTER TABLE reviewprizedrawentry ALTER COLUMN order_id DROP NOT NULL"))
+                    conn.execute(text("ALTER TABLE reviewprizedrawentry ALTER COLUMN customer_id DROP NOT NULL"))
+            except Exception as e:
+                error_str = str(e).lower()
+                if "does not exist" not in error_str and "not found" not in error_str:
+                    print(
+                        f"Note: could not make prize draw order/customer nullable: {e}",
+                        file=sys.stderr,
+                        flush=True,
+                    )
 
         has_configurator_invite_table = inspector.has_table("configuratorinvite")
         if not has_configurator_invite_table:

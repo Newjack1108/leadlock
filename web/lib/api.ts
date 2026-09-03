@@ -1587,6 +1587,16 @@ export const getReviewPrizeDrawEntries = async (params?: { month?: string; statu
   return response.data as { entries: import('@/lib/types').ReviewPrizeDrawEntryListItem[]; approved_count: number };
 };
 
+export const addManualReviewPrizeDrawEntries = async (month: string, names: string[]) => {
+  const response = await api.post('/api/review-prize-draw/entries/manual', { month, names });
+  return response.data as { entries: import('@/lib/types').ReviewPrizeDrawEntryListItem[]; approved_count: number };
+};
+
+export const deleteManualReviewPrizeDrawEntry = async (entryId: number) => {
+  const response = await api.delete(`/api/review-prize-draw/entries/${entryId}`);
+  return response.data as { success: boolean };
+};
+
 export const approveReviewPrizeDrawEntry = async (entryId: number) => {
   const response = await api.post(`/api/review-prize-draw/entries/${entryId}/approve`);
   return response.data;

@@ -795,9 +795,9 @@ export interface PrizeDrawEntry {
 
 export interface ReviewPrizeDrawEntryListItem {
   id: number;
-  order_id: number;
+  order_id?: number | null;
   order_number: string;
-  customer_id: number;
+  customer_id?: number | null;
   customer_name: string;
   platforms_claimed: string[];
   status: string;
@@ -806,16 +806,18 @@ export interface ReviewPrizeDrawEntryListItem {
   rejection_note?: string | null;
   reviewed_at?: string | null;
   reviewed_by_name?: string | null;
+  is_manual?: boolean;
 }
 
 export interface ReviewPrizeDrawWinner {
   month: string;
   entry_id: number;
-  order_id: number;
+  order_id?: number | null;
   order_number: string;
-  customer_id: number;
+  customer_id?: number | null;
   customer_name: string;
   platforms_claimed: string[];
+  is_manual?: boolean;
   picked_at: string;
   picked_by_id: number;
   picked_by_name?: string | null;

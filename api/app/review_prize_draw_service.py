@@ -45,6 +45,49 @@ PLATFORM_LABELS = {
     ReviewPrizeDrawPlatform.TRUSTPILOT.value: "Trustpilot",
 }
 
+MAX_MANUAL_NAMES_PER_REQUEST = 100
+_MONTH_FORMAT_ERROR = "Month must be YYYY-MM"
+
+
+def is_manual_entry(entry: ReviewPrizeDrawEntry) -> bool:
+    return entry.order_id is None
+
+
+def entry_display_name(entry: ReviewPrizeDrawEntry, session: Session) -> str:
+    if (entry.manual_name or "").strip():
+        return entry.manual_name.strip()
+    if entry.customer_id:
+        customer = session.get(Customer, entry.customer_id)
+        if customer and customer.name:
+            return customer.name
+    return "Unknown"
+
+
+def _entry_order(entry: Optional[ReviewPrizeDrawEntry], session: Session) -> Optional[Order]:
+    if not entry or not entry.order_id:
+        return None
+    return session.get(Order, entry.order_id)
+
+
+def _normalize_month(month: str) -> Tuple[Optional[str], Optional[str]]:
+    raw = (month or "").strip()
+    try:
+        year_s, mon_s = raw.split("-", 1)
+        year, mon = int(year_s), int(mon_s)
+        if mon < 1 or mon > 12:
+            return None, _MONTH_FORMAT_ERROR
+        return f"{year:04d}-{mon:02d}", None
+    except (TypeError, ValueError):
+        return None, _MONTH_FORMAT_ERROR
+
+
+def _submitted_at_for_month(month: str) -> datetime:
+    now = datetime.utcnow()
+    if now.strftime("%Y-%m") == month:
+        return now
+    year, mon = map(int, month.split("-"))
+    return datetime(year, mon, 1, 12, 0, 0)
+
 
 def _get_company_settings(session: Session) -> Optional[CompanySettings]:
     return session.exec(select(CompanySettings).limit(1)).first()
@@ -188,7 +231,7 @@ def submit_prize_draw_entry(
     entry.entry_month = None
     session.add(entry)
 
-    order = session.get(Order, entry.order_id)
+    order = _entry_order(entry, session)
     if order:
         record_order_audit_event(
             session,
@@ -216,7 +259,7 @@ def approve_entry(entry_id: int, user: User, session: Session) -> Tuple[Optional
     entry.entry_month = now.strftime("%Y-%m")
     session.add(entry)
 
-    order = session.get(Order, entry.order_id)
+    order = _entry_order(entry, session)
     if order:
         record_order_audit_event(
             session,
@@ -251,7 +294,7 @@ def reject_entry(
     entry.entry_month = None
     session.add(entry)
 
-    order = session.get(Order, entry.order_id)
+    order = _entry_order(entry, session)
     if order:
         record_order_audit_event(
             session,
@@ -263,6 +306,78 @@ def reject_entry(
             created_by_id=user.id,
         )
     return entry, None
+
+
+def add_manual_entries(
+    names: List[str],
+    month: str,
+    user: User,
+    session: Session,
+) -> Tuple[Optional[List[ReviewPrizeDrawEntry]], Optional[str]]:
+    """Add staff-entered names to a month's approved prize draw pool."""
+    normalized_month, month_err = _normalize_month(month)
+    if month_err or not normalized_month:
+        return None, month_err or _MONTH_FORMAT_ERROR
+
+    cleaned: List[str] = []
+    seen = set()
+    for raw in names or []:
+        name = " ".join((raw or "").split())
+        if not name:
+            continue
+        if len(name) > 255:
+            return None, "Names must be 255 characters or fewer"
+        key = name.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        cleaned.append(name)
+
+    if not cleaned:
+        return None, "Enter at least one name"
+    if len(cleaned) > MAX_MANUAL_NAMES_PER_REQUEST:
+        return None, f"Add at most {MAX_MANUAL_NAMES_PER_REQUEST} names at a time"
+
+    now = datetime.utcnow()
+    submitted_at = _submitted_at_for_month(normalized_month)
+    created: List[ReviewPrizeDrawEntry] = []
+    for name in cleaned:
+        entry = ReviewPrizeDrawEntry(
+            order_id=None,
+            customer_id=None,
+            manual_name=name,
+            access_token=secrets.token_urlsafe(32),
+            platforms_claimed=[],
+            status=ReviewPrizeDrawEntryStatus.APPROVED,
+            submitted_at=submitted_at,
+            reviewed_at=now,
+            reviewed_by_id=user.id,
+            entry_month=normalized_month,
+        )
+        session.add(entry)
+        created.append(entry)
+    session.flush()
+    return created, None
+
+
+def delete_manual_entry(
+    entry_id: int,
+    session: Session,
+) -> Tuple[bool, Optional[str]]:
+    entry = session.get(ReviewPrizeDrawEntry, entry_id)
+    if not entry:
+        return False, "Entry not found"
+    if not is_manual_entry(entry):
+        return False, "Only manually added names can be removed"
+
+    winner = session.exec(
+        select(ReviewPrizeDrawWinner).where(ReviewPrizeDrawWinner.entry_id == entry_id)
+    ).first()
+    if winner:
+        return False, "This name is the picked winner. Reset the draw before removing it."
+
+    session.delete(entry)
+    return True, None
 
 
 def _month_bounds(month: str) -> Tuple[datetime, datetime]:
@@ -345,8 +460,8 @@ def pick_random_winner(
     session.add(winner)
     session.flush()
 
-    order = session.get(Order, winner_entry.order_id)
-    customer = session.get(Customer, winner_entry.customer_id)
+    order = _entry_order(winner_entry, session)
+    customer = session.get(Customer, winner_entry.customer_id) if winner_entry.customer_id else None
     if order:
         record_order_audit_event(
             session,
@@ -374,8 +489,8 @@ def reset_winner_for_month(
         return False, "No winner picked for this month"
 
     entry = session.get(ReviewPrizeDrawEntry, winner.entry_id)
-    order = session.get(Order, entry.order_id) if entry else None
-    customer = session.get(Customer, entry.customer_id) if entry else None
+    order = _entry_order(entry, session)
+    customer = session.get(Customer, entry.customer_id) if entry and entry.customer_id else None
     previous_entry_id = winner.entry_id
     session.delete(winner)
 
@@ -464,7 +579,9 @@ def send_congratulations_to_winner(
     entry = session.get(ReviewPrizeDrawEntry, winner.entry_id)
     if not entry:
         return None, "Winner entry not found"
-    order = session.get(Order, entry.order_id)
+    if is_manual_entry(entry):
+        return None, "Cannot send congratulations for a manually added name"
+    order = _entry_order(entry, session)
     if not order:
         return None, "Winner order not found"
     customer = session.get(Customer, entry.customer_id)
