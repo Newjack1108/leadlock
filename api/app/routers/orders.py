@@ -44,6 +44,7 @@ from app.delivery_location import (
 )
 from app.constants import LIST_PAGE_SIZE_DEFAULT, LIST_PAGE_SIZE_MAX
 from app.delivery_install_amount import sum_delivery_install_ex_vat
+from app.order_payment import reconcile_payment_flags_from_update
 from app.order_route_metrics import resolve_order_route_metrics
 from app.schemas import (
     OrderResponse,
@@ -458,11 +459,17 @@ def _order_status_condition(status: OrderListStatusFilter):
     if status == "new":
         return and_(
             Order.deposit_paid == False,  # noqa: E712
+            Order.balance_paid == False,  # noqa: E712
+            Order.paid_in_full == False,  # noqa: E712
             Order.installation_booked == False,  # noqa: E712
             Order.installation_completed == False,  # noqa: E712
         )
     if status == "deposit_paid":
-        return Order.deposit_paid == True  # noqa: E712
+        return or_(
+            Order.deposit_paid == True,  # noqa: E712
+            Order.balance_paid == True,  # noqa: E712
+            Order.paid_in_full == True,  # noqa: E712
+        )
     if status == "installation_booked":
         return Order.installation_booked == True  # noqa: E712
     if status == "installation_completed":
@@ -627,6 +634,7 @@ async def update_order(
         "delivery_what3words",
     }
     has_delivery_update = bool(delivery_field_names.intersection(update_dict))
+    reconcile_payment_flags_from_update(update_dict, order)
     for field, value in update_dict.items():
         if field not in delivery_field_names:
             setattr(order, field, value)

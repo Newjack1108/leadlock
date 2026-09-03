@@ -1320,6 +1320,33 @@ def create_db_and_tables():
                     except Exception as e:
                         if "already exists" not in str(e).lower():
                             print(f"Warning adding {col_name}: {e}", file=sys.stderr, flush=True)
+            # Align legacy payment flags: paid_in_full / balance_paid imply all three.
+            try:
+                with engine.begin() as conn:
+                    result = conn.execute(
+                        text(
+                            """
+                            UPDATE customer_order
+                            SET deposit_paid = TRUE,
+                                balance_paid = TRUE,
+                                paid_in_full = TRUE
+                            WHERE (paid_in_full = TRUE OR balance_paid = TRUE)
+                              AND (
+                                COALESCE(deposit_paid, FALSE) = FALSE
+                                OR COALESCE(balance_paid, FALSE) = FALSE
+                                OR COALESCE(paid_in_full, FALSE) = FALSE
+                              )
+                            """
+                        )
+                    )
+                    if result.rowcount:
+                        print(
+                            f"Backfilled payment flags on {result.rowcount} customer_order row(s)",
+                            file=sys.stderr,
+                            flush=True,
+                        )
+            except Exception as e:
+                print(f"Warning backfilling payment flags: {e}", file=sys.stderr, flush=True)
             for col_name in ("invoice_number", "xero_invoice_id"):
                 if col_name not in order_columns:
                     try:

@@ -77,6 +77,7 @@ from app.messenger_service import (
 )
 from app.system_user_service import get_system_user_id
 from app.order_audit import record_order_audit_event
+from app.order_payment import reconcile_payment_flags_from_update
 from app.review_request_service import on_installation_completed, on_installation_uncompleted
 
 router = APIRouter(prefix="/api/webhooks", tags=["webhooks"])
@@ -488,30 +489,6 @@ def _describe_installation_status_changes(changes: list[dict]) -> str:
     )
 
 
-def _reconcile_payment_flags_from_update(update_dict: dict, order: Order) -> None:
-    """
-    Align deposit / balance / paid-in-full when production pushes a payment flag.
-    Balance paid implies paid in full (and deposit paid). Paid in full implies both.
-    """
-    if not any(k in update_dict for k in ("deposit_paid", "balance_paid", "paid_in_full")):
-        return
-
-    deposit_paid = bool(update_dict["deposit_paid"]) if "deposit_paid" in update_dict else bool(order.deposit_paid or False)
-    balance_paid = bool(update_dict["balance_paid"]) if "balance_paid" in update_dict else bool(order.balance_paid or False)
-    paid_in_full = bool(update_dict["paid_in_full"]) if "paid_in_full" in update_dict else bool(order.paid_in_full or False)
-
-    if paid_in_full or ("balance_paid" in update_dict and balance_paid):
-        deposit_paid = True
-        balance_paid = True
-        paid_in_full = True
-    elif deposit_paid and balance_paid:
-        paid_in_full = True
-
-    update_dict["deposit_paid"] = deposit_paid
-    update_dict["balance_paid"] = balance_paid
-    update_dict["paid_in_full"] = paid_in_full
-
-
 @router.post("/work-orders/status", response_model=WorkOrderStatusUpdateResponse)
 async def work_order_status_webhook(
     payload: WorkOrderStatusUpdatePayload,
@@ -548,7 +525,7 @@ async def work_order_status_webhook(
     ):
         update_dict["installation_booked"] = True
 
-    _reconcile_payment_flags_from_update(update_dict, order)
+    reconcile_payment_flags_from_update(update_dict, order)
 
     for field, value in update_dict.items():
         setattr(order, field, value)

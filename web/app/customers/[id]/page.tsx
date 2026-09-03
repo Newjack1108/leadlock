@@ -73,6 +73,7 @@ import api, {
   deleteCustomer,
 } from '@/lib/api';
 import { formatDateTime, formatActivityTypeLabel } from '@/lib/utils';
+import { isDepositPaid, isPaidInFull } from '@/lib/orderPayment';
 import { Customer, Activity, ActivityType, Lead, CustomerHistoryEvent, CustomerHistoryEventType, WebsiteVisit, Order, CustomerCommunicationStats, LeadSource, LeadType } from '@/lib/types';
 import { STAFF_SELECTABLE_LEAD_SOURCES, SELECTABLE_LEAD_TYPES } from '@/lib/leadQualifyRules';
 import SendQuoteEmailDialog from '@/components/SendQuoteEmailDialog';
@@ -1096,8 +1097,11 @@ export default function CustomerDetailPage() {
                             </span>
                           </div>
                           <div className="flex items-center gap-2">
-                            {(order.deposit_paid ?? false) && (
+                            {isDepositPaid(order) && (
                               <Badge variant="secondary" className="text-xs">Deposit paid</Badge>
+                            )}
+                            {isPaidInFull(order) && (
+                              <Badge variant="secondary" className="text-xs">Paid in full</Badge>
                             )}
                             {(order.installation_booked ?? false) && (
                               <Badge variant="secondary" className="text-xs">Inst. booked</Badge>

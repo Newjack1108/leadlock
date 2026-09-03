@@ -273,3 +273,21 @@ def test_work_order_status_balance_paid_sets_paid_in_full(client, engine, seeded
             )
         ).all()
         assert len(events) == 1
+
+
+def test_work_order_status_paid_in_full_sets_all_payment_flags(client, engine, seeded_session):
+    _, _, order, *_ = seeded_session
+    res = client.post(
+        "/api/webhooks/work-orders/status",
+        json={"order_id": order.id, "paid_in_full": True},
+        headers=_auth_headers(),
+    )
+    assert res.status_code == 200
+    assert res.json()["updated"] is True
+
+    with Session(engine) as session:
+        updated = session.get(Order, order.id)
+        assert updated.deposit_paid is True
+        assert updated.balance_paid is True
+        assert updated.paid_in_full is True
+        assert updated.invoice_number is not None

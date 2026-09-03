@@ -28,6 +28,7 @@ import { CompanySettings, Order, OrderItem, Customer } from '@/lib/types';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { formatDateTime } from '@/lib/utils';
+import { isDepositPaid, isPaidInFull } from '@/lib/orderPayment';
 import { ArrowLeft, ChevronDown, ExternalLink, CheckCircle, Circle, Eye, FileDown, Mail, Upload, Copy, Link2, Send, Trash2, CreditCard, Undo2 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -149,7 +150,12 @@ export default function OrderDetailPage() {
 
   const toggleStatus = async (key: StatusKey) => {
     if (!order) return;
-    const current = order[key] ?? false;
+    const current =
+      key === 'deposit_paid'
+        ? isDepositPaid(order)
+        : key === 'paid_in_full'
+          ? isPaidInFull(order)
+          : (order[key] ?? false);
     const next = !current;
     try {
       setUpdating(key);
@@ -184,9 +190,9 @@ export default function OrderDetailPage() {
   const handleDownloadPdf = async () => {
     if (!order) return;
     try {
-      if (order.paid_in_full && order.invoice_number) {
+      if (isPaidInFull(order) && order.invoice_number) {
         await handlePaidInFullInvoice();
-      } else if ((order.deposit_paid || order.paid_in_full) && order.invoice_number) {
+      } else if (isDepositPaid(order) && order.invoice_number) {
         await handleDepositInvoice();
       } else {
         await previewQuotePdf(order.quote_id, {
@@ -426,7 +432,8 @@ export default function OrderDetailPage() {
     );
   }
 
-  const depositSatisfied = !!(order.deposit_paid || order.paid_in_full);
+  const depositSatisfied = isDepositPaid(order);
+  const paidInFullSatisfied = isPaidInFull(order);
   const addressComplete =
     order.fulfillment_method === 'COLLECTION'
       ? true
@@ -456,14 +463,14 @@ export default function OrderDetailPage() {
             </div>
             <div className="flex items-center gap-3">
               <Badge
-                className={`text-sm ${order.deposit_paid ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'}`}
+                className={`text-sm ${depositSatisfied ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'}`}
               >
                 Deposit paid
               </Badge>
               <Badge
-                className={`text-sm ${order.balance_paid || order.paid_in_full ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'}`}
+                className={`text-sm ${paidInFullSatisfied ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'}`}
               >
-                Balance paid
+                Paid in full
               </Badge>
               {order.fulfillment_method === 'COLLECTION' && (
                 <Badge variant="secondary" className="text-sm">
@@ -599,22 +606,25 @@ export default function OrderDetailPage() {
                   </Button>
                 )}
                 <div className="flex flex-wrap gap-2 pt-2">
-                  {(['deposit_paid', 'paid_in_full'] as const).map((key) => (
+                  {(['deposit_paid', 'paid_in_full'] as const).map((key) => {
+                    const checked = key === 'deposit_paid' ? depositSatisfied : paidInFullSatisfied;
+                    return (
                     <Button
                       key={key}
-                      variant={order[key] ? 'default' : 'outline'}
+                      variant={checked ? 'default' : 'outline'}
                       size="sm"
                       onClick={() => toggleStatus(key)}
                       disabled={updating === key}
                     >
-                      {order[key] ? (
+                      {checked ? (
                         <CheckCircle className="h-4 w-4 mr-1" />
                       ) : (
                         <Circle className="h-4 w-4 mr-1 opacity-50" />
                       )}
                       {key.replace(/_/g, ' ')}
                     </Button>
-                  ))}
+                    );
+                  })}
                 </div>
               </CardContent>
             </Card>
@@ -926,7 +936,7 @@ export default function OrderDetailPage() {
                       <Button
                         variant="outline"
                         size="sm"
-                        disabled={!order.invoice_number || (!order.deposit_paid && !order.paid_in_full)}
+                        disabled={!order.invoice_number || !depositSatisfied}
                       >
                         <FileDown className="h-4 w-4 mr-1" />
                         Deposit Invoice
@@ -952,7 +962,7 @@ export default function OrderDetailPage() {
                       <Button
                         variant="outline"
                         size="sm"
-                        disabled={!order.invoice_number || !order.paid_in_full}
+                        disabled={!order.invoice_number || !paidInFullSatisfied}
                       >
                         <FileDown className="h-4 w-4 mr-1" />
                         Paid in Full Invoice

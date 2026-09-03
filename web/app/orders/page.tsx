@@ -19,6 +19,7 @@ import { toast } from 'sonner';
 import { FileText, ExternalLink } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import NinoxBadge from '@/components/NinoxBadge';
+import { isDepositPaid, isPaidInFull } from '@/lib/orderPayment';
 
 const ORDERS_PAGE_SIZE = 50;
 const SEARCH_DEBOUNCE_MS = 300;
@@ -230,8 +231,11 @@ export default function OrdersPage() {
                         </td>
                         <td className="p-3">
                           <div className="flex flex-wrap gap-1">
-                            {(order.deposit_paid ?? false) && (
+                            {isDepositPaid(order) && (
                               <Badge variant="secondary" className="text-xs">Deposit paid</Badge>
+                            )}
+                            {isPaidInFull(order) && (
+                              <Badge variant="secondary" className="text-xs">Paid in full</Badge>
                             )}
                             {(order.installation_booked ?? false) && (
                               <Badge variant="secondary" className="text-xs">Inst. booked</Badge>
@@ -248,7 +252,7 @@ export default function OrdersPage() {
                                 {order.access_sheet.completed ? 'Access done' : 'Access sent'}
                               </Badge>
                             )}
-                            {!(order.deposit_paid ?? false) && !(order.installation_booked ?? false) && !(order.installation_completed ?? false) && !order.access_sheet && (
+                            {!isDepositPaid(order) && !isPaidInFull(order) && !(order.installation_booked ?? false) && !(order.installation_completed ?? false) && !order.access_sheet && (
                               <span className="text-muted-foreground text-sm">—</span>
                             )}
                           </div>
