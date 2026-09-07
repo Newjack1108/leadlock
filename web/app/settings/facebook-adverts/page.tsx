@@ -224,7 +224,7 @@ export default function FacebookAdvertsPage() {
               <CardContent className="pt-6">
                 <div className="flex gap-4">
                   {profile.image_url ? (
-                    <div className="h-40 w-28 shrink-0 overflow-hidden rounded-md border bg-muted">
+                    <div className="h-56 w-40 shrink-0 overflow-hidden rounded-md border bg-muted">
                       <img
                         src={profile.image_url}
                         alt={profile.name}
@@ -232,7 +232,7 @@ export default function FacebookAdvertsPage() {
                       />
                     </div>
                   ) : (
-                    <div className="flex h-40 w-28 shrink-0 items-center justify-center rounded-md border bg-muted/40 text-center text-xs text-muted-foreground">
+                    <div className="flex h-56 w-40 shrink-0 items-center justify-center rounded-md border bg-muted/40 text-center text-xs text-muted-foreground">
                       No image
                     </div>
                   )}
