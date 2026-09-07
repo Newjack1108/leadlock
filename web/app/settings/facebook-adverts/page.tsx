@@ -126,11 +126,16 @@ export default function FacebookAdvertsPage() {
     }
   };
 
-  const handleToggleActive = async (profile: FacebookAdvertProfile) => {
+  const handleToggleActive = async (profileId: number, currentlyActive: boolean) => {
     try {
-      await updateFacebookAdvert(profile.id, { is_active: !profile.is_active });
-      toast.success(profile.is_active ? 'Advert archived' : 'Advert reactivated');
-      fetchProfiles();
+      const nextActive = !currentlyActive;
+      await updateFacebookAdvert(profileId, { is_active: nextActive });
+      setProfiles((prev) =>
+        prev.map((profile) =>
+          profile.id === profileId ? { ...profile, is_active: nextActive } : profile
+        )
+      );
+      toast.success(currentlyActive ? 'Advert archived' : 'Advert reactivated');
     } catch (error: any) {
       toast.error(error.response?.data?.detail || 'Failed to update advert status');
     }
@@ -220,9 +225,9 @@ export default function FacebookAdvertsPage() {
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {profiles.map((profile) => (
-            <Card key={profile.id}>
+            <Card key={profile.id} className="overflow-hidden">
               <CardContent className="pt-6">
-                <div className="flex gap-4">
+                <div className="flex min-w-0 gap-4">
                   {profile.image_url ? (
                     <div className="h-56 w-40 shrink-0 overflow-hidden rounded-md border bg-muted">
                       <img
@@ -244,16 +249,23 @@ export default function FacebookAdvertsPage() {
                       </Badge>
                     </div>
                     <CardDescription>{profile.offer_type || 'No offer type set'}</CardDescription>
-                    <div className="mt-auto flex gap-2 pt-2">
-                      <Button size="sm" variant="outline" onClick={() => startEdit(profile)} className="flex-1">
+                    <div className="mt-auto flex min-w-0 flex-col gap-2 pt-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => startEdit(profile)}
+                        className="w-full"
+                      >
                         <Pencil className="h-4 w-4 mr-2" />
                         Edit
                       </Button>
                       <Button
+                        type="button"
                         size="sm"
                         variant="outline"
-                        onClick={() => handleToggleActive(profile)}
-                        className="flex-1"
+                        onClick={() => handleToggleActive(profile.id, profile.is_active)}
+                        className="w-full"
                       >
                         {profile.is_active ? 'Archive' : 'Activate'}
                       </Button>
