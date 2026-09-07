@@ -221,40 +221,44 @@ export default function FacebookAdvertsPage() {
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {profiles.map((profile) => (
             <Card key={profile.id}>
-              <CardHeader>
-                <div className="flex items-center justify-between gap-2">
-                  <CardTitle className="text-lg">{profile.name}</CardTitle>
-                  <Badge variant={profile.is_active ? 'default' : 'secondary'}>
-                    {profile.is_active ? 'Active' : 'Archived'}
-                  </Badge>
-                </div>
-                <CardDescription>{profile.offer_type || 'No offer type set'}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {profile.image_url ? (
-                  <img
-                    src={profile.image_url}
-                    alt={profile.name}
-                    className="h-24 w-full rounded-md border object-cover"
-                  />
-                ) : (
-                  <div className="h-24 w-full rounded-md border bg-muted/40 flex items-center justify-center text-xs text-muted-foreground">
-                    No image
+              <CardContent className="pt-6">
+                <div className="flex gap-4">
+                  {profile.image_url ? (
+                    <div className="h-40 w-28 shrink-0 overflow-hidden rounded-md border bg-muted">
+                      <img
+                        src={profile.image_url}
+                        alt={profile.name}
+                        className="h-full w-full object-contain"
+                      />
+                    </div>
+                  ) : (
+                    <div className="flex h-40 w-28 shrink-0 items-center justify-center rounded-md border bg-muted/40 text-center text-xs text-muted-foreground">
+                      No image
+                    </div>
+                  )}
+                  <div className="flex min-w-0 flex-1 flex-col gap-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <CardTitle className="text-lg leading-snug">{profile.name}</CardTitle>
+                      <Badge variant={profile.is_active ? 'default' : 'secondary'} className="shrink-0">
+                        {profile.is_active ? 'Active' : 'Archived'}
+                      </Badge>
+                    </div>
+                    <CardDescription>{profile.offer_type || 'No offer type set'}</CardDescription>
+                    <div className="mt-auto flex gap-2 pt-2">
+                      <Button size="sm" variant="outline" onClick={() => startEdit(profile)} className="flex-1">
+                        <Pencil className="h-4 w-4 mr-2" />
+                        Edit
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleToggleActive(profile)}
+                        className="flex-1"
+                      >
+                        {profile.is_active ? 'Archive' : 'Activate'}
+                      </Button>
+                    </div>
                   </div>
-                )}
-                <div className="flex gap-2">
-                  <Button size="sm" variant="outline" onClick={() => startEdit(profile)} className="flex-1">
-                    <Pencil className="h-4 w-4 mr-2" />
-                    Edit
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleToggleActive(profile)}
-                    className="flex-1"
-                  >
-                    {profile.is_active ? 'Archive' : 'Activate'}
-                  </Button>
                 </div>
               </CardContent>
             </Card>
