@@ -6,6 +6,7 @@ import LoginGreeting from "@/components/LoginGreeting";
 import TaskAssignmentPopup from "@/components/TaskAssignmentPopup";
 import CallSessionProvider from "@/components/CallSessionProvider";
 import AreaBackgroundWrapper from "@/components/AreaBackgroundWrapper";
+import AppHeader from "@/components/AppHeader";
 import Footer from "@/components/Footer";
 
 const geistSans = Geist({
@@ -83,6 +84,7 @@ export default function RootLayout({
         <AreaBackgroundWrapper>
           <CallSessionProvider>
             <div className="flex min-h-screen flex-col">
+              <AppHeader />
               <div className="flex-1">{children}</div>
               <Footer />
             </div>

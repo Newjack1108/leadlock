@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Header from '@/components/Header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -129,7 +128,6 @@ export default function DealerDiscountSettingsPage() {
   if (userRole !== null && userRole !== 'DIRECTOR' && userRole !== 'VIEWER') {
     return (
       <div className="min-h-screen">
-        <Header />
         <main className="container mx-auto px-4 sm:px-6 py-8">
           <div className="text-center py-12 text-muted-foreground">
             Access denied. This page is for directors only.
@@ -143,7 +141,6 @@ export default function DealerDiscountSettingsPage() {
 
   return (
     <div className="min-h-screen">
-      <Header />
       <main className="container mx-auto px-4 sm:px-6 py-8 space-y-6">
         <div>
           <h1 className="text-3xl font-semibold mb-2">Dealer Discounts</h1>

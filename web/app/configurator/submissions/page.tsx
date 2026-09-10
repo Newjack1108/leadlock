@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Header from '@/components/Header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -54,7 +53,6 @@ export default function ConfiguratorSubmissionsPage() {
 
   return (
     <div className="min-h-screen bg-muted/30">
-      <Header />
       <main className="container mx-auto px-4 py-6">
         <Card>
           <CardHeader>

@@ -3,7 +3,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import Header from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
@@ -350,7 +349,6 @@ export default function DiscountRequestsPage() {
   if (loading) {
     return (
       <div className="min-h-screen">
-        <Header />
         <div className="container mx-auto px-4 sm:px-6 py-8">
           <div className="text-center py-12 text-muted-foreground">Loading...</div>
         </div>
@@ -360,7 +358,6 @@ export default function DiscountRequestsPage() {
 
   return (
     <div className="min-h-screen">
-      <Header />
       <main className="container mx-auto px-4 sm:px-6 py-8">
         <div className="mb-6">
           <h1 className="text-3xl font-semibold mb-2">Discount requests</h1>

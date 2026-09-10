@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import Header from '@/components/Header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -495,7 +494,6 @@ export default function WeeklyPlanPage() {
   if (loading) {
     return (
       <div className="min-h-screen">
-        <Header />
         <div className="container mx-auto px-4 sm:px-6 py-8">
           <div className="text-center py-12 text-muted-foreground">Loading weekly plan...</div>
         </div>
@@ -505,7 +503,6 @@ export default function WeeklyPlanPage() {
 
   return (
     <div className="min-h-screen">
-      <Header />
       <main className="container mx-auto px-4 sm:px-6 py-8 space-y-6">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>

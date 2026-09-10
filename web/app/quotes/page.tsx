@@ -2,7 +2,6 @@
 
 import { Suspense, useCallback, useEffect, useLayoutEffect, useState, useMemo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import Header from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -499,7 +498,6 @@ function QuotesPageContent() {
   if (loading && !hasLoadedRef.current) {
     return (
       <div className="min-h-screen">
-        <Header />
         <div className="container mx-auto px-4 sm:px-6 py-8">
           <div className="text-center py-12 text-muted-foreground">Loading...</div>
         </div>
@@ -509,7 +507,6 @@ function QuotesPageContent() {
 
   return (
     <div className="min-h-screen">
-      <Header />
       <main className="container mx-auto px-4 sm:px-6 py-8">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-3xl font-semibold">Quotes</h1>
@@ -1089,7 +1086,6 @@ export default function QuotesPage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen">
-        <Header />
         <main className="container mx-auto px-4 sm:px-6 py-8">
           <div className="text-center py-12 text-muted-foreground">Loading...</div>
         </main>

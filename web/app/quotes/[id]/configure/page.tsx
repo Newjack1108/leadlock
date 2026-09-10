@@ -2,7 +2,6 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import Header from '@/components/Header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import ConfiguratorShell from '@/components/configurator/ConfiguratorShell';
@@ -123,7 +122,6 @@ function QuoteConfiguratorDetailContent() {
 export default function QuoteConfiguratorDetailPage() {
   return (
     <div className="min-h-screen">
-      <Header />
       <Suspense
         fallback={
           <main className="container mx-auto px-4 py-8 sm:px-6">

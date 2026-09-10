@@ -2,7 +2,6 @@
 
 import { useState, useEffect, Suspense, useMemo, useCallback, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import Header from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -749,7 +748,6 @@ function EditQuoteContent() {
   if (pageLoading) {
     return (
       <div className="min-h-screen">
-        <Header />
         <div className="container mx-auto px-4 sm:px-6 py-8">
           <div className="text-center py-12 text-muted-foreground">Loading...</div>
         </div>
@@ -760,7 +758,6 @@ function EditQuoteContent() {
   if (!quote || !quoteId) {
     return (
       <div className="min-h-screen">
-        <Header />
         <div className="container mx-auto px-4 sm:px-6 py-8">
           <div className="text-center py-12 text-muted-foreground">Quote not found</div>
           <Button variant="outline" onClick={() => router.push('/quotes')}>
@@ -774,7 +771,6 @@ function EditQuoteContent() {
   if (quote.status !== 'DRAFT') {
     return (
       <div className="min-h-screen">
-        <Header />
         <div className="container mx-auto px-4 sm:px-6 py-8">
           <div className="text-center py-12 text-muted-foreground">
             Only draft quotes can be edited.
@@ -789,7 +785,6 @@ function EditQuoteContent() {
 
   return (
     <div className="min-h-screen">
-      <Header />
       <main className="container mx-auto px-4 sm:px-6 py-8">
         <div className="mb-6">
           <div className="flex items-center gap-2 mb-4">
@@ -1607,7 +1602,6 @@ export default function EditQuotePage() {
     <Suspense
       fallback={
         <div className="min-h-screen">
-          <Header />
           <div className="container mx-auto px-4 sm:px-6 py-8">
             <div className="text-center py-12 text-muted-foreground">Loading...</div>
           </div>

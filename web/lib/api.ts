@@ -73,6 +73,15 @@ const api = axios.create({
 export const LIST_FETCH_TIMEOUT_MS = 60_000;
 export const AUTH_FETCH_TIMEOUT_MS = 60_000;
 
+let authMeCache: { data: AuthMe; expiresAt: number } | null = null;
+let authMeInFlight: Promise<AuthMe> | null = null;
+const AUTH_ME_TTL_MS = 30_000;
+
+export const invalidateAuthMeCache = () => {
+  authMeCache = null;
+  authMeInFlight = null;
+};
+
 /** Compose, quote email, reply, heavy quote writes: provider + DB often exceed 15s on Railway */
 export const EMAIL_AND_UPLOAD_TIMEOUT_MS = 120_000;
 
@@ -93,7 +102,14 @@ api.interceptors.request.use((config) => {
 
 // Handle auth errors
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    const url = String(response.config?.url || '');
+    const method = String(response.config?.method || 'get').toLowerCase();
+    if (method === 'get' && url.includes('/api/auth/me') && response.data) {
+      authMeCache = { data: response.data as AuthMe, expiresAt: Date.now() + AUTH_ME_TTL_MS };
+    }
+    return response;
+  },
   (error) => {
     const requestConfig = (error?.config ?? {}) as AxiosRequestConfig;
     if (typeof window !== 'undefined' && !requestConfig.skipAuthRedirect) {
@@ -112,6 +128,7 @@ api.interceptors.response.use(
       }
       if (status === 401) {
         localStorage.removeItem('token');
+        invalidateAuthMeCache();
         window.location.href = '/login';
       }
     }
@@ -1938,8 +1955,24 @@ export const getAssignableUsers = async () => {
 };
 
 export const getAuthMe = async () => {
-  const response = await api.get('/api/auth/me');
-  return response.data as AuthMe;
+  const now = Date.now();
+  if (authMeCache && now < authMeCache.expiresAt) {
+    return authMeCache.data;
+  }
+  if (authMeInFlight) {
+    return authMeInFlight;
+  }
+  authMeInFlight = (async () => {
+    try {
+      const response = await api.get('/api/auth/me');
+      const data = response.data as AuthMe;
+      authMeCache = { data, expiresAt: Date.now() + AUTH_ME_TTL_MS };
+      return data;
+    } finally {
+      authMeInFlight = null;
+    }
+  })();
+  return authMeInFlight;
 };
 
 export const getConfiguratorAccessStatus = async () => {

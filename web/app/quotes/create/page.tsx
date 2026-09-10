@@ -2,7 +2,6 @@
 
 import { useState, useEffect, Suspense, useMemo, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import Header from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Dialog,
@@ -923,7 +922,6 @@ function CreateQuoteContent() {
   if (pageLoading) {
     return (
       <div className="min-h-screen">
-        <Header />
         <div className="container mx-auto px-4 sm:px-6 py-8">
           <div className="text-center py-12 text-muted-foreground">Loading...</div>
         </div>
@@ -934,7 +932,6 @@ function CreateQuoteContent() {
   if (!customer) {
     return (
       <div className="min-h-screen">
-        <Header />
         <div className="container mx-auto px-4 sm:px-6 py-8">
           <div className="text-center py-12 text-muted-foreground">Customer not found</div>
           <div className="text-center mt-4">
@@ -949,7 +946,6 @@ function CreateQuoteContent() {
 
   return (
     <div className="min-h-screen">
-      <Header />
       <main className="container mx-auto px-4 sm:px-6 py-8">
         <div className="mb-6">
           <div className="flex flex-wrap items-center gap-2 mb-4">
@@ -1690,7 +1686,6 @@ export default function CreateQuotePage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen">
-        <Header />
         <div className="container mx-auto px-4 sm:px-6 py-8">
           <div className="text-center py-12 text-muted-foreground">Loading...</div>
         </div>

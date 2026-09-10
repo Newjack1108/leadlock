@@ -2,7 +2,6 @@
 
 import { Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import Header from '@/components/Header';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -161,7 +160,6 @@ function CustomersPageContent() {
   if (loading) {
     return (
       <div className="min-h-screen">
-        <Header />
         <div className="container mx-auto px-4 sm:px-6 py-8">
           <div className="text-center py-12 text-muted-foreground">Loading...</div>
         </div>
@@ -171,7 +169,6 @@ function CustomersPageContent() {
 
   return (
     <div className="min-h-screen">
-      <Header />
       <main className="container mx-auto px-4 sm:px-6 py-8">
         <div className="mb-6 flex flex-col gap-4">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -402,7 +399,6 @@ export default function CustomersPage() {
     <Suspense
       fallback={
         <div className="min-h-screen">
-          <Header />
           <main className="container mx-auto px-4 sm:px-6 py-8">
             <div className="text-center py-12 text-muted-foreground">Loading...</div>
           </main>

@@ -30,6 +30,7 @@ import api from '@/lib/api';
 import { canManageFacebookAdverts, isMarketingRole, isViewerRole } from '@/lib/roles';
 import {
   getAuthMe,
+  invalidateAuthMeCache,
   getStaleSummary,
   getDiscountRequests,
   getUnreadSms,
@@ -65,10 +66,14 @@ function BadgePill({ count }: { count: number }) {
   );
 }
 
+const BADGE_POLL_MS = 60_000;
+const BADGE_FOCUS_DEBOUNCE_MS = 15_000;
+
 export default function Header() {
   const router = useRouter();
   const pathname = usePathname();
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [roleReady, setRoleReady] = useState(false);
   const [reminderCount, setReminderCount] = useState<number>(0);
   const [newLeadsCount, setNewLeadsCount] = useState<number>(0);
   const [unreadMessagesCount, setUnreadMessagesCount] = useState<number>(0);
@@ -84,6 +89,8 @@ export default function Header() {
         setUserRole(me.role);
       } catch {
         setUserRole(null);
+      } finally {
+        setRoleReady(true);
       }
     };
     fetchUser();
@@ -149,8 +156,9 @@ export default function Header() {
     }
   };
 
-  /* eslint-disable react-hooks/set-state-in-effect -- async API helpers update badge state after await; not synchronous setState */
   useEffect(() => {
+    if (!roleReady) return;
+
     if (userRole === 'DEALER_ADMIN' || userRole === 'DEALER_USER') {
       setReminderCount(0);
       setNewLeadsCount(0);
@@ -160,27 +168,50 @@ export default function Header() {
       setConfiguratorSubmissionsCount(0);
       return;
     }
-    if (isMarketingRole(userRole)) {
+
+    if (!userRole) return;
+
+    const marketing = isMarketingRole(userRole);
+    if (marketing) {
       setReminderCount(0);
       setUnreadMessagesCount(0);
       setPendingDiscountCount(0);
       setNewQualifiedDashboardCount(0);
+    }
+
+    const refreshBadges = () => {
+      if (marketing) {
+        fetchNewLeadsCount();
+        fetchConfiguratorSubmissionsCount();
+        return;
+      }
+      fetchReminderCount();
       fetchNewLeadsCount();
+      fetchUnreadMessagesCount();
       fetchConfiguratorSubmissionsCount();
-      return;
-    }
-    fetchReminderCount();
-    fetchNewLeadsCount();
-    fetchUnreadMessagesCount();
-    fetchConfiguratorSubmissionsCount();
-    if (userRole === 'DIRECTOR' || userRole === 'SALES_MANAGER') {
-      fetchPendingDiscountCount();
-    }
-    if (userRole === 'CLOSER') {
-      fetchNewQualifiedDashboardCount();
-    }
-  }, [pathname, userRole]);
-  /* eslint-enable react-hooks/set-state-in-effect */
+      if (userRole === 'DIRECTOR' || userRole === 'SALES_MANAGER') {
+        fetchPendingDiscountCount();
+      }
+      if (userRole === 'CLOSER') {
+        fetchNewQualifiedDashboardCount();
+      }
+    };
+
+    refreshBadges();
+    const intervalId = window.setInterval(refreshBadges, BADGE_POLL_MS);
+    let lastFocusRefresh = Date.now();
+    const onFocus = () => {
+      const now = Date.now();
+      if (now - lastFocusRefresh < BADGE_FOCUS_DEBOUNCE_MS) return;
+      lastFocusRefresh = now;
+      refreshBadges();
+    };
+    window.addEventListener('focus', onFocus);
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [roleReady, userRole]);
 
   useEffect(() => {
     const onRefreshUnread = () => {
@@ -213,6 +244,7 @@ export default function Header() {
   const handleLogout = () => {
     localStorage.removeItem('token');
     document.cookie = 'token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    invalidateAuthMeCache();
     router.push('/login');
     window.location.href = '/login';
   };

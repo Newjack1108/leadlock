@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Image from 'next/image';
-import Header from '@/components/Header';
 import QuoteLockCard from '@/components/QuoteLockCard';
 import ComposeEmailDialog from '@/components/ComposeEmailDialog';
 import { useCallSession } from '@/components/CallSessionProvider';
@@ -408,7 +407,6 @@ export default function LeadDetailPage() {
   if (loading) {
     return (
       <div className="min-h-screen">
-        <Header />
         <div className="container mx-auto px-4 sm:px-6 py-8">
           <div className="text-center py-12 text-muted-foreground">Loading...</div>
         </div>
@@ -419,7 +417,6 @@ export default function LeadDetailPage() {
   if (!lead) {
     return (
       <div className="min-h-screen">
-        <Header />
         <div className="container mx-auto px-4 sm:px-6 py-8">
           <div className="text-center py-12 text-muted-foreground">Lead not found</div>
         </div>
@@ -438,7 +435,6 @@ export default function LeadDetailPage() {
 
   return (
     <div className="min-h-screen">
-      <Header />
       <main className="container mx-auto px-4 sm:px-6 py-8">
         <div className="mb-6">
           <Button variant="ghost" onClick={() => router.push('/leads')} className="mb-4">

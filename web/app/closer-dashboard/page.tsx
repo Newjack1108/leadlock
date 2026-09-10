@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import Header from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import ReminderList from '@/components/ReminderList';
@@ -157,7 +156,6 @@ export default function CloserDashboardPage() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <Header />
       <main className="flex-1 container mx-auto px-4 sm:px-6 py-4 overflow-y-auto">
         <div className="shrink-0 mb-4">
           <p className="text-2xl font-bold">

@@ -2,7 +2,6 @@
 
 import { Suspense, useEffect, useLayoutEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import Header from '@/components/Header';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -375,7 +374,6 @@ function LeadsPageContent() {
 
   return (
     <div className="min-h-screen">
-      <Header />
       <main className="container mx-auto px-4 sm:px-6 py-8">
         <div className="mb-6">
           <h1 className="text-3xl font-semibold mb-6">Leads</h1>
@@ -845,7 +843,6 @@ export default function LeadsPage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen">
-        <Header />
         <main className="container mx-auto px-4 sm:px-6 py-8">
           <div className="text-center py-12 text-muted-foreground">Loading...</div>
         </main>
