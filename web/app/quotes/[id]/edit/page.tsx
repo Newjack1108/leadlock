@@ -64,6 +64,10 @@ import {
   quoteLineTotal,
 } from '@/lib/quoteInstallHours';
 import { calculateTotalQuoteDeliveryBoxes } from '@/lib/quoteDeliveryBoxes';
+import {
+  defaultDepositLabel,
+  staffDefaultDepositRate,
+} from '@/lib/quoteDeposit';
 import { useDraftAutosave } from '@/hooks/useDraftAutosave';
 import DeliveryInstallEstimatePanel from '@/components/quotes/DeliveryInstallEstimatePanel';
 import DeliveryLocationFields from '@/components/quotes/DeliveryLocationFields';
@@ -518,7 +522,22 @@ function EditQuoteContent() {
   };
 
   const calculateTotalIncVat = () => calculateSubtotal() * 1.2;
-  const calculateDefaultDeposit = () => calculateTotalIncVat() * 0.5;
+  const depositRate = useMemo(() => {
+    const categories = items.map((item) => {
+      if (!item.product_id) return null;
+      return (
+        productDetails[item.product_id]?.category ??
+        products.find((p) => p.id === item.product_id)?.category ??
+        null
+      );
+    });
+    return staffDefaultDepositRate({
+      leadType: quote?.lead_type,
+      productCategories: categories,
+      dealerId: quote?.dealer_id ?? null,
+    });
+  }, [items, productDetails, products, quote]);
+  const calculateDefaultDeposit = () => calculateTotalIncVat() * depositRate;
   const getDepositAmount = () =>
     depositAmount === '' ? calculateDefaultDeposit() : Number(depositAmount);
   const getBalanceAmount = () => Math.max(0, calculateTotalIncVat() - getDepositAmount());
@@ -1409,11 +1428,11 @@ function EditQuoteContent() {
                       const value = e.target.value;
                       setDepositAmount(value === '' ? '' : parseFloat(value) || 0);
                     }}
-                    placeholder={`Default: £${calculateDefaultDeposit().toFixed(2)} (50%)`}
+                    placeholder={`Default: £${calculateDefaultDeposit().toFixed(2)} (${Math.round(depositRate * 100)}%)`}
                   />
                   <div className="text-sm text-muted-foreground">
                     {depositAmount === ''
-                      ? `Default deposit: £${calculateDefaultDeposit().toFixed(2)} (50% of total inc VAT)`
+                      ? `Default deposit: £${calculateDefaultDeposit().toFixed(2)} (${defaultDepositLabel(depositRate)})`
                       : `Balance: £${getBalanceAmount().toFixed(2)}`}
                   </div>
                 </div>

@@ -125,6 +125,7 @@ from app.constants import (
     LIST_PAGE_SIZE_DEFAULT,
     LIST_PAGE_SIZE_MAX,
 )
+from app.commission_turnover import default_deposit_amount
 from app.quote_delete import delete_quote_cascade
 from app.discount_limits import assert_templates_not_expired_for_apply, validate_and_record_redemptions_on_accept
 from datetime import datetime
@@ -1175,13 +1176,22 @@ async def create_quote(
             items.append(item)
     
         # Calculate deposit and balance (inc VAT)
-        # Default to 50% of total inc VAT if not provided
+        # Staff shed commission sales default to 20%; otherwise 50% of total inc VAT
         total_amount = subtotal  # No discounts applied yet
         total_inc_vat = total_amount * (Decimal("1") + VAT_RATE_DECIMAL)
         if quote_data.deposit_amount is not None:
             deposit_amount = Decimal(str(quote_data.deposit_amount))  # Client sends inc VAT
         else:
-            deposit_amount = total_inc_vat * Decimal("0.5")
+            deposit_probe = Quote(
+                lead_id=lead_id,
+                quote_number=quote_number,
+                subtotal=subtotal,
+                total_amount=total_amount,
+                created_by_id=current_user.id,
+            )
+            deposit_amount = default_deposit_amount(
+                total_inc_vat, deposit_probe, items, session
+            )
         
         if deposit_amount > total_inc_vat:
             deposit_amount = total_inc_vat
@@ -1337,7 +1347,9 @@ async def create_quote(
         if quote_data.deposit_amount is not None:
             deposit_amount = Decimal(str(quote_data.deposit_amount))  # Client sends inc VAT
         else:
-            deposit_amount = total_inc_vat * Decimal("0.5")
+            deposit_amount = default_deposit_amount(
+                total_inc_vat, quote, quote_items, session
+            )
         
         if deposit_amount > total_inc_vat:
             deposit_amount = total_inc_vat
@@ -2467,7 +2479,9 @@ def _update_draft_quote_impl(
     if quote_data.deposit_amount is not None:
         deposit_amount = Decimal(str(quote_data.deposit_amount))  # Client sends inc VAT
     else:
-        deposit_amount = total_inc_vat * Decimal("0.5")
+        deposit_amount = default_deposit_amount(
+            total_inc_vat, quote, quote_items, session
+        )
     if deposit_amount > total_inc_vat:
         deposit_amount = total_inc_vat
     quote.deposit_amount = deposit_amount

@@ -23,6 +23,11 @@ ARCHIVE_AFTER_DAYS = 200
 VAT_RATE_PERCENT = 20
 VAT_RATE_DECIMAL = Decimal("0.20")
 
+# Staff quote deposit defaults (fraction of total inc VAT)
+STAFF_DEFAULT_DEPOSIT_RATE = Decimal("0.50")
+# Staff shed sales are agency/commission: deposit is commission and counts as turnover
+STAFF_SHED_COMMISSION_DEPOSIT_RATE = Decimal("0.20")
+
 # Website base URLs for visit tracking links (?ltk=customer_number)
 TRACKING_WEBSITE_BASE_URLS = [
     ("https://www.csgbgroup.co.uk", "www.csgbgroup.co.uk"),

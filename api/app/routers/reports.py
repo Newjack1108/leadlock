@@ -14,7 +14,7 @@ from app.db_utils import scalar_int
 from app.date_ranges import ResolvedDateRange, previous_equal_range, resolve_date_range
 from app.models import (
     Lead, LeadStatus, LeadSource, LeadType, Customer,
-    Quote, QuoteStatus, QuoteDiscount, Order, OrderItem, Product,
+    Quote, QuoteStatus, QuoteDiscount, QuoteItem, Order, OrderItem, Product,
     User, CompanySettings, FacebookAdvertProfile,
     OpportunityStage,
 )
@@ -34,6 +34,7 @@ from app.schemas import (
     DiscountUsageRow,
 )
 from app.stats_exclusion import lead_counts_toward_stats, quote_counts_toward_stats
+from app.commission_turnover import order_recognised_turnover, quote_recognised_turnover
 from app.report_pdf_service import (
     generate_pipeline_value_pdf,
     generate_source_performance_pdf,
@@ -76,6 +77,41 @@ def _decimal_or_zero(value: Optional[Decimal]) -> Decimal:
     if isinstance(value, Decimal):
         return value
     return Decimal(str(value))
+
+
+def _batch_quote_items_by_quote_id(
+    session: Session,
+    quote_ids: set[int] | list[int],
+) -> dict[int, list[QuoteItem]]:
+    ids = [int(qid) for qid in quote_ids if qid is not None]
+    if not ids:
+        return {}
+    items = session.exec(select(QuoteItem).where(QuoteItem.quote_id.in_(ids))).all()
+    by_quote: dict[int, list[QuoteItem]] = defaultdict(list)
+    for item in items:
+        by_quote[int(item.quote_id)].append(item)
+    return by_quote
+
+
+def _quote_turnover_amount(
+    quote: Quote,
+    items_by_quote_id: dict[int, list[QuoteItem]],
+    session: Session,
+) -> Decimal:
+    items = items_by_quote_id.get(int(quote.id), []) if quote.id is not None else []
+    return quote_recognised_turnover(quote, items, session)
+
+
+def _order_turnover_amount(
+    order: Order,
+    quote: Optional[Quote],
+    items_by_quote_id: dict[int, list[QuoteItem]],
+    session: Session,
+) -> Decimal:
+    if quote is None:
+        return _decimal_or_zero(order.total_amount)
+    items = items_by_quote_id.get(int(quote.id), []) if quote.id is not None else []
+    return order_recognised_turnover(order, quote, items, session)
 
 
 def _average_days_to_convert(rows: list[FacebookLeadConversionRow]) -> float:
@@ -246,6 +282,7 @@ def _build_facebook_lead_conversion_report(
             quotes_by_lead_id[quote.lead_id].append(quote)
 
     quote_ids = [quote.id for quote in quotes if quote.id is not None]
+    items_by_quote_id = _batch_quote_items_by_quote_id(session, quote_ids)
     orders = list(session.exec(select(Order).where(Order.quote_id.in_(quote_ids))).all()) if quote_ids else []
 
     orders_by_quote_id: dict[int, list[Order]] = defaultdict(list)
@@ -311,15 +348,33 @@ def _build_facebook_lead_conversion_report(
         latest_quote = lead_quotes[-1] if lead_quotes else None
         primary_quote = quote_by_id.get(primary_order.quote_id) if primary_order else latest_quote
 
-        order_total = (
-            sum((_decimal_or_zero(order.total_amount) for order in period_orders), Decimal("0"))
-            if converted_in_period
-            else (
-                sum((_decimal_or_zero(order.total_amount) for order in lead_orders), Decimal("0"))
-                if created_in_period and converted
-                else None
+        order_total = None
+        if converted_in_period:
+            order_total = sum(
+                (
+                    _order_turnover_amount(
+                        order,
+                        quote_by_id.get(order.quote_id),
+                        items_by_quote_id,
+                        session,
+                    )
+                    for order in period_orders
+                ),
+                Decimal("0"),
             )
-        )
+        elif created_in_period and converted:
+            order_total = sum(
+                (
+                    _order_turnover_amount(
+                        order,
+                        quote_by_id.get(order.quote_id),
+                        items_by_quote_id,
+                        session,
+                    )
+                    for order in lead_orders
+                ),
+                Decimal("0"),
+            )
         order_count = (
             len(period_orders) if converted_in_period
             else (len(lead_orders) if created_in_period and converted else 0)
@@ -428,21 +483,30 @@ async def get_pipeline_value_report(
     if resolved_range.period != "all":
         quote_filter = quote_filter & (Quote.sent_at >= resolved_range.start) & (Quote.sent_at <= resolved_range.end)
 
-    # Weighted value = total_amount * (close_probability/100), treating NULL prob as 0
-    weighted_expr = Quote.total_amount * (func.coalesce(Quote.close_probability, 0) / 100)
-    stmt = (
-        select(
-            Quote.opportunity_stage,
-            func.count(Quote.id).label("cnt"),
-            func.coalesce(func.sum(Quote.total_amount), 0).label("total_val"),
-            func.coalesce(func.sum(weighted_expr), 0).label("weighted_val"),
-        )
-        .where(quote_filter)
-        .where(quote_counts_toward_stats())
-        .where(Quote.opportunity_stage.isnot(None))
-        .group_by(Quote.opportunity_stage)
+    quotes = list(
+        session.exec(
+            select(Quote)
+            .where(quote_filter)
+            .where(quote_counts_toward_stats())
+            .where(Quote.opportunity_stage.isnot(None))
+        ).all()
     )
-    rows = session.exec(stmt).all()
+    items_by_quote_id = _batch_quote_items_by_quote_id(
+        session, [q.id for q in quotes if q.id is not None]
+    )
+
+    stage_counts: dict = defaultdict(int)
+    stage_total: dict = defaultdict(lambda: Decimal("0"))
+    stage_weighted: dict = defaultdict(lambda: Decimal("0"))
+    for quote in quotes:
+        stage = quote.opportunity_stage
+        if stage is None:
+            continue
+        turnover = _quote_turnover_amount(quote, items_by_quote_id, session)
+        close_pct = _decimal_or_zero(quote.close_probability) / Decimal("100")
+        stage_counts[stage] += 1
+        stage_total[stage] += turnover
+        stage_weighted[stage] += turnover * close_pct
 
     stages = []
     total_value = Decimal("0")
@@ -452,21 +516,20 @@ async def get_pipeline_value_report(
         OpportunityStage.FOLLOW_UP, OpportunityStage.DECISION_PENDING,
         OpportunityStage.WON, OpportunityStage.LOST,
     ]
-    seen_stages = {}
-    for r in rows:
-        seen_stages[r[0]] = (r[1], r[2] or Decimal("0"), r[3] or Decimal("0"))
 
     for stage in stage_order:
-        if stage in seen_stages:
-            cnt, tv, wv = seen_stages[stage]
-            stages.append(PipelineValueStageItem(
-                stage=stage.value if hasattr(stage, "value") else str(stage),
-                count=cnt,
-                total_value=tv,
-                weighted_value=wv,
-            ))
-            total_value += tv
-            total_weighted += wv
+        if stage not in stage_counts:
+            continue
+        tv = stage_total[stage]
+        wv = stage_weighted[stage]
+        stages.append(PipelineValueStageItem(
+            stage=stage.value if hasattr(stage, "value") else str(stage),
+            count=stage_counts[stage],
+            total_value=tv,
+            weighted_value=wv,
+        ))
+        total_value += tv
+        total_weighted += wv
 
     return PipelineValueReport(
         period=resolved_range.period,
@@ -742,6 +805,25 @@ async def get_closer_performance_report(
     """Wins and revenue by salesperson."""
     users = list(session.exec(select(User)).all())
 
+    accepted_quotes = list(
+        session.exec(
+            select(Quote)
+            .where(Quote.status == QuoteStatus.ACCEPTED)
+            .where(quote_counts_toward_stats())
+        ).all()
+    )
+    items_by_quote_id = _batch_quote_items_by_quote_id(
+        session, [q.id for q in accepted_quotes if q.id is not None]
+    )
+    revenue_by_user: dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
+    for quote in accepted_quotes:
+        owner_id = quote.owner_id if quote.owner_id is not None else quote.created_by_id
+        if owner_id is None:
+            continue
+        revenue_by_user[int(owner_id)] += _quote_turnover_amount(
+            quote, items_by_quote_id, session
+        )
+
     closers = []
     for user in users:
         leads_assigned = session.exec(
@@ -759,13 +841,7 @@ async def get_closer_performance_report(
             )
         ).one()
 
-        revenue_stmt = (
-            select(func.coalesce(func.sum(Quote.total_amount), 0))
-            .where(Quote.status == QuoteStatus.ACCEPTED)
-            .where(quote_counts_toward_stats())
-            .where((Quote.owner_id == user.id) | ((Quote.owner_id.is_(None)) & (Quote.created_by_id == user.id)))
-        )
-        total_revenue = session.exec(revenue_stmt).one() or Decimal("0")
+        total_revenue = revenue_by_user.get(int(user.id), Decimal("0")) if user.id is not None else Decimal("0")
 
         if leads_assigned > 0 or won_count > 0 or total_revenue > 0:
             closers.append(CloserPerformanceItem(
@@ -998,6 +1074,8 @@ def _build_sales_report_order_rows(
             if q.id is not None
         }
 
+    items_by_quote_id = _batch_quote_items_by_quote_id(session, quote_ids)
+
     lead_ids = {int(q.lead_id) for q in quotes_by_id.values() if q.lead_id}
     leads_by_id = {}
     if lead_ids:
@@ -1025,7 +1103,12 @@ def _build_sales_report_order_rows(
                 leads_by_id=leads_by_id,
             ),
             order_number=order.order_number,
-            total_amount=_decimal_or_zero(order.total_amount),
+            total_amount=_order_turnover_amount(
+                order,
+                quotes_by_id.get(int(order.quote_id)) if order.quote_id else None,
+                items_by_quote_id,
+                session,
+            ),
         )
         for order in ordered
     ]
@@ -1101,8 +1184,35 @@ def _build_sales_report_metrics(
         closed_quotes = [q for q in closed_quotes if _in_range(q.updated_at, start, end)]
         accepted_orders = [o for o in accepted_orders if _in_range(o.created_at, start, end)]
 
-    rejected_amounts = [
-        _decimal_or_zero(q.total_amount) for q in lost_quotes + closed_quotes
+    all_metric_quotes = created_quotes + sent_quotes + lost_quotes + closed_quotes
+    quote_ids_for_items = {int(q.id) for q in all_metric_quotes if q.id is not None}
+    quote_ids_for_items.update(int(o.quote_id) for o in accepted_orders if o.quote_id)
+    items_by_quote_id = _batch_quote_items_by_quote_id(session, quote_ids_for_items)
+
+    quotes_by_id_for_orders = {}
+    order_quote_ids = {int(o.quote_id) for o in accepted_orders if o.quote_id}
+    if order_quote_ids:
+        quotes_by_id_for_orders = {
+            int(q.id): q
+            for q in session.exec(select(Quote).where(Quote.id.in_(order_quote_ids))).all()
+            if q.id is not None
+        }
+
+    def _quote_amounts(quotes: list[Quote]) -> list[Decimal]:
+        return [
+            _quote_turnover_amount(q, items_by_quote_id, session)
+            for q in quotes
+        ]
+
+    rejected_amounts = _quote_amounts(lost_quotes + closed_quotes)
+    accepted_amounts = [
+        _order_turnover_amount(
+            o,
+            quotes_by_id_for_orders.get(int(o.quote_id)) if o.quote_id else None,
+            items_by_quote_id,
+            session,
+        )
+        for o in accepted_orders
     ]
 
     metrics = SalesReportPeriodMetrics(
@@ -1111,16 +1221,12 @@ def _build_sales_report_metrics(
         end_date=end,
         leads_count=leads_count,
         qualified_count=qualified_count,
-        quotes_created=_metric_block(
-            [_decimal_or_zero(q.total_amount) for q in created_quotes]
-        ),
-        quotes_sent=_metric_block([_decimal_or_zero(q.total_amount) for q in sent_quotes]),
-        quotes_accepted=_metric_block(
-            [_decimal_or_zero(o.total_amount) for o in accepted_orders]
-        ),
+        quotes_created=_metric_block(_quote_amounts(created_quotes)),
+        quotes_sent=_metric_block(_quote_amounts(sent_quotes)),
+        quotes_accepted=_metric_block(accepted_amounts),
         quotes_rejected=_metric_block(rejected_amounts),
-        quotes_lost=_metric_block([_decimal_or_zero(q.total_amount) for q in lost_quotes]),
-        quotes_closed=_metric_block([_decimal_or_zero(q.total_amount) for q in closed_quotes]),
+        quotes_lost=_metric_block(_quote_amounts(lost_quotes)),
+        quotes_closed=_metric_block(_quote_amounts(closed_quotes)),
     )
     return metrics, _build_sales_report_order_rows(session, accepted_orders)
 

@@ -29,7 +29,11 @@ import {
   parseQuoteLineUnitPrice,
   quoteLineTotal,
 } from '@/lib/quoteInstallHours';
-import { Customer, Product, QuoteFulfillmentMethod, QuoteItemCreate } from '@/lib/types';
+import {
+  defaultDepositLabel,
+  staffDefaultDepositRate,
+} from '@/lib/quoteDeposit';
+import { Customer, Product, QuoteFulfillmentMethod, QuoteItemCreate, LeadType } from '@/lib/types';
 import { toast } from 'sonner';
 import { Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
 import FulfillmentMethodField from '@/components/quotes/FulfillmentMethodField';
@@ -40,6 +44,7 @@ interface CreateQuoteDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   customer: Customer;
+  leadType?: LeadType | string | null;
   onSuccess?: () => void;
 }
 
@@ -47,6 +52,7 @@ export default function CreateQuoteDialog({
   open,
   onOpenChange,
   customer,
+  leadType = null,
   onSuccess,
 }: CreateQuoteDialogProps) {
   const [loading, setLoading] = useState(false);
@@ -258,8 +264,16 @@ export default function CreateQuoteDialog({
 
   const calculateTotalIncVat = () => calculateTotal() * 1.2;
 
+  const depositRate = useMemo(() => {
+    const categories = items.map((item) => getSelectedProduct(item)?.category ?? null);
+    return staffDefaultDepositRate({
+      leadType,
+      productCategories: categories,
+    });
+  }, [items, leadType, productDetails, products]);
+
   const calculateDefaultDeposit = () => {
-    return calculateTotalIncVat() * 0.5;
+    return calculateTotalIncVat() * depositRate;
   };
 
   const getDepositAmount = () => {
@@ -636,11 +650,11 @@ export default function CreateQuoteDialog({
                       const value = e.target.value;
                       setDepositAmount(value === '' ? '' : parseFloat(value) || 0);
                     }}
-                    placeholder={`Default: £${calculateDefaultDeposit().toFixed(2)} (50%)`}
+                    placeholder={`Default: £${calculateDefaultDeposit().toFixed(2)} (${Math.round(depositRate * 100)}%)`}
                   />
                   <div className="text-sm text-muted-foreground">
                     {depositAmount === '' ? (
-                      <>Default deposit: £{calculateDefaultDeposit().toFixed(2)} (50% of total inc VAT)</>
+                      <>Default deposit: £{calculateDefaultDeposit().toFixed(2)} ({defaultDepositLabel(depositRate)})</>
                     ) : (
                       <>Balance: £{getBalanceAmount().toFixed(2)}</>
                     )}

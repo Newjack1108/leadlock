@@ -1560,6 +1560,7 @@ export interface Quote {
   order_id?: number | null;
   customer_last_interacted_at?: string | null;
   archived_at?: string | null;
+  dealer_id?: number | null;
   dealer_customer_name?: string | null;
   dealer_customer_email?: string | null;
   dealer_customer_phone?: string | null;

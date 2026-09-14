@@ -18,7 +18,7 @@ from app.models import (
     User,
     UserRole,
 )
-from app.quote_pdf_service import (
+from app.quote_brand import (
     _installation_lead_time_for_settings,
     _resolve_quote_brand_lead_type,
 )

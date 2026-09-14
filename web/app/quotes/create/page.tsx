@@ -59,6 +59,10 @@ import {
   quoteLineTotal,
 } from '@/lib/quoteInstallHours';
 import { calculateTotalQuoteDeliveryBoxes } from '@/lib/quoteDeliveryBoxes';
+import {
+  defaultDepositLabel,
+  staffDefaultDepositRate,
+} from '@/lib/quoteDeposit';
 import { useDraftAutosave } from '@/hooks/useDraftAutosave';
 import {
   Customer,
@@ -67,6 +71,7 @@ import {
   QuoteItemCreate,
   DiscountTemplate,
   QuoteTemperature,
+  LeadType,
   QuoteFulfillmentMethod,
   DeliveryInstallEstimateResponse,
   isDiscountTemplateExpired,
@@ -136,6 +141,7 @@ function CreateQuoteContent() {
   const syncedDraftBaselineRef = useRef<string | null>(null);
   const [pageLoading, setPageLoading] = useState(true);
   const [customer, setCustomer] = useState<Customer | null>(null);
+  const [leadType, setLeadType] = useState<LeadType | string | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [items, setItems] = useState<QuoteItemCreate[]>([
     {
@@ -224,6 +230,14 @@ function CreateQuoteContent() {
     try {
       const response = await api.get(`/api/customers/${customerId}`);
       setCustomer(response.data);
+      if (leadId) {
+        try {
+          const leadRes = await api.get(`/api/leads/${leadId}`);
+          setLeadType(leadRes.data?.lead_type ?? null);
+        } catch {
+          setLeadType(null);
+        }
+      }
     } catch (error: any) {
       toast.error('Failed to load customer');
       if (error.response?.status === 401) {
@@ -493,8 +507,23 @@ function CreateQuoteContent() {
 
   const calculateTotalIncVat = () => calculateTotal() * 1.2;
 
+  const depositRate = useMemo(() => {
+    const categories = items.map((item) => {
+      if (!item.product_id) return null;
+      return (
+        productDetails[item.product_id]?.category ??
+        products.find((p) => p.id === item.product_id)?.category ??
+        null
+      );
+    });
+    return staffDefaultDepositRate({
+      leadType,
+      productCategories: categories,
+    });
+  }, [items, leadType, productDetails, products]);
+
   const calculateDefaultDeposit = () => {
-    return calculateTotalIncVat() * 0.5;
+    return calculateTotalIncVat() * depositRate;
   };
 
   const getDepositAmount = () => {
@@ -1517,11 +1546,11 @@ function CreateQuoteContent() {
                         const value = e.target.value;
                         setDepositAmount(value === '' ? '' : parseFloat(value) || 0);
                       }}
-                      placeholder={`Default: £${calculateDefaultDeposit().toFixed(2)} (50%)`}
+                      placeholder={`Default: £${calculateDefaultDeposit().toFixed(2)} (${Math.round(depositRate * 100)}%)`}
                     />
                     <div className="text-sm text-muted-foreground">
                       {depositAmount === '' ? (
-                        <>Default deposit: £{calculateDefaultDeposit().toFixed(2)} (50% of total inc VAT)</>
+                        <>Default deposit: £{calculateDefaultDeposit().toFixed(2)} ({defaultDepositLabel(depositRate)})</>
                       ) : (
                         <>Balance: £{getBalanceAmount().toFixed(2)}</>
                       )}

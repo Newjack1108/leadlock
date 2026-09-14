@@ -1867,7 +1867,7 @@ class QuoteCreate(BaseModel):
     terms_and_conditions: Optional[str] = None
     specification_sheet: Optional[str] = None
     notes: Optional[str] = None
-    deposit_amount: Optional[Decimal] = None  # Optional deposit amount inc VAT (defaults to 50% of total inc VAT if not provided)
+    deposit_amount: Optional[Decimal] = None  # Optional deposit amount inc VAT (defaults: 20% staff sheds, else 50% of total inc VAT)
     items: List[QuoteItemCreate]
     discount_template_ids: Optional[List[int]] = None  # List of discount template IDs to apply
     temperature: Optional[QuoteTemperature] = None

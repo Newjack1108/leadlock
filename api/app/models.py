@@ -653,7 +653,7 @@ class Quote(SQLModel, table=True):
     subtotal: Decimal = Field(sa_column=Column(Numeric(10, 2)))  # Sum of all line items (before discounts)
     discount_total: Decimal = Field(default=0, sa_column=Column(Numeric(10, 2)))  # Total of all discounts applied
     total_amount: Decimal = Field(sa_column=Column(Numeric(10, 2)))  # subtotal - discount_total (final amount)
-    deposit_amount: Decimal = Field(default=0, sa_column=Column(Numeric(10, 2)))  # Deposit amount inc VAT (default 50% of total inc VAT)
+    deposit_amount: Decimal = Field(default=0, sa_column=Column(Numeric(10, 2)))  # Deposit amount inc VAT (staff sheds 20% commission default; else 50%)
     balance_amount: Decimal = Field(default=0, sa_column=Column(Numeric(10, 2)))  # Balance amount inc VAT (total inc VAT - deposit)
     currency: str = Field(default="GBP")
     valid_until: Optional[datetime] = None
