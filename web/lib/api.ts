@@ -2570,6 +2570,46 @@ export const downloadFacebookLeadConversionReportCsv = async (filter?: DateRange
   window.URL.revokeObjectURL(url);
 };
 
+export const getDiscountUsageReport = async (filter?: DateRangeQueryParams) => {
+  const params = buildDateRangeParams(filter);
+  const response = await api.get('/api/reports/discount-usage', { params });
+  return response.data;
+};
+
+export const downloadDiscountUsageReportPdf = async (filter?: DateRangeQueryParams) => {
+  const params = buildDateRangeParams(filter);
+  const response = await api.get('/api/reports/discount-usage/pdf', {
+    responseType: 'blob',
+    params,
+  });
+  const blob = new Blob([response.data], { type: 'application/pdf' });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', `Discount_Usage_Report_${new Date().toISOString().slice(0, 10)}.pdf`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
+};
+
+export const downloadDiscountUsageReportCsv = async (filter?: DateRangeQueryParams) => {
+  const params = buildDateRangeParams(filter);
+  const response = await api.get('/api/reports/discount-usage.csv', {
+    responseType: 'blob',
+    params,
+  });
+  const blob = new Blob([response.data], { type: 'text/csv' });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', `Discount_Usage_Report_${new Date().toISOString().slice(0, 10)}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
+};
+
 export const getCloserPerformanceReport = async () => {
   const response = await api.get('/api/reports/closer-performance');
   return response.data;

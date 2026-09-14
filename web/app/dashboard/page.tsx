@@ -26,12 +26,15 @@ import api, {
   downloadCloserPerformanceReportPdf,
   downloadQuoteEngagementReportPdf,
   downloadSalesReportPdf,
+  getDiscountUsageReport,
+  downloadDiscountUsageReportPdf,
+  downloadDiscountUsageReportCsv,
 } from '@/lib/api';
-import { DashboardStats, StaleSummary, CompanySettings, UnreadSmsSummary, UnreadMessengerSummary, LeadLocationItem, DiscountTemplate, DashboardCommunicationTotals, FacebookLeadConversionReport, FacebookLeadConversionRow, DashboardPresetPeriod, DateRangeQueryParams } from '@/lib/types';
+import { DashboardStats, StaleSummary, CompanySettings, UnreadSmsSummary, UnreadMessengerSummary, LeadLocationItem, DiscountTemplate, DashboardCommunicationTotals, FacebookLeadConversionReport, FacebookLeadConversionRow, DiscountUsageReport, DiscountUsageRow, DashboardPresetPeriod, DateRangeQueryParams } from '@/lib/types';
 import { getInstallationLeadTimeRows, hasAnyInstallationLeadTime } from '@/lib/companyLeadTimeDisplay';
 import { isMarketingRole } from '@/lib/roles';
 import { toast } from 'sonner';
-import { TrendingUp, Users, CheckCircle2, Trophy, Bell, ArrowRight, Clock, MessageSquare, FileDown, BarChart3, Target, MessageCircle, Calendar, DoorClosed, LayoutDashboard, ChevronDown, ChevronUp } from 'lucide-react';
+import { TrendingUp, Users, CheckCircle2, Trophy, Bell, ArrowRight, Clock, MessageSquare, FileDown, BarChart3, Target, MessageCircle, Calendar, DoorClosed, LayoutDashboard, ChevronDown, ChevronUp, Tag } from 'lucide-react';
 import StatusPieChart from '@/components/StatusPieChart';
 import LeadsBySourceBarChart from '@/components/LeadsBySourceBarChart';
 
@@ -89,6 +92,55 @@ function getOrderReference(row: FacebookLeadConversionRow): string {
   }
   if (row.order_count <= 1) return row.order_number;
   return `${row.order_number} +${row.order_count - 1}`;
+}
+
+function renderDiscountUsageTable(
+  rows: DiscountUsageRow[],
+  emptyMessage: string,
+  options: { includeOrderNumber: boolean }
+) {
+  if (rows.length === 0) {
+    return (
+      <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+        {emptyMessage}
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-x-auto rounded-lg border">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b bg-muted/40">
+            <th className="p-3 text-left font-medium">Date</th>
+            <th className="p-3 text-left font-medium">Name</th>
+            <th className="p-3 text-left font-medium">Quote</th>
+            {options.includeOrderNumber && (
+              <th className="p-3 text-left font-medium">Order</th>
+            )}
+            <th className="p-3 text-left font-medium">Order value</th>
+            <th className="p-3 text-left font-medium">Discount name</th>
+            <th className="p-3 text-left font-medium">Discount amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={`${row.quote_discount_id}-${row.event_date}`} className="border-b last:border-0">
+              <td className="p-3 text-muted-foreground">{formatShortDate(row.event_date)}</td>
+              <td className="p-3 font-medium">{row.customer_name}</td>
+              <td className="p-3">{row.quote_number}</td>
+              {options.includeOrderNumber && (
+                <td className="p-3">{row.order_number || '—'}</td>
+              )}
+              <td className="p-3">{formatCurrency(row.order_value)}</td>
+              <td className="p-3">{row.discount_name}</td>
+              <td className="p-3">{formatCurrency(row.discount_amount)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 function formatDateInputLabel(value?: string | null): string {
@@ -150,6 +202,7 @@ export default function DashboardPage() {
   const [leadLocations, setLeadLocations] = useState<LeadLocationItem[]>([]);
   const [communicationTotals, setCommunicationTotals] = useState<DashboardCommunicationTotals | null>(null);
   const [facebookLeadReport, setFacebookLeadReport] = useState<FacebookLeadConversionReport | null>(null);
+  const [discountUsageReport, setDiscountUsageReport] = useState<DiscountUsageReport | null>(null);
   const [activeDiscounts, setActiveDiscounts] = useState<DiscountTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -160,6 +213,7 @@ export default function DashboardPage() {
   const [customEndDate, setCustomEndDate] = useState(getTodayDateInputValue());
   const [userRole, setUserRole] = useState<string | null>(null);
   const [facebookLeadReportExpanded, setFacebookLeadReportExpanded] = useState(false);
+  const [discountUsageReportExpanded, setDiscountUsageReportExpanded] = useState(false);
   const activeDateParams = useMemo(() => getDateRangeParams(dateFilter), [dateFilter]);
   const activeRangeLabel = useMemo(() => getActiveRangeLabel(dateFilter), [dateFilter]);
 
@@ -193,6 +247,7 @@ export default function DashboardPage() {
         setActiveDiscounts([]);
         setCommunicationTotals(null);
         setFacebookLeadReport(facebookReportRes);
+        setDiscountUsageReport(null);
         return;
       }
 
@@ -206,6 +261,7 @@ export default function DashboardPage() {
         discountsRes,
         communicationRes,
         facebookReportRes,
+        discountUsageRes,
       ] = await Promise.all([
         getDashboardStats(activeDateParams).catch((err: unknown) => {
           setLoadError('Dashboard stats could not be loaded. Try All Time or check API logs.');
@@ -220,6 +276,7 @@ export default function DashboardPage() {
         getDiscountTemplates(true).catch(() => []),
         getDashboardCommunicationTotals(activeDateParams).catch(() => null),
         getFacebookLeadConversionReport(activeDateParams).catch(() => null),
+        getDiscountUsageReport(activeDateParams).catch(() => null),
       ]);
       if (!statsRes) {
         setStats(null);
@@ -234,6 +291,7 @@ export default function DashboardPage() {
       setActiveDiscounts(Array.isArray(discountsRes) ? discountsRes : []);
       setCommunicationTotals(communicationRes);
       setFacebookLeadReport(facebookReportRes);
+      setDiscountUsageReport(discountUsageRes);
     } catch (error: unknown) {
       const status = typeof error === 'object' && error !== null && 'response' in error
         ? (error as { response?: { status?: number } }).response?.status
@@ -1057,6 +1115,132 @@ export default function DashboardPage() {
                     </div>
                   </div>
                     </>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Discount Usage Report */}
+        {!isMarketing && discountUsageReport && (
+          <Card className="mb-8">
+            <CardHeader>
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div
+                  className="flex-1 cursor-pointer select-none rounded-lg transition-colors hover:bg-muted/50 -m-2 p-2"
+                  onClick={() => setDiscountUsageReportExpanded(!discountUsageReportExpanded)}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <Tag className="h-5 w-5" />
+                        Discount Usage
+                      </CardTitle>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {activeRangeLabel} discounts offered on quotes vs taken on accepted orders.
+                        Offered uses applied date; taken uses acceptance date.
+                      </p>
+                    </div>
+                    {discountUsageReportExpanded ? (
+                      <ChevronUp className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
+                    ) : (
+                      <ChevronDown className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
+                    )}
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      downloadDiscountUsageReportPdf(activeDateParams);
+                    }}
+                  >
+                    <FileDown className="h-4 w-4 mr-1" />
+                    Download PDF
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      downloadDiscountUsageReportCsv(activeDateParams);
+                    }}
+                  >
+                    <FileDown className="h-4 w-4 mr-1" />
+                    Download CSV
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {discountUsageReport.offered.length === 0 && discountUsageReport.taken.length === 0 ? (
+                <div className="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
+                  No discounts offered or taken for this period.
+                </div>
+              ) : (
+                <div className={discountUsageReportExpanded ? 'space-y-6' : 'space-y-4'}>
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    <div className="rounded-lg border p-4">
+                      <p className="text-sm text-muted-foreground">Offered</p>
+                      <p className="mt-1 text-2xl font-semibold">{discountUsageReport.summary.offered_count}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {discountUsageReport.summary.offered_quote_count} quotes
+                      </p>
+                    </div>
+                    <div className="rounded-lg border p-4">
+                      <p className="text-sm text-muted-foreground">Offered total</p>
+                      <p className="mt-1 text-2xl font-semibold">
+                        {formatCurrency(discountUsageReport.summary.offered_total)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Applied in period</p>
+                    </div>
+                    <div className="rounded-lg border p-4">
+                      <p className="text-sm text-muted-foreground">Taken</p>
+                      <p className="mt-1 text-2xl font-semibold">{discountUsageReport.summary.taken_count}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {discountUsageReport.summary.taken_order_count} orders
+                      </p>
+                    </div>
+                    <div className="rounded-lg border p-4">
+                      <p className="text-sm text-muted-foreground">Taken total</p>
+                      <p className="mt-1 text-2xl font-semibold">
+                        {formatCurrency(discountUsageReport.summary.taken_total)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Accepted in period</p>
+                    </div>
+                  </div>
+
+                  {discountUsageReportExpanded && (
+                    <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                      <div>
+                        <div className="mb-3">
+                          <h3 className="font-medium">Offered</h3>
+                          <p className="text-sm text-muted-foreground">
+                            Discounts applied to quotes in this period.
+                          </p>
+                        </div>
+                        {renderDiscountUsageTable(
+                          discountUsageReport.offered,
+                          'No discounts offered in this period.',
+                          { includeOrderNumber: false }
+                        )}
+                      </div>
+                      <div>
+                        <div className="mb-3">
+                          <h3 className="font-medium">Taken</h3>
+                          <p className="text-sm text-muted-foreground">
+                            Discounts on quotes accepted as orders in this period.
+                          </p>
+                        </div>
+                        {renderDiscountUsageTable(
+                          discountUsageReport.taken,
+                          'No discounts taken in this period.',
+                          { includeOrderNumber: true }
+                        )}
+                      </div>
+                    </div>
                   )}
                 </div>
               )}

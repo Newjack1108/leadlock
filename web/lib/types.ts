@@ -584,6 +584,39 @@ export interface FacebookLeadConversionReport {
   rows: FacebookLeadConversionRow[];
 }
 
+export interface DiscountUsageRow {
+  quote_discount_id: number;
+  quote_id: number;
+  customer_name: string;
+  quote_number: string;
+  order_number?: string | null;
+  order_id?: number | null;
+  order_value: number;
+  discount_name: string;
+  discount_amount: number;
+  event_date: string;
+}
+
+export interface DiscountUsageSummary {
+  offered_count: number;
+  offered_total: number;
+  offered_quote_count: number;
+  taken_count: number;
+  taken_total: number;
+  taken_order_count: number;
+}
+
+export interface DiscountUsageReport {
+  period?: string | null;
+  period_label: string;
+  generated_at: string;
+  start_date: string;
+  end_date: string;
+  summary: DiscountUsageSummary;
+  offered: DiscountUsageRow[];
+  taken: DiscountUsageRow[];
+}
+
 export interface CloserPerformanceItem {
   user_id: number;
   full_name: string;

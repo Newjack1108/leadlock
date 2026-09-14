@@ -14,7 +14,7 @@ from app.db_utils import scalar_int
 from app.date_ranges import ResolvedDateRange, previous_equal_range, resolve_date_range
 from app.models import (
     Lead, LeadStatus, LeadSource, LeadType, Customer,
-    Quote, QuoteStatus, Order, OrderItem, Product,
+    Quote, QuoteStatus, QuoteDiscount, Order, OrderItem, Product,
     User, CompanySettings, FacebookAdvertProfile,
     OpportunityStage,
 )
@@ -29,6 +29,9 @@ from app.schemas import (
     SalesReportMetricBlock,
     SalesReportOrderRow,
     SalesReportPeriodMetrics,
+    DiscountUsageReport,
+    DiscountUsageSummary,
+    DiscountUsageRow,
 )
 from app.stats_exclusion import lead_counts_toward_stats, quote_counts_toward_stats
 from app.report_pdf_service import (
@@ -38,6 +41,7 @@ from app.report_pdf_service import (
     generate_closer_performance_pdf,
     generate_quote_engagement_pdf,
     generate_sales_report_pdf,
+    generate_discount_usage_pdf,
 )
 from datetime import datetime
 from decimal import Decimal
@@ -1245,6 +1249,316 @@ async def get_sales_report_pdf(
         )
     else:
         fn = f"Sales_Report_{report.period}_{report.end_date.strftime('%Y-%m-%d')}.pdf"
+    return Response(
+        content=pdf_content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{fn}"'},
+    )
+
+
+# --- Discount Usage Report (offered vs taken) ---
+
+
+def _discount_report_customer_name(
+    quote: Quote,
+    *,
+    customers_by_id: dict,
+    leads_by_id: dict,
+) -> str:
+    if quote.customer_id:
+        customer = customers_by_id.get(int(quote.customer_id))
+        if customer and customer.name:
+            return customer.name
+    if quote.dealer_customer_name:
+        return quote.dealer_customer_name
+    if quote.lead_id:
+        lead = leads_by_id.get(int(quote.lead_id))
+        if lead and lead.name:
+            return lead.name
+    return "Unknown"
+
+
+def _build_discount_usage_report(
+    session: Session,
+    resolved_range: ResolvedDateRange,
+) -> DiscountUsageReport:
+    """Build offered (applied_at) vs taken (accepted) discount rows for the range."""
+    discounts = list(
+        session.exec(
+            select(QuoteDiscount)
+            .join(Quote, QuoteDiscount.quote_id == Quote.id)
+            .where(_quote_stats_filter())
+        ).all()
+    )
+    if not discounts:
+        return DiscountUsageReport(
+            period=resolved_range.period,
+            period_label=_period_label(resolved_range.start, resolved_range.end),
+            generated_at=datetime.utcnow(),
+            start_date=resolved_range.start,
+            end_date=resolved_range.end,
+            summary=DiscountUsageSummary(),
+            offered=[],
+            taken=[],
+        )
+
+    quote_ids = {int(d.quote_id) for d in discounts}
+    quotes_by_id = {
+        int(q.id): q
+        for q in session.exec(select(Quote).where(Quote.id.in_(quote_ids))).all()
+        if q.id is not None
+    }
+
+    customer_ids = {int(q.customer_id) for q in quotes_by_id.values() if q.customer_id}
+    customers_by_id = {}
+    if customer_ids:
+        customers_by_id = {
+            int(c.id): c
+            for c in session.exec(select(Customer).where(Customer.id.in_(customer_ids))).all()
+            if c.id is not None
+        }
+
+    lead_ids = {int(q.lead_id) for q in quotes_by_id.values() if q.lead_id}
+    leads_by_id = {}
+    if lead_ids:
+        leads_by_id = {
+            int(lead.id): lead
+            for lead in session.exec(select(Lead).where(Lead.id.in_(lead_ids))).all()
+            if lead.id is not None
+        }
+
+    orders = list(
+        session.exec(select(Order).where(Order.quote_id.in_(quote_ids))).all()
+    )
+    orders_by_quote_id = {int(o.quote_id): o for o in orders if o.quote_id is not None}
+
+    offered: List[DiscountUsageRow] = []
+    taken: List[DiscountUsageRow] = []
+
+    for discount in discounts:
+        quote = quotes_by_id.get(int(discount.quote_id))
+        if quote is None or discount.id is None:
+            continue
+
+        customer_name = _discount_report_customer_name(
+            quote,
+            customers_by_id=customers_by_id,
+            leads_by_id=leads_by_id,
+        )
+        order = orders_by_quote_id.get(int(quote.id)) if quote.id is not None else None
+        discount_amount = _decimal_or_zero(discount.discount_amount)
+        discount_name = discount.description or "Discount"
+
+        if _in_range(discount.applied_at, resolved_range.start, resolved_range.end):
+            offered.append(
+                DiscountUsageRow(
+                    quote_discount_id=int(discount.id),
+                    quote_id=int(quote.id),
+                    customer_name=customer_name,
+                    quote_number=quote.quote_number,
+                    order_number=order.order_number if order else None,
+                    order_id=int(order.id) if order and order.id is not None else None,
+                    order_value=_decimal_or_zero(quote.subtotal),
+                    discount_name=discount_name,
+                    discount_amount=discount_amount,
+                    event_date=_as_naive_utc(discount.applied_at) or discount.applied_at,
+                )
+            )
+
+        if order is not None:
+            taken_at = _order_accepted_at(order, quote)
+            if _in_range(taken_at, resolved_range.start, resolved_range.end):
+                taken.append(
+                    DiscountUsageRow(
+                        quote_discount_id=int(discount.id),
+                        quote_id=int(quote.id),
+                        customer_name=customer_name,
+                        quote_number=quote.quote_number,
+                        order_number=order.order_number,
+                        order_id=int(order.id) if order.id is not None else None,
+                        order_value=_decimal_or_zero(order.subtotal),
+                        discount_name=discount_name,
+                        discount_amount=discount_amount,
+                        event_date=_as_naive_utc(taken_at) or taken_at,
+                    )
+                )
+
+    offered.sort(key=lambda row: (row.event_date, row.quote_number, row.discount_name))
+    taken.sort(key=lambda row: (row.event_date, row.order_number or "", row.discount_name))
+
+    offered_total = sum((row.discount_amount for row in offered), Decimal("0"))
+    taken_total = sum((row.discount_amount for row in taken), Decimal("0"))
+
+    return DiscountUsageReport(
+        period=resolved_range.period,
+        period_label=_period_label(resolved_range.start, resolved_range.end),
+        generated_at=datetime.utcnow(),
+        start_date=resolved_range.start,
+        end_date=resolved_range.end,
+        summary=DiscountUsageSummary(
+            offered_count=len(offered),
+            offered_total=offered_total,
+            offered_quote_count=len({row.quote_id for row in offered}),
+            taken_count=len(taken),
+            taken_total=taken_total,
+            taken_order_count=len({row.order_id for row in taken if row.order_id is not None}),
+        ),
+        offered=offered,
+        taken=taken,
+    )
+
+
+def _discount_usage_pdf_payload(report: DiscountUsageReport) -> dict:
+    return {
+        "period": report.period,
+        "period_label": report.period_label,
+        "start_date": report.start_date,
+        "end_date": report.end_date,
+        "generated_at": report.generated_at,
+        "summary": {
+            "offered_count": report.summary.offered_count,
+            "offered_total": float(report.summary.offered_total),
+            "offered_quote_count": report.summary.offered_quote_count,
+            "taken_count": report.summary.taken_count,
+            "taken_total": float(report.summary.taken_total),
+            "taken_order_count": report.summary.taken_order_count,
+        },
+        "offered": [
+            {
+                "customer_name": row.customer_name,
+                "quote_number": row.quote_number,
+                "order_number": row.order_number,
+                "order_value": float(row.order_value),
+                "discount_name": row.discount_name,
+                "discount_amount": float(row.discount_amount),
+                "event_date": row.event_date,
+            }
+            for row in report.offered
+        ],
+        "taken": [
+            {
+                "customer_name": row.customer_name,
+                "quote_number": row.quote_number,
+                "order_number": row.order_number,
+                "order_value": float(row.order_value),
+                "discount_name": row.discount_name,
+                "discount_amount": float(row.discount_amount),
+                "event_date": row.event_date,
+            }
+            for row in report.taken
+        ],
+    }
+
+
+@router.get("/discount-usage", response_model=DiscountUsageReport)
+async def get_discount_usage_report(
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_user),
+    period: Optional[str] = Query(None, description="Period: all, week, month, quarter, year."),
+    start_date: Optional[str] = Query(None, description="Custom range start date (YYYY-MM-DD)."),
+    end_date: Optional[str] = Query(None, description="Custom range end date (YYYY-MM-DD)."),
+):
+    """Discounts offered on quotes vs taken on accepted orders for the selected range."""
+    resolved_range = resolve_date_range(
+        period=period, start_date=start_date, end_date=end_date, default_period="week"
+    )
+    return _build_discount_usage_report(session, resolved_range)
+
+
+@router.get("/discount-usage.csv")
+async def download_discount_usage_report_csv(
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_user),
+    period: Optional[str] = Query(None),
+    start_date: Optional[str] = Query(None, description="Custom range start date (YYYY-MM-DD)."),
+    end_date: Optional[str] = Query(None, description="Custom range end date (YYYY-MM-DD)."),
+):
+    """Download discount offered vs taken report as CSV."""
+    resolved_range = resolve_date_range(
+        period=period, start_date=start_date, end_date=end_date, default_period="week"
+    )
+    report = _build_discount_usage_report(session, resolved_range)
+    output = io.StringIO(newline="")
+    writer = csv.writer(output)
+    writer.writerow([
+        "Status",
+        "Date",
+        "Customer Name",
+        "Quote Number",
+        "Order Number",
+        "Order Value",
+        "Discount Name",
+        "Discount Amount",
+    ])
+    for row in report.offered:
+        writer.writerow([
+            "Offered",
+            row.event_date.isoformat(),
+            row.customer_name,
+            row.quote_number,
+            row.order_number or "",
+            f"{row.order_value:.2f}",
+            row.discount_name,
+            f"{row.discount_amount:.2f}",
+        ])
+    for row in report.taken:
+        writer.writerow([
+            "Taken",
+            row.event_date.isoformat(),
+            row.customer_name,
+            row.quote_number,
+            row.order_number or "",
+            f"{row.order_value:.2f}",
+            row.discount_name,
+            f"{row.discount_amount:.2f}",
+        ])
+
+    if report.period == "custom":
+        filename = (
+            f"Discount_Usage_Report_{report.start_date.strftime('%Y-%m-%d')}"
+            f"_to_{report.end_date.strftime('%Y-%m-%d')}.csv"
+        )
+    else:
+        filename = f"Discount_Usage_Report_{report.period}_{report.end_date.strftime('%Y-%m-%d')}.csv"
+    return Response(
+        content=output.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/discount-usage/pdf")
+async def download_discount_usage_report_pdf(
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_user),
+    period: Optional[str] = Query(None),
+    start_date: Optional[str] = Query(None, description="Custom range start date (YYYY-MM-DD)."),
+    end_date: Optional[str] = Query(None, description="Custom range end date (YYYY-MM-DD)."),
+):
+    """Download discount offered vs taken report as PDF."""
+    report = await get_discount_usage_report(
+        session=session,
+        current_user=current_user,
+        period=period,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    data = _discount_usage_pdf_payload(report)
+    company_settings = _get_company_settings(session)
+    company_name = (
+        (company_settings.trading_name or company_settings.company_name or "LeadLock")
+        if company_settings
+        else "LeadLock"
+    )
+    buffer = generate_discount_usage_pdf(data, company_name, company_settings=company_settings)
+    pdf_content = buffer.read()
+    if report.period == "custom":
+        fn = (
+            f"Discount_Usage_Report_{report.start_date.strftime('%Y-%m-%d')}"
+            f"_to_{report.end_date.strftime('%Y-%m-%d')}.pdf"
+        )
+    else:
+        fn = f"Discount_Usage_Report_{report.period}_{report.end_date.strftime('%Y-%m-%d')}.pdf"
     return Response(
         content=pdf_content,
         media_type="application/pdf",

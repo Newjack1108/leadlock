@@ -1193,3 +1193,117 @@ def generate_sales_report_pdf(
     doc.build(flowables)
     buffer.seek(0)
     return buffer
+
+
+def _format_short_date(value: Any) -> str:
+    dt = _coerce_datetime(value)
+    if not dt:
+        return "—"
+    return dt.strftime("%d %b %Y")
+
+
+def generate_discount_usage_pdf(
+    data: Dict[str, Any],
+    company_name: str = "",
+    company_settings: Optional[CompanySettings] = None,
+) -> BytesIO:
+    """Generate PDF for Discount Usage Report (offered vs taken)."""
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=36, leftMargin=36, topMargin=40, bottomMargin=40)
+    styles = getSampleStyleSheet()
+    normal = styles["Normal"]
+
+    _, logo_bytes = _resolve_logo(company_settings)
+    flowables = _build_report_header(company_name, "Discount Usage Report", logo_bytes)
+
+    period_line = f"<b>Period:</b> {data.get('period_label', '')}"
+    if data.get("period"):
+        period_line += f" ({data.get('period')})"
+    flowables.append(Paragraph(period_line, normal))
+    flowables.append(Spacer(1, 6))
+    flowables.append(
+        Paragraph(
+            "Offered = discounts applied to quotes in this period. "
+            "Taken = discounts on quotes accepted as orders in this period.",
+            normal,
+        )
+    )
+    flowables.append(Spacer(1, 15))
+
+    summary = data.get("summary") or {}
+    summary_table = Table(
+        [
+            ["Metric", "Value"],
+            ["Offered discounts", str(summary.get("offered_count", 0))],
+            ["Offered total", format_currency(summary.get("offered_total", 0))],
+            ["Quotes with offers", str(summary.get("offered_quote_count", 0))],
+            ["Taken discounts", str(summary.get("taken_count", 0))],
+            ["Taken total", format_currency(summary.get("taken_total", 0))],
+            ["Orders with discounts", str(summary.get("taken_order_count", 0))],
+        ],
+        colWidths=[200, 160],
+    )
+    summary_table.setStyle(_table_style())
+    flowables.append(summary_table)
+    flowables.append(Spacer(1, 20))
+
+    def _append_discount_table(title: str, rows: List[Dict[str, Any]], include_order: bool) -> None:
+        flowables.append(Paragraph(f"<b>{title}</b>", normal))
+        flowables.append(Spacer(1, 8))
+        if not rows:
+            flowables.append(Paragraph("No rows in this period.", normal))
+            flowables.append(Spacer(1, 16))
+            return
+
+        if include_order:
+            table_data: List[List[str]] = [
+                ["Date", "Name", "Quote", "Order", "Value", "Discount", "Amount"]
+            ]
+            col_widths = [55, 85, 55, 55, 55, 85, 55]
+        else:
+            table_data = [["Date", "Name", "Quote", "Value", "Discount", "Amount"]]
+            col_widths = [55, 100, 60, 60, 100, 60]
+
+        total_discount = 0.0
+        for row in rows:
+            amount = float(row.get("discount_amount", 0) or 0)
+            total_discount += amount
+            base = [
+                _format_short_date(row.get("event_date")),
+                str(row.get("customer_name") or "Unknown")[:28],
+                str(row.get("quote_number") or ""),
+            ]
+            if include_order:
+                base.append(str(row.get("order_number") or "—"))
+            base.extend(
+                [
+                    format_currency(row.get("order_value", 0)),
+                    str(row.get("discount_name") or "")[:28],
+                    format_currency(amount),
+                ]
+            )
+            table_data.append(base)
+
+        if include_order:
+            table_data.append(["Total", "", "", "", "", "", format_currency(total_discount)])
+        else:
+            table_data.append(["Total", "", "", "", "", format_currency(total_discount)])
+
+        table = Table(table_data, colWidths=col_widths, repeatRows=1)
+        style = _table_style()
+        amount_col = 6 if include_order else 5
+        value_col = 4 if include_order else 3
+        style.add("ALIGN", (value_col, 0), (value_col, -1), "RIGHT")
+        style.add("ALIGN", (amount_col, 0), (amount_col, -1), "RIGHT")
+        style.add("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold")
+        style.add("ALIGN", (0, 1), (2, -1), "LEFT")
+        table.setStyle(style)
+        flowables.append(table)
+        flowables.append(Spacer(1, 16))
+
+    _append_discount_table("Offered (applied in period)", list(data.get("offered") or []), include_order=False)
+    _append_discount_table("Taken (accepted in period)", list(data.get("taken") or []), include_order=True)
+
+    doc.build(flowables)
+    buffer.seek(0)
+    return buffer

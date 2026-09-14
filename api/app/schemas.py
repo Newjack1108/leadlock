@@ -1187,6 +1187,40 @@ class SalesReport(BaseModel):
     comparison: Optional[SalesReportPeriodMetrics] = None
 
 
+class DiscountUsageRow(BaseModel):
+    """One discount line on a quote (offered) or accepted order (taken)."""
+    quote_discount_id: int
+    quote_id: int
+    customer_name: str
+    quote_number: str
+    order_number: Optional[str] = None
+    order_id: Optional[int] = None
+    order_value: Decimal = Decimal("0")  # pre-discount subtotal
+    discount_name: str
+    discount_amount: Decimal = Decimal("0")
+    event_date: datetime
+
+
+class DiscountUsageSummary(BaseModel):
+    offered_count: int = 0
+    offered_total: Decimal = Decimal("0")
+    offered_quote_count: int = 0
+    taken_count: int = 0
+    taken_total: Decimal = Decimal("0")
+    taken_order_count: int = 0
+
+
+class DiscountUsageReport(BaseModel):
+    period: Optional[str] = None
+    period_label: str
+    generated_at: datetime
+    start_date: datetime
+    end_date: datetime
+    summary: DiscountUsageSummary
+    offered: List[DiscountUsageRow] = []
+    taken: List[DiscountUsageRow] = []
+
+
 class UnreadSmsMessageItem(BaseModel):
     """Single unread SMS for dashboard list."""
     id: int
