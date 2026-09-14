@@ -2,11 +2,13 @@
 Service for generating PDF documents for sales reports.
 Includes company logo, green theme, and charts.
 """
-from reportlab.lib.pagesizes import A4
+from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib import colors
+from reportlab.lib.enums import TA_RIGHT
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
+from xml.sax.saxutils import escape as xml_escape
 from reportlab.graphics.shapes import Drawing, String
 from reportlab.graphics.charts.barcharts import VerticalBarChart, HorizontalBarChart
 from reportlab.graphics.charts.piecharts import Pie
@@ -1202,6 +1204,11 @@ def _format_short_date(value: Any) -> str:
     return dt.strftime("%d %b %Y")
 
 
+def _discount_cell(text: Any, style: ParagraphStyle) -> Paragraph:
+    """Wrap cell text so ReportLab clips within the column instead of overlapping."""
+    return Paragraph(xml_escape(str(text if text is not None else "")), style)
+
+
 def generate_discount_usage_pdf(
     data: Dict[str, Any],
     company_name: str = "",
@@ -1209,9 +1216,38 @@ def generate_discount_usage_pdf(
 ) -> BytesIO:
     """Generate PDF for Discount Usage Report (offered vs taken)."""
     buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=36, leftMargin=36, topMargin=40, bottomMargin=40)
+    # Landscape gives enough width for quote/order numbers + currency without overlap.
+    page = landscape(A4)
+    doc = SimpleDocTemplate(buffer, pagesize=page, rightMargin=28, leftMargin=28, topMargin=32, bottomMargin=32)
     styles = getSampleStyleSheet()
     normal = styles["Normal"]
+    muted = ParagraphStyle(
+        name="DiscountUsageMuted",
+        parent=normal,
+        fontSize=9,
+        textColor=colors.HexColor("#6b7280"),
+    )
+    header_cell = ParagraphStyle(
+        name="DiscountUsageHeaderCell",
+        parent=normal,
+        fontSize=8,
+        leading=10,
+        textColor=colors.white,
+        fontName="Helvetica-Bold",
+    )
+    body_cell = ParagraphStyle(
+        name="DiscountUsageBodyCell",
+        parent=normal,
+        fontSize=8,
+        leading=10,
+        textColor=colors.black,
+        splitLongWords=1,
+    )
+    body_cell_right = ParagraphStyle(
+        name="DiscountUsageBodyCellRight",
+        parent=body_cell,
+        alignment=TA_RIGHT,
+    )
 
     _, logo_bytes = _resolve_logo(company_settings)
     flowables = _build_report_header(company_name, "Discount Usage Report", logo_bytes)
@@ -1220,15 +1256,15 @@ def generate_discount_usage_pdf(
     if data.get("period"):
         period_line += f" ({data.get('period')})"
     flowables.append(Paragraph(period_line, normal))
-    flowables.append(Spacer(1, 6))
+    flowables.append(Spacer(1, 4))
     flowables.append(
         Paragraph(
             "Offered = discounts applied to quotes in this period. "
             "Taken = discounts on quotes accepted as orders in this period.",
-            normal,
+            muted,
         )
     )
-    flowables.append(Spacer(1, 15))
+    flowables.append(Spacer(1, 12))
 
     summary = data.get("summary") or {}
     summary_table = Table(
@@ -1241,65 +1277,77 @@ def generate_discount_usage_pdf(
             ["Taken total", format_currency(summary.get("taken_total", 0))],
             ["Orders with discounts", str(summary.get("taken_order_count", 0))],
         ],
-        colWidths=[200, 160],
+        colWidths=[55 * mm, 45 * mm],
     )
     summary_table.setStyle(_table_style())
     flowables.append(summary_table)
-    flowables.append(Spacer(1, 20))
+    flowables.append(Spacer(1, 16))
+
+    # Landscape usable width ≈ 841 - 56 ≈ 785pt (~277mm with 28pt margins).
+    offered_widths = [22 * mm, 42 * mm, 32 * mm, 28 * mm, 110 * mm, 28 * mm]
+    taken_widths = [20 * mm, 36 * mm, 30 * mm, 30 * mm, 26 * mm, 90 * mm, 26 * mm]
+
+    def _header_row(labels: List[str]) -> List[Paragraph]:
+        return [_discount_cell(label, header_cell) for label in labels]
 
     def _append_discount_table(title: str, rows: List[Dict[str, Any]], include_order: bool) -> None:
         flowables.append(Paragraph(f"<b>{title}</b>", normal))
-        flowables.append(Spacer(1, 8))
+        flowables.append(Spacer(1, 6))
         if not rows:
-            flowables.append(Paragraph("No rows in this period.", normal))
-            flowables.append(Spacer(1, 16))
+            flowables.append(Paragraph("No rows in this period.", muted))
+            flowables.append(Spacer(1, 14))
             return
 
         if include_order:
-            table_data: List[List[str]] = [
-                ["Date", "Name", "Quote", "Order", "Value", "Discount", "Amount"]
+            table_data: List[List[Any]] = [
+                _header_row(["Date", "Name", "Quote", "Order", "Value", "Discount", "Amount"])
             ]
-            col_widths = [55, 85, 55, 55, 55, 85, 55]
+            col_widths = taken_widths
         else:
-            table_data = [["Date", "Name", "Quote", "Value", "Discount", "Amount"]]
-            col_widths = [55, 100, 60, 60, 100, 60]
+            table_data = [_header_row(["Date", "Name", "Quote", "Value", "Discount", "Amount"])]
+            col_widths = offered_widths
 
         total_discount = 0.0
         for row in rows:
             amount = float(row.get("discount_amount", 0) or 0)
             total_discount += amount
-            base = [
-                _format_short_date(row.get("event_date")),
-                str(row.get("customer_name") or "Unknown")[:28],
-                str(row.get("quote_number") or ""),
+            cells: List[Any] = [
+                _discount_cell(_format_short_date(row.get("event_date")), body_cell),
+                _discount_cell(row.get("customer_name") or "Unknown", body_cell),
+                _discount_cell(row.get("quote_number") or "", body_cell),
             ]
             if include_order:
-                base.append(str(row.get("order_number") or "—"))
-            base.extend(
+                cells.append(_discount_cell(row.get("order_number") or "—", body_cell))
+            cells.extend(
                 [
-                    format_currency(row.get("order_value", 0)),
-                    str(row.get("discount_name") or "")[:28],
-                    format_currency(amount),
+                    _discount_cell(format_currency(row.get("order_value", 0)), body_cell_right),
+                    _discount_cell(row.get("discount_name") or "", body_cell),
+                    _discount_cell(format_currency(amount), body_cell_right),
                 ]
             )
-            table_data.append(base)
+            table_data.append(cells)
 
-        if include_order:
-            table_data.append(["Total", "", "", "", "", "", format_currency(total_discount)])
-        else:
-            table_data.append(["Total", "", "", "", "", format_currency(total_discount)])
+        amount_col = 6 if include_order else 5
+        total_row: List[Any] = [
+            _discount_cell("Total" if col == 0 else "", body_cell)
+            for col in range(amount_col + 1)
+        ]
+        total_row[amount_col] = _discount_cell(format_currency(total_discount), body_cell_right)
+        table_data.append(total_row)
 
         table = Table(table_data, colWidths=col_widths, repeatRows=1)
         style = _table_style()
-        amount_col = 6 if include_order else 5
-        value_col = 4 if include_order else 3
-        style.add("ALIGN", (value_col, 0), (value_col, -1), "RIGHT")
-        style.add("ALIGN", (amount_col, 0), (amount_col, -1), "RIGHT")
+        style.add("FONTSIZE", (0, 0), (-1, -1), 8)
+        style.add("LEFTPADDING", (0, 0), (-1, -1), 4)
+        style.add("RIGHTPADDING", (0, 0), (-1, -1), 4)
+        style.add("TOPPADDING", (0, 0), (-1, -1), 4)
+        style.add("BOTTOMPADDING", (0, 0), (-1, -1), 4)
+        style.add("VALIGN", (0, 0), (-1, -1), "TOP")
+        style.add("ALIGN", (0, 0), (-1, -1), "LEFT")
         style.add("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold")
-        style.add("ALIGN", (0, 1), (2, -1), "LEFT")
         table.setStyle(style)
         flowables.append(table)
-        flowables.append(Spacer(1, 16))
+        flowables.append(Spacer(1, 14))
 
     _append_discount_table("Offered (applied in period)", list(data.get("offered") or []), include_order=False)
     _append_discount_table("Taken (accepted in period)", list(data.get("taken") or []), include_order=True)
