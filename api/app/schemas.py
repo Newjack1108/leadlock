@@ -1243,6 +1243,13 @@ class UnreadEmailSummary(BaseModel):
     count: int
 
 
+class UnreadCountsSummary(BaseModel):
+    """Header badge totals without hydrating message lists."""
+    sms: int
+    messenger: int
+    email: int
+
+
 class UnreadByCustomerItem(BaseModel):
     """Per-customer unread message count (SMS + Messenger)."""
     customer_id: int

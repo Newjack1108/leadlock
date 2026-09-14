@@ -4,7 +4,7 @@ import os
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 
 import pytest
-from datetime import datetime
+from datetime import datetime, timedelta
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.pool import StaticPool
@@ -415,3 +415,104 @@ def test_closer_sees_unread_for_lost_and_closed_customers(api_client, sqlite_eng
     )
     assert director_res.status_code == 200, director_res.text
     assert director_res.json()["count"] == 2
+
+
+def test_qualify_restore_unread_skips_messages_from_before_lead(api_client, sqlite_engine):
+    """Qualify must not reopen a customer's older inbound history as unread."""
+    from app.models import LeadSource, LeadType
+    from app.workflow import auto_transition_lead_status
+
+    with Session(sqlite_engine) as session:
+        closer = _add_user(session, "closer-restore-scope@example.com", UserRole.CLOSER)
+        director = _add_user(session, "director-restore-scope@example.com", UserRole.DIRECTOR)
+        customer = Customer(
+            customer_number="C-RESTORE-SCOPE",
+            name="Scoped Restore Customer",
+            phone="+447700900107",
+        )
+        session.add(customer)
+        session.commit()
+        session.refresh(customer)
+
+        old_time = datetime.utcnow() - timedelta(days=400)
+        lead_created = datetime.utcnow() - timedelta(days=2)
+        lead = Lead(
+            name="Recent lead only",
+            status=LeadStatus.ENGAGED,
+            lead_source=LeadSource.REFERRAL,
+            lead_type=LeadType.STABLES,
+            customer_id=customer.id,
+            assigned_to_id=director.id,
+            created_at=lead_created,
+        )
+        session.add(lead)
+        session.add(
+            SmsMessage(
+                customer_id=customer.id,
+                direction=SmsDirection.RECEIVED,
+                from_phone="+447700900107",
+                to_phone="+441234567890",
+                body="Old history",
+                received_at=old_time,
+                created_at=old_time,
+                read_at=old_time,
+            )
+        )
+        session.add(
+            SmsMessage(
+                customer_id=customer.id,
+                direction=SmsDirection.RECEIVED,
+                from_phone="+447700900107",
+                to_phone="+441234567890",
+                body="Reply before qualify",
+                received_at=datetime.utcnow(),
+                read_at=datetime.utcnow(),
+            )
+        )
+        session.commit()
+        session.refresh(lead)
+        closer_token = create_access_token(data={"sub": closer.email})
+        customer_id = customer.id
+        lead_id = lead.id
+        director_id = director.id
+
+    with Session(sqlite_engine) as session:
+        ok = auto_transition_lead_status(
+            lead_id,
+            LeadStatus.QUALIFIED,
+            session,
+            director_id,
+            reason="Test qualify does not restore old history",
+        )
+        assert ok is True
+
+    after = api_client.get(
+        "/api/dashboard/unread-sms",
+        headers={"Authorization": f"Bearer {closer_token}"},
+    )
+    assert after.status_code == 200, after.text
+    assert after.json()["count"] == 1
+    assert after.json()["messages"][0]["customer_id"] == customer_id
+    assert after.json()["messages"][0]["body"] == "Reply before qualify"
+
+
+def test_unread_counts_and_count_only_for_closer(api_client, sqlite_engine):
+    with Session(sqlite_engine) as session:
+        closer, _, _, _ = _seed_unread_scenario(session)
+        closer_token = create_access_token(data={"sub": closer.email})
+
+    counts = api_client.get(
+        "/api/dashboard/unread-counts",
+        headers={"Authorization": f"Bearer {closer_token}"},
+    )
+    assert counts.status_code == 200, counts.text
+    assert counts.json() == {"sms": 1, "messenger": 0, "email": 0}
+
+    count_only = api_client.get(
+        "/api/dashboard/unread-sms",
+        params={"count_only": True},
+        headers={"Authorization": f"Bearer {closer_token}"},
+    )
+    assert count_only.status_code == 200, count_only.text
+    assert count_only.json()["count"] == 1
+    assert count_only.json()["messages"] == []

@@ -302,8 +302,10 @@ export const getCustomerSms = async (customerId: number) => {
   return response.data;
 };
 
-export const getUnreadSms = async () => {
-  const response = await api.get('/api/dashboard/unread-sms');
+export const getUnreadSms = async (options?: { countOnly?: boolean }) => {
+  const response = await api.get('/api/dashboard/unread-sms', {
+    params: options?.countOnly ? { count_only: true } : undefined,
+  });
   return response.data;
 };
 
@@ -451,13 +453,20 @@ export function dispatchRefreshUnreadCounts(): void {
   }
 }
 
-export const getUnreadMessenger = async () => {
-  const response = await api.get('/api/dashboard/unread-messenger');
+export const getUnreadMessenger = async (options?: { countOnly?: boolean }) => {
+  const response = await api.get('/api/dashboard/unread-messenger', {
+    params: options?.countOnly ? { count_only: true } : undefined,
+  });
   return response.data;
 };
 
 export const getUnreadEmails = async () => {
   const response = await api.get('/api/dashboard/unread-email');
+  return response.data;
+};
+
+export const getUnreadCounts = async (): Promise<{ sms: number; messenger: number; email: number }> => {
+  const response = await api.get('/api/dashboard/unread-counts');
   return response.data;
 };
 

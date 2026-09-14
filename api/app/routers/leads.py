@@ -748,7 +748,9 @@ async def create_lead(
 
         if lead.status == LeadStatus.QUALIFIED and lead.customer_id:
             sync_customer_contact_from_lead_on_qualify(session, lead)
-            restore_inbound_unread_for_customer_on_qualify(session, lead.customer_id)
+            restore_inbound_unread_for_customer_on_qualify(
+                session, lead.customer_id, since=lead.created_at
+            )
 
         # Create initial status history
         status_history = StatusHistory(
@@ -887,7 +889,9 @@ async def transition_lead_status(
 
     if transition.new_status == LeadStatus.QUALIFIED:
         sync_customer_contact_from_lead_on_qualify(session, lead)
-        restore_inbound_unread_for_customer_on_qualify(session, lead.customer_id)
+        restore_inbound_unread_for_customer_on_qualify(
+            session, lead.customer_id, since=lead.created_at
+        )
 
     if transition.new_status == LeadStatus.CLOSED:
         draft_stmt = select(Quote).where(

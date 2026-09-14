@@ -16,6 +16,7 @@ from app.models import (
     MessengerDirection,
 )
 from sqlmodel import Session, select
+from sqlalchemy import and_, or_, update
 from datetime import datetime, timedelta
 from decimal import Decimal
 
@@ -247,15 +248,22 @@ def check_sla_overdue(lead: Lead, session: Session) -> Optional[str]:
 
 
 def restore_inbound_unread_for_customer_on_qualify(
-    session: Session, customer_id: Optional[int]
+    session: Session,
+    customer_id: Optional[int],
+    *,
+    since: Optional[datetime] = None,
 ) -> int:
     """
-    Clear read_at on received SMS, Messenger, and email for this customer.
+    Clear read_at on received SMS, Messenger, and email for this lead's window.
 
     Pre-qualify replies are often marked read when staff open the thread before
     QUALIFIED. Restoring unread on qualify so closers see pipeline indicators.
+
+    Only messages received on/after ``since`` (the lead's created_at) are
+    reopened. Clearing a customer's entire inbound history made unread counts
+    huge and slowed header/dashboard badge queries for every user.
     """
-    if not customer_id:
+    if not customer_id or since is None:
         return 0
 
     cleared = 0
@@ -264,19 +272,20 @@ def restore_inbound_unread_for_customer_on_qualify(
         (MessengerMessage, MessengerDirection.RECEIVED),
         (Email, EmailDirection.RECEIVED),
     ):
-        rows = list(
-            session.exec(
-                select(model).where(
-                    model.customer_id == customer_id,
-                    model.direction == direction,
-                    model.read_at.isnot(None),
-                )
-            ).all()
+        result = session.execute(
+            update(model)
+            .where(
+                model.customer_id == customer_id,
+                model.direction == direction,
+                model.read_at.isnot(None),
+                or_(
+                    model.received_at >= since,
+                    and_(model.received_at.is_(None), model.created_at >= since),
+                ),
+            )
+            .values(read_at=None)
         )
-        for row in rows:
-            row.read_at = None
-            session.add(row)
-            cleared += 1
+        cleared += int(result.rowcount or 0)
     return cleared
 
 
@@ -379,7 +388,9 @@ def auto_transition_lead_status(
 
     if new_status == LeadStatus.QUALIFIED:
         sync_customer_contact_from_lead_on_qualify(session, lead)
-        restore_inbound_unread_for_customer_on_qualify(session, lead.customer_id)
+        restore_inbound_unread_for_customer_on_qualify(
+            session, lead.customer_id, since=lead.created_at
+        )
 
     # Create status history record
     from app.models import StatusHistory

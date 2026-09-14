@@ -366,6 +366,25 @@ def _ensure_list_performance_indexes(engine) -> None:
             "ON email (customer_id) WHERE read_at IS NULL"
         ),
         (
+            "CREATE INDEX IF NOT EXISTS ix_smsmessage_unread_received "
+            "ON smsmessage (customer_id, created_at DESC) "
+            "WHERE direction = 'RECEIVED' AND read_at IS NULL"
+        ),
+        (
+            "CREATE INDEX IF NOT EXISTS ix_messengermessage_unread_received "
+            "ON messengermessage (customer_id, created_at DESC) "
+            "WHERE direction = 'RECEIVED' AND read_at IS NULL"
+        ),
+        (
+            "CREATE INDEX IF NOT EXISTS ix_email_unread_received "
+            "ON email (customer_id, created_at DESC) "
+            "WHERE direction = 'RECEIVED' AND read_at IS NULL"
+        ),
+        (
+            "CREATE INDEX IF NOT EXISTS ix_lead_customer_status "
+            "ON lead (customer_id, status) WHERE customer_id IS NOT NULL"
+        ),
+        (
             "CREATE INDEX IF NOT EXISTS ix_lead_active_created "
             "ON lead (created_at DESC) WHERE archived_at IS NULL"
         ),

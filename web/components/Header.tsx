@@ -33,9 +33,7 @@ import {
   invalidateAuthMeCache,
   getStaleSummary,
   getDiscountRequests,
-  getUnreadSms,
-  getUnreadMessenger,
-  getUnreadEmails,
+  getUnreadCounts,
   getQualifiedForQuoting,
   getUnreadConfiguratorSubmissionsCount,
   LEADLOCK_REFRESH_CONFIGURATOR_SUBMISSIONS_EVENT,
@@ -125,14 +123,8 @@ export default function Header() {
 
   const fetchUnreadMessagesCount = async () => {
     try {
-      const [smsRes, messengerRes, emailRes] = await Promise.all([
-        getUnreadSms().catch(() => ({ count: 0 })),
-        getUnreadMessenger().catch(() => ({ count: 0 })),
-        getUnreadEmails().catch(() => ({ count: 0 })),
-      ]);
-      setUnreadMessagesCount(
-        (smsRes?.count ?? 0) + (messengerRes?.count ?? 0) + (emailRes?.count ?? 0)
-      );
+      const counts = await getUnreadCounts();
+      setUnreadMessagesCount((counts?.sms ?? 0) + (counts?.messenger ?? 0) + (counts?.email ?? 0));
     } catch {
       setUnreadMessagesCount(0);
     }
