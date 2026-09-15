@@ -1289,6 +1289,10 @@ export const getOrders = async (options?: {
   search?: string;
   status?: string;
   lead_type?: string;
+  createdFrom?: string;
+  createdTo?: string;
+  sort_by?: string;
+  sort_dir?: string;
 }) => {
   const params: Record<string, string | number> = {};
   if (options?.page != null) params.page = options.page;
@@ -1296,8 +1300,51 @@ export const getOrders = async (options?: {
   if (options?.search?.trim()) params.search = options.search.trim();
   if (options?.status && options.status !== 'all') params.status = options.status;
   if (options?.lead_type && options.lead_type !== 'all') params.lead_type = options.lead_type;
+  if (options?.createdFrom?.trim()) params.created_from = options.createdFrom.trim();
+  if (options?.createdTo?.trim()) params.created_to = options.createdTo.trim();
+  if (options?.sort_by) params.sort_by = options.sort_by;
+  if (options?.sort_dir) params.sort_dir = options.sort_dir;
   const response = await api.get('/api/orders', { params: Object.keys(params).length ? params : undefined });
   return response.data as OrderListPayload;
+};
+
+export const downloadOrdersPdf = async (options?: {
+  search?: string;
+  status?: string;
+  lead_type?: string;
+  createdFrom?: string;
+  createdTo?: string;
+  sort_by?: string;
+  sort_dir?: string;
+}) => {
+  const params: Record<string, string> = {};
+  if (options?.search?.trim()) params.search = options.search.trim();
+  if (options?.status && options.status !== 'all') params.status = options.status;
+  if (options?.lead_type && options.lead_type !== 'all') params.lead_type = options.lead_type;
+  if (options?.createdFrom?.trim()) params.created_from = options.createdFrom.trim();
+  if (options?.createdTo?.trim()) params.created_to = options.createdTo.trim();
+  if (options?.sort_by) params.sort_by = options.sort_by;
+  if (options?.sort_dir) params.sort_dir = options.sort_dir;
+  const response = await api.get('/api/orders/export.pdf', {
+    responseType: 'blob',
+    timeout: EMAIL_AND_UPLOAD_TIMEOUT_MS,
+    params: Object.keys(params).length ? params : undefined,
+  });
+  const blob = new Blob([response.data], { type: 'application/pdf' });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  const disposition = response.headers['content-disposition'] as string | undefined;
+  let filename = `orders-${new Date().toISOString().slice(0, 10)}.pdf`;
+  if (disposition) {
+    const match = /filename="?([^"]+)"?/.exec(disposition);
+    if (match?.[1]) filename = match[1];
+  }
+  link.setAttribute('download', filename);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
 };
 
 export const getCustomerOrders = async (customerId: number) => {

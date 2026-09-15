@@ -1355,3 +1355,157 @@ def generate_discount_usage_pdf(
     doc.build(flowables)
     buffer.seek(0)
     return buffer
+
+
+_ORDERS_LIST_SORT_LABELS = {
+    "order_number": "Order #",
+    "customer": "Customer",
+    "customer_since": "Customer since",
+    "lead_type": "Lead type",
+    "lead_source": "Lead source",
+    "total": "Total",
+    "install_booked": "Install booked",
+    "created": "Created",
+}
+
+
+def _orders_list_range_label(data: Dict[str, Any]) -> str:
+    created_from = (data.get("created_from") or "").strip()
+    created_to = (data.get("created_to") or "").strip()
+    if created_from and created_to:
+        return f"{created_from} to {created_to}"
+    if created_from:
+        return f"from {created_from}"
+    if created_to:
+        return f"to {created_to}"
+    return "All dates"
+
+
+def generate_orders_list_pdf(
+    data: Dict[str, Any],
+    company_name: str = "",
+    company_settings: Optional[CompanySettings] = None,
+) -> BytesIO:
+    """Landscape PDF of orders matching the list filters."""
+    buffer = BytesIO()
+    page = landscape(A4)
+    doc = SimpleDocTemplate(buffer, pagesize=page, rightMargin=28, leftMargin=28, topMargin=32, bottomMargin=32)
+    styles = getSampleStyleSheet()
+    normal = styles["Normal"]
+    muted = ParagraphStyle(
+        name="OrdersListMuted",
+        parent=normal,
+        fontSize=9,
+        textColor=colors.HexColor("#6b7280"),
+    )
+    header_cell = ParagraphStyle(
+        name="OrdersListHeaderCell",
+        parent=normal,
+        fontSize=8,
+        leading=10,
+        textColor=colors.white,
+        fontName="Helvetica-Bold",
+    )
+    body_cell = ParagraphStyle(
+        name="OrdersListBodyCell",
+        parent=normal,
+        fontSize=8,
+        leading=10,
+        textColor=colors.black,
+        splitLongWords=1,
+    )
+    body_cell_right = ParagraphStyle(
+        name="OrdersListBodyCellRight",
+        parent=body_cell,
+        alignment=TA_RIGHT,
+    )
+
+    _, logo_bytes = _resolve_logo(company_settings)
+    flowables = _build_report_header(company_name, "Orders", logo_bytes)
+
+    filter_bits = [f"<b>Created:</b> {_orders_list_range_label(data)}"]
+    status = data.get("status")
+    if status and status != "all":
+        filter_bits.append(f"<b>Status:</b> {xml_escape(str(status).replace('_', ' '))}")
+    lead_type = data.get("lead_type")
+    if lead_type and lead_type != "all":
+        filter_bits.append(f"<b>Lead type:</b> {xml_escape(str(lead_type))}")
+    search = data.get("search")
+    if search:
+        filter_bits.append(f"<b>Search:</b> {xml_escape(str(search))}")
+    sort_by = data.get("sort_by") or "created"
+    sort_dir = data.get("sort_dir") or "desc"
+    sort_label = _ORDERS_LIST_SORT_LABELS.get(sort_by, str(sort_by))
+    filter_bits.append(f"<b>Sort:</b> {xml_escape(sort_label)} {sort_dir}")
+    flowables.append(Paragraph(" | ".join(filter_bits), normal))
+    flowables.append(Spacer(1, 8))
+
+    total = int(data.get("total") or 0)
+    rows = list(data.get("rows") or [])
+    included = int(data.get("included") if data.get("included") is not None else len(rows))
+    if total > included:
+        flowables.append(
+            Paragraph(
+                f"Showing first {included} of {total} matching orders.",
+                muted,
+            )
+        )
+        flowables.append(Spacer(1, 8))
+
+    if not rows:
+        flowables.append(Paragraph("No orders match the selected filters.", muted))
+        doc.build(flowables)
+        buffer.seek(0)
+        return buffer
+
+    col_widths = [28 * mm, 42 * mm, 24 * mm, 32 * mm, 28 * mm, 26 * mm, 48 * mm, 24 * mm]
+    table_data: List[List[Any]] = [[
+        _discount_cell(label, header_cell)
+        for label in [
+            "Order #",
+            "Customer",
+            "Lead type",
+            "Lead source",
+            "Customer since",
+            "Total",
+            "Status",
+            "Created",
+        ]
+    ]]
+    orders_total = 0.0
+    for row in rows:
+        amount = float(row.get("total_amount", 0) or 0)
+        orders_total += amount
+        table_data.append(
+            [
+                _discount_cell(row.get("order_number") or "", body_cell),
+                _discount_cell(row.get("customer_name") or "—", body_cell),
+                _discount_cell(row.get("lead_type") or "—", body_cell),
+                _discount_cell(row.get("lead_source") or "—", body_cell),
+                _discount_cell(_format_short_date(row.get("customer_since")), body_cell),
+                _discount_cell(format_currency(amount, row.get("currency") or "GBP"), body_cell_right),
+                _discount_cell(row.get("status") or "—", body_cell),
+                _discount_cell(_format_short_date(row.get("created_at")), body_cell),
+            ]
+        )
+    total_row = [_discount_cell("Total" if col == 0 else "", body_cell) for col in range(8)]
+    total_row[5] = _discount_cell(format_currency(orders_total), body_cell_right)
+    table_data.append(total_row)
+
+    table = Table(table_data, colWidths=col_widths, repeatRows=1)
+    style = _table_style()
+    style.add("FONTSIZE", (0, 0), (-1, -1), 8)
+    style.add("LEFTPADDING", (0, 0), (-1, -1), 4)
+    style.add("RIGHTPADDING", (0, 0), (-1, -1), 4)
+    style.add("TOPPADDING", (0, 0), (-1, -1), 4)
+    style.add("BOTTOMPADDING", (0, 0), (-1, -1), 4)
+    style.add("VALIGN", (0, 0), (-1, -1), "TOP")
+    style.add("ALIGN", (0, 0), (-1, -1), "LEFT")
+    style.add("ALIGN", (5, 1), (5, -1), "RIGHT")
+    style.add("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold")
+    table.setStyle(style)
+    flowables.append(table)
+
+    doc.build(flowables)
+    buffer.seek(0)
+    return buffer

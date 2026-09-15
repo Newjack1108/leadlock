@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import axios from 'axios';
+import { toast } from 'sonner';
+import { ChevronDown, ChevronUp, ExternalLink, FileDown, FileText } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,10 +15,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { getOrders } from '@/lib/api';
+import { downloadOrdersPdf, getOrders } from '@/lib/api';
 import { LeadType, Order } from '@/lib/types';
-import { toast } from 'sonner';
-import { FileText, ExternalLink } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import NinoxBadge from '@/components/NinoxBadge';
 import { isDepositPaid, isPaidInFull } from '@/lib/orderPayment';
@@ -25,6 +26,16 @@ const SEARCH_DEBOUNCE_MS = 300;
 
 type OrderStatusFilter = 'new' | 'deposit_paid' | 'installation_booked' | 'installation_completed' | 'completed' | 'all';
 type LeadTypeFilter = 'all' | LeadType | 'unknown';
+type OrdersSortBy =
+  | 'order_number'
+  | 'customer'
+  | 'customer_since'
+  | 'lead_type'
+  | 'lead_source'
+  | 'total'
+  | 'install_booked'
+  | 'created';
+type OrdersSortDir = 'asc' | 'desc';
 
 function formatCurrency(amount: number, currency: string = 'GBP'): string {
   return new Intl.NumberFormat('en-GB', {
@@ -39,12 +50,66 @@ function getDisplayLeadType(leadType?: LeadType | null): LeadType | null {
   return leadType;
 }
 
+function formatLeadSource(source?: string | null): string {
+  if (!source || source === 'UNKNOWN') return '—';
+  return source.replace(/_/g, ' ');
+}
+
+function formatDate(value?: string | null): string {
+  if (!value) return '—';
+  return new Date(value).toLocaleDateString('en-GB');
+}
+
 function hasActiveFilters(
   statusFilter: OrderStatusFilter,
   leadTypeFilter: LeadTypeFilter,
   searchApplied: string,
+  createdFrom: string,
+  createdTo: string,
 ): boolean {
-  return statusFilter !== 'all' || leadTypeFilter !== 'all' || searchApplied.trim().length > 0;
+  return (
+    statusFilter !== 'all' ||
+    leadTypeFilter !== 'all' ||
+    searchApplied.trim().length > 0 ||
+    createdFrom.trim().length > 0 ||
+    createdTo.trim().length > 0
+  );
+}
+
+function SortHeader({
+  label,
+  column,
+  sortBy,
+  sortDir,
+  onSort,
+  className = 'text-left',
+}: {
+  label: string;
+  column: OrdersSortBy;
+  sortBy: OrdersSortBy;
+  sortDir: OrdersSortDir;
+  onSort: (column: OrdersSortBy) => void;
+  className?: string;
+}) {
+  const active = sortBy === column;
+  return (
+    <th className={`p-3 font-medium ${className}`}>
+      <button
+        type="button"
+        onClick={() => onSort(column)}
+        className="inline-flex items-center gap-1 hover:text-foreground"
+      >
+        {label}
+        {active ? (
+          sortDir === 'asc' ? (
+            <ChevronUp className="h-3.5 w-3.5" />
+          ) : (
+            <ChevronDown className="h-3.5 w-3.5" />
+          )
+        ) : null}
+      </button>
+    </th>
+  );
 }
 
 export default function OrdersPage() {
@@ -52,10 +117,15 @@ export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [statusFilter, setStatusFilter] = useState<OrderStatusFilter>('all');
   const [leadTypeFilter, setLeadTypeFilter] = useState<LeadTypeFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchApplied, setSearchApplied] = useState('');
+  const [createdFrom, setCreatedFrom] = useState('');
+  const [createdTo, setCreatedTo] = useState('');
+  const [sortBy, setSortBy] = useState<OrdersSortBy>('created');
+  const [sortDir, setSortDir] = useState<OrdersSortDir>('desc');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const hasLoadedRef = useRef(false);
@@ -69,7 +139,17 @@ export default function OrdersPage() {
 
   useLayoutEffect(() => {
     setPage(1);
-  }, [statusFilter, leadTypeFilter, searchApplied]);
+  }, [statusFilter, leadTypeFilter, searchApplied, createdFrom, createdTo, sortBy, sortDir]);
+
+  const listQuery = {
+    search: searchApplied.trim() || undefined,
+    status: statusFilter !== 'all' ? statusFilter : undefined,
+    lead_type: leadTypeFilter !== 'all' ? leadTypeFilter : undefined,
+    createdFrom: createdFrom.trim() || undefined,
+    createdTo: createdTo.trim() || undefined,
+    sort_by: sortBy,
+    sort_dir: sortDir,
+  };
 
   const fetchOrders = useCallback(async () => {
     try {
@@ -84,24 +164,28 @@ export default function OrdersPage() {
         search: searchApplied.trim() || undefined,
         status: statusFilter !== 'all' ? statusFilter : undefined,
         lead_type: leadTypeFilter !== 'all' ? leadTypeFilter : undefined,
+        createdFrom: createdFrom.trim() || undefined,
+        createdTo: createdTo.trim() || undefined,
+        sort_by: sortBy,
+        sort_dir: sortDir,
       });
       setOrders(data.items);
       setTotal(data.total);
       hasLoadedRef.current = true;
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error('Failed to load orders');
-      if (error.response?.status === 401) router.push('/login');
+      if (axios.isAxiosError(error) && error.response?.status === 401) router.push('/login');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [page, statusFilter, leadTypeFilter, searchApplied, router]);
+  }, [page, statusFilter, leadTypeFilter, searchApplied, createdFrom, createdTo, sortBy, sortDir, router]);
 
   useEffect(() => {
     fetchOrders();
   }, [fetchOrders]);
 
-  const filtersActive = hasActiveFilters(statusFilter, leadTypeFilter, searchApplied);
+  const filtersActive = hasActiveFilters(statusFilter, leadTypeFilter, searchApplied, createdFrom, createdTo);
   const totalPages = Math.max(1, Math.ceil(total / ORDERS_PAGE_SIZE));
 
   const clearFilters = () => {
@@ -109,6 +193,31 @@ export default function OrdersPage() {
     setLeadTypeFilter('all');
     setSearchQuery('');
     setSearchApplied('');
+    setCreatedFrom('');
+    setCreatedTo('');
+    setSortBy('created');
+    setSortDir('desc');
+  };
+
+  const handleSort = (column: OrdersSortBy) => {
+    if (sortBy === column) {
+      setSortDir((dir) => (dir === 'desc' ? 'asc' : 'desc'));
+      return;
+    }
+    setSortBy(column);
+    setSortDir('desc');
+  };
+
+  const handleDownloadPdf = async () => {
+    try {
+      setDownloadingPdf(true);
+      await downloadOrdersPdf(listQuery);
+    } catch (error: unknown) {
+      toast.error('Failed to download PDF');
+      if (axios.isAxiosError(error) && error.response?.status === 401) router.push('/login');
+    } finally {
+      setDownloadingPdf(false);
+    }
   };
 
   if (loading && orders.length === 0 && total === 0) {
@@ -127,7 +236,7 @@ export default function OrdersPage() {
         <h1 className="text-3xl font-semibold mb-6">Orders</h1>
 
         {(total > 0 || filtersActive) && (
-          <div className="flex flex-col md:flex-row gap-4 mb-6">
+          <div className="flex flex-col lg:flex-row flex-wrap gap-4 mb-6 items-end">
             <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as OrderStatusFilter)}>
               <SelectTrigger className="w-full md:w-[200px]">
                 <SelectValue placeholder="Status" />
@@ -153,12 +262,41 @@ export default function OrdersPage() {
                 <SelectItem value="unknown">Unknown / not set</SelectItem>
               </SelectContent>
             </Select>
+            <div className="w-full md:w-auto">
+              <p className="mb-1 text-xs text-muted-foreground">Created from</p>
+              <Input
+                type="date"
+                value={createdFrom}
+                onChange={(e) => setCreatedFrom(e.target.value)}
+                className="w-full md:w-[160px]"
+              />
+            </div>
+            <div className="w-full md:w-auto">
+              <p className="mb-1 text-xs text-muted-foreground">Created to</p>
+              <Input
+                type="date"
+                value={createdTo}
+                onChange={(e) => setCreatedTo(e.target.value)}
+                className="w-full md:w-[160px]"
+              />
+            </div>
             <Input
               placeholder="Search by order # or customer..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full md:w-[260px]"
             />
+            <Button
+              variant="outline"
+              size="sm"
+              className="mb-0.5"
+              disabled={total === 0 || downloadingPdf}
+              title={total === 0 ? 'No orders to export' : 'Download matching orders as PDF'}
+              onClick={handleDownloadPdf}
+            >
+              <FileDown className="h-4 w-4 mr-1" />
+              {downloadingPdf ? 'Downloading…' : 'Download PDF'}
+            </Button>
           </div>
         )}
 
@@ -190,13 +328,15 @@ export default function OrdersPage() {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b bg-muted/50">
-                      <th className="text-left p-3 font-medium">Order #</th>
-                      <th className="text-left p-3 font-medium">Customer</th>
-                      <th className="text-left p-3 font-medium">Lead type</th>
-                      <th className="text-left p-3 font-medium">Total</th>
+                      <SortHeader label="Order #" column="order_number" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
+                      <SortHeader label="Customer" column="customer" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
+                      <SortHeader label="Customer since" column="customer_since" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
+                      <SortHeader label="Lead type" column="lead_type" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
+                      <SortHeader label="Lead source" column="lead_source" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
+                      <SortHeader label="Total" column="total" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
                       <th className="text-left p-3 font-medium">Status</th>
-                      <th className="text-left p-3 font-medium">Install booked</th>
-                      <th className="text-left p-3 font-medium">Created</th>
+                      <SortHeader label="Install booked" column="install_booked" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
+                      <SortHeader label="Created" column="created" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
                       <th className="text-right p-3 font-medium">Quote</th>
                     </tr>
                   </thead>
@@ -214,6 +354,7 @@ export default function OrdersPage() {
                             {order.is_ninox_origin && <NinoxBadge className="h-auto px-1.5 py-0.5 text-xs" />}
                           </span>
                         </td>
+                        <td className="p-3 text-muted-foreground">{formatDate(order.customer_since)}</td>
                         <td className="p-3">
                           {getDisplayLeadType(order.lead_type) ? (
                             <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
@@ -223,6 +364,7 @@ export default function OrdersPage() {
                             <span className="text-muted-foreground text-sm">—</span>
                           )}
                         </td>
+                        <td className="p-3 text-muted-foreground text-sm">{formatLeadSource(order.lead_source)}</td>
                         <td className="p-3 font-semibold">
                           {formatCurrency(order.total_amount, order.currency)}
                         </td>
@@ -255,12 +397,10 @@ export default function OrdersPage() {
                           </div>
                         </td>
                         <td className="p-3 text-muted-foreground">
-                          {order.installation_scheduled_at
-                            ? new Date(order.installation_scheduled_at).toLocaleDateString('en-GB')
-                            : '—'}
+                          {formatDate(order.installation_scheduled_at)}
                         </td>
                         <td className="p-3 text-muted-foreground">
-                          {new Date(order.created_at).toLocaleDateString('en-GB')}
+                          {formatDate(order.created_at)}
                         </td>
                         <td className="p-3 text-right" onClick={(e) => e.stopPropagation()}>
                           <Button

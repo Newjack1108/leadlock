@@ -2262,6 +2262,8 @@ class OrderResponse(BaseModel):
     customer_id: Optional[int] = None
     customer_name: Optional[str] = None
     lead_type: Optional[LeadType] = None
+    lead_source: Optional[LeadSource] = None
+    customer_since: Optional[datetime] = None
     order_number: str
     subtotal: Decimal
     discount_total: Decimal

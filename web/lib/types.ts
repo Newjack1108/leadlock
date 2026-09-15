@@ -1408,6 +1408,8 @@ export interface Order {
   customer_id?: number | null;
   customer_name?: string | null;
   lead_type?: LeadType | null;
+  lead_source?: LeadSource | null;
+  customer_since?: string | null;
   order_number: string;
   subtotal: number;
   discount_total: number;

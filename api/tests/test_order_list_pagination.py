@@ -13,7 +13,7 @@ from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
 
 from app.database import get_session
-from app.models import Customer, Lead, LeadType, Order, Quote, QuoteStatus, User, UserRole
+from app.models import Customer, Lead, LeadSource, LeadType, Order, Quote, QuoteStatus, User, UserRole
 from app.routers import orders as orders_router
 
 
@@ -74,18 +74,23 @@ def _seed_order(
     deposit_paid: bool = False,
     installation_booked: bool = False,
     lead_type: LeadType | None = None,
+    lead_source: LeadSource | None = None,
+    customer_since: datetime | None = None,
+    total_amount: Decimal | None = None,
     created_at: datetime | None = None,
 ) -> int:
     with Session(sqlite_engine) as session:
         user = session.exec(select(User).where(User.email == "order-list@example.com")).first()
         assert user is not None
 
+        amount = total_amount if total_amount is not None else Decimal("100.00")
         lead_id = None
-        if lead_type is not None:
+        if lead_type is not None or lead_source is not None:
             lead = Lead(
                 name=f"Lead {suffix}",
                 email=f"lead-{suffix}@example.com",
-                lead_type=lead_type,
+                lead_type=lead_type or LeadType.UNKNOWN,
+                lead_source=lead_source or LeadSource.UNKNOWN,
             )
             session.add(lead)
             session.commit()
@@ -96,6 +101,7 @@ def _seed_order(
             customer_number=f"CUST-ORD-{suffix}",
             name=customer_name,
             email=f"cust-{suffix}@example.com",
+            customer_since=customer_since or datetime.utcnow(),
         )
         session.add(customer)
         session.commit()
@@ -106,9 +112,9 @@ def _seed_order(
             lead_id=lead_id,
             quote_number=f"QT-ORD-{suffix}",
             status=QuoteStatus.ACCEPTED,
-            subtotal=Decimal("100.00"),
+            subtotal=amount,
             discount_total=Decimal("0.00"),
-            total_amount=Decimal("100.00"),
+            total_amount=amount,
             deposit_amount=Decimal("60.00"),
             balance_amount=Decimal("40.00"),
             created_by_id=user.id,
@@ -122,9 +128,9 @@ def _seed_order(
             quote_id=quote.id,
             customer_id=customer.id,
             order_number=f"ORD-TEST-{suffix}",
-            subtotal=Decimal("100.00"),
+            subtotal=amount,
             discount_total=Decimal("0.00"),
-            total_amount=Decimal("100.00"),
+            total_amount=amount,
             deposit_amount=Decimal("60.00"),
             balance_amount=Decimal("40.00"),
             created_by_id=user.id,
@@ -146,6 +152,8 @@ def seeded_orders(sqlite_engine):
             sqlite_engine,
             "newest",
             customer_name="Alpha Customer",
+            total_amount=Decimal("300.00"),
+            customer_since=datetime(2024, 1, 15),
             created_at=base,
         ),
         _seed_order(
@@ -154,6 +162,9 @@ def seeded_orders(sqlite_engine):
             customer_name="Beta Customer",
             deposit_paid=True,
             lead_type=LeadType.STABLES,
+            lead_source=LeadSource.FACEBOOK,
+            total_amount=Decimal("100.00"),
+            customer_since=datetime(2023, 6, 1),
             created_at=base - timedelta(hours=1),
         ),
         _seed_order(
@@ -162,6 +173,9 @@ def seeded_orders(sqlite_engine):
             customer_name="Gamma Searchable",
             installation_booked=True,
             lead_type=LeadType.CABINS,
+            lead_source=LeadSource.REFERRAL,
+            total_amount=Decimal("200.00"),
+            customer_since=datetime(2022, 3, 20),
             created_at=base - timedelta(hours=2),
         ),
     ]
@@ -218,3 +232,82 @@ def test_order_list_lead_type_filter(api_client, seeded_orders):
     assert r2.status_code == 200
     assert r2.json()["total"] == 1
     assert r2.json()["items"][0]["order_number"] == "ORD-TEST-newest"
+
+
+def test_order_list_includes_lead_source_and_customer_since(api_client, seeded_orders):
+    r = api_client.get("/api/orders")
+    assert r.status_code == 200
+    by_number = {item["order_number"]: item for item in r.json()["items"]}
+
+    newest = by_number["ORD-TEST-newest"]
+    assert newest["lead_source"] is None
+    assert newest["customer_since"].startswith("2024-01-15")
+
+    middle = by_number["ORD-TEST-middle"]
+    assert middle["lead_source"] == "FACEBOOK"
+    assert middle["customer_since"].startswith("2023-06-01")
+
+
+def test_order_list_created_from_to_filters_by_created_at(api_client, seeded_orders):
+    today = datetime.utcnow().date().isoformat()
+    r = api_client.get("/api/orders", params={"created_from": today, "created_to": today})
+    assert r.status_code == 200
+    assert r.json()["total"] == 3
+
+    r2 = api_client.get(
+        "/api/orders",
+        params={"created_from": "2020-01-01", "created_to": "2020-01-02"},
+    )
+    assert r2.status_code == 200
+    assert r2.json()["total"] == 0
+    assert r2.json()["items"] == []
+
+
+def test_order_list_created_to_before_from_returns_400(api_client, seeded_orders):
+    r = api_client.get(
+        "/api/orders",
+        params={"created_from": "2024-06-01", "created_to": "2024-01-01"},
+    )
+    assert r.status_code == 400
+
+
+def test_order_list_sort_by_total_asc(api_client, seeded_orders):
+    r = api_client.get("/api/orders", params={"sort_by": "total", "sort_dir": "asc"})
+    assert r.status_code == 200
+    numbers = [item["order_number"] for item in r.json()["items"]]
+    assert numbers == ["ORD-TEST-middle", "ORD-TEST-oldest", "ORD-TEST-newest"]
+
+
+def test_order_list_invalid_sort_by_returns_422(api_client, seeded_orders):
+    r = api_client.get("/api/orders", params={"sort_by": "nope"})
+    assert r.status_code == 422
+
+
+def test_order_list_export_pdf(api_client, seeded_orders):
+    r = api_client.get("/api/orders/export.pdf")
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("application/pdf")
+    assert r.content.startswith(b"%PDF")
+    assert 'filename="orders-' in (r.headers.get("content-disposition") or "")
+
+    empty = api_client.get(
+        "/api/orders/export.pdf",
+        params={"created_from": "2020-01-01", "created_to": "2020-01-02"},
+    )
+    assert empty.status_code == 200
+    assert empty.content.startswith(b"%PDF")
+
+    filtered = api_client.get(
+        "/api/orders/export.pdf",
+        params={"status": "deposit_paid", "sort_by": "total", "sort_dir": "asc"},
+    )
+    assert filtered.status_code == 200
+    assert filtered.content.startswith(b"%PDF")
+
+
+def test_order_list_export_pdf_inverted_range_returns_400(api_client, seeded_orders):
+    r = api_client.get(
+        "/api/orders/export.pdf",
+        params={"created_from": "2024-06-01", "created_to": "2024-01-01"},
+    )
+    assert r.status_code == 400

@@ -4,13 +4,13 @@ import re
 import secrets
 import uuid
 from html import escape
-from datetime import date, datetime
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from fastapi.responses import Response
 from sqlmodel import Session, select
 from typing import List, Literal, Optional
-from sqlalchemy import and_, func, or_, true
+from sqlalchemy import and_, case, func, or_, true
 import httpx
 from app.database import get_session
 from app.models import (
@@ -44,7 +44,7 @@ from app.delivery_location import (
 )
 from app.constants import LIST_PAGE_SIZE_DEFAULT, LIST_PAGE_SIZE_MAX
 from app.delivery_install_amount import sum_delivery_install_ex_vat
-from app.order_payment import reconcile_payment_flags_from_update
+from app.order_payment import is_deposit_paid, is_paid_in_full, reconcile_payment_flags_from_update
 from app.order_route_metrics import resolve_order_route_metrics
 from app.schemas import (
     OrderResponse,
@@ -69,6 +69,7 @@ from app.review_request_service import (
 from app.models import Reminder, ReminderType
 from app.models import User
 from app.invoice_pdf_service import generate_deposit_paid_invoice_pdf, generate_paid_in_full_invoice_pdf
+from app.report_pdf_service import generate_orders_list_pdf
 from app.make_xero_service import push_order_invoice_to_make
 from app.order_delete import delete_order_cascade
 from app.order_audit import record_order_audit_event
@@ -254,6 +255,8 @@ def build_order_list_response(
     """Lightweight order row for GET /api/orders (no line items or per-row DB queries)."""
     customer_name = customer.name if customer else None
     lead_type = lead.lead_type if lead else None
+    lead_source = lead.lead_source if lead else None
+    customer_since = customer.customer_since if customer else None
     is_ninox_origin = customer is not None and customer.source_system == "Ninox"
     access_sheet = None
     if access_req:
@@ -269,6 +272,8 @@ def build_order_list_response(
         customer_id=order.customer_id,
         customer_name=customer_name,
         lead_type=lead_type,
+        lead_source=lead_source,
+        customer_since=customer_since,
         order_number=order.order_number,
         subtotal=order.subtotal,
         discount_total=order.discount_total,
@@ -355,17 +360,22 @@ def build_order_response(order: Order, order_items: List[OrderItem], session: Se
     """Build OrderResponse with items and optional customer_name."""
     customer_name = None
     customer_source_system = None
+    customer_since = None
     lead_type = None
+    lead_source = None
     if order.customer_id:
         customer = session.exec(select(Customer).where(Customer.id == order.customer_id)).first()
         if customer:
             customer_name = customer.name
             customer_source_system = customer.source_system
+            customer_since = customer.customer_since
 
     quote = session.exec(select(Quote).where(Quote.id == order.quote_id)).first()
     if quote and quote.lead_id:
         lead = session.exec(select(Lead).where(Lead.id == quote.lead_id)).first()
-        lead_type = lead.lead_type if lead else None
+        if lead:
+            lead_type = lead.lead_type
+            lead_source = lead.lead_source
     is_ninox_origin = customer_source_system == "Ninox"
 
     access_sheet = _build_access_sheet_response(order.id, session)
@@ -381,6 +391,8 @@ def build_order_response(order: Order, order_items: List[OrderItem], session: Se
         customer_id=order.customer_id,
         customer_name=customer_name,
         lead_type=lead_type,
+        lead_source=lead_source,
+        customer_since=customer_since,
         order_number=order.order_number,
         subtotal=order.subtotal,
         discount_total=order.discount_total,
@@ -444,6 +456,29 @@ def build_order_response(order: Order, order_items: List[OrderItem], session: Se
 OrderListStatusFilter = Literal[
     "new", "deposit_paid", "installation_booked", "installation_completed", "completed", "all"
 ]
+OrderListSortBy = Literal[
+    "order_number",
+    "customer",
+    "customer_since",
+    "lead_type",
+    "lead_source",
+    "total",
+    "install_booked",
+    "created",
+]
+OrderListSortDir = Literal["asc", "desc"]
+
+ORDER_LIST_SORT_COLUMNS = {
+    "order_number": Order.order_number,
+    "customer": Customer.name,
+    "customer_since": Customer.customer_since,
+    "lead_type": Lead.lead_type,
+    "lead_source": Lead.lead_source,
+    "total": Order.total_amount,
+    "install_booked": Order.installation_scheduled_at,
+    "created": Order.created_at,
+}
+ORDER_LIST_EXPORT_MAX_ROWS = 2000
 
 
 def _order_list_joins():
@@ -479,17 +514,26 @@ def _order_status_condition(status: OrderListStatusFilter):
     return None
 
 
-@router.get("", response_model=OrderListResponse)
-async def list_orders(
-    search: Optional[str] = Query(None),
-    status: Optional[OrderListStatusFilter] = Query(None),
-    lead_type: Optional[str] = Query(None, alias="lead_type"),
-    page: int = Query(1, ge=1),
-    page_size: int = Query(LIST_PAGE_SIZE_DEFAULT, ge=1, le=LIST_PAGE_SIZE_MAX),
-    session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+def _parse_created_date_bound(value: Optional[str], *, param_name: str) -> Optional[date]:
+    if value is None or not str(value).strip():
+        return None
+    try:
+        return date.fromisoformat(str(value).strip())
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{param_name} must use YYYY-MM-DD format",
+        ) from exc
+
+
+def _order_list_where_clause(
+    *,
+    search: Optional[str] = None,
+    status: Optional[OrderListStatusFilter] = None,
+    lead_type: Optional[str] = None,
+    created_from: Optional[str] = None,
+    created_to: Optional[str] = None,
 ):
-    """Paginated orders (newest first)."""
     conditions = []
 
     if status and status != "all":
@@ -521,8 +565,27 @@ async def list_orders(
             )
         )
 
-    where_clause = and_(*conditions) if conditions else true()
+    from_day = _parse_created_date_bound(created_from, param_name="created_from")
+    to_day = _parse_created_date_bound(created_to, param_name="created_to")
+    if from_day is not None and to_day is not None and to_day < from_day:
+        raise HTTPException(status_code=400, detail="created_to must be on or after created_from")
+    if from_day is not None:
+        conditions.append(Order.created_at >= datetime.combine(from_day, time.min))
+    if to_day is not None:
+        conditions.append(Order.created_at < datetime.combine(to_day + timedelta(days=1), time.min))
 
+    return and_(*conditions) if conditions else true()
+
+
+def _order_list_order_by(sort_by: OrderListSortBy, sort_dir: OrderListSortDir):
+    column = ORDER_LIST_SORT_COLUMNS[sort_by]
+    nulls_last_key = case((column.is_(None), 1), else_=0)
+    primary = column.asc() if sort_dir == "asc" else column.desc()
+    tie = Order.id.asc() if sort_dir == "asc" else Order.id.desc()
+    return [nulls_last_key, primary, tie]
+
+
+def _count_matching_orders(session: Session, where_clause) -> int:
     count_stmt = (
         select(func.count(Order.id))
         .select_from(Order)
@@ -532,16 +595,95 @@ async def list_orders(
         .where(where_clause)
     )
     _total_row = session.exec(count_stmt).one()
-    total = int(_total_row[0]) if isinstance(_total_row, (tuple, list)) else int(_total_row)
+    return int(_total_row[0]) if isinstance(_total_row, (tuple, list)) else int(_total_row)
 
+
+def _fetch_matching_orders(
+    session: Session,
+    where_clause,
+    *,
+    sort_by: OrderListSortBy,
+    sort_dir: OrderListSortDir,
+    offset: Optional[int] = None,
+    limit: Optional[int] = None,
+) -> list[Order]:
     statement = (
         _order_list_joins()
         .where(where_clause)
-        .order_by(Order.created_at.desc())
-        .offset((page - 1) * page_size)
-        .limit(page_size)
+        .order_by(*_order_list_order_by(sort_by, sort_dir))
     )
-    orders = list(session.exec(statement).all())
+    if offset:
+        statement = statement.offset(offset)
+    if limit is not None:
+        statement = statement.limit(limit)
+    return list(session.exec(statement).all())
+
+
+def _enum_display(value) -> Optional[str]:
+    if value is None:
+        return None
+    raw = value.value if hasattr(value, "value") else str(value)
+    if raw in ("UNKNOWN", "unknown"):
+        return None
+    return raw.replace("_", " ")
+
+
+def _order_list_status_label(order: Order) -> str:
+    parts: list[str] = []
+    if is_deposit_paid(
+        deposit_paid=bool(order.deposit_paid),
+        balance_paid=bool(order.balance_paid),
+        paid_in_full=bool(order.paid_in_full),
+    ):
+        parts.append("Deposit paid")
+    if is_paid_in_full(balance_paid=bool(order.balance_paid), paid_in_full=bool(order.paid_in_full)):
+        parts.append("Paid in full")
+    if order.installation_booked:
+        parts.append("Inst. booked")
+    if order.installation_completed:
+        parts.append("Inst. done")
+    return ", ".join(parts) if parts else "—"
+
+
+def _orders_pdf_filename(*, created_from: Optional[str], created_to: Optional[str]) -> str:
+    from_part = (created_from or "").strip()
+    to_part = (created_to or "").strip()
+    if from_part and to_part:
+        return f"orders-{from_part}-to-{to_part}.pdf"
+    return f"orders-{date.today().isoformat()}.pdf"
+
+
+@router.get("", response_model=OrderListResponse)
+async def list_orders(
+    search: Optional[str] = Query(None),
+    status: Optional[OrderListStatusFilter] = Query(None),
+    lead_type: Optional[str] = Query(None, alias="lead_type"),
+    created_from: Optional[str] = Query(None, description="Filter by created_at start date (YYYY-MM-DD)."),
+    created_to: Optional[str] = Query(None, description="Filter by created_at end date (YYYY-MM-DD)."),
+    sort_by: OrderListSortBy = Query("created"),
+    sort_dir: OrderListSortDir = Query("desc"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(LIST_PAGE_SIZE_DEFAULT, ge=1, le=LIST_PAGE_SIZE_MAX),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Paginated orders (newest first by default)."""
+    where_clause = _order_list_where_clause(
+        search=search,
+        status=status,
+        lead_type=lead_type,
+        created_from=created_from,
+        created_to=created_to,
+    )
+    total = _count_matching_orders(session, where_clause)
+    orders = _fetch_matching_orders(
+        session,
+        where_clause,
+        sort_by=sort_by,
+        sort_dir=sort_dir,
+        offset=(page - 1) * page_size,
+        limit=page_size,
+    )
     customers_by_id, quotes_by_id, leads_by_id, access_by_order = _batch_order_list_lookups(
         session, orders
     )
@@ -564,6 +706,92 @@ async def list_orders(
         )
 
     return OrderListResponse(items=result, total=total, page=page, page_size=page_size)
+
+
+@router.get("/export.pdf")
+async def export_orders_pdf(
+    search: Optional[str] = Query(None),
+    status: Optional[OrderListStatusFilter] = Query(None),
+    lead_type: Optional[str] = Query(None, alias="lead_type"),
+    created_from: Optional[str] = Query(None, description="Filter by created_at start date (YYYY-MM-DD)."),
+    created_to: Optional[str] = Query(None, description="Filter by created_at end date (YYYY-MM-DD)."),
+    sort_by: OrderListSortBy = Query("created"),
+    sort_dir: OrderListSortDir = Query("desc"),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Download matching orders as a PDF (same filters/sort as the list, no pagination)."""
+    where_clause = _order_list_where_clause(
+        search=search,
+        status=status,
+        lead_type=lead_type,
+        created_from=created_from,
+        created_to=created_to,
+    )
+    total = _count_matching_orders(session, where_clause)
+    orders = _fetch_matching_orders(
+        session,
+        where_clause,
+        sort_by=sort_by,
+        sort_dir=sort_dir,
+        limit=ORDER_LIST_EXPORT_MAX_ROWS,
+    )
+    customers_by_id, quotes_by_id, leads_by_id, _access_by_order = _batch_order_list_lookups(
+        session, orders
+    )
+
+    rows = []
+    for order in orders:
+        customer = customers_by_id.get(order.customer_id) if order.customer_id else None
+        quote = quotes_by_id.get(order.quote_id) if order.quote_id else None
+        lead = leads_by_id.get(quote.lead_id) if quote and quote.lead_id else None
+        rows.append(
+            {
+                "order_number": order.order_number,
+                "customer_name": customer.name if customer else None,
+                "lead_type": _enum_display(lead.lead_type if lead else None),
+                "lead_source": _enum_display(lead.lead_source if lead else None),
+                "customer_since": customer.customer_since if customer else None,
+                "total_amount": float(order.total_amount or 0),
+                "currency": order.currency or "GBP",
+                "status": _order_list_status_label(order),
+                "created_at": order.created_at,
+            }
+        )
+
+    company_settings = session.exec(select(CompanySettings).limit(1)).first()
+    company_name = (
+        (company_settings.trading_name or company_settings.company_name or "LeadLock")
+        if company_settings
+        else "LeadLock"
+    )
+    try:
+        buffer = generate_orders_list_pdf(
+            {
+                "rows": rows,
+                "total": total,
+                "included": len(rows),
+                "created_from": (created_from or "").strip() or None,
+                "created_to": (created_to or "").strip() or None,
+                "status": status,
+                "lead_type": lead_type,
+                "search": (search or "").strip() or None,
+                "sort_by": sort_by,
+                "sort_dir": sort_dir,
+            },
+            company_name,
+            company_settings=company_settings,
+        )
+        pdf_content = buffer.read()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating PDF: {str(e)}") from e
+
+    filename = _orders_pdf_filename(created_from=created_from, created_to=created_to)
+    return Response(
+        content=pdf_content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/{order_id}", response_model=OrderResponse)
