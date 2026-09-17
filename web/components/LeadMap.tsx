@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet';
-import type { DashboardPresetPeriod, LeadLocationItem } from '@/lib/types';
-import { getLeadLocations } from '@/lib/api';
+import type { DashboardPresetPeriod, DateRangeQueryParams, LeadLocationItem } from '@/lib/types';
+import { getLeadLocations, getOrderLocations } from '@/lib/api';
 import {
   Dialog,
   DialogContent,
@@ -25,17 +25,24 @@ const PERIODS: { value: DatePeriod; label: string }[] = [
   { value: 'year', label: 'Year' },
 ];
 
-function MapMarkers({ locations }: { locations: LeadLocationItem[] }) {
+function MapMarkers({
+  locations,
+  kind,
+}: {
+  locations: LeadLocationItem[];
+  kind: 'lead' | 'order';
+}) {
+  const isLead = kind === 'lead';
   return (
     <>
       {locations.map((loc, i) => (
         <CircleMarker
-          key={`${loc.postcode}-${i}`}
+          key={`${kind}-${loc.postcode}-${i}`}
           center={[loc.lat, loc.lng]}
           radius={6}
           pathOptions={{
-            fillColor: '#22c55e',
-            color: '#16a34a',
+            fillColor: isLead ? '#22c55e' : '#3b82f6',
+            color: isLead ? '#16a34a' : '#2563eb',
             weight: 1,
             fillOpacity: 1,
             opacity: 1,
@@ -45,7 +52,8 @@ function MapMarkers({ locations }: { locations: LeadLocationItem[] }) {
             <span className="font-medium">{loc.postcode}</span>
             <br />
             <span className="text-muted-foreground">
-              {loc.count} lead{loc.count !== 1 ? 's' : ''}
+              {loc.count} {isLead ? 'lead' : 'order'}
+              {loc.count !== 1 ? 's' : ''}
             </span>
           </Popup>
         </CircleMarker>
@@ -58,15 +66,55 @@ interface LeadMapProps {
   locations: LeadLocationItem[];
   loading?: boolean;
   period?: LeadMapPeriod;
+  /** Used when fetching order locations for the current dashboard filter (incl. custom range). */
+  dateRange?: DateRangeQueryParams;
   periodLabel?: string;
   height?: number;
 }
 
-export default function LeadMap({ locations, loading = false, period = 'all', periodLabel, height = 300 }: LeadMapProps) {
+export default function LeadMap({
+  locations,
+  loading = false,
+  period = 'all',
+  dateRange,
+  periodLabel,
+  height = 300,
+}: LeadMapProps) {
   const [expanded, setExpanded] = useState(false);
   const [modalPeriod, setModalPeriod] = useState<LeadMapPeriod>(period);
   const [modalLocations, setModalLocations] = useState<LeadLocationItem[]>(locations);
   const [modalLoading, setModalLoading] = useState(false);
+  const [showOrders, setShowOrders] = useState(false);
+  const [orderLocations, setOrderLocations] = useState<LeadLocationItem[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+
+  const orderFilterForPeriod = useCallback(
+    (activePeriod: LeadMapPeriod): DateRangeQueryParams => {
+      if (activePeriod === 'custom') {
+        if (dateRange?.start_date && dateRange?.end_date) {
+          return { start_date: dateRange.start_date, end_date: dateRange.end_date };
+        }
+        return { period: 'all' };
+      }
+      return { period: activePeriod };
+    },
+    [dateRange]
+  );
+
+  const fetchOrderLocations = useCallback(
+    async (activePeriod: LeadMapPeriod) => {
+      setOrdersLoading(true);
+      try {
+        const res = await getOrderLocations(orderFilterForPeriod(activePeriod));
+        setOrderLocations(Array.isArray(res) ? res : []);
+      } catch {
+        setOrderLocations([]);
+      } finally {
+        setOrdersLoading(false);
+      }
+    },
+    [orderFilterForPeriod]
+  );
 
   // Sync modal period when opening with dashboard period
   useEffect(() => {
@@ -75,6 +123,13 @@ export default function LeadMap({ locations, loading = false, period = 'all', pe
       setModalLocations(locations);
     }
   }, [expanded, period, locations]);
+
+  // Fetch order locations when toggle is on or period changes while on
+  useEffect(() => {
+    if (!showOrders) return;
+    const activePeriod = expanded ? modalPeriod : period;
+    void fetchOrderLocations(activePeriod);
+  }, [showOrders, expanded, modalPeriod, period, fetchOrderLocations]);
 
   const handlePeriodChange = async (newPeriod: DatePeriod) => {
     setModalPeriod(newPeriod);
@@ -89,6 +144,17 @@ export default function LeadMap({ locations, loading = false, period = 'all', pe
     }
   };
 
+  const handleToggleOrders = () => {
+    setShowOrders((prev) => !prev);
+  };
+
+  const hasLeadMarkers = locations && locations.length > 0;
+  const hasOrderMarkers = showOrders && orderLocations.length > 0;
+  const showEmpty =
+    !loading &&
+    !hasLeadMarkers &&
+    !(showOrders && (ordersLoading || hasOrderMarkers));
+
   if (loading) {
     return (
       <div className="flex items-center justify-center rounded-lg border border-border bg-muted/30" style={{ height }}>
@@ -97,18 +163,40 @@ export default function LeadMap({ locations, loading = false, period = 'all', pe
     );
   }
 
-  if (!locations || locations.length === 0) {
+  if (showEmpty) {
     return (
-      <div className="flex flex-col items-center justify-center gap-1 rounded-lg border border-border bg-muted/30 px-4 text-center" style={{ height }}>
+      <div className="relative flex flex-col items-center justify-center gap-1 rounded-lg border border-border bg-muted/30 px-4 text-center" style={{ height }}>
         <p className="text-sm text-muted-foreground">
           No leads with postcodes in this period
         </p>
         <p className="text-xs text-muted-foreground">
           Add postcodes to leads or customers to see them on the map. Try &quot;All&quot; for all-time.
         </p>
+        <Button
+          variant={showOrders ? 'default' : 'secondary'}
+          size="sm"
+          className="absolute top-2 left-2 z-[1000] shadow-md"
+          onClick={handleToggleOrders}
+          type="button"
+        >
+          {showOrders ? 'Hide orders' : 'Show orders'}
+        </Button>
       </div>
     );
   }
+
+  const ordersToggle = (
+    <Button
+      variant={showOrders ? 'default' : 'secondary'}
+      size="sm"
+      className="absolute top-2 left-2 z-[1000] shadow-md"
+      onClick={handleToggleOrders}
+      type="button"
+      disabled={ordersLoading}
+    >
+      {ordersLoading ? 'Loading…' : showOrders ? 'Hide orders' : 'Show orders'}
+    </Button>
+  );
 
   return (
     <>
@@ -129,8 +217,10 @@ export default function LeadMap({ locations, loading = false, period = 'all', pe
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
-          <MapMarkers locations={locations} />
+          {hasLeadMarkers && <MapMarkers locations={locations} kind="lead" />}
+          {hasOrderMarkers && <MapMarkers locations={orderLocations} kind="order" />}
         </MapContainer>
+        {ordersToggle}
         <Button
           variant="secondary"
           size="sm"
@@ -147,7 +237,7 @@ export default function LeadMap({ locations, loading = false, period = 'all', pe
         <DialogContent className="max-w-6xl w-[90vw] h-[85vh] flex flex-col gap-4 p-0">
           <DialogHeader className="px-6 pt-6 pb-0">
             <DialogTitle>Lead Locations</DialogTitle>
-            <div className="flex flex-wrap gap-2 pt-2">
+            <div className="flex flex-wrap items-center gap-2 pt-2">
               {modalPeriod === 'custom' && (
                 <Button variant="default" size="sm" disabled type="button">
                   Custom
@@ -165,9 +255,23 @@ export default function LeadMap({ locations, loading = false, period = 'all', pe
                   {p.label}
                 </Button>
               ))}
+              <Button
+                variant={showOrders ? 'default' : 'outline'}
+                size="sm"
+                onClick={handleToggleOrders}
+                disabled={ordersLoading}
+                type="button"
+              >
+                {ordersLoading ? 'Loading…' : showOrders ? 'Hide orders' : 'Show orders'}
+              </Button>
             </div>
             {modalPeriod === 'custom' && periodLabel && (
               <p className="pt-2 text-sm text-muted-foreground">Showing: {periodLabel}</p>
+            )}
+            {showOrders && (
+              <p className="pt-1 text-xs text-muted-foreground">
+                Green = leads · Blue = accepted orders
+              </p>
             )}
           </DialogHeader>
           <div className="flex-1 min-h-0 px-6 pb-6">
@@ -175,10 +279,11 @@ export default function LeadMap({ locations, loading = false, period = 'all', pe
               <div className="flex h-full min-h-[400px] items-center justify-center rounded-lg border border-border bg-muted/30">
                 <p className="text-sm text-muted-foreground">Loading map...</p>
               </div>
-            ) : !modalLocations || modalLocations.length === 0 ? (
+            ) : (!modalLocations || modalLocations.length === 0) &&
+              !(showOrders && orderLocations.length > 0) ? (
               <div className="flex h-full min-h-[400px] flex-col items-center justify-center gap-1 rounded-lg border border-border bg-muted/30 px-4 text-center">
                 <p className="text-sm text-muted-foreground">
-                  No leads with postcodes in this period
+                  No locations with postcodes in this period
                 </p>
               </div>
             ) : (
@@ -194,7 +299,12 @@ export default function LeadMap({ locations, loading = false, period = 'all', pe
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                   />
-                  <MapMarkers locations={modalLocations} />
+                  {modalLocations && modalLocations.length > 0 && (
+                    <MapMarkers locations={modalLocations} kind="lead" />
+                  )}
+                  {showOrders && orderLocations.length > 0 && (
+                    <MapMarkers locations={orderLocations} kind="order" />
+                  )}
                 </MapContainer>
               </div>
             )}

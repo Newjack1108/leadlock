@@ -401,7 +401,12 @@ export default function CloserDashboardPage() {
               {loadingPhase3 ? (
                 <div className="h-[200px] animate-pulse rounded bg-muted" />
               ) : (
-                <LeadMap locations={leadLocations} period={datePeriod} height={200} />
+                <LeadMap
+                  locations={leadLocations}
+                  period={datePeriod}
+                  dateRange={{ period: datePeriod }}
+                  height={200}
+                />
               )}
             </CardContent>
           </Card>

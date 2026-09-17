@@ -481,6 +481,12 @@ export const getLeadLocations = async (filter?: DateRangeQueryParams | Dashboard
   return response.data;
 };
 
+export const getOrderLocations = async (filter?: DateRangeQueryParams | DashboardPresetPeriod) => {
+  const params = buildDateRangeParams(filter);
+  const response = await api.get('/api/dashboard/order-locations', { params });
+  return response.data;
+};
+
 export const getDashboardCommunicationTotals = async (
   filter: DateRangeQueryParams = { period: 'week' }
 ): Promise<DashboardCommunicationTotals> => {

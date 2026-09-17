@@ -611,6 +611,7 @@ export default function DashboardPage() {
                 locations={leadLocations}
                 loading={loading}
                 period={dateFilter.mode === 'custom' ? 'custom' : dateFilter.period}
+                dateRange={activeDateParams}
                 periodLabel={activeRangeLabel}
               />
             </CardContent>

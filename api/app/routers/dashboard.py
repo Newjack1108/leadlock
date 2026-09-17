@@ -17,6 +17,7 @@ from app.models import (
     MessengerDirection,
     Email,
     EmailDirection,
+    Order,
     User,
     UserRole,
 )
@@ -29,6 +30,7 @@ from app.stats_exclusion import (
     customer_communication_counts_toward_stats,
     lead_counts_toward_stats,
     quote_counts_toward_stats,
+    test_customer_ids_subquery,
 )
 from app.schemas import (
     DashboardStats,
@@ -361,6 +363,85 @@ async def get_lead_locations(
             Customer.postcode != "",
             Customer.exclude_from_stats.is_(False),
             lead_counts_toward_stats(),
+        )
+        .group_by(Customer.postcode)
+    )
+    if date_filter is not None:
+        stmt2 = stmt2.where(date_filter)
+    rows2 = session.exec(stmt2).all()
+    for postcode, count in rows2:
+        pc = (postcode or "").strip()
+        if pc:
+            postcode_counts[pc] = postcode_counts.get(pc, 0) + count
+
+    if not postcode_counts:
+        return []
+
+    postcodes = list(postcode_counts.keys())
+    counts = [postcode_counts[pc] for pc in postcodes]
+    coords_list = bulk_geocode_postcodes(postcodes)
+    out = []
+    for i, coords in enumerate(coords_list):
+        if coords is not None:
+            out.append(
+                LeadLocationItem(
+                    lat=coords[0],
+                    lng=coords[1],
+                    postcode=postcodes[i],
+                    count=counts[i],
+                )
+            )
+    return out
+
+
+@router.get("/order-locations", response_model=list[LeadLocationItem])
+async def get_order_locations(
+    session: Session = Depends(get_session),
+    current_user = Depends(require_non_dealer_user),
+    period: Optional[str] = Query(None, description="Filter by period: all, week, month, quarter, year."),
+    start_date: Optional[str] = Query(None, description="Custom range start date (YYYY-MM-DD)."),
+    end_date: Optional[str] = Query(None, description="Custom range end date (YYYY-MM-DD)."),
+):
+    """Get geocoded accepted-order locations for dashboard map. Uses delivery postcode, or customer postcode when order has none."""
+    resolved_range = resolve_date_range(period=period, start_date=start_date, end_date=end_date, default_period="all")
+    date_filter = None
+    if resolved_range.period != "all":
+        date_filter = (Order.created_at >= resolved_range.start) & (Order.created_at <= resolved_range.end)
+
+    excluded_customers = test_customer_ids_subquery()
+    not_sandbox = or_(
+        Order.customer_id.is_(None),
+        Order.customer_id.notin_(excluded_customers),
+    )
+
+    # 1. Orders with delivery postcode
+    stmt = (
+        select(Order.delivery_postcode, func.count(Order.id).label("count"))
+        .where(
+            Order.delivery_postcode.isnot(None),
+            Order.delivery_postcode != "",
+            not_sandbox,
+        )
+        .group_by(Order.delivery_postcode)
+    )
+    if date_filter is not None:
+        stmt = stmt.where(date_filter)
+    rows = session.exec(stmt).all()
+    postcode_counts: dict[str, int] = {}
+    for postcode, count in rows:
+        pc = (postcode or "").strip()
+        if pc:
+            postcode_counts[pc] = postcode_counts.get(pc, 0) + count
+
+    # 2. Orders without delivery postcode but with customer that has postcode
+    stmt2 = (
+        select(Customer.postcode, func.count(Order.id).label("count"))
+        .join(Customer, Order.customer_id == Customer.id)
+        .where(
+            or_(Order.delivery_postcode.is_(None), Order.delivery_postcode == ""),
+            Customer.postcode.isnot(None),
+            Customer.postcode != "",
+            Customer.exclude_from_stats.is_(False),
         )
         .group_by(Customer.postcode)
     )
