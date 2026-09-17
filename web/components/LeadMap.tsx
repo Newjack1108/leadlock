@@ -84,6 +84,7 @@ export default function LeadMap({
   const [modalPeriod, setModalPeriod] = useState<LeadMapPeriod>(period);
   const [modalLocations, setModalLocations] = useState<LeadLocationItem[]>(locations);
   const [modalLoading, setModalLoading] = useState(false);
+  const [showLeads, setShowLeads] = useState(true);
   const [showOrders, setShowOrders] = useState(false);
   const [orderLocations, setOrderLocations] = useState<LeadLocationItem[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
@@ -144,16 +145,45 @@ export default function LeadMap({
     }
   };
 
+  const handleToggleLeads = () => {
+    setShowLeads((prev) => !prev);
+  };
+
   const handleToggleOrders = () => {
     setShowOrders((prev) => !prev);
   };
 
-  const hasLeadMarkers = locations && locations.length > 0;
+  const hasLeadData = locations && locations.length > 0;
+  const hasLeadMarkers = showLeads && hasLeadData;
   const hasOrderMarkers = showOrders && orderLocations.length > 0;
   const showEmpty =
     !loading &&
-    !hasLeadMarkers &&
+    !hasLeadData &&
     !(showOrders && (ordersLoading || hasOrderMarkers));
+
+  const layerToggles = (
+    <div className="absolute top-2 left-2 z-[1000] flex flex-wrap gap-1.5">
+      <Button
+        variant={showLeads ? 'default' : 'secondary'}
+        size="sm"
+        className="shadow-md"
+        onClick={handleToggleLeads}
+        type="button"
+      >
+        {showLeads ? 'Hide leads' : 'Show leads'}
+      </Button>
+      <Button
+        variant={showOrders ? 'default' : 'secondary'}
+        size="sm"
+        className="shadow-md"
+        onClick={handleToggleOrders}
+        type="button"
+        disabled={ordersLoading}
+      >
+        {ordersLoading ? 'Loading…' : showOrders ? 'Hide orders' : 'Show orders'}
+      </Button>
+    </div>
+  );
 
   if (loading) {
     return (
@@ -172,31 +202,10 @@ export default function LeadMap({
         <p className="text-xs text-muted-foreground">
           Add postcodes to leads or customers to see them on the map. Try &quot;All&quot; for all-time.
         </p>
-        <Button
-          variant={showOrders ? 'default' : 'secondary'}
-          size="sm"
-          className="absolute top-2 left-2 z-[1000] shadow-md"
-          onClick={handleToggleOrders}
-          type="button"
-        >
-          {showOrders ? 'Hide orders' : 'Show orders'}
-        </Button>
+        {layerToggles}
       </div>
     );
   }
-
-  const ordersToggle = (
-    <Button
-      variant={showOrders ? 'default' : 'secondary'}
-      size="sm"
-      className="absolute top-2 left-2 z-[1000] shadow-md"
-      onClick={handleToggleOrders}
-      type="button"
-      disabled={ordersLoading}
-    >
-      {ordersLoading ? 'Loading…' : showOrders ? 'Hide orders' : 'Show orders'}
-    </Button>
-  );
 
   return (
     <>
@@ -220,7 +229,7 @@ export default function LeadMap({
           {hasLeadMarkers && <MapMarkers locations={locations} kind="lead" />}
           {hasOrderMarkers && <MapMarkers locations={orderLocations} kind="order" />}
         </MapContainer>
-        {ordersToggle}
+        {layerToggles}
         <Button
           variant="secondary"
           size="sm"
@@ -256,6 +265,14 @@ export default function LeadMap({
                 </Button>
               ))}
               <Button
+                variant={showLeads ? 'default' : 'outline'}
+                size="sm"
+                onClick={handleToggleLeads}
+                type="button"
+              >
+                {showLeads ? 'Hide leads' : 'Show leads'}
+              </Button>
+              <Button
                 variant={showOrders ? 'default' : 'outline'}
                 size="sm"
                 onClick={handleToggleOrders}
@@ -268,7 +285,7 @@ export default function LeadMap({
             {modalPeriod === 'custom' && periodLabel && (
               <p className="pt-2 text-sm text-muted-foreground">Showing: {periodLabel}</p>
             )}
-            {showOrders && (
+            {(showLeads || showOrders) && (
               <p className="pt-1 text-xs text-muted-foreground">
                 Green = leads · Blue = accepted orders
               </p>
@@ -279,11 +296,13 @@ export default function LeadMap({
               <div className="flex h-full min-h-[400px] items-center justify-center rounded-lg border border-border bg-muted/30">
                 <p className="text-sm text-muted-foreground">Loading map...</p>
               </div>
-            ) : (!modalLocations || modalLocations.length === 0) &&
+            ) : !(showLeads && modalLocations && modalLocations.length > 0) &&
               !(showOrders && orderLocations.length > 0) ? (
               <div className="flex h-full min-h-[400px] flex-col items-center justify-center gap-1 rounded-lg border border-border bg-muted/30 px-4 text-center">
                 <p className="text-sm text-muted-foreground">
-                  No locations with postcodes in this period
+                  {!showLeads && !showOrders
+                    ? 'Turn on leads or orders to see locations'
+                    : 'No locations with postcodes in this period'}
                 </p>
               </div>
             ) : (
@@ -299,7 +318,7 @@ export default function LeadMap({
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                   />
-                  {modalLocations && modalLocations.length > 0 && (
+                  {showLeads && modalLocations && modalLocations.length > 0 && (
                     <MapMarkers locations={modalLocations} kind="lead" />
                   )}
                   {showOrders && orderLocations.length > 0 && (
