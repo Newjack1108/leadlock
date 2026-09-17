@@ -148,12 +148,15 @@ def _add_discount(
     description: str,
     discount_amount: Decimal,
     applied_at: datetime,
+    quote_item_id: int | None = None,
+    scope: DiscountScope = DiscountScope.QUOTE,
 ) -> QuoteDiscount:
     discount = QuoteDiscount(
         quote_id=quote.id,
+        quote_item_id=quote_item_id,
         discount_type=DiscountType.FIXED_AMOUNT,
         discount_value=discount_amount,
-        scope=DiscountScope.QUOTE,
+        scope=scope,
         discount_amount=discount_amount,
         description=description,
         applied_at=applied_at,
@@ -259,7 +262,7 @@ def test_taken_when_accepted_in_range_even_if_applied_earlier(api_client, sqlite
     assert float(july["taken"][0]["order_value"]) == 2000.0
 
 
-def test_multiple_discounts_on_one_quote_produce_multiple_rows(api_client, sqlite_engine):
+def test_multiple_discounts_on_one_quote_aggregate_to_single_row(api_client, sqlite_engine):
     with Session(sqlite_engine) as session:
         user = _seed_user(session)
         customer = _add_customer(session, name="Carol Multi", customer_number="C-MUL-1")
@@ -302,16 +305,77 @@ def test_multiple_discounts_on_one_quote_produce_multiple_rows(api_client, sqlit
         params={"start_date": "2026-06-01", "end_date": "2026-06-30"},
     ).json()
 
-    assert data["summary"]["offered_count"] == 2
-    assert data["summary"]["taken_count"] == 2
+    assert data["summary"]["offered_count"] == 1
+    assert data["summary"]["taken_count"] == 1
     assert data["summary"]["offered_quote_count"] == 1
     assert data["summary"]["taken_order_count"] == 1
     assert float(data["summary"]["offered_total"]) == 350.0
     assert float(data["summary"]["taken_total"]) == 350.0
-    offered_names = {row["discount_name"] for row in data["offered"]}
-    taken_names = {row["discount_name"] for row in data["taken"]}
-    assert offered_names == {"Loyalty £200", "Promo £150"}
-    assert taken_names == {"Loyalty £200", "Promo £150"}
+    assert len(data["offered"]) == 1
+    assert len(data["taken"]) == 1
+    assert float(data["offered"][0]["discount_amount"]) == 350.0
+    assert float(data["offered"][0]["order_value"]) == 3000.0
+    assert float(data["taken"][0]["discount_amount"]) == 350.0
+    assert float(data["taken"][0]["order_value"]) == 3000.0
+    offered_name = data["offered"][0]["discount_name"]
+    taken_name = data["taken"][0]["discount_name"]
+    assert "Loyalty £200" in offered_name
+    assert "Promo £150" in offered_name
+    assert "Loyalty £200" in taken_name
+    assert "Promo £150" in taken_name
+
+
+def test_item_level_discounts_collapse_to_quote_total(api_client, sqlite_engine):
+    """Product-scope discounts fan out per line item; report must show one quote total."""
+    with Session(sqlite_engine) as session:
+        user = _seed_user(session)
+        customer = _add_customer(session, name="Eve Items", customer_number="C-ITEM-1")
+        quote = _add_quote(
+            session,
+            user_id=user.id,
+            customer_id=customer.id,
+            quote_number="QT-ITEM-1",
+            status=QuoteStatus.SENT,
+            subtotal=Decimal("5000.00"),
+            discount_total=Decimal("500.00"),
+        )
+        _add_discount(
+            session,
+            quote=quote,
+            user_id=user.id,
+            description="10% OFF Building",
+            discount_amount=Decimal("300.00"),
+            applied_at=datetime(2026, 6, 10, 9, 0, 0),
+            quote_item_id=101,
+            scope=DiscountScope.PRODUCT,
+        )
+        _add_discount(
+            session,
+            quote=quote,
+            user_id=user.id,
+            description="10% OFF Building",
+            discount_amount=Decimal("200.00"),
+            applied_at=datetime(2026, 6, 10, 9, 0, 0),
+            quote_item_id=102,
+            scope=DiscountScope.PRODUCT,
+        )
+
+    data = api_client.get(
+        "/api/reports/discount-usage",
+        params={"start_date": "2026-06-01", "end_date": "2026-06-30"},
+    ).json()
+
+    assert data["summary"]["offered_count"] == 1
+    assert data["summary"]["offered_quote_count"] == 1
+    assert float(data["summary"]["offered_total"]) == 500.0
+    assert len(data["offered"]) == 1
+    row = data["offered"][0]
+    assert row["customer_name"] == "Eve Items"
+    assert row["quote_number"] == "QT-ITEM-1"
+    assert row["discount_name"] == "10% OFF Building"
+    assert float(row["discount_amount"]) == 500.0
+    assert float(row["order_value"]) == 5000.0
+    assert data["taken"] == []
 
 
 def test_sandbox_customer_excluded(api_client, sqlite_engine):

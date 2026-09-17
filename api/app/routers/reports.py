@@ -1384,6 +1384,42 @@ def _discount_report_customer_name(
     return "Unknown"
 
 
+def _joined_discount_names(lines: List[QuoteDiscount]) -> str:
+    names: List[str] = []
+    seen: set[str] = set()
+    for line in sorted(lines, key=lambda d: ((d.description or "").casefold(), d.id or 0)):
+        name = (line.description or "").strip() or "Discount"
+        if name not in seen:
+            seen.add(name)
+            names.append(name)
+    return "; ".join(names) if names else "Discount"
+
+
+def _aggregate_quote_discount_row(
+    *,
+    quote: Quote,
+    lines: List[QuoteDiscount],
+    customer_name: str,
+    order: Optional[Order],
+    order_value: Decimal,
+    event_date: datetime,
+) -> DiscountUsageRow:
+    """Collapse one or more QuoteDiscount lines into a single quote-level report row."""
+    discount_ids = [int(d.id) for d in lines if d.id is not None]
+    return DiscountUsageRow(
+        quote_discount_id=min(discount_ids) if discount_ids else 0,
+        quote_id=int(quote.id),
+        customer_name=customer_name,
+        quote_number=quote.quote_number,
+        order_number=order.order_number if order else None,
+        order_id=int(order.id) if order and order.id is not None else None,
+        order_value=order_value,
+        discount_name=_joined_discount_names(lines),
+        discount_amount=sum((_decimal_or_zero(d.discount_amount) for d in lines), Decimal("0")),
+        event_date=event_date,
+    )
+
+
 def _build_discount_usage_report(
     session: Session,
     resolved_range: ResolvedDateRange,
@@ -1438,12 +1474,19 @@ def _build_discount_usage_report(
     )
     orders_by_quote_id = {int(o.quote_id): o for o in orders if o.quote_id is not None}
 
+    # Group by quote so product-scope / multi-line discounts become one quote-level row.
+    discounts_by_quote: dict[int, List[QuoteDiscount]] = defaultdict(list)
+    for discount in discounts:
+        if discount.id is None:
+            continue
+        discounts_by_quote[int(discount.quote_id)].append(discount)
+
     offered: List[DiscountUsageRow] = []
     taken: List[DiscountUsageRow] = []
 
-    for discount in discounts:
-        quote = quotes_by_id.get(int(discount.quote_id))
-        if quote is None or discount.id is None:
+    for quote_id, quote_discounts in discounts_by_quote.items():
+        quote = quotes_by_id.get(quote_id)
+        if quote is None:
             continue
 
         customer_name = _discount_report_customer_name(
@@ -1451,23 +1494,24 @@ def _build_discount_usage_report(
             customers_by_id=customers_by_id,
             leads_by_id=leads_by_id,
         )
-        order = orders_by_quote_id.get(int(quote.id)) if quote.id is not None else None
-        discount_amount = _decimal_or_zero(discount.discount_amount)
-        discount_name = discount.description or "Discount"
+        order = orders_by_quote_id.get(quote_id)
 
-        if _in_range(discount.applied_at, resolved_range.start, resolved_range.end):
+        offered_lines = [
+            d
+            for d in quote_discounts
+            if _in_range(d.applied_at, resolved_range.start, resolved_range.end)
+        ]
+        if offered_lines:
             offered.append(
-                DiscountUsageRow(
-                    quote_discount_id=int(discount.id),
-                    quote_id=int(quote.id),
+                _aggregate_quote_discount_row(
+                    quote=quote,
+                    lines=offered_lines,
                     customer_name=customer_name,
-                    quote_number=quote.quote_number,
-                    order_number=order.order_number if order else None,
-                    order_id=int(order.id) if order and order.id is not None else None,
+                    order=order,
                     order_value=_decimal_or_zero(quote.subtotal),
-                    discount_name=discount_name,
-                    discount_amount=discount_amount,
-                    event_date=_as_naive_utc(discount.applied_at) or discount.applied_at,
+                    event_date=min(
+                        (_as_naive_utc(d.applied_at) or d.applied_at) for d in offered_lines
+                    ),
                 )
             )
 
@@ -1475,16 +1519,12 @@ def _build_discount_usage_report(
             taken_at = _order_accepted_at(order, quote)
             if _in_range(taken_at, resolved_range.start, resolved_range.end):
                 taken.append(
-                    DiscountUsageRow(
-                        quote_discount_id=int(discount.id),
-                        quote_id=int(quote.id),
+                    _aggregate_quote_discount_row(
+                        quote=quote,
+                        lines=quote_discounts,
                         customer_name=customer_name,
-                        quote_number=quote.quote_number,
-                        order_number=order.order_number,
-                        order_id=int(order.id) if order.id is not None else None,
+                        order=order,
                         order_value=_decimal_or_zero(order.subtotal),
-                        discount_name=discount_name,
-                        discount_amount=discount_amount,
                         event_date=_as_naive_utc(taken_at) or taken_at,
                     )
                 )

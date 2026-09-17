@@ -1188,14 +1188,18 @@ class SalesReport(BaseModel):
 
 
 class DiscountUsageRow(BaseModel):
-    """One discount line on a quote (offered) or accepted order (taken)."""
+    """One quote-level discount total (offered) or accepted order (taken).
+
+    Multiple QuoteDiscount lines on the same quote are aggregated into a single row.
+    ``quote_discount_id`` is the minimum line id among the aggregated rows.
+    """
     quote_discount_id: int
     quote_id: int
     customer_name: str
     quote_number: str
     order_number: Optional[str] = None
     order_id: Optional[int] = None
-    order_value: Decimal = Decimal("0")  # pre-discount subtotal
+    order_value: Decimal = Decimal("0")  # pre-discount quote/order subtotal
     discount_name: str
     discount_amount: Decimal = Decimal("0")
     event_date: datetime
