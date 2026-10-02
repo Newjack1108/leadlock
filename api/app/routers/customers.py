@@ -631,31 +631,7 @@ async def create_customer_activity(
         session.add(activity)
         session.commit()
         session.refresh(activity)
-        
-        # Check if quote unlocks and transition ENGAGED → QUALIFIED
-        from app.workflow import check_quote_prerequisites, auto_transition_lead_status, find_leads_by_customer_id, auto_create_opportunity
-        can_quote, error = check_quote_prerequisites(customer, session)
-        if can_quote:
-            # Find all ENGAGED leads for this customer and transition to QUALIFIED
-            leads = find_leads_by_customer_id(customer.id, session)
-            for lead in leads:
-                if lead.status == LeadStatus.ENGAGED:
-                    auto_transition_lead_status(
-                        lead.id,
-                        LeadStatus.QUALIFIED,
-                        session,
-                        current_user.id,
-                        "Automatic transition: Quote unlocked"
-                    )
-                    # Auto-create opportunity when lead becomes QUALIFIED
-                    auto_create_opportunity(
-                        customer.id,
-                        lead.id,
-                        session,
-                        current_user.id
-                    )
-        
-        return ActivityResponse(
+        saved = ActivityResponse(
             id=activity.id,
             customer_id=activity.customer_id,
             activity_type=activity.activity_type,
@@ -664,6 +640,44 @@ async def create_customer_activity(
             created_at=activity.created_at,
             created_by_name=current_user.full_name
         )
+
+        # Qualifying a lead must not fail the call note the user just saved.
+        try:
+            from app.workflow import check_quote_prerequisites, auto_transition_lead_status, find_leads_by_customer_id, auto_create_opportunity
+            can_quote, error = check_quote_prerequisites(customer, session)
+            if can_quote and customer.id is not None:
+                leads = find_leads_by_customer_id(customer.id, session)
+                for lead in leads:
+                    if lead.status == LeadStatus.ENGAGED and lead.id is not None:
+                        auto_transition_lead_status(
+                            lead.id,
+                            LeadStatus.QUALIFIED,
+                            session,
+                            current_user.id,
+                            "Automatic transition: Quote unlocked"
+                        )
+                        auto_create_opportunity(
+                            customer.id,
+                            lead.id,
+                            session,
+                            current_user.id
+                        )
+        except Exception as workflow_error:
+            import traceback
+            print(
+                f"Call logged for customer {customer_id}, but follow-up workflow failed: {workflow_error}",
+                file=__import__('sys').stderr,
+                flush=True,
+            )
+            print(traceback.format_exc(), file=__import__('sys').stderr, flush=True)
+            try:
+                session.rollback()
+            except Exception:
+                pass
+
+        return saved
+    except HTTPException:
+        raise
     except Exception as e:
         import traceback
         error_msg = f"Error creating activity: {str(e)}"

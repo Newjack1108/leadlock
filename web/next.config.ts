@@ -9,6 +9,11 @@ const apiProxyTarget =
   "http://127.0.0.1:8000";
 
 const nextConfig: NextConfig = {
+  // Same-origin /api calls are proxied to the API. The default 30s cutoff
+  // drops slow dashboard aggregates before the browser timeout.
+  experimental: {
+    proxyTimeout: 120_000,
+  },
   async redirects() {
     return [
       {

@@ -498,7 +498,10 @@ export const getUnreadCounts = async (): Promise<{ sms: number; messenger: numbe
 };
 
 export const getDashboardStats = async (filter?: DateRangeQueryParams): Promise<DashboardStats> => {
-  const response = await api.get('/api/dashboard/stats', { params: buildDateRangeParams(filter) });
+  const response = await api.get('/api/dashboard/stats', {
+    params: buildDateRangeParams(filter),
+    timeout: 120_000,
+  });
   return response.data;
 };
 

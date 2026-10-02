@@ -1164,19 +1164,16 @@ def _ensure_userrole_marketing(engine) -> None:
 
 
 def _ensure_activitytype_messenger_values(engine) -> None:
-    """Allow Messenger/WhatsApp activity types on PostgreSQL activitytype enum."""
+    """Make sure every ActivityType value exists on the PostgreSQL activitytype enum."""
     import sys
 
     try:
         inspector = inspect(engine)
         if not inspector.has_table("activity"):
             return
-        for value in (
-            "WHATSAPP_SENT",
-            "WHATSAPP_RECEIVED",
-            "MESSENGER_SENT",
-            "MESSENGER_RECEIVED",
-        ):
+        from app.models import ActivityType
+
+        for value in (item.value for item in ActivityType):
             try:
                 with engine.begin() as conn:
                     conn.execute(text(f"ALTER TYPE activitytype ADD VALUE IF NOT EXISTS '{value}'"))

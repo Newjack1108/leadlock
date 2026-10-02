@@ -1475,3 +1475,22 @@ class DealerDiscountPolicy(SQLModel, table=True):
         default=None, sa_column=Column(Numeric(10, 2))
     )
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+def _use_naive_utc_datetime_columns() -> None:
+    """Keep timestamp columns as naive UTC.
+
+    SQLModel 0.0.45+ maps a plain datetime field to UTCDateTime. That type
+    rejects datetime.utcnow() on insert and on query filters, and it returns
+    timezone-aware values on read. This database stores naive UTC, and the
+    rest of the app compares those values with datetime.utcnow().
+    """
+    from sqlalchemy import DateTime as SADateTime
+
+    for table in SQLModel.metadata.tables.values():
+        for column in table.columns:
+            if type(column.type).__name__ == "UTCDateTime":
+                column.type = SADateTime(timezone=False)
+
+
+_use_naive_utc_datetime_columns()

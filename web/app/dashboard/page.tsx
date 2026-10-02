@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import ReminderList from '@/components/ReminderList';
 import SubmittedConfiguratorInvitesCard from '@/components/configurator/SubmittedConfiguratorInvitesCard';
 import api, {
+  getApiErrorDetail,
   getDashboardStats,
   getStaleSummary,
   getCompanySettings,
@@ -171,6 +172,14 @@ function getPresetPeriodLabel(period: DashboardPresetPeriod): string {
   }
 }
 
+function dashboardStatsLoadError(err: unknown): string {
+  const detail = getApiErrorDetail(err);
+  if (!detail || detail === 'Something went wrong') {
+    return 'Dashboard stats could not be loaded. Try All Time or check API logs.';
+  }
+  return `Dashboard stats could not be loaded. ${detail}`;
+}
+
 function getDateRangeParams(filter: DashboardDateFilter): DateRangeQueryParams {
   if (filter.mode === 'custom') {
     return {
@@ -231,7 +240,7 @@ export default function DashboardPage() {
       if (isMarketingRole(role)) {
         const [statsRes, locationsRes, facebookReportRes] = await Promise.all([
           getDashboardStats(activeDateParams).catch((err: unknown) => {
-            setLoadError('Dashboard stats could not be loaded. Try All Time or check API logs.');
+            setLoadError(dashboardStatsLoadError(err));
             console.error('getDashboardStats failed', err);
             return null;
           }),
@@ -264,7 +273,7 @@ export default function DashboardPage() {
         discountUsageRes,
       ] = await Promise.all([
         getDashboardStats(activeDateParams).catch((err: unknown) => {
-          setLoadError('Dashboard stats could not be loaded. Try All Time or check API logs.');
+          setLoadError(dashboardStatsLoadError(err));
           console.error('getDashboardStats failed', err);
           return null;
         }),

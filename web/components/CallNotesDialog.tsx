@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { logCallActivity, createManualReminder } from '@/lib/api';
+import { logCallActivity, createManualReminder, getApiErrorDetail } from '@/lib/api';
 import { ActivityType } from '@/lib/types';
 import { getTelUrl } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -89,8 +89,8 @@ export default function CallNotesDialog() {
       await logCallActivity(session.customerId, notes.trim(), ActivityType.LIVE_CALL);
       toast.success('Call logged');
       finishLogged(session.customerId);
-    } catch {
-      toast.error('Failed to log call');
+    } catch (err: unknown) {
+      toast.error(getApiErrorDetail(err) || 'Failed to log call');
     } finally {
       setSubmitting(false);
     }
@@ -103,8 +103,8 @@ export default function CallNotesDialog() {
       await logCallActivity(session.customerId, combineNotes('No answer', notes));
       toast.success('Call logged (No answer)');
       finishLogged(session.customerId);
-    } catch {
-      toast.error('Failed to log call');
+    } catch (err: unknown) {
+      toast.error(getApiErrorDetail(err) || 'Failed to log call');
     } finally {
       setSubmitting(false);
     }
@@ -121,8 +121,8 @@ export default function CallNotesDialog() {
       await logCallActivity(session.customerId, combineNotes('Left message', notes));
       toast.success('Call logged (Left message)');
       finishLogged(session.customerId);
-    } catch {
-      toast.error('Failed to log call');
+    } catch (err: unknown) {
+      toast.error(getApiErrorDetail(err) || 'Failed to log call');
     } finally {
       setSubmitting(false);
     }
