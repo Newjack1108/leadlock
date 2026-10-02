@@ -29,12 +29,17 @@ export default function LoginPage() {
       );
 
       const accessToken = response.data?.access_token as string | undefined;
-      if (accessToken) {
-        await fetch('/api/session', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ access_token: accessToken }),
-        });
+      if (!accessToken) {
+        throw new Error('Login did not return a session');
+      }
+      const sessionRes = await fetch('/api/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ access_token: accessToken }),
+        redirect: 'manual',
+      });
+      if (sessionRes.type === 'opaqueredirect' || !sessionRes.ok) {
+        throw new Error('Could not start a session. Please try again.');
       }
       try {
         localStorage.removeItem('token');

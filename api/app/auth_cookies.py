@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import os
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import Request, Response
 
@@ -20,13 +20,7 @@ def _cookie_secure() -> bool:
 def set_auth_cookie(response: Response, token: str, max_age_seconds: int) -> None:
     secure = _cookie_secure()
     # Cross-origin SPA → API needs SameSite=None; same-site / local uses Lax.
-    cross_site = (os.getenv("AUTH_COOKIE_CROSS_SITE") or "").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
-    samesite = "none" if (cross_site and secure) else "lax"
+    samesite = _cookie_samesite(secure)
     response.set_cookie(
         key=AUTH_COOKIE_NAME,
         value=token,
@@ -38,8 +32,27 @@ def set_auth_cookie(response: Response, token: str, max_age_seconds: int) -> Non
     )
 
 
+def _cookie_samesite(secure: bool) -> Literal["lax", "none"]:
+    cross_site = (os.getenv("AUTH_COOKIE_CROSS_SITE") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    return "none" if (cross_site and secure) else "lax"
+
+
 def clear_auth_cookie(response: Response) -> None:
-    response.delete_cookie(key=AUTH_COOKIE_NAME, path="/")
+    """Clear with the same flags used when setting, or the browser keeps the cookie."""
+    secure = _cookie_secure()
+    samesite = _cookie_samesite(secure)
+    response.delete_cookie(
+        key=AUTH_COOKIE_NAME,
+        path="/",
+        secure=True if samesite == "none" else secure,
+        httponly=True,
+        samesite=samesite,
+    )
 
 
 def extract_bearer_or_cookie_token(request: Request, authorization: Optional[str] = None) -> Optional[str]:

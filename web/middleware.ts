@@ -29,8 +29,13 @@ function withSecurityHeaders(response: NextResponse): NextResponse {
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // Session cookie is set before the user has a token. Do not treat it as a page route.
+  if (pathname === '/api/session') {
+    return NextResponse.next();
+  }
+
   // Attach JWT from HttpOnly cookie so same-origin /api rewrites authenticate against FastAPI.
-  if (pathname.startsWith('/api/') && pathname !== '/api/session') {
+  if (pathname.startsWith('/api/')) {
     const token = request.cookies.get(AUTH_COOKIE)?.value;
     if (token) {
       const headers = new Headers(request.headers);
