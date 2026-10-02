@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,7 +11,6 @@ import { LEADLOCK_LOGIN_GREETING_SESSION_KEY } from '@/lib/loginGreeting';
 import { toast } from 'sonner';
 
 export default function LoginPage() {
-  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -36,9 +34,8 @@ export default function LoginPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ access_token: accessToken }),
-        redirect: 'manual',
       });
-      if (sessionRes.type === 'opaqueredirect' || !sessionRes.ok) {
+      if (!sessionRes.ok) {
         throw new Error('Could not start a session. Please try again.');
       }
       try {
@@ -48,7 +45,7 @@ export default function LoginPage() {
       }
       document.cookie = 'token=; path=/; max-age=0';
       sessionStorage.setItem(LEADLOCK_LOGIN_GREETING_SESSION_KEY, '1');
-      router.push('/');
+      window.location.assign('/');
     } catch (error: unknown) {
       const message = getApiErrorDetail(error);
       toast.error(
