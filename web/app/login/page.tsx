@@ -28,9 +28,20 @@ export default function LoginPage() {
         { timeout: AUTH_FETCH_TIMEOUT_MS }
       );
 
-      localStorage.setItem('token', response.data.access_token);
-      // Also set cookie for middleware
-      document.cookie = `token=${response.data.access_token}; path=/; max-age=86400`;
+      const accessToken = response.data?.access_token as string | undefined;
+      if (accessToken) {
+        await fetch('/api/session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ access_token: accessToken }),
+        });
+      }
+      try {
+        localStorage.removeItem('token');
+      } catch {
+        // ignore
+      }
+      document.cookie = 'token=; path=/; max-age=0';
       sessionStorage.setItem(LEADLOCK_LOGIN_GREETING_SESSION_KEY, '1');
       router.push('/');
     } catch (error: unknown) {

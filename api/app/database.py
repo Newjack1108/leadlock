@@ -1199,7 +1199,7 @@ def _ensure_activitytype_messenger_values(engine) -> None:
 
 
 def _ensure_user_leave_schema(engine) -> None:
-    """Add on_leave / leave_until columns for temporary holiday lock."""
+    """Add on_leave / leave_until / token_version columns for leave lock and JWT revocation."""
     import sys
 
     try:
@@ -1211,9 +1211,63 @@ def _ensure_user_leave_schema(engine) -> None:
                 text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS on_leave BOOLEAN NOT NULL DEFAULT FALSE')
             )
             conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS leave_until DATE'))
-        print("User leave schema ensured", file=sys.stderr, flush=True)
+            conn.execute(
+                text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS token_version INTEGER NOT NULL DEFAULT 0')
+            )
+        print("User leave/token_version schema ensured", file=sys.stderr, flush=True)
     except Exception as exc:
         print(f"Warning: could not ensure user leave schema: {exc}", file=sys.stderr, flush=True)
+
+
+def _ensure_customer_tracking_pixel_tokens(engine) -> None:
+    """Add tracking_pixel_token and backfill unguessable values for existing customers."""
+    import secrets
+    import sys
+
+    from sqlmodel import select
+
+    try:
+        inspector = inspect(engine)
+        if not inspector.has_table("customer"):
+            return
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "ALTER TABLE customer ADD COLUMN IF NOT EXISTS tracking_pixel_token VARCHAR(255)"
+                )
+            )
+        with Session(engine) as session:
+            from app.models import Customer
+
+            rows = session.exec(
+                select(Customer).where(
+                    (Customer.tracking_pixel_token.is_(None))
+                    | (Customer.tracking_pixel_token == "")
+                )
+            ).all()
+            for customer in rows:
+                customer.tracking_pixel_token = secrets.token_urlsafe(32)
+                session.add(customer)
+            if rows:
+                session.commit()
+                print(
+                    f"Backfilled tracking_pixel_token for {len(rows)} customer(s)",
+                    file=sys.stderr,
+                    flush=True,
+                )
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS ix_customer_tracking_pixel_token "
+                    "ON customer (tracking_pixel_token)"
+                )
+            )
+    except Exception as exc:
+        print(
+            f"Warning: could not ensure customer tracking_pixel_token: {exc}",
+            file=sys.stderr,
+            flush=True,
+        )
 
 
 def create_db_and_tables():
@@ -1239,6 +1293,7 @@ def create_db_and_tables():
     _ensure_userrole_enum_values(engine)
     _ensure_activitytype_messenger_values(engine)
     _ensure_user_leave_schema(engine)
+    _ensure_customer_tracking_pixel_tokens(engine)
     _ensure_weekly_planner_schema(engine)
     _ensure_weekly_plan_template_schema(engine)
     _ensure_sales_document_storage_schema(engine)
@@ -3957,6 +4012,14 @@ def create_db_and_tables():
             encrypt_existing_plaintext_values(session)
     except Exception as e:
         print(f"Bank details encryption migration skipped: {e}", file=sys.stderr, flush=True)
+
+    try:
+        with Session(engine) as session:
+            from app.mailbox_crypto import encrypt_existing_plaintext_mailbox_passwords
+
+            encrypt_existing_plaintext_mailbox_passwords(session)
+    except Exception as e:
+        print(f"Mailbox password encryption migration skipped: {e}", file=sys.stderr, flush=True)
 
     try:
         with Session(engine) as session:

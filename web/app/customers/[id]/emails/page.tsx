@@ -19,6 +19,7 @@ import { Email, EmailDirection, Customer, EmailScheduled, ScheduledEmailStatus }
 import { toast } from 'sonner';
 import api from '@/lib/api';
 import ComposeEmailDialog from '@/components/ComposeEmailDialog';
+import { sanitizeHtml } from '@/lib/sanitizeHtml';
 
 export default function CustomerEmailsPage() {
   const router = useRouter();
@@ -336,7 +337,7 @@ export default function CustomerEmailsPage() {
                         <div className="text-sm mt-2">
                           {email.body_html?.trim() ? (
                             <div
-                              dangerouslySetInnerHTML={{ __html: email.body_html }}
+                              dangerouslySetInnerHTML={{ __html: sanitizeHtml(email.body_html) }}
                               className="prose prose-sm max-w-none"
                             />
                           ) : email.body_text?.trim() ? (

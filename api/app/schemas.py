@@ -16,6 +16,16 @@ from app.models import (
     CustomerFileKind, WeeklyPlanItemStatus, WeeklyPlanScope,
 )
 
+MIN_PASSWORD_LENGTH = 12
+
+
+def _validate_password_strength(v: Optional[str]) -> Optional[str]:
+    if v is None:
+        return None
+    if not isinstance(v, str) or len(v) < MIN_PASSWORD_LENGTH:
+        raise ValueError(f"Password must be at least {MIN_PASSWORD_LENGTH} characters")
+    return v
+
 
 class Token(BaseModel):
     access_token: str
@@ -55,6 +65,11 @@ class BootstrapCreate(BaseModel):
     full_name: str
     password: str
 
+    @field_validator("password")
+    @classmethod
+    def password_strong(cls, v: str) -> str:
+        return _validate_password_strength(v)  # type: ignore[return-value]
+
 
 class UserResponse(BaseModel):
     id: int
@@ -74,6 +89,11 @@ class UserCreate(BaseModel):
     dealer_id: Optional[int] = None
     dealer_commission_pct: Optional[int] = None
 
+    @field_validator("password")
+    @classmethod
+    def password_strong(cls, v: str) -> str:
+        return _validate_password_strength(v)  # type: ignore[return-value]
+
 
 class UserUpdate(BaseModel):
     full_name: Optional[str] = None
@@ -83,6 +103,11 @@ class UserUpdate(BaseModel):
     dealer_commission_pct: Optional[int] = None
     on_leave: Optional[bool] = None
     leave_until: Optional[date] = None
+
+    @field_validator("password")
+    @classmethod
+    def password_strong(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_password_strength(v)
 
 
 class SystemAttributionBackfillRequest(BaseModel):
@@ -214,6 +239,40 @@ class ConfiguratorPreviewResponse(BaseModel):
 class ConfiguratorCatalogResponse(BaseModel):
     items: List["ProductResponse"] = Field(default_factory=list)
     extras: List["ProductResponse"] = Field(default_factory=list)
+
+
+class PublicConfiguratorProductResponse(BaseModel):
+    """Limited product fields for unauthenticated configurator catalog."""
+
+    id: int
+    name: str
+    description: Optional[str] = None
+    category: ProductCategory
+    is_extra: bool
+    base_price: Decimal
+    unit: str
+    image_url: Optional[str] = None
+    size: Optional[str] = None
+    height: Optional[str] = None
+    width: Optional[Decimal] = None
+    length: Optional[Decimal] = None
+    configurator_width: Optional[Decimal] = None
+    configurator_length: Optional[Decimal] = None
+    configurator_front_face: Optional[ConfiguratorFrontFace] = None
+    configurator_connection_profile: Optional[ConfiguratorConnectionProfile] = None
+    configurator_is_corner_box: bool = False
+    configurator_is_starter_box: bool = False
+    allow_in_configurator: bool = False
+    configurator_per_box: bool = False
+
+    class Config:
+        from_attributes = True
+        json_encoders = {Decimal: str}
+
+
+class PublicConfiguratorCatalogResponse(BaseModel):
+    items: List[PublicConfiguratorProductResponse] = Field(default_factory=list)
+    extras: List[PublicConfiguratorProductResponse] = Field(default_factory=list)
 
 
 class QuoteConfigurationResponse(BaseModel):
@@ -382,6 +441,7 @@ class CustomerResponse(BaseModel):
     updated_at: datetime
     messenger_psid: Optional[str] = None
     messenger_page_id: Optional[str] = None
+    tracking_pixel_token: Optional[str] = None
     source_system: Optional[str] = None
 
 
@@ -412,6 +472,7 @@ def customer_to_response(customer: Customer) -> CustomerResponse:
         updated_at=customer.updated_at,
         messenger_psid=customer.messenger_psid,
         messenger_page_id=getattr(customer, "messenger_page_id", None),
+        tracking_pixel_token=getattr(customer, "tracking_pixel_token", None),
         source_system=customer.source_system,
     )
 

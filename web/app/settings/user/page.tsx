@@ -11,6 +11,7 @@ import { Settings, Save, Mail, FileText } from 'lucide-react';
 import { getUserEmailSettings, updateUserEmailSettings, getPublicCompanyLogo } from '@/lib/api';
 import { UserEmailSettings } from '@/lib/types';
 import { toast } from 'sonner';
+import { sanitizeHtml } from '@/lib/sanitizeHtml';
 
 export default function UserSettingsPage() {
   const router = useRouter();
@@ -422,7 +423,7 @@ export default function UserSettingsPage() {
                   <Label>Preview</Label>
                   <div
                     className="mt-2 p-4 bg-muted rounded-md border"
-                    dangerouslySetInnerHTML={{ __html: signature }}
+                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(signature) }}
                   />
                 </div>
               )}

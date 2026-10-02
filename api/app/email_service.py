@@ -485,7 +485,9 @@ def get_smtp_config(user_id: Optional[int] = None) -> Dict:
                     # Check if user has smtp_host configured (using getattr to handle missing attributes)
                     smtp_host = getattr(user, 'smtp_host', None)
                     smtp_user = getattr(user, 'smtp_user', None)
-                    smtp_password = getattr(user, 'smtp_password', None)
+                    from app.mailbox_crypto import decrypt_mailbox_password
+
+                    smtp_password = decrypt_mailbox_password(getattr(user, 'smtp_password', None))
                     
                     # Only use user's config if they have host, user, and password configured
                     if smtp_host and smtp_user and smtp_password:
@@ -546,7 +548,9 @@ def get_imap_config(user_id: Optional[int] = None) -> Dict:
                     # Check if user has imap_host configured (using getattr to handle missing attributes)
                     imap_host = getattr(user, 'imap_host', None)
                     imap_user = getattr(user, 'imap_user', None)
-                    imap_password = getattr(user, 'imap_password', None)
+                    from app.mailbox_crypto import decrypt_mailbox_password
+
+                    imap_password = decrypt_mailbox_password(getattr(user, 'imap_password', None))
                     
                     # Only use user's config if they have host, user, and password configured
                     if imap_host and imap_user and imap_password:
@@ -598,7 +602,9 @@ def get_imap_config_for_poll() -> Dict:
             for u in users:
                 h = getattr(u, "imap_host", None)
                 usr = getattr(u, "imap_user", None)
-                pwd = getattr(u, "imap_password", None)
+                from app.mailbox_crypto import decrypt_mailbox_password
+
+                pwd = decrypt_mailbox_password(getattr(u, "imap_password", None))
                 if h and usr and pwd:
                     return {
                         "host": h,

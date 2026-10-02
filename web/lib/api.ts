@@ -67,6 +67,7 @@ const api = axios.create({
     'Content-Type': 'application/json',
   },
   timeout: 60_000, // Railway public Postgres + cold pool can exceed 15s on first request
+  withCredentials: true,
 });
 
 /** List/auth on Railway public DB can be slow on cold start. */
@@ -82,10 +83,36 @@ export const invalidateAuthMeCache = () => {
   authMeInFlight = null;
 };
 
+function clearClientAuthArtifacts() {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.removeItem('token');
+  } catch {
+    // ignore
+  }
+  document.cookie = 'token=; path=/; max-age=0';
+  document.cookie = 'leadlock_session=; path=/; max-age=0';
+}
+
+export async function logoutSession(): Promise<void> {
+  try {
+    await api.post('/api/auth/logout');
+  } catch {
+    // best effort
+  }
+  try {
+    await fetch('/api/session', { method: 'DELETE' });
+  } catch {
+    // best effort
+  }
+  clearClientAuthArtifacts();
+  invalidateAuthMeCache();
+}
+
 /** Compose, quote email, reply, heavy quote writes: provider + DB often exceed 15s on Railway */
 export const EMAIL_AND_UPLOAD_TIMEOUT_MS = 120_000;
 
-// Add token to requests; resolve API base URL per request (runtime injection from layout).
+// Prefer same-origin /api (HttpOnly cookie). Legacy localStorage Bearer still accepted.
 api.interceptors.request.use((config) => {
   const base = resolveApiBaseUrl();
   if (base) {
@@ -93,7 +120,7 @@ api.interceptors.request.use((config) => {
   }
   if (typeof window !== 'undefined') {
     const token = localStorage.getItem('token');
-    if (token) {
+    if (token && !config.headers?.Authorization) {
       config.headers.Authorization = `Bearer ${token}`;
     }
   }
@@ -127,7 +154,7 @@ api.interceptors.response.use(
         return Promise.reject(error);
       }
       if (status === 401) {
-        localStorage.removeItem('token');
+        clearClientAuthArtifacts();
         invalidateAuthMeCache();
         window.location.href = '/login';
       }

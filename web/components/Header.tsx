@@ -233,11 +233,9 @@ export default function Header() {
   const closerQualifiedBadgeCount =
     userRole === 'CLOSER' ? newQualifiedDashboardCount : 0;
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    document.cookie = 'token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-    invalidateAuthMeCache();
-    router.push('/login');
+  const handleLogout = async () => {
+    const { logoutSession } = await import('@/lib/api');
+    await logoutSession();
     window.location.href = '/login';
   };
 

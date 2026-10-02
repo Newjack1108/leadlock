@@ -10,6 +10,7 @@ from starlette.responses import Response
 from app.json_datetime import json_dumps_utf8, normalize_json_datetimes
 from app.database import create_db_and_tables, engine
 from sqlmodel import Session, select
+from app.auth import assert_secret_key_configured
 from app.routers import auth, leads, dashboard, reports, webhooks, products, settings, quotes, customers, emails, email_templates, quote_templates, sms_templates, reminders, discounts, discount_requests, sms, messenger, public, public_configurator, delivery_install, orders, customer_files, users, sales_documents, facebook_adverts, dealer_portal, dealer_discount_admin, configurator, configurator_invites, review_prize_draw
 from app.models import User
 import os
@@ -17,7 +18,16 @@ import traceback
 import shutil
 from pathlib import Path
 
-app = FastAPI(title="LeadLock API", version="1.0.0")
+assert_secret_key_configured()
+
+_IS_PRODUCTION = bool(os.getenv("RAILWAY_ENVIRONMENT"))
+app = FastAPI(
+    title="LeadLock API",
+    version="1.0.0",
+    docs_url=None if _IS_PRODUCTION else "/docs",
+    redoc_url=None if _IS_PRODUCTION else "/redoc",
+    openapi_url=None if _IS_PRODUCTION else "/openapi.json",
+)
 
 # Setup static files directory for logos and other assets
 static_dir = Path(__file__).parent.parent / "static"
@@ -41,13 +51,18 @@ app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 # CORS: os.getenv("CORS_ORIGINS", default) does NOT use default when the var is set but empty
 # (common in dashboards). Empty list => no Access-Control-Allow-Origin on any response.
 # Production domains are always merged in so a partial CORS_ORIGINS env cannot drop the live site.
-_REQUIRED_CORS_ORIGINS = (
-    "http://localhost:3000",
-    "http://localhost:3001",
+_PRODUCTION_CORS_ORIGINS = (
     "https://leadlock-frontend-production.up.railway.app",
     "https://leadlock-production.up.railway.app",
     "https://www.csgbsales.co.uk",
     "https://csgbsales.co.uk",
+)
+_LOCAL_CORS_ORIGINS = (
+    "http://localhost:3000",
+    "http://localhost:3001",
+)
+_REQUIRED_CORS_ORIGINS = (
+    _PRODUCTION_CORS_ORIGINS if _IS_PRODUCTION else (*_LOCAL_CORS_ORIGINS, *_PRODUCTION_CORS_ORIGINS)
 )
 _raw_cors = os.getenv("CORS_ORIGINS", "").strip()
 _cors_from_env = [origin.strip() for origin in _raw_cors.split(",") if origin.strip()]
@@ -68,9 +83,37 @@ app.add_middleware(
     allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["*"],
-    expose_headers=["*"],
+    allow_headers=[
+        "Authorization",
+        "Content-Type",
+        "Accept",
+        "Origin",
+        "X-API-Key",
+        "X-Bootstrap-Secret",
+        "X-Requested-With",
+    ],
+    expose_headers=["Content-Disposition"],
 )
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Add baseline security headers on API responses."""
+
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+        if _IS_PRODUCTION:
+            response.headers.setdefault(
+                "Strict-Transport-Security",
+                "max-age=31536000; includeSubDomains",
+            )
+        return response
+
+
+app.add_middleware(SecurityHeadersMiddleware)
 
 
 class UtcIsoJsonMiddleware(BaseHTTPMiddleware):
@@ -395,76 +438,6 @@ async def health():
         "version": "1.0.1",
         "database": db_status,
         "migrations": migrations,
-        "database_error": db_detail,
         "features": ["engagement_proof_toggle"],
     }
-    if db_status == "ok":
-        try:
-            from sqlmodel import Session, select, func
-            from app.models import Customer, Lead, User
-            from app.db_utils import scalar_int
-
-            with Session(engine) as session:
-                def _count_table(model):
-                    row = session.exec(select(func.count()).select_from(model)).one()
-                    return scalar_int(row)
-
-                payload["row_counts"] = {
-                    "customers": _count_table(Customer),
-                    "leads": _count_table(Lead),
-                    "users": _count_table(User),
-                }
-        except Exception as exc:
-            payload["row_counts_error"] = str(exc)
     return payload
-
-
-@app.post("/api/seed")
-@app.get("/api/seed")
-async def seed_database():
-    """Seed the database with initial users. Only works if no users exist."""
-    # Check if users already exist
-    with Session(engine) as session:
-        statement = select(User)
-        existing = session.exec(statement).first()
-        if existing:
-            raise HTTPException(status_code=400, detail="Users already exist. Database already seeded.")
-        
-        # Import here to avoid circular imports
-        from app.models import UserRole
-        from app.auth import get_password_hash
-        
-        users = [
-            User(
-                email="director@cheshirestables.com",
-                hashed_password=get_password_hash("director123"),
-                full_name="Director",
-                role=UserRole.DIRECTOR
-            ),
-            User(
-                email="manager@cheshirestables.com",
-                hashed_password=get_password_hash("manager123"),
-                full_name="Sales Manager",
-                role=UserRole.SALES_MANAGER
-            ),
-            User(
-                email="closer@cheshirestables.com",
-                hashed_password=get_password_hash("closer123"),
-                full_name="Closer",
-                role=UserRole.CLOSER
-            ),
-        ]
-        
-        for user in users:
-            session.add(user)
-        
-        session.commit()
-        
-        return {
-            "message": "Database seeded successfully",
-            "users": [
-                {"email": "director@cheshirestables.com", "password": "director123", "role": "DIRECTOR"},
-                {"email": "manager@cheshirestables.com", "password": "manager123", "role": "SALES_MANAGER"},
-                {"email": "closer@cheshirestables.com", "password": "closer123", "role": "CLOSER"},
-            ]
-        }

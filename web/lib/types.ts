@@ -301,6 +301,8 @@ export interface Customer {
   updated_at: string;
   messenger_psid?: string | null;
   messenger_page_id?: string | null;
+  /** Unguessable token for website visit tracking pixel links. */
+  tracking_pixel_token?: string | null;
   source_system?: string | null;
 }
 

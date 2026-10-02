@@ -28,6 +28,7 @@ import { EmailTemplate, EmailTemplateCreate, EmailTemplateUpdate } from '@/lib/t
 import { toast } from 'sonner';
 import EmailBodyEditor, { type EmailSnippetItem } from '@/components/EmailBodyEditor';
 import { isHtmlEffectivelyEmpty } from '@/lib/htmlEmail';
+import { sanitizeHtml } from '@/lib/sanitizeHtml';
 
 const EMAIL_TEMPLATE_SNIPPETS: EmailSnippetItem[] = [
   { label: 'Customer name', insert: '{{ customer.name }}' },
@@ -438,7 +439,7 @@ export default function EmailTemplatesPage() {
                   <Label>Body:</Label>
                   <div
                     className="mt-1 p-4 bg-muted rounded border"
-                    dangerouslySetInnerHTML={{ __html: previewData.body_html }}
+                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(previewData.body_html) }}
                   />
                 </div>
               </div>

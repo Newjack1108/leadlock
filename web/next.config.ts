@@ -1,11 +1,12 @@
 import type { NextConfig } from "next";
 
 // Server-side /api rewrites only. Prefer API_PROXY_TARGET (private railway.internal is OK here).
-// Fall back to public URL when proxy target is unset.
+// Fall back to public URL when proxy target is unset; local default for same-origin cookies.
 const apiProxyTarget =
   process.env.API_PROXY_TARGET?.trim() ||
+  process.env.API_URL?.trim() ||
   process.env.NEXT_PUBLIC_API_URL?.trim() ||
-  "";
+  "http://127.0.0.1:8000";
 
 const nextConfig: NextConfig = {
   async redirects() {
@@ -18,8 +19,6 @@ const nextConfig: NextConfig = {
     ];
   },
   async rewrites() {
-    // Proxy frontend /api calls to FastAPI in production.
-    // Keep disabled when target is missing or already a relative path.
     if (!apiProxyTarget || apiProxyTarget.startsWith("/")) {
       return [];
     }

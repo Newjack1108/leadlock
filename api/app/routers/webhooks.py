@@ -22,6 +22,7 @@ PRODUCT_IMPORT_TYPE_MAIN = frozenset(
     }
 )
 from app.database import get_session
+from app.facebook_webhook_security import verify_facebook_signature
 from app.models import (
     Lead,
     User,
@@ -876,8 +877,14 @@ async def facebook_messenger_webhook(request: Request, session: Session = Depend
     Process incoming Facebook Messenger webhook events.
     Match by messenger_psid (Customer first, then Lead with customer_id); unknown users get Lead + Customer created.
     """
+    raw_body = await request.body()
+    signature = request.headers.get("X-Hub-Signature-256")
+    if not verify_facebook_signature(raw_body, signature):
+        raise HTTPException(status_code=403, detail="Invalid Facebook signature")
     try:
-        body = await request.json()
+        import json as _json
+
+        body = _json.loads(raw_body.decode("utf-8") or "{}")
     except Exception:
         return Response(status_code=200)
     events = parse_webhook_payload(body)
@@ -1192,8 +1199,14 @@ async def facebook_leadgen_webhook(request: Request, session: Session = Depends(
     Process incoming Facebook Lead Ads webhook events.
     Fetches lead data from Graph API and creates Customer + Lead with lead_source=FACEBOOK.
     """
+    raw_body = await request.body()
+    signature = request.headers.get("X-Hub-Signature-256")
+    if not verify_facebook_signature(raw_body, signature):
+        raise HTTPException(status_code=403, detail="Invalid Facebook signature")
     try:
-        body = await request.json()
+        import json as _json
+
+        body = _json.loads(raw_body.decode("utf-8") or "{}")
     except Exception:
         return Response(status_code=200)
     events = _parse_leadgen_events(body)

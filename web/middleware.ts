@@ -1,46 +1,87 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
+const AUTH_COOKIE = 'leadlock_token';
+const LEGACY_AUTH_COOKIE = 'token';
+
+function withSecurityHeaders(response: NextResponse): NextResponse {
+  response.headers.set('X-Content-Type-Options', 'nosniff');
+  response.headers.set('X-Frame-Options', 'DENY');
+  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  response.headers.set(
+    'Content-Security-Policy',
+    [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline'",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: blob: https:",
+      "font-src 'self' data:",
+      "connect-src 'self' https: http://localhost:* http://127.0.0.1:*",
+      "frame-ancestors 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
+    ].join('; ')
+  );
+  return response;
+}
+
 export function middleware(request: NextRequest) {
-  // Check for token in cookie (we'll set this on login)
-  const token = request.cookies.get('token')?.value;
-  
-  const isLoginPage = request.nextUrl.pathname === '/login';
-  const isPublicQuoteView = request.nextUrl.pathname.startsWith('/quotes/view/');
-  const isPublicOrderView = request.nextUrl.pathname.startsWith('/orders/view/');
-  const isPublicAccessSheet = request.nextUrl.pathname.startsWith('/access-sheet/');
+  const { pathname } = request.nextUrl;
+
+  // Attach JWT from HttpOnly cookie so same-origin /api rewrites authenticate against FastAPI.
+  if (pathname.startsWith('/api/') && pathname !== '/api/session') {
+    const token = request.cookies.get(AUTH_COOKIE)?.value;
+    if (token) {
+      const headers = new Headers(request.headers);
+      if (!headers.get('authorization')) {
+        headers.set('Authorization', `Bearer ${token}`);
+      }
+      return NextResponse.next({ request: { headers } });
+    }
+    return NextResponse.next();
+  }
+
+  const token =
+    request.cookies.get(AUTH_COOKIE)?.value ||
+    request.cookies.get(LEGACY_AUTH_COOKIE)?.value;
+
+  const isLoginPage = pathname === '/login';
+  const isPublicQuoteView = pathname.startsWith('/quotes/view/');
+  const isPublicOrderView = pathname.startsWith('/orders/view/');
+  const isPublicAccessSheet = pathname.startsWith('/access-sheet/');
   const isPublicConfigure =
-    request.nextUrl.pathname === '/configure' ||
-    request.nextUrl.pathname.startsWith('/configure/');
-  const isDataDeletionPage = request.nextUrl.pathname === '/data-deletion';
-  const isPrivacyPage = request.nextUrl.pathname === '/privacy';
+    pathname === '/configure' || pathname.startsWith('/configure/');
+  const isPublicReview =
+    pathname.startsWith('/review/') || pathname.startsWith('/review-prize/');
+  const isDataDeletionPage = pathname === '/data-deletion';
+  const isPrivacyPage = pathname === '/privacy';
   const isPublicPage =
     isLoginPage ||
     isPublicQuoteView ||
     isPublicOrderView ||
     isPublicAccessSheet ||
     isPublicConfigure ||
+    isPublicReview ||
     isDataDeletionPage ||
     isPrivacyPage;
 
-  // If no token and trying to access protected route, redirect to login
-  // Note: We also check token in client-side, this is just a basic check
   if (!isPublicPage && !token) {
-    // Allow through - client-side will handle redirect if token missing
-    return NextResponse.next();
+    const loginUrl = new URL('/login', request.url);
+    loginUrl.searchParams.set('next', pathname);
+    return withSecurityHeaders(NextResponse.redirect(loginUrl));
   }
 
-  // If has token and on login page, redirect to home (role-based redirect handled there)
   if (isLoginPage && token) {
-    return NextResponse.redirect(new URL('/', request.url));
+    return withSecurityHeaders(NextResponse.redirect(new URL('/', request.url)));
   }
 
-  return NextResponse.next();
+  return withSecurityHeaders(NextResponse.next());
 }
 
 export const config = {
   matcher: [
-    // Skip static assets and PWA metadata so auth middleware never runs on them
-    '/((?!api|_next/static|_next/image|favicon\\.ico|icon\\.png|apple-icon\\.png|manifest\\.webmanifest).*)',
+    '/api/:path*',
+    '/((?!_next/static|_next/image|favicon\\.ico|icon\\.png|apple-icon\\.png|manifest\\.webmanifest).*)',
   ],
 };

@@ -4,7 +4,11 @@ import os
 from unittest.mock import patch
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
+os.environ.setdefault("FACEBOOK_APP_SECRET", "test-facebook-app-secret")
+os.environ.setdefault("ALLOW_INSECURE_SECRET_KEY", "true")
+os.environ.setdefault("SECRET_KEY", "test-secret-key-for-unit-tests-only")
 
+from app.facebook_webhook_security import compute_facebook_signature
 from app.messenger_service import (
     get_messenger_page_token,
     get_page_access_token,
@@ -16,6 +20,19 @@ from app.models import LeadSource, MessengerDirection
 
 CSGB_PAGE_ID = "485666198220603"
 CHESHIRE_PAGE_ID = "1806797756222550"
+_FB_SECRET = os.environ["FACEBOOK_APP_SECRET"]
+
+
+def _signed_facebook_post(client, url, payload, secret=_FB_SECRET):
+    body = json.dumps(payload).encode("utf-8")
+    return client.post(
+        url,
+        content=body,
+        headers={
+            "Content-Type": "application/json",
+            "X-Hub-Signature-256": compute_facebook_signature(body, secret),
+        },
+    )
 
 
 class _FakeResponse:
@@ -204,9 +221,10 @@ def test_inbound_creates_lead_and_reply_uses_matching_page_token(monkeypatch):
         "app.customer_outreach_service.try_customer_outreach_for_new_lead",
         return_value=None,
     ):
-        inbound = client.post(
+        inbound = _signed_facebook_post(
+            client,
             "/api/webhooks/facebook/messenger",
-            json={
+            {
                 "object": "page",
                 "entry": [
                     {
@@ -295,9 +313,10 @@ def test_both_pages_inbound_use_distinct_reply_tokens(monkeypatch):
             (CSGB_PAGE_ID, "psid-a", "Question for CSGB"),
             (CHESHIRE_PAGE_ID, "psid-b", "Question for Cheshire"),
         ):
-            resp = client.post(
+            resp = _signed_facebook_post(
+                client,
                 "/api/webhooks/facebook/messenger",
-                json={
+                {
                     "object": "page",
                     "entry": [
                         {

@@ -61,7 +61,7 @@ def api_client(sqlite_engine):
 def _add_user(session: Session, *, email: str, role: UserRole) -> User:
     user = User(
         email=email,
-        hashed_password=get_password_hash("password123"),
+        hashed_password=get_password_hash("password12345"),
         full_name=role.value.title(),
         role=role,
     )

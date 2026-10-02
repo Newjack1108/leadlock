@@ -1,9 +1,14 @@
 """Facebook Lead Ads token split and case-insensitive field mapping."""
+import json
 import os
 from unittest.mock import patch
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
+os.environ.setdefault("FACEBOOK_APP_SECRET", "test-facebook-app-secret")
+os.environ.setdefault("ALLOW_INSECURE_SECRET_KEY", "true")
+os.environ.setdefault("SECRET_KEY", "test-secret-key-for-unit-tests-only")
 
+from app.facebook_webhook_security import compute_facebook_signature
 from app.messenger_service import (
     fetch_ad_name,
     fetch_leadgen_lead,
@@ -18,6 +23,21 @@ from app.routers.webhooks import (
     _parse_leadgen_events,
     _resolve_leadgen_advert_metadata,
 )
+
+
+_FB_SECRET = os.environ["FACEBOOK_APP_SECRET"]
+
+
+def _signed_facebook_post(client, url, payload, secret=_FB_SECRET):
+    body = json.dumps(payload).encode("utf-8")
+    return client.post(
+        url,
+        content=body,
+        headers={
+            "Content-Type": "application/json",
+            "X-Hub-Signature-256": compute_facebook_signature(body, secret),
+        },
+    )
 
 
 CHESHIRE_STABLES_FIELDS = {
@@ -577,7 +597,7 @@ def test_failed_lead_fetch_log_includes_ids_not_token(capsys):
         return_value=(False, None, "Invalid OAuth access token"),
     ):
         client = TestClient(app)
-        response = client.post("/api/webhooks/facebook/leadgen", json=payload)
+        response = _signed_facebook_post(client, "/api/webhooks/facebook/leadgen", payload)
 
     assert response.status_code == 200
     err = capsys.readouterr().err
@@ -652,7 +672,7 @@ def test_lead_is_created_when_advert_metadata_is_absent(capsys):
         return_value=None,
     ):
         client = TestClient(app)
-        response = client.post("/api/webhooks/facebook/leadgen", json=payload)
+        response = _signed_facebook_post(client, "/api/webhooks/facebook/leadgen", payload)
 
     assert response.status_code == 200
     with Session(engine) as session:
@@ -717,7 +737,7 @@ def _post_leadgen_webhook(webhook_body, fetch_payload, fetch_ad_name_return=None
         return_value=None,
     ):
         client = TestClient(app)
-        response = client.post("/api/webhooks/facebook/leadgen", json=webhook_body)
+        response = _signed_facebook_post(client, "/api/webhooks/facebook/leadgen", webhook_body)
 
     with Session(engine) as session:
         lead = session.exec(select(Lead)).first()

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 from app.database import get_session
 from app.models import User, UserRole
-from app.auth import get_current_user, require_role, get_password_hash, effective_on_leave
+from app.auth import get_current_user, require_role, get_password_hash, effective_on_leave, bump_token_version
 from app.schemas import (
     UserCreate,
     UserUpdate,
@@ -200,6 +200,7 @@ async def update_user(
     update_data = data.dict(exclude_unset=True)
     if "password" in update_data:
         update_data["hashed_password"] = get_password_hash(update_data.pop("password"))
+        bump_token_version(user, session)
     # Clearing leave should also clear leave_until when on_leave is explicitly set false
     if update_data.get("on_leave") is False and "leave_until" not in update_data:
         update_data["leave_until"] = None
@@ -228,6 +229,7 @@ async def deactivate_user(
             detail="You cannot deactivate your own account",
         )
     user.is_active = False
+    bump_token_version(user, session)
     session.add(user)
     session.commit()
     return {"message": "User deactivated"}

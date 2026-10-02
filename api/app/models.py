@@ -5,6 +5,7 @@ from typing import Optional, List
 from datetime import datetime, date
 from enum import Enum
 from decimal import Decimal
+import secrets
 
 
 class UserRole(str, Enum):
@@ -115,6 +116,7 @@ class User(SQLModel, table=True):
     is_active: bool = Field(default=True)
     on_leave: bool = Field(default=False)
     leave_until: Optional[date] = Field(default=None)
+    token_version: int = Field(default=0)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
     # Email Settings (per-user)
@@ -185,6 +187,11 @@ class Customer(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     messenger_psid: Optional[str] = Field(default=None, unique=True, index=True)  # Facebook Page-Scoped ID for Messenger
     messenger_page_id: Optional[str] = Field(default=None, index=True)  # Facebook Page ID that owns the PSID / conversation
+    tracking_pixel_token: Optional[str] = Field(
+        default_factory=lambda: secrets.token_urlsafe(32),
+        unique=True,
+        index=True,
+    )
     source_system: Optional[str] = None  # e.g. "Ninox" for CSV imports from old system
     
     # Relationships

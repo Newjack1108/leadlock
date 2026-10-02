@@ -1,10 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+"""Auth routes: login, bootstrap, session cookie, and current user."""
+from datetime import timedelta
+import os
+
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
 from sqlalchemy import func
 from sqlmodel import Session, select
-from app.database import DATABASE_URL, get_session
-from app.db_utils import scalar_int
-from app.models import Customer, Lead, User, UserRole
+
 from app.auth import (
+    ACCESS_TOKEN_EXPIRE_MINUTES,
     verify_password,
     create_access_token,
     get_current_user,
@@ -13,11 +16,14 @@ from app.auth import (
     has_configurator_access,
     effective_on_leave,
 )
-from app.system_user_service import system_user_email
-from app.schemas import Token, UserLogin, UserResponse, BootstrapCreate, LoginQuoteResponse
+from app.auth_cookies import clear_auth_cookie, set_auth_cookie
+from app.database import DATABASE_URL, get_session
+from app.db_utils import scalar_int
 from app.login_quote_service import generate_login_quote
-from datetime import timedelta
-import os
+from app.models import Customer, Lead, User, UserRole
+from app.rate_limit import enforce_rate_limit
+from app.schemas import Token, UserLogin, UserResponse, BootstrapCreate, LoginQuoteResponse
+from app.system_user_service import system_user_email
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -34,9 +40,41 @@ def _build_user_response(user: User) -> UserResponse:
     )
 
 
+def _require_bootstrap_allowed(
+    request: Request,
+    x_bootstrap_secret: str | None = Header(None, alias="X-Bootstrap-Secret"),
+) -> None:
+    """Bootstrap is disabled on Railway unless BOOTSTRAP_SECRET matches.
+
+    Locally, BOOTSTRAP_SECRET is optional; when set it must match the header.
+    """
+    import hmac
+
+    enforce_rate_limit(request, scope="auth-bootstrap", max_requests=5, window_seconds=300)
+    expected = (os.getenv("BOOTSTRAP_SECRET") or "").strip()
+    on_railway = bool(os.getenv("RAILWAY_ENVIRONMENT"))
+    if on_railway and not expected:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Bootstrap is disabled in this environment",
+        )
+    if expected and (
+        not x_bootstrap_secret or not hmac.compare_digest(x_bootstrap_secret, expected)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid bootstrap secret",
+        )
+
+
 @router.post("/bootstrap", response_model=UserResponse)
-async def bootstrap(data: BootstrapCreate, session: Session = Depends(get_session)):
-    """Create the first director when no users exist. No auth required. Locked once any user exists."""
+async def bootstrap(
+    data: BootstrapCreate,
+    request: Request,
+    session: Session = Depends(get_session),
+    _: None = Depends(_require_bootstrap_allowed),
+):
+    """Create the first director when no users exist. Locked once any user exists."""
     existing = session.exec(select(User)).first()
     if existing:
         raise HTTPException(
@@ -56,7 +94,13 @@ async def bootstrap(data: BootstrapCreate, session: Session = Depends(get_sessio
 
 
 @router.post("/login", response_model=Token)
-def login(credentials: UserLogin, session: Session = Depends(get_session)):
+def login(
+    credentials: UserLogin,
+    request: Request,
+    response: Response,
+    session: Session = Depends(get_session),
+):
+    enforce_rate_limit(request, scope="auth-login", max_requests=20, window_seconds=60)
     if credentials.email.strip().lower() == system_user_email():
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -68,7 +112,7 @@ def login(credentials: UserLogin, session: Session = Depends(get_session)):
     user = session.exec(select(User).where(User.email == email)).first()
     if user is None:
         user = session.exec(select(User).where(func.lower(User.email) == email_key)).first()
-    
+
     if not user or not verify_password(credentials.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -81,12 +125,21 @@ def login(credentials: UserLogin, session: Session = Depends(get_session)):
             detail="Account is deactivated",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
-    access_token_expires = timedelta(minutes=1440)
+
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user.email}, expires_delta=access_token_expires
+        data={"sub": user.email},
+        expires_delta=access_token_expires,
+        token_version=int(getattr(user, "token_version", 0) or 0),
     )
+    set_auth_cookie(response, access_token, max_age_seconds=ACCESS_TOKEN_EXPIRE_MINUTES * 60)
     return {"access_token": access_token, "token_type": "bearer"}
+
+
+@router.post("/logout")
+def logout(response: Response):
+    clear_auth_cookie(response)
+    return {"message": "Logged out"}
 
 
 @router.get("/me", response_model=UserResponse)

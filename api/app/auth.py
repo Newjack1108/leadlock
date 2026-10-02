@@ -5,18 +5,56 @@ from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, Request, status, Header
 from fastapi.security import OAuth2PasswordBearer
 from sqlmodel import Session, select
+from app.auth_cookies import extract_bearer_or_cookie_token
 from app.database import get_session
+from app.dealer_access import dealer_may_access
 from app.marketing_access import marketing_may_access
 from app.models import User, UserRole
 from app.viewer_access import viewer_may_access
+import hmac
 import os
 
-SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
-ALGORITHM = os.getenv("ALGORITHM", "HS256")
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))
+_DEFAULT_SECRET_KEY = "your-secret-key-change-in-production"
+SECRET_KEY = os.getenv("SECRET_KEY", _DEFAULT_SECRET_KEY)
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "480"))
+
+
+def assert_secret_key_configured() -> None:
+    """Refuse to run with a missing or default JWT signing key outside tests."""
+    key = (os.getenv("SECRET_KEY") or "").strip()
+    allow_insecure = (os.getenv("ALLOW_INSECURE_SECRET_KEY") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    if allow_insecure:
+        return
+    if not key or key == _DEFAULT_SECRET_KEY:
+        raise RuntimeError(
+            "SECRET_KEY must be set to a strong random value "
+            "(not the default). Set ALLOW_INSECURE_SECRET_KEY=true only for local tests."
+        )
+
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login", auto_error=False)
+
+
+def _resolve_access_token(
+    request: Request,
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+    bearer_token: Optional[str] = Depends(oauth2_scheme),
+) -> str:
+    token = bearer_token or extract_bearer_or_cookie_token(request, authorization)
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return token
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -27,15 +65,26 @@ def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
 
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+def create_access_token(
+    data: dict,
+    expires_delta: Optional[timedelta] = None,
+    token_version: int = 0,
+):
     to_encode = data.copy()
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
     else:
         expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
+    to_encode.update({"exp": expire, "tv": int(token_version)})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
+
+
+def bump_token_version(user: User, session: Session) -> User:
+    """Invalidate existing JWTs for this user (password change / deactivation)."""
+    user.token_version = int(getattr(user, "token_version", 0) or 0) + 1
+    session.add(user)
+    return user
 
 
 def _env_bool(name: str, default: bool = False) -> bool:
@@ -83,7 +132,8 @@ def leave_forbidden_detail(user: User) -> dict:
 
 
 def get_current_user_base(
-    token: str = Depends(oauth2_scheme),
+    request: Request,
+    token: str = Depends(_resolve_access_token),
     session: Session = Depends(get_session),
 ) -> User:
     """JWT + active check; does not block users on leave (used by /me)."""
@@ -97,6 +147,7 @@ def get_current_user_base(
         email: str = payload.get("sub")
         if email is None:
             raise credentials_exception
+        token_version = payload.get("tv")
     except JWTError:
         raise credentials_exception
 
@@ -106,6 +157,10 @@ def get_current_user_base(
         raise credentials_exception
     if not user.is_active:
         raise credentials_exception
+    expected_tv = int(getattr(user, "token_version", 0) or 0)
+    provided_tv = 0 if token_version is None else int(token_version)
+    if provided_tv != expected_tv:
+        raise credentials_exception
     # Expire leave before reporting status on /me
     effective_on_leave(user, session)
     return user
@@ -113,15 +168,22 @@ def get_current_user_base(
 
 def get_current_user(
     request: Request,
-    token: str = Depends(oauth2_scheme),
+    token: str = Depends(_resolve_access_token),
     session: Session = Depends(get_session),
 ) -> User:
     """Authenticated active user; hard-locks accounts currently on leave."""
-    user = get_current_user_base(token=token, session=session)
+    user = get_current_user_base(request=request, token=token, session=session)
     if effective_on_leave(user, session):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=leave_forbidden_detail(user),
+        )
+    if user.role in (UserRole.DEALER_ADMIN, UserRole.DEALER_USER) and not dealer_may_access(
+        request.method, request.url.path
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Dashboard is not available for dealer accounts",
         )
     if user.role == UserRole.MARKETING and not marketing_may_access(request.method, request.url.path):
         raise HTTPException(
@@ -219,6 +281,12 @@ async def require_dealer_configurator_access(
     return current_user
 
 
+def _constant_time_equals(provided: Optional[str], expected: str) -> bool:
+    if provided is None:
+        return False
+    return hmac.compare_digest(provided.encode("utf-8"), expected.encode("utf-8"))
+
+
 def get_webhook_api_key(api_key: str = Header(None, alias="X-API-Key")) -> str:
     """Validate webhook API key from header."""
     expected_key = os.getenv("WEBHOOK_API_KEY")
@@ -227,7 +295,7 @@ def get_webhook_api_key(api_key: str = Header(None, alias="X-API-Key")) -> str:
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Webhook API key not configured"
         )
-    if api_key != expected_key:
+    if not _constant_time_equals(api_key, expected_key):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid API key"
@@ -237,7 +305,7 @@ def get_webhook_api_key(api_key: str = Header(None, alias="X-API-Key")) -> str:
 
 def get_product_import_api_key(authorization: Optional[str] = Header(None, alias="Authorization")) -> str:
     """Validate Bearer token in Authorization header against product import API key."""
-    expected_key = os.getenv("PRODUCT_IMPORT_API_KEY") or os.getenv("WEBHOOK_API_KEY")
+    expected_key = os.getenv("PRODUCT_IMPORT_API_KEY")
     if not expected_key:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -250,7 +318,7 @@ def get_product_import_api_key(authorization: Optional[str] = Header(None, alias
             headers={"WWW-Authenticate": "Bearer"},
         )
     token = authorization[7:].strip()  # Remove "Bearer " prefix
-    if token != expected_key:
+    if not _constant_time_equals(token, expected_key):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid Bearer token",
@@ -261,7 +329,7 @@ def get_product_import_api_key(authorization: Optional[str] = Header(None, alias
 
 def get_production_app_api_key(authorization: Optional[str] = Header(None, alias="Authorization")) -> str:
     """Validate Bearer token against production↔LeadLock shared secret."""
-    expected_key = os.getenv("PRODUCTION_APP_API_KEY") or os.getenv("WEBHOOK_API_KEY")
+    expected_key = os.getenv("PRODUCTION_APP_API_KEY")
     if not expected_key:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -274,10 +342,11 @@ def get_production_app_api_key(authorization: Optional[str] = Header(None, alias
             headers={"WWW-Authenticate": "Bearer"},
         )
     token = authorization[7:].strip()
-    if token != expected_key:
+    if not _constant_time_equals(token, expected_key):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid Bearer token",
             headers={"WWW-Authenticate": "Bearer"},
         )
     return token
+

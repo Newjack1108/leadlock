@@ -57,10 +57,16 @@ export const viewport: Viewport = {
   colorScheme: "light",
 };
 
-/** Public API URL for browser calls only — never use API_PROXY_TARGET (may be a private railway.internal URL). */
+/** Prefer same-origin /api rewrites so HttpOnly auth cookies stay on the app domain. */
 function getServerApiBaseUrl(): string {
-  const raw = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || '';
-  return raw.trim().replace(/\/+$/, '');
+  const forceAbsolute = (process.env.LEADLOCK_BROWSER_API_ABSOLUTE || '')
+    .trim()
+    .toLowerCase();
+  if (['1', 'true', 'yes', 'on'].includes(forceAbsolute)) {
+    const raw = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || '';
+    return raw.trim().replace(/\/+$/, '');
+  }
+  return '';
 }
 
 export default function RootLayout({
@@ -69,14 +75,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   const apiBaseUrl = getServerApiBaseUrl();
-  const apiUrlScript = `window.__LEADLOCK_API_URL__=${JSON.stringify(apiBaseUrl)};`;
+  const apiUrlScript = apiBaseUrl
+    ? `window.__LEADLOCK_API_URL__=${JSON.stringify(apiBaseUrl)};`
+    : `window.__LEADLOCK_API_URL__='';`;
 
   return (
     <html lang="en" className="bg-background">
       <head>
-        {apiBaseUrl ? (
-          <script dangerouslySetInnerHTML={{ __html: apiUrlScript }} />
-        ) : null}
+        <script dangerouslySetInnerHTML={{ __html: apiUrlScript }} />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background`}

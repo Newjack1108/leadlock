@@ -27,6 +27,7 @@ import {
 } from '@/lib/api';
 import { QuoteTemplate, QuoteTemplateCreate, QuoteTemplateUpdate, SalesDocument } from '@/lib/types';
 import { toast } from 'sonner';
+import { sanitizeHtml } from '@/lib/sanitizeHtml';
 
 export default function QuoteTemplatesPage() {
   const router = useRouter();
@@ -524,7 +525,7 @@ export default function QuoteTemplatesPage() {
                   <Label>Body:</Label>
                   <div
                     className="mt-1 p-4 bg-muted rounded border"
-                    dangerouslySetInnerHTML={{ __html: previewData.body_html }}
+                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(previewData.body_html) }}
                   />
                 </div>
               </div>

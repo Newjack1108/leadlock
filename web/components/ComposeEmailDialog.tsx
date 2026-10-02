@@ -22,6 +22,7 @@ import { Customer, EmailTemplate } from '@/lib/types';
 import { toast } from 'sonner';
 import { Paperclip, X, FolderOpen } from 'lucide-react';
 import SalesDocumentAttachDialog from '@/components/SalesDocumentAttachDialog';
+import { sanitizeHtml } from '@/lib/sanitizeHtml';
 
 interface ComposeEmailDialogProps {
   open: boolean;
@@ -672,7 +673,7 @@ export default function ComposeEmailDialog({
         {signature ? (
           <div
             className="p-3 bg-muted rounded-md border text-sm max-h-[50vh] overflow-y-auto"
-            dangerouslySetInnerHTML={{ __html: signature }}
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(signature) }}
           />
         ) : null}
         <DialogFooter className="gap-2 sm:justify-between">
@@ -728,7 +729,7 @@ export default function ComposeEmailDialog({
             <div className="border rounded-md bg-muted/30 overflow-auto max-h-[min(60vh,560px)] p-4">
               <div
                 className="max-w-[600px] mx-auto bg-background border shadow-sm rounded-md overflow-hidden"
-                dangerouslySetInnerHTML={{ __html: previewResult.body_html }}
+                dangerouslySetInnerHTML={{ __html: sanitizeHtml(previewResult.body_html) }}
               />
             </div>
           </div>

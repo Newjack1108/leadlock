@@ -24,9 +24,9 @@ function formatBackOn(leaveUntil: string | null | undefined): string | null {
 }
 
 function clearAuthAndGoLogin() {
-  localStorage.removeItem('token');
-  document.cookie = 'token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-  window.location.replace('/login');
+  void import('@/lib/api').then(({ logoutSession }) => logoutSession()).finally(() => {
+    window.location.replace('/login');
+  });
 }
 
 function fireHolidayConfetti() {

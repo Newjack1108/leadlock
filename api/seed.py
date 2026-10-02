@@ -22,19 +22,19 @@ def seed_users():
         users = [
             User(
                 email="director@cheshirestables.com",
-                hashed_password=get_password_hash("director123"),
+                hashed_password=get_password_hash("director12345"),
                 full_name="Director",
                 role=UserRole.DIRECTOR
             ),
             User(
                 email="manager@cheshirestables.com",
-                hashed_password=get_password_hash("manager123"),
+                hashed_password=get_password_hash("manager12345"),
                 full_name="Sales Manager",
                 role=UserRole.SALES_MANAGER
             ),
             User(
                 email="closer@cheshirestables.com",
-                hashed_password=get_password_hash("closer123"),
+                hashed_password=get_password_hash("closer12345"),
                 full_name="Closer",
                 role=UserRole.CLOSER
             ),
@@ -45,9 +45,9 @@ def seed_users():
         
         session.commit()
         print("✓ Seeded users:")
-        print("  - director@cheshirestables.com / director123")
-        print("  - manager@cheshirestables.com / manager123")
-        print("  - closer@cheshirestables.com / closer123")
+        print("  - director@cheshirestables.com / director12345")
+        print("  - manager@cheshirestables.com / manager12345")
+        print("  - closer@cheshirestables.com / closer12345")
 
 if __name__ == "__main__":
     seed_users()

@@ -86,7 +86,6 @@ export default function LoginGreeting() {
     if (typeof window === 'undefined') return;
     if (loginGreetingPathShouldSuppress(pathname)) return;
     if (sessionStorage.getItem(LEADLOCK_LOGIN_GREETING_SESSION_KEY) !== '1') return;
-    if (!localStorage.getItem('token')) return;
 
     let cancelled = false;
 

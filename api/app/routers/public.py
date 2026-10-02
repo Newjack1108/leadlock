@@ -5,7 +5,7 @@ Used for quote view link tracking, public quote view page, and website visit pix
 import base64
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -80,6 +80,21 @@ SITE_SLUG_TO_ENUM = {
 }
 
 
+def _quote_view_max_age_days() -> int:
+    raw = (os.getenv("QUOTE_VIEW_TOKEN_MAX_AGE_DAYS") or "90").strip()
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return 90
+
+
+def _ensure_quote_view_token_valid(quote_email: QuoteEmail) -> None:
+    created = getattr(quote_email, "created_at", None) or datetime.utcnow()
+    max_age = timedelta(days=_quote_view_max_age_days())
+    if created + max_age < datetime.utcnow():
+        raise HTTPException(status_code=410, detail="Quote view link has expired")
+
+
 def _resolve_public_logo_url(
     request: Request,
     logo_url: str | None,
@@ -135,6 +150,7 @@ def get_public_quote_view(
     quote_email = session.exec(statement).first()
     if not quote_email:
         raise HTTPException(status_code=404, detail="Quote view not found")
+    _ensure_quote_view_token_valid(quote_email)
 
     quote = session.get(Quote, quote_email.quote_id)
     if not quote:
@@ -327,6 +343,7 @@ def get_public_quote_pdf(
     quote_email = session.exec(statement).first()
     if not quote_email:
         raise HTTPException(status_code=404, detail="Quote view not found")
+    _ensure_quote_view_token_valid(quote_email)
 
     quote = session.get(Quote, quote_email.quote_id)
     if not quote:
@@ -603,7 +620,7 @@ def submit_review_prize(
 
 @router.get("/pixel")
 def get_pixel(
-    token: str = Query(..., description="Customer number (e.g. CUST-2024-001)"),
+    token: str = Query(..., description="Unguessable tracking pixel token for a customer"),
     site: str = Query(..., description="Site slug: cheshire_stables, csgb, or blc"),
     session: Session = Depends(get_session),
 ):
@@ -613,9 +630,9 @@ def get_pixel(
     (do not leak whether token was valid).
     """
     site_enum = SITE_SLUG_TO_ENUM.get(site.lower() if site else "")
-    if site_enum is not None:
+    if site_enum is not None and token and len(token) >= 16:
         customer = session.exec(
-            select(Customer).where(Customer.customer_number == token)
+            select(Customer).where(Customer.tracking_pixel_token == token)
         ).first()
         if customer:
             visit = WebsiteVisit(customer_id=customer.id, site=site_enum)

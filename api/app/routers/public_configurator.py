@@ -1,5 +1,5 @@
 """Public configurator endpoints (no auth; token-based)."""
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlmodel import Session, select
 
 from app.configurator_invite_service import (
@@ -21,12 +21,13 @@ from app.models import (
     ProductCategory,
     Quote,
 )
+from app.rate_limit import enforce_rate_limit
 from app.schemas import (
-    ConfiguratorCatalogResponse,
     ConfiguratorPreviewRequest,
     ConfiguratorPreviewResponse,
-    ProductResponse,
+    PublicConfiguratorCatalogResponse,
     PublicConfiguratorContextResponse,
+    PublicConfiguratorProductResponse,
     PublicConfiguratorRegisterRequest,
     PublicConfiguratorStartRequest,
     PublicConfiguratorStartResponse,
@@ -36,27 +37,41 @@ from app.schemas import (
 router = APIRouter(prefix="/api/public/configurator", tags=["public-configurator"])
 
 
-def _build_product_response(product: Product) -> ProductResponse:
-    payload = {
-        **product.dict(),
-        "configurator_front_face": (
+def _build_public_product(product: Product) -> PublicConfiguratorProductResponse:
+    return PublicConfiguratorProductResponse(
+        id=product.id,
+        name=product.name,
+        description=product.description,
+        category=product.category,
+        is_extra=product.is_extra,
+        base_price=product.base_price,
+        unit=product.unit,
+        image_url=product.image_url,
+        size=product.size,
+        height=product.height,
+        width=product.width,
+        length=product.length,
+        configurator_width=product.configurator_width,
+        configurator_length=product.configurator_length,
+        configurator_front_face=(
             ConfiguratorFrontFace(product.configurator_front_face)
             if isinstance(product.configurator_front_face, str) and product.configurator_front_face
             else product.configurator_front_face
         ),
-        "configurator_connection_profile": (
+        configurator_connection_profile=(
             ConfiguratorConnectionProfile(product.configurator_connection_profile)
             if isinstance(product.configurator_connection_profile, str)
             and product.configurator_connection_profile
             else product.configurator_connection_profile
         ),
-        "is_production_synced": product.production_product_id is not None,
-        "optional_extras": None,
-    }
-    return ProductResponse(**payload)
+        configurator_is_corner_box=bool(product.configurator_is_corner_box),
+        configurator_is_starter_box=bool(product.configurator_is_starter_box),
+        allow_in_configurator=bool(product.allow_in_configurator),
+        configurator_per_box=bool(product.configurator_per_box),
+    )
 
 
-def _get_public_catalog(session: Session) -> ConfiguratorCatalogResponse:
+def _get_public_catalog(session: Session) -> PublicConfiguratorCatalogResponse:
     items = session.exec(
         select(Product)
         .where(
@@ -75,17 +90,19 @@ def _get_public_catalog(session: Session) -> ConfiguratorCatalogResponse:
         )
         .order_by(Product.name)
     ).all()
-    return ConfiguratorCatalogResponse(
-        items=[_build_product_response(product) for product in items],
-        extras=[_build_product_response(product) for product in extras],
+    return PublicConfiguratorCatalogResponse(
+        items=[_build_public_product(product) for product in items],
+        extras=[_build_public_product(product) for product in extras],
     )
 
 
 @router.post("/start", response_model=PublicConfiguratorStartResponse)
 async def public_configurator_start(
     body: PublicConfiguratorStartRequest,
+    request: Request,
     session: Session = Depends(get_session),
 ):
+    enforce_rate_limit(request, scope="public-configurator-start", max_requests=30, window_seconds=60)
     invite = start_organic_invite(session, body.campaign_slug)
     status = invite.status.value if hasattr(invite.status, "value") else str(invite.status)
     return PublicConfiguratorStartResponse(
@@ -95,7 +112,7 @@ async def public_configurator_start(
     )
 
 
-@router.get("/catalog", response_model=ConfiguratorCatalogResponse)
+@router.get("/catalog", response_model=PublicConfiguratorCatalogResponse)
 async def public_configurator_catalog(session: Session = Depends(get_session)):
     return _get_public_catalog(session)
 

@@ -51,7 +51,6 @@ export default function TaskAssignmentPopup() {
   const [queue, setQueue] = useState<Reminder[]>([]);
   const baselinedRef = useRef(false);
   const currentUserRef = useRef<AuthMe | null>(null);
-  const tokenRef = useRef<string | null>(null);
   const queueIdsRef = useRef<Set<number>>(new Set());
 
   const activeTask = queue[0] ?? null;
@@ -73,17 +72,7 @@ export default function TaskAssignmentPopup() {
 
   const poll = useCallback(async () => {
     if (typeof window === 'undefined') return;
-    const token = localStorage.getItem('token');
-    if (!token) return;
     if (loginGreetingPathShouldSuppress(pathname)) return;
-
-    if (token !== tokenRef.current) {
-      tokenRef.current = token;
-      currentUserRef.current = null;
-      baselinedRef.current = false;
-      queueIdsRef.current = new Set();
-      setQueue([]);
-    }
 
     let user = currentUserRef.current;
     if (!user) {
@@ -136,7 +125,7 @@ export default function TaskAssignmentPopup() {
 
   useEffect(() => {
     if (loginGreetingPathShouldSuppress(pathname)) return;
-    if (typeof window === 'undefined' || !localStorage.getItem('token')) return;
+    if (typeof window === 'undefined') return;
 
     void poll();
     const id = window.setInterval(() => {

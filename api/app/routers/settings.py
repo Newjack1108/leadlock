@@ -194,6 +194,9 @@ async def update_user_email_settings(
     """Update current user's email settings. Users can only update their own."""
     try:
         update_data = settings_data.dict(exclude_unset=True)
+        from app.mailbox_crypto import prepare_mailbox_fields_for_save
+
+        update_data = prepare_mailbox_fields_for_save(update_data)
         
         # Update only provided fields
         for field, value in update_data.items():
@@ -274,9 +277,11 @@ async def import_customers(
 @router.get("/customers/export")
 async def export_customers(
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(
+        require_role([UserRole.DIRECTOR, UserRole.SALES_MANAGER, UserRole.CLOSER])
+    ),
 ):
-    """Export all customers to CSV. All authenticated users."""
+    """Export all customers to CSV. Director and sales roles only."""
     content = export_customers_to_csv(session)
     date_str = datetime.utcnow().strftime("%Y-%m-%d")
     return Response(

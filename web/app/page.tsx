@@ -1,15 +1,13 @@
 'use client';
 
 import { useEffect } from 'react';
-import api from '@/lib/api';
+import api, { logoutSession } from '@/lib/api';
 
 export default function Home() {
   useEffect(() => {
     let cancelled = false;
-    const clearAuthStorage = () => {
-      if (typeof window === 'undefined') return;
-      localStorage.removeItem('token');
-      document.cookie = 'token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    const clearAuthStorage = async () => {
+      await logoutSession();
     };
 
     const redirectByRole = async () => {
@@ -23,7 +21,7 @@ export default function Home() {
         });
         if (cancelled) return;
         if (response.status === 401) {
-          clearAuthStorage();
+          await clearAuthStorage();
           window.location.replace('/login');
           return;
         }
