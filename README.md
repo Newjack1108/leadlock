@@ -357,3 +357,4 @@ Proprietary - Cheshire Stables
 #   l e a d l o c k 
  
  
+Cloud agent connectivity test — safe to revert.
