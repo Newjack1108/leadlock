@@ -59,6 +59,7 @@ export default function ProductsPage() {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [saving, setSaving] = useState(false);
+  const [tradeSavingId, setTradeSavingId] = useState<number | null>(null);
   const [newProduct, setNewProduct] = useState({
     name: '',
     description: '',
@@ -219,6 +220,35 @@ export default function ProductsPage() {
       toast.error(getApiErrorDetail(error) || 'Failed to update product');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleToggleTradeDealer = async (product: Product, checked: boolean) => {
+    const previous = product.allow_trade_dealer_sale;
+    setProducts((prev) =>
+      prev.map((item) =>
+        item.id === product.id ? { ...item, allow_trade_dealer_sale: checked } : item
+      )
+    );
+    setTradeSavingId(product.id);
+    try {
+      await api.patch(`/api/products/${product.id}`, {
+        allow_trade_dealer_sale: checked,
+      });
+      toast.success(
+        checked
+          ? `${product.name} added to the trade dealer`
+          : `${product.name} removed from the trade dealer`
+      );
+    } catch (error: unknown) {
+      setProducts((prev) =>
+        prev.map((item) =>
+          item.id === product.id ? { ...item, allow_trade_dealer_sale: previous } : item
+        )
+      );
+      toast.error(getApiErrorDetail(error) || 'Failed to update trade dealer setting');
+    } finally {
+      setTradeSavingId(null);
     }
   };
 
@@ -402,6 +432,9 @@ export default function ProductsPage() {
                     <th className="text-left p-3 font-medium">Price</th>
                     <th className="text-left p-3 font-medium">Unit</th>
                     <th className="text-left p-3 font-medium">SKU</th>
+                    <th className="text-left p-3 font-medium whitespace-nowrap" title="Allow trade dealers to sell this product">
+                      Trade
+                    </th>
                     <th className="text-left p-3 font-medium">Pushed</th>
                     <th className="text-right p-3 font-medium w-[100px]">Actions</th>
                   </tr>
@@ -448,6 +481,17 @@ export default function ProductsPage() {
                       <td className="p-3 font-semibold">£{Number(product.base_price).toFixed(2)}</td>
                       <td className="p-3 text-muted-foreground">{product.unit || '—'}</td>
                       <td className="p-3 text-muted-foreground">{product.sku || '—'}</td>
+                      <td className="p-3" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={!!product.allow_trade_dealer_sale}
+                          disabled={tradeSavingId === product.id}
+                          aria-label={`Allow trade dealers to sell ${product.name}`}
+                          title="Allow trade dealers to sell this product"
+                          onChange={(e) => void handleToggleTradeDealer(product, e.target.checked)}
+                          className="h-4 w-4 rounded border-input"
+                        />
+                      </td>
                       <td className="p-3 text-muted-foreground text-sm">
                         {product.production_pushed_at
                           ? formatDateTime(product.production_pushed_at)
@@ -565,6 +609,21 @@ export default function ProductsPage() {
                         <span>{product.sku}</span>
                       </div>
                     )}
+                    <label
+                      className="flex items-center justify-between gap-2 pt-1 cursor-pointer"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <span className="text-muted-foreground">Trade dealer</span>
+                      <input
+                        type="checkbox"
+                        checked={!!product.allow_trade_dealer_sale}
+                        disabled={tradeSavingId === product.id}
+                        aria-label={`Allow trade dealers to sell ${product.name}`}
+                        title="Allow trade dealers to sell this product"
+                        onChange={(e) => void handleToggleTradeDealer(product, e.target.checked)}
+                        className="h-4 w-4 rounded border-input"
+                      />
+                    </label>
                     {product.production_pushed_at && (
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Pushed:</span>
