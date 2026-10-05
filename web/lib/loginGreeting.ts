@@ -32,6 +32,18 @@ export function loginGreetingPathShouldSuppress(pathname: string | null): boolea
   return false;
 }
 
+/** Role home after password login or visiting `/` while authenticated. */
+export function postLoginPathForRole(role: string | null | undefined): string {
+  if (role === 'CLOSER') return '/closer-dashboard';
+  if (role === 'DEALER_ADMIN' || role === 'DEALER_USER') return '/dealer';
+  if (role === 'MARKETING') return '/dashboard';
+  return '/leads';
+}
+
+/** Retries for /api/auth/me when the post-login greeting flag is set. */
+export const LOGIN_GREETING_ME_MAX_ATTEMPTS = 3;
+export const LOGIN_GREETING_ME_RETRY_DELAY_MS = 200;
+
 export function displayFirstNameFromUser(fullName: string, email: string): string {
   const fromName = fullName.trim().split(/\s+/)[0];
   if (fromName) return fromName;

@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import api, { logoutSession } from '@/lib/api';
+import { postLoginPathForRole } from '@/lib/loginGreeting';
 
 export default function Home() {
   useEffect(() => {
@@ -29,16 +30,7 @@ export default function Home() {
           window.location.replace('/on-leave');
           return;
         }
-        const role = response.data?.role;
-        const path =
-          role === 'CLOSER'
-            ? '/closer-dashboard'
-            : role === 'DEALER_ADMIN' || role === 'DEALER_USER'
-              ? '/dealer'
-              : role === 'MARKETING'
-                ? '/dashboard'
-                : '/leads';
-        window.location.replace(path);
+        window.location.replace(postLoginPathForRole(response.data?.role));
       } catch {
         if (!cancelled) {
           clearAuthStorage();

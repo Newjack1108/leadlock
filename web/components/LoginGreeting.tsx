@@ -10,6 +10,8 @@ import { cn } from '@/lib/utils';
 import {
   LEADLOCK_LOGIN_GREETING_SESSION_KEY,
   LOGIN_GREETING_AUTO_DISMISS_MS,
+  LOGIN_GREETING_ME_MAX_ATTEMPTS,
+  LOGIN_GREETING_ME_RETRY_DELAY_MS,
   displayFirstNameFromUser,
   getGreetingLabelForHour,
   loginGreetingPathShouldSuppress,
@@ -21,6 +23,29 @@ const CONFETTI_Z = 5100;
 const CONFETTI_COLORS = ['#1F6B3A', '#2d8f52', '#3FA86B', '#5cb87e', '#10B981', '#a7f3d0', '#ecfdf5'];
 
 const FADE_OUT_MS = 900;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+async function fetchAuthMeWithRetry(
+  isCancelled: () => boolean,
+): Promise<{ full_name: string; email: string }> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= LOGIN_GREETING_ME_MAX_ATTEMPTS; attempt++) {
+    if (isCancelled()) throw lastError ?? new Error('cancelled');
+    try {
+      const { data } = await api.get<{ full_name: string; email: string }>('/api/auth/me');
+      return data;
+    } catch (error) {
+      lastError = error;
+      if (attempt < LOGIN_GREETING_ME_MAX_ATTEMPTS) {
+        await sleep(LOGIN_GREETING_ME_RETRY_DELAY_MS * attempt);
+      }
+    }
+  }
+  throw lastError;
+}
 
 /** Returns delayed side-burst timeout id for cleanup. */
 function fireLoginConfetti(): number {
@@ -91,7 +116,7 @@ export default function LoginGreeting() {
 
     const run = async () => {
       try {
-        const { data } = await api.get<{ full_name: string; email: string }>('/api/auth/me');
+        const data = await fetchAuthMeWithRetry(() => cancelled);
         if (cancelled) return;
         sessionStorage.removeItem(LEADLOCK_LOGIN_GREETING_SESSION_KEY);
         const hour = new Date().getHours();

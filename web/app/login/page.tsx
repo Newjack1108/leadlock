@@ -7,7 +7,10 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import Logo from '@/components/Logo';
 import api, { AUTH_FETCH_TIMEOUT_MS, getApiErrorDetail } from '@/lib/api';
-import { LEADLOCK_LOGIN_GREETING_SESSION_KEY } from '@/lib/loginGreeting';
+import {
+  LEADLOCK_LOGIN_GREETING_SESSION_KEY,
+  postLoginPathForRole,
+} from '@/lib/loginGreeting';
 import { toast } from 'sonner';
 
 export default function LoginPage() {
@@ -44,8 +47,18 @@ export default function LoginPage() {
         // ignore
       }
       document.cookie = 'token=; path=/; max-age=0';
+
+      // Cookie is set; resolve role here so we skip the `/` bounce that suppressed greeting.
+      const me = await api.get<{ role?: string; on_leave?: boolean }>('/api/auth/me', {
+        timeout: AUTH_FETCH_TIMEOUT_MS,
+        skipAuthRedirect: true,
+      });
+      if (me.data?.on_leave) {
+        window.location.assign('/on-leave');
+        return;
+      }
       sessionStorage.setItem(LEADLOCK_LOGIN_GREETING_SESSION_KEY, '1');
-      window.location.assign('/');
+      window.location.assign(postLoginPathForRole(me.data?.role));
     } catch (error: unknown) {
       const message = getApiErrorDetail(error);
       toast.error(
