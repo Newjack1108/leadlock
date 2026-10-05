@@ -64,10 +64,12 @@ Set these in your API environment (e.g. Railway):
 | Variable | Description |
 |----------|-------------|
 | `FACEBOOK_VERIFY_TOKEN` | Arbitrary string you set in the Meta App webhook configuration; must match exactly for verification (used for Messenger and Lead Ads webhook verify). |
+| `FACEBOOK_APP_SECRET` | Shared Meta **App secret** used to verify `X-Hub-Signature-256` on webhook POSTs. Required unless you set the channel-specific secrets below. |
+| `FACEBOOK_MESSENGER_APP_SECRET` | Optional. App secret for the **LeadLock Messenger** Meta app. When set, Messenger POSTs accept this secret or `FACEBOOK_APP_SECRET`. |
 | `FACEBOOK_PAGE_ACCESS_TOKEN` | Default / fallback Messenger Page access token (`pages_messaging`). Used when a customer has no `messenger_page_id`, or when the Page is not listed in the map below. |
 | `FACEBOOK_MESSENGER_PAGE_TOKENS` | **Required for dual-Page replies.** JSON object mapping Facebook Page ID → Page access token. Example: `{"485666198220603":"<CSGB token>","1806797756222550":"<Cheshire token>"}`. |
 
-Do **not** put the Lead Ads system-user token into Messenger vars. Leave `FACEBOOK_LEADS_ACCESS_TOKEN` for Lead Ads only.
+Do **not** put the Lead Ads system-user token into Messenger vars. Leave `FACEBOOK_LEADS_ACCESS_TOKEN` for Lead Ads only. With two Meta apps, set each app’s **App secret** on the matching channel variable (`FACEBOOK_MESSENGER_APP_SECRET` / `FACEBOOK_LEADS_APP_SECRET`) rather than forcing one shared secret.
 
 **Optional / unused by current code:**
 
@@ -117,7 +119,8 @@ Before expecting production Messenger to work, confirm:
 3. Webhook field **`messages`** is subscribed.
 4. Both Pages are installed with `subscribed_fields=messages`.
 5. Railway has `FACEBOOK_VERIFY_TOKEN`, `FACEBOOK_PAGE_ACCESS_TOKEN`, and `FACEBOOK_MESSENGER_PAGE_TOKENS` (both Page tokens).
-6. `FACEBOOK_LEADS_ACCESS_TOKEN` is unchanged (Ads only).
+6. Railway has `FACEBOOK_MESSENGER_APP_SECRET` (Messenger app) or a correct shared `FACEBOOK_APP_SECRET`.
+7. `FACEBOOK_LEADS_ACCESS_TOKEN` is unchanged (Ads only).
 
 ### 7. Testing
 
@@ -132,6 +135,7 @@ Before expecting production Messenger to work, confirm:
 | Symptom | Likely cause | Fix |
 |--------|---------------|-----|
 | **403 on verification** | Verify token mismatch or wrong hub.mode. | Ensure `FACEBOOK_VERIFY_TOKEN` in your API exactly matches the value in Meta App → Webhooks. |
+| **403 on POST / invalid signature** | Wrong or missing App secret for the Messenger Meta app. | Set `FACEBOOK_MESSENGER_APP_SECRET` (or shared `FACEBOOK_APP_SECRET`) to that app’s **App secret** from Meta → Settings → Basic. |
 | **Messages not received** | Webhook not subscribed or URL wrong. | Confirm callback URL and **messages** subscription; confirm each Page is installed. |
 | **Send fails (500)** | Missing or wrong Page token for that conversation. | Ensure `FACEBOOK_MESSENGER_PAGE_TOKENS` includes the customer’s `messenger_page_id`, or set `FACEBOOK_PAGE_ACCESS_TOKEN`. |
 | **Reply works for one Page only** | Single token only. | Add both Page tokens to `FACEBOOK_MESSENGER_PAGE_TOKENS`. |
@@ -144,6 +148,8 @@ Before expecting production Messenger to work, confirm:
 LeadLock receives **Lead Ad** form submissions via a separate webhook. When a lead is submitted on a Facebook or Instagram Lead Ad, Meta sends a notification; LeadLock fetches the lead’s field data (name, email, phone, etc.) from the Graph API and creates a **Customer** and **Lead** (source FACEBOOK).
 
 Use the **LeadLock Ads** Meta app and `FACEBOOK_LEADS_ACCESS_TOKEN` (Graph API v26.0). Do not replace Messenger’s Page tokens with the Ads token.
+
+Set `FACEBOOK_LEADS_APP_SECRET` to that app’s **App secret** (Meta → Settings → Basic), or use a shared `FACEBOOK_APP_SECRET` that matches the Ads app when both webhooks share one Meta app. Without a matching secret, Lead Ads POSTs return 403.
 
 ### Lead Ads webhook URL
 
@@ -196,12 +202,13 @@ The token used as `FACEBOOK_LEADS_ACCESS_TOKEN` must have:
 | `advert metadata unavailable; retrying without ad_id/ad_name` | Graph rejected advert fields | Same permission / asset fix as above |
 | Lead has `Facebook Ad ID:` but no `Facebook Advert:` | Webhook supplied `ad_id`; Graph still omitted `ad_name` | Token / ad-account access still short for `ad_name` |
 | Meta Lead Ads Testing Tool | Often has no `ad_id` / `ad_name` | Expected; use a real ad click for advert metadata |
+| **403 Invalid Facebook signature** | Wrong or missing Ads App secret | Set `FACEBOOK_LEADS_APP_SECRET` (or shared `FACEBOOK_APP_SECRET`) to the LeadLock Ads app **App secret** |
 
 Existing leads are not updated automatically. Do not replay webhooks (duplicates).
 
 ### Testing Lead Ads
 
-1. Set `FACEBOOK_VERIFY_TOKEN` and `FACEBOOK_LEADS_ACCESS_TOKEN` in your API (system-user token with the permissions above).
+1. Set `FACEBOOK_VERIFY_TOKEN`, `FACEBOOK_LEADS_ACCESS_TOKEN`, and `FACEBOOK_LEADS_APP_SECRET` (or a matching shared `FACEBOOK_APP_SECRET`) in your API.
 2. In Meta App → Webhooks → Page, add the leadgen callback URL and verify.
 3. Subscribe to **leadgen** and install the app on your Page (see above).
 4. Create a test Lead Ad or use Meta’s test lead tool; submit a lead. The lead should appear in LeadLock as a new Lead (and Customer) with source FACEBOOK and type STABLES.

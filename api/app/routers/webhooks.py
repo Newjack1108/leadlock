@@ -22,7 +22,11 @@ PRODUCT_IMPORT_TYPE_MAIN = frozenset(
     }
 )
 from app.database import get_session
-from app.facebook_webhook_security import verify_facebook_signature
+from app.facebook_webhook_security import (
+    FACEBOOK_CHANNEL_LEADGEN,
+    FACEBOOK_CHANNEL_MESSENGER,
+    verify_facebook_signature,
+)
 from app.models import (
     Lead,
     User,
@@ -879,7 +883,15 @@ async def facebook_messenger_webhook(request: Request, session: Session = Depend
     """
     raw_body = await request.body()
     signature = request.headers.get("X-Hub-Signature-256")
-    if not verify_facebook_signature(raw_body, signature):
+    if not verify_facebook_signature(
+        raw_body, signature, channel=FACEBOOK_CHANNEL_MESSENGER
+    ):
+        print(
+            "Facebook Messenger webhook: invalid signature "
+            "(check FACEBOOK_MESSENGER_APP_SECRET or FACEBOOK_APP_SECRET)",
+            file=sys.stderr,
+            flush=True,
+        )
         raise HTTPException(status_code=403, detail="Invalid Facebook signature")
     try:
         import json as _json
@@ -1201,7 +1213,15 @@ async def facebook_leadgen_webhook(request: Request, session: Session = Depends(
     """
     raw_body = await request.body()
     signature = request.headers.get("X-Hub-Signature-256")
-    if not verify_facebook_signature(raw_body, signature):
+    if not verify_facebook_signature(
+        raw_body, signature, channel=FACEBOOK_CHANNEL_LEADGEN
+    ):
+        print(
+            "Facebook Lead Ads webhook: invalid signature "
+            "(check FACEBOOK_LEADS_APP_SECRET or FACEBOOK_APP_SECRET)",
+            file=sys.stderr,
+            flush=True,
+        )
         raise HTTPException(status_code=403, detail="Invalid Facebook signature")
     try:
         import json as _json
