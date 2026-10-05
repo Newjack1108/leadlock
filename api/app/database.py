@@ -2325,6 +2325,22 @@ def create_db_and_tables():
                 err = str(e).lower()
                 if "already exists" not in err and "duplicate" not in err:
                     print(f"Warning: could not create ix_activity_customer_id: {e}", file=sys.stderr, flush=True)
+            try:
+                with engine.begin() as conn:
+                    conn.execute(
+                        sql_text(
+                            "CREATE INDEX IF NOT EXISTS ix_activity_created_by_created_at "
+                            "ON activity (created_by_id, created_at)"
+                        )
+                    )
+            except Exception as e:
+                err = str(e).lower()
+                if "already exists" not in err and "duplicate" not in err:
+                    print(
+                        f"Warning: could not create ix_activity_created_by_created_at: {e}",
+                        file=sys.stderr,
+                        flush=True,
+                    )
 
         # Step 5: Migrate Quote table: lead_id -> customer_id
         if has_quote_table:

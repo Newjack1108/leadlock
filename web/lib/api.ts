@@ -4,6 +4,7 @@ import {
   ActivityType,
   type CustomerCommunicationStats,
   type DashboardCommunicationTotals,
+  type DashboardMyActivityItem,
   type DashboardPresetPeriod,
   type DashboardStats,
   type DateRangeQueryParams,
@@ -502,6 +503,11 @@ export const getDashboardStats = async (filter?: DateRangeQueryParams): Promise<
     params: buildDateRangeParams(filter),
     timeout: 120_000,
   });
+  return response.data;
+};
+
+export const getMyDashboardActivity = async (): Promise<DashboardMyActivityItem[]> => {
+  const response = await api.get('/api/dashboard/my-activity');
   return response.data;
 };
 

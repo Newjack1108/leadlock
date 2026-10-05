@@ -1038,6 +1038,15 @@ class DashboardStats(BaseModel):
     leads_by_source: List[LeadSourceCount] = []
 
 
+class DashboardMyActivityItem(BaseModel):
+    id: int
+    customer_id: Optional[int] = None
+    customer_name: Optional[str] = None
+    activity_type: ActivityType
+    notes: Optional[str] = None
+    created_at: datetime
+
+
 class DashboardChannelDirectionCounts(BaseModel):
     sent: int
     received: int

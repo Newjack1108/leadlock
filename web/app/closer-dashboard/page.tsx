@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import ReminderList from '@/components/ReminderList';
+import RecentActivityCard from '@/components/RecentActivityCard';
 import StatusPieChart from '@/components/StatusPieChart';
 import LeadsBySourceBarChart from '@/components/LeadsBySourceBarChart';
 import api, {
@@ -352,6 +353,10 @@ export default function CloserDashboardPage() {
               )}
             </CardContent>
           </Card>
+        </div>
+
+        <div className="mb-4 shrink-0">
+          <RecentActivityCard compact={true} />
         </div>
 
         {/* Pipeline overview: Status, Leads by source, Map */}

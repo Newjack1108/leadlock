@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import ReminderList from '@/components/ReminderList';
+import RecentActivityCard from '@/components/RecentActivityCard';
 import SubmittedConfiguratorInvitesCard from '@/components/configurator/SubmittedConfiguratorInvitesCard';
 import api, {
   getApiErrorDetail,
@@ -1406,6 +1407,10 @@ export default function DashboardPage() {
 
         <div className="mb-8">
           <SubmittedConfiguratorInvitesCard />
+        </div>
+
+        <div className="mb-8">
+          <RecentActivityCard />
         </div>
 
         {!isMarketing && (

@@ -451,6 +451,15 @@ export interface DashboardStats {
   leads_by_source: LeadSourceCount[];
 }
 
+export interface DashboardMyActivityItem {
+  id: number;
+  customer_id?: number | null;
+  customer_name?: string | null;
+  activity_type: ActivityType;
+  notes?: string | null;
+  created_at: string;
+}
+
 export interface DashboardChannelDirectionCounts {
   sent: number;
   received: number;

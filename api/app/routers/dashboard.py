@@ -34,6 +34,7 @@ from app.stats_exclusion import (
 )
 from app.schemas import (
     DashboardStats,
+    DashboardMyActivityItem,
     DashboardChannelDirectionCounts,
     DashboardCommunicationTotals,
     LeadSourceCount,
@@ -48,9 +49,36 @@ from app.schemas import (
     QualifiedForQuotingSummary,
     QualifiedForQuotingItem,
 )
-from typing import Optional
+from typing import List, Optional
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
+
+
+@router.get("/my-activity", response_model=List[DashboardMyActivityItem])
+async def get_my_activity(
+    session: Session = Depends(get_session),
+    current_user=Depends(require_non_dealer_user),
+):
+    """Return the signed-in user's 10 most recent logged activities."""
+    statement = (
+        select(Activity, Customer)
+        .outerjoin(Customer, Activity.customer_id == Customer.id)
+        .where(Activity.created_by_id == current_user.id)
+        .order_by(Activity.created_at.desc())
+        .limit(10)
+    )
+    results = session.exec(statement).all()
+    return [
+        DashboardMyActivityItem(
+            id=activity.id,
+            customer_id=activity.customer_id,
+            customer_name=customer.name if customer else None,
+            activity_type=activity.activity_type,
+            notes=activity.notes,
+            created_at=activity.created_at,
+        )
+        for activity, customer in results
+    ]
 
 
 @router.get("/stats", response_model=DashboardStats)
