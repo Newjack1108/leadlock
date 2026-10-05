@@ -87,6 +87,9 @@ export function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     '/api/:path*',
-    '/((?!_next/static|_next/image|favicon\\.ico|icon\\.png|apple-icon\\.png|manifest\\.webmanifest).*)',
+    // Public files such as /email-icon.png must skip auth. The image optimizer
+    // fetches them without a cookie; a login redirect is not an image, so the
+    // customer profile icons fail to render.
+    '/((?!_next/static|_next/image|.*\\.(?:png|jpe?g|gif|webp|svg|ico|txt|xml|webmanifest)$).*)',
   ],
 };
