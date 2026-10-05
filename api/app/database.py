@@ -2552,6 +2552,45 @@ def create_db_and_tables():
                         import traceback
                         print(traceback.format_exc(), file=sys.stderr, flush=True)
 
+            # Append aftercare points (twisting top doors, timber splits/cracks) once.
+            _timber_anchor = "Natural timber characteristics (knots, cracks, colour variation) are normal."
+            _timber_marker = "Top doors can twist as timber expands and contracts with moisture."
+            _timber_addition = (
+                "Small splits and cracks in timber, and holes where knots shrink and fall out, are normal. "
+                "They do not affect the structure of the building and are not a fault. They can be filled with a suitable flexible wood filler.\n"
+                "Top doors can twist as timber expands and contracts with moisture. This is natural movement, not a manufacturing fault, and door adjustment is part of normal aftercare."
+            )
+            try:
+                with engine.begin() as conn:
+                    rows = conn.execute(
+                        text("SELECT id, default_terms_and_conditions FROM companysettings")
+                    ).fetchall()
+                    for row in rows:
+                        current = row.default_terms_and_conditions or ""
+                        if _timber_anchor in current and _timber_marker not in current:
+                            updated = current.replace(
+                                _timber_anchor,
+                                _timber_anchor + "\n" + _timber_addition,
+                                1,
+                            )
+                            conn.execute(
+                                text(
+                                    "UPDATE companysettings SET default_terms_and_conditions = :terms WHERE id = :id"
+                                ),
+                                {"terms": updated, "id": row.id},
+                            )
+                            print(
+                                f"Added timber aftercare points to companysettings {row.id} default terms",
+                                file=sys.stderr,
+                                flush=True,
+                            )
+            except Exception as terms_error:
+                print(
+                    f"Warning: could not update default terms with timber aftercare points: {terms_error}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+
             company_columns = [col['name'] for col in inspector.get_columns("companysettings")]
             if "email_disclaimer" not in company_columns:
                 print("Adding email_disclaimer column to companysettings table...", file=sys.stderr, flush=True)

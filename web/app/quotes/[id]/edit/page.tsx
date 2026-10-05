@@ -117,6 +117,8 @@ No cancellations once goods are assembled, altered, or used.
 Planning & Use
 Customers are responsible for planning permission where required.
 Natural timber characteristics (knots, cracks, colour variation) are normal.
+Small splits and cracks in timber, and holes where knots shrink and fall out, are normal. They do not affect the structure of the building and are not a fault. They can be filled with a suitable flexible wood filler.
+Top doors can twist as timber expands and contracts with moisture. This is natural movement, not a manufacturing fault, and door adjustment is part of normal aftercare.
 
 Warranty & Liability
 12-month parts-only warranty.
