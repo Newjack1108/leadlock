@@ -71,6 +71,7 @@ export enum LeadSource {
   FACEBOOK_WHATSAPP = "Facebook/WhatsApp",
   INSTAGRAM = "INSTAGRAM",
   GOOGLE = "Google",
+  EBAY = "Ebay",
   WEBSITE = "WEBSITE",  // Legacy - prefer CSGB/CS/BLC WEBSITE for new leads
   CSGB_WEBSITE = "CSGB WEBSITE",
   CS_WEBSITE = "CS WEBSITE",

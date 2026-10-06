@@ -1195,6 +1195,28 @@ def _ensure_activitytype_messenger_values(engine) -> None:
         print(f"Warning: could not ensure activitytype messenger values: {exc}", file=sys.stderr, flush=True)
 
 
+def _ensure_leadsource_enum_values(engine) -> None:
+    """Allow EBAY on the PostgreSQL leadsource enum (no-op on SQLite)."""
+    import sys
+
+    try:
+        inspector = inspect(engine)
+        if not inspector.has_table("lead"):
+            return
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TYPE leadsource ADD VALUE IF NOT EXISTS 'EBAY'"))
+        print("Ensured leadsource enum value: EBAY", file=sys.stderr, flush=True)
+    except Exception as exc:
+        error_str = str(exc).lower()
+        if (
+            "already exists" not in error_str
+            and "does not exist" not in error_str
+            and "sqlite" not in error_str
+            and "unknown type" not in error_str
+        ):
+            print(f"Warning: could not add leadsource value EBAY: {exc}", file=sys.stderr, flush=True)
+
+
 def _ensure_user_leave_schema(engine) -> None:
     """Add on_leave / leave_until / token_version columns for leave lock and JWT revocation."""
     import sys
@@ -1289,6 +1311,7 @@ def create_db_and_tables():
     _ensure_dealer_portal_schema(engine)
     _ensure_userrole_enum_values(engine)
     _ensure_activitytype_messenger_values(engine)
+    _ensure_leadsource_enum_values(engine)
     _ensure_user_leave_schema(engine)
     _ensure_customer_tracking_pixel_tokens(engine)
     _ensure_weekly_planner_schema(engine)

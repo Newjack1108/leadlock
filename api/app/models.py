@@ -84,6 +84,7 @@ class LeadSource(str, Enum):
     FACEBOOK_WHATSAPP = "Facebook/WhatsApp"
     INSTAGRAM = "INSTAGRAM"
     GOOGLE = "Google"
+    EBAY = "Ebay"
     WEBSITE = "WEBSITE"  # Legacy - prefer CSGB_WEBSITE, CS_WEBSITE, BLC_WEBSITE for new leads
     CSGB_WEBSITE = "CSGB WEBSITE"
     CS_WEBSITE = "CS WEBSITE"

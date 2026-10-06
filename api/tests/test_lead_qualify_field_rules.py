@@ -10,6 +10,7 @@ from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
 
 from app.auth import create_access_token
+from app.lead_qualify_rules import STAFF_SELECTABLE_LEAD_SOURCES
 from app.routers import customers as customers_router
 from app.routers import leads as leads_router
 from app.models import (
@@ -20,6 +21,11 @@ from app.models import (
     User,
     UserRole,
 )
+
+
+def test_ebay_is_staff_selectable_lead_source():
+    assert LeadSource.EBAY.value == "Ebay"
+    assert LeadSource.EBAY in STAFF_SELECTABLE_LEAD_SOURCES
 
 
 @pytest.fixture()
