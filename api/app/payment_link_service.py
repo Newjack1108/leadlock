@@ -33,15 +33,14 @@ def company_default_payment_url(company_settings: Optional[CompanySettings]) -> 
 def resolve_payment_url(
     requested: Optional[str],
     saved: Optional[str],
-    company_settings: Optional[CompanySettings],
+    company_settings: Optional[CompanySettings] = None,
 ) -> str:
-    """Requested URL, else saved, else company default, else the built-in PayPal page."""
-    return (
-        (requested or "").strip()
-        or (saved or "").strip()
-        or company_default_payment_url(company_settings)
-        or DEFAULT_PAYPAL_PAYMENT_LINK
-    )
+    """Requested URL, else saved on the order/quote. Does not invent a default.
+
+    company_settings is accepted for call-site compatibility but is not used.
+    """
+    _ = company_settings
+    return (requested or "").strip() or (saved or "").strip()
 
 
 def payment_link_template_context(order: Order, payment_url: str) -> Dict:

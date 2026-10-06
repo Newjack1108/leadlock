@@ -99,7 +99,11 @@ export default function SendPaymentLinkDialog(props: SendPaymentLinkDialogProps)
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const url = paymentUrl.trim();
-    if (url && !url.startsWith('https://')) {
+    if (!url) {
+      toast.error('Payment URL is required. Paste a link or click Use PayPal.');
+      return;
+    }
+    if (!url.startsWith('https://')) {
       toast.error('Payment URL must start with https://');
       return;
     }
@@ -112,7 +116,7 @@ export default function SendPaymentLinkDialog(props: SendPaymentLinkDialogProps)
     try {
       const payload = {
         channel,
-        payment_url: url || undefined,
+        payment_url: url,
         to_email: channel === 'email' ? toEmail.trim() : undefined,
         to_phone: channel === 'sms' ? toPhone.trim() || undefined : undefined,
         subject: channel === 'email' ? subject.trim() || undefined : undefined,
@@ -158,8 +162,8 @@ export default function SendPaymentLinkDialog(props: SendPaymentLinkDialogProps)
             Send Payment link
           </DialogTitle>
           <DialogDescription>
-            Send the company PayPal payment page, or paste another pay-by-link URL, for{' '}
-            {documentLabel} {documentNumber}.
+            Paste a pay-by-link URL, or use the company PayPal page, for {documentLabel}{' '}
+            {documentNumber}.
           </DialogDescription>
         </DialogHeader>
 
@@ -193,7 +197,7 @@ export default function SendPaymentLinkDialog(props: SendPaymentLinkDialogProps)
                 type="url"
                 value={paymentUrl}
                 onChange={(e) => setPaymentUrl(e.target.value)}
-                placeholder="Leave blank to send the company PayPal page"
+                placeholder="Paste a payment URL, or click Use PayPal"
                 className="font-mono text-sm"
               />
               <Button
@@ -212,8 +216,7 @@ export default function SendPaymentLinkDialog(props: SendPaymentLinkDialogProps)
             ) : (
               !paymentUrl.trim() && (
                 <p className="text-xs text-muted-foreground">
-                  Leave blank to send the company PayPal payment page, or paste another pay-by-link
-                  URL.
+                  Paste a pay-by-link URL, or click Use PayPal to fill the company PayPal page.
                 </p>
               )
             )}
@@ -373,7 +376,7 @@ export default function SendPaymentLinkDialog(props: SendPaymentLinkDialogProps)
             <Button type="submit" disabled={loading}>
               {loading
                 ? 'Sending…'
-                : `Send ${isPayPalPaymentLink(paymentUrl) || !paymentUrl.trim() ? 'PayPal' : 'payment'} link by ${channel}`}
+                : `Send Link by ${channel === 'email' ? 'email' : 'SMS'}`}
             </Button>
           </DialogFooter>
         </form>
