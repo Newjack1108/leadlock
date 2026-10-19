@@ -22,6 +22,7 @@ from app.customer_import_export import (
     export_customers_to_csv,
 )
 from app.image_upload_service import upload_specification_sheet_file
+from app.payment_link_service import validate_company_paypal_url
 from datetime import datetime
 import logging
 
@@ -59,8 +60,22 @@ def _company_settings_response(settings: CompanySettings, current_user: User) ->
     return CompanySettingsResponse(**data)
 
 
+def _normalize_default_payment_link(data: dict) -> None:
+    if "default_payment_link_url" not in data:
+        return
+    value = data.get("default_payment_link_url")
+    if value is None or (isinstance(value, str) and not value.strip()):
+        data["default_payment_link_url"] = None
+        return
+    try:
+        data["default_payment_link_url"] = validate_company_paypal_url(str(value))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 def _apply_company_settings_create_data(settings_data: CompanySettingsCreate) -> dict:
     data = settings_data.dict()
+    _normalize_default_payment_link(data)
     for field in ("account_number", "sort_code"):
         if field in data:
             data[field] = encrypt_bank_value(data.get(field))
@@ -136,6 +151,7 @@ async def update_company_settings(
         settings_data.dict(exclude_unset=True),
         settings,
     )
+    _normalize_default_payment_link(update_data)
     for field, value in update_data.items():
         setattr(settings, field, value)
 

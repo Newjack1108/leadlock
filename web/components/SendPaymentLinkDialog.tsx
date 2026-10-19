@@ -23,7 +23,12 @@ import {
   getApiErrorDetail,
 } from '@/lib/api';
 import { Customer, Order, Quote, EmailTemplate, SmsTemplate } from '@/lib/types';
-import { PAYPAL_PAYMENT_LINK, isPayPalPaymentLink } from '@/lib/paymentLink';
+import {
+  PAYPAL_PAYMENT_LINK,
+  isAllowedPaymentLink,
+  isPayPalPaymentLink,
+  messageContainsOnlyPaymentLink,
+} from '@/lib/paymentLink';
 import { toast } from 'sonner';
 import { Mail, MessageSquare, CreditCard } from 'lucide-react';
 
@@ -103,8 +108,14 @@ export default function SendPaymentLinkDialog(props: SendPaymentLinkDialogProps)
       toast.error('Payment URL is required. Paste a link or click Use PayPal.');
       return;
     }
-    if (!url.startsWith('https://')) {
-      toast.error('Payment URL must start with https://');
+    if (!isAllowedPaymentLink(url)) {
+      toast.error(
+        'Use the company PayPal page, or a Trust Payments link from paybylink.trustpayments.com'
+      );
+      return;
+    }
+    if (body.trim() && !messageContainsOnlyPaymentLink(body, url)) {
+      toast.error('The message can only include the payment link you are sending');
       return;
     }
     if (channel === 'email' && !toEmail.trim()) {
@@ -162,8 +173,8 @@ export default function SendPaymentLinkDialog(props: SendPaymentLinkDialogProps)
             Send Payment link
           </DialogTitle>
           <DialogDescription>
-            Paste a pay-by-link URL, or use the company PayPal page, for {documentLabel}{' '}
-            {documentNumber}.
+            Paste a Trust Payments card link, or use the company PayPal page, for {documentLabel}{' '}
+            {documentNumber}. The message can only include that same link.
           </DialogDescription>
         </DialogHeader>
 
@@ -197,7 +208,7 @@ export default function SendPaymentLinkDialog(props: SendPaymentLinkDialogProps)
                 type="url"
                 value={paymentUrl}
                 onChange={(e) => setPaymentUrl(e.target.value)}
-                placeholder="Paste a payment URL, or click Use PayPal"
+                placeholder="Paste a Trust Payments link, or click Use PayPal"
                 className="font-mono text-sm"
               />
               <Button
@@ -213,12 +224,18 @@ export default function SendPaymentLinkDialog(props: SendPaymentLinkDialogProps)
               <p className="text-xs text-muted-foreground">
                 This is the company PayPal payment page. Customers can pay from that link.
               </p>
+            ) : isAllowedPaymentLink(paymentUrl) ? (
+              <p className="text-xs text-muted-foreground">
+                This is a Trust Payments card link.
+              </p>
+            ) : paymentUrl.trim() ? (
+              <p className="text-xs text-destructive">
+                Use the company PayPal page, or a link starting with https://paybylink.trustpayments.com/
+              </p>
             ) : (
-              !paymentUrl.trim() && (
-                <p className="text-xs text-muted-foreground">
-                  Paste a pay-by-link URL, or click Use PayPal to fill the company PayPal page.
-                </p>
-              )
+              <p className="text-xs text-muted-foreground">
+                Paste a Trust Payments card link, or click Use PayPal.
+              </p>
             )}
           </div>
 

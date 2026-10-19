@@ -162,6 +162,42 @@ def test_send_payment_link_invalid_url(api_client, sqlite_engine):
     assert "https" in resp.json()["detail"].lower()
 
 
+def test_send_payment_link_rejects_other_https_url(api_client, sqlite_engine):
+    quote_id = _seed_order(sqlite_engine)
+    order_id = _order_id(api_client, sqlite_engine, quote_id)
+    headers = _auth_headers(sqlite_engine)
+
+    resp = api_client.post(
+        f"/api/orders/{order_id}/send-payment-link",
+        headers=headers,
+        json={"channel": "sms", "payment_url": "https://evil.example/pay"},
+    )
+    assert resp.status_code == 400
+    assert "trust payments" in resp.json()["detail"].lower()
+
+
+@patch.dict(os.environ, {"TWILIO_PHONE_NUMBER": "+441111111111"})
+@patch("app.routers.orders.send_sms", return_value=(True, "SM-PAY-BLOCK", None))
+def test_send_payment_link_rejects_other_url_in_message(_mock_sms, api_client, sqlite_engine):
+    quote_id = _seed_order(sqlite_engine)
+    order_id = _order_id(api_client, sqlite_engine, quote_id)
+    headers = _auth_headers(sqlite_engine)
+    payment_url = "https://paybylink.trustpayments.com/order-123"
+
+    resp = api_client.post(
+        f"/api/orders/{order_id}/send-payment-link",
+        headers=headers,
+        json={
+            "channel": "sms",
+            "payment_url": payment_url,
+            "body": f"Pay {payment_url} or https://evil.example/pay",
+        },
+    )
+    assert resp.status_code == 400
+    assert "message" in resp.json()["detail"].lower()
+    _mock_sms.assert_not_called()
+
+
 def test_send_payment_link_missing_url_requires_url(api_client, sqlite_engine):
     quote_id = _seed_order(sqlite_engine)
     order_id = _order_id(api_client, sqlite_engine, quote_id)
@@ -210,7 +246,7 @@ def test_send_payment_link_missing_phone(api_client, sqlite_engine):
     resp = api_client.post(
         f"/api/orders/{order_id}/send-payment-link",
         headers=headers,
-        json={"channel": "sms", "payment_url": "https://pay.example.com/abc"},
+        json={"channel": "sms", "payment_url": "https://paybylink.trustpayments.com/abc"},
     )
     assert resp.status_code == 400
     assert "phone" in resp.json()["detail"].lower()
@@ -222,7 +258,7 @@ def test_send_payment_link_sms_success(_mock_sms, api_client, sqlite_engine):
     quote_id = _seed_order(sqlite_engine)
     order_id = _order_id(api_client, sqlite_engine, quote_id)
     headers = _auth_headers(sqlite_engine)
-    payment_url = "https://pay.example.com/order-123"
+    payment_url = "https://paybylink.trustpayments.com/order-123"
 
     resp = api_client.post(
         f"/api/orders/{order_id}/send-payment-link",
@@ -269,7 +305,7 @@ def test_send_payment_link_email_success(_mock_send, _mock_cfg, api_client, sqli
     quote_id = _seed_order(sqlite_engine)
     order_id = _order_id(api_client, sqlite_engine, quote_id)
     headers = _auth_headers(sqlite_engine)
-    payment_url = "https://pay.example.com/email-456"
+    payment_url = "https://paybylink.trustpayments.com/email-456"
 
     resp = api_client.post(
         f"/api/orders/{order_id}/send-payment-link",

@@ -201,7 +201,7 @@ def test_send_quote_payment_link_missing_phone(api_client, sqlite_engine):
     resp = api_client.post(
         f"/api/quotes/{quote_id}/send-payment-link",
         headers=headers,
-        json={"channel": "sms", "payment_url": "https://pay.example.com/abc"},
+        json={"channel": "sms", "payment_url": "https://paybylink.trustpayments.com/abc"},
     )
     assert resp.status_code == 400
     assert "phone" in resp.json()["detail"].lower()
@@ -212,7 +212,7 @@ def test_send_quote_payment_link_missing_phone(api_client, sqlite_engine):
 def test_send_quote_payment_link_sms_success(_mock_sms, api_client, sqlite_engine):
     quote_id = _seed_quote(sqlite_engine)
     headers = _auth_headers(sqlite_engine)
-    payment_url = "https://pay.example.com/quote-123"
+    payment_url = "https://paybylink.trustpayments.com/quote-123"
 
     resp = api_client.post(
         f"/api/quotes/{quote_id}/send-payment-link",
@@ -258,7 +258,7 @@ def test_send_quote_payment_link_sms_success(_mock_sms, api_client, sqlite_engin
 def test_send_quote_payment_link_email_success(_mock_send, _mock_cfg, api_client, sqlite_engine):
     quote_id = _seed_quote(sqlite_engine)
     headers = _auth_headers(sqlite_engine)
-    payment_url = "https://pay.example.com/email-456"
+    payment_url = "https://paybylink.trustpayments.com/email-456"
 
     resp = api_client.post(
         f"/api/quotes/{quote_id}/send-payment-link",
@@ -307,7 +307,7 @@ def test_send_quote_payment_link_email_requires_url_when_omitted(api_client, sql
 def test_quote_payment_link_copied_to_order_on_accept(_mock_sms, api_client, sqlite_engine):
     quote_id = _seed_quote(sqlite_engine)
     headers = _auth_headers(sqlite_engine)
-    payment_url = "https://pay.example.com/carry-forward"
+    payment_url = "https://paybylink.trustpayments.com/carry-forward"
 
     with Session(sqlite_engine) as session:
         quote = session.get(Quote, quote_id)

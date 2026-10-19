@@ -87,6 +87,7 @@ from app.email_service import is_email_configured, build_activity_email_notes, s
 from app.email_template_service import render_email_template
 from app.sms_template_service import render_sms_template
 from app.payment_link_service import (
+    assert_payment_message_links,
     validate_payment_url,
     resolve_payment_url,
     quote_payment_link_template_context,
@@ -2767,6 +2768,11 @@ async def send_quote_payment_link(
         else:
             sms_body = default_quote_payment_sms_body(quote, payment_url)
 
+        try:
+            assert_payment_message_links(sms_body, payment_url)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
         success, sid, error = send_sms(to_phone, sms_body)
         if not success:
             if is_unsubscribed_recipient_error(error):
@@ -2843,6 +2849,11 @@ async def send_quote_payment_link(
         if not body_html:
             body_html = default_quote_payment_email_html(quote, payment_url)
         body_text = _html_to_plain(body_html) if body_html else None
+
+        try:
+            assert_payment_message_links(f"{subject}\n{body_html or ''}", payment_url)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
 
         success, message_id, error, sent_html, sent_text = await asyncio.to_thread(
             send_email,

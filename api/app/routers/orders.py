@@ -74,6 +74,7 @@ from app.make_xero_service import push_order_invoice_to_make
 from app.order_delete import delete_order_cascade
 from app.order_audit import record_order_audit_event
 from app.payment_link_service import (
+    assert_payment_message_links,
     validate_payment_url,
     resolve_payment_url,
     payment_link_template_context,
@@ -989,6 +990,11 @@ async def send_order_payment_link(
         else:
             sms_body = default_payment_sms_body(order, payment_url)
 
+        try:
+            assert_payment_message_links(sms_body, payment_url)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
         success, sid, error = send_sms(to_phone, sms_body)
         if not success:
             if is_unsubscribed_recipient_error(error):
@@ -1062,6 +1068,11 @@ async def send_order_payment_link(
         if not body_html:
             body_html = default_payment_email_html(order, payment_url)
         body_text = _html_to_plain(body_html) if body_html else None
+
+        try:
+            assert_payment_message_links(f"{subject}\n{body_html or ''}", payment_url)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
 
         success, message_id, error, sent_html, sent_text = await asyncio.to_thread(
             send_email,

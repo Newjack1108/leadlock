@@ -354,6 +354,11 @@ export default function CompanySettingsPage() {
       toast.error('Prize draw minimum platforms must be 2 or 3');
       return;
     }
+    const paymentLink = formData.default_payment_link_url.trim();
+    if (paymentLink && paymentLink !== PAYPAL_PAYMENT_LINK) {
+      toast.error('The company payment link must be the company PayPal page');
+      return;
+    }
     const weeklyPlanMaxItemsVal = formData.weekly_plan_max_items
       ? parseInt(formData.weekly_plan_max_items, 10)
       : 100;
@@ -1400,8 +1405,8 @@ export default function CompanySettingsPage() {
                     disabled={saving}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Pre-filled when staff send a payment link from a quote or order. Defaults to the
-                    company PayPal page.
+                    The company PayPal page only. Card payments are pasted per order from Trust
+                    Payments and are not stored here.
                   </p>
                 </div>
               </div>
