@@ -202,24 +202,14 @@ export default function SendPaymentLinkDialog(props: SendPaymentLinkDialogProps)
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="payment_url">Payment URL</Label>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <Input
-                id="payment_url"
-                type="url"
-                value={paymentUrl}
-                onChange={(e) => setPaymentUrl(e.target.value)}
-                placeholder="Paste a Trust Payments link, or click Use PayPal"
-                className="font-mono text-sm"
-              />
-              <Button
-                type="button"
-                variant={isPayPalPaymentLink(paymentUrl) ? 'default' : 'outline'}
-                onClick={() => setPaymentUrl(PAYPAL_PAYMENT_LINK)}
-                className="shrink-0"
-              >
-                Use PayPal
-              </Button>
-            </div>
+            <Input
+              id="payment_url"
+              type="url"
+              value={paymentUrl}
+              onChange={(e) => setPaymentUrl(e.target.value)}
+              placeholder="Paste a Trust Payments link"
+              className="font-mono text-sm"
+            />
             {isPayPalPaymentLink(paymentUrl) ? (
               <p className="text-xs text-muted-foreground">
                 This is the company PayPal payment page. Customers can pay from that link.
@@ -234,9 +224,18 @@ export default function SendPaymentLinkDialog(props: SendPaymentLinkDialogProps)
               </p>
             ) : (
               <p className="text-xs text-muted-foreground">
-                Paste a Trust Payments card link, or click Use PayPal.
+                Paste a Trust Payments card link. Or use PayPal below if needed.
               </p>
             )}
+            <Button
+              type="button"
+              variant={isPayPalPaymentLink(paymentUrl) ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => setPaymentUrl(PAYPAL_PAYMENT_LINK)}
+              className="h-8 px-2 text-muted-foreground hover:text-foreground self-start"
+            >
+              Use PayPal
+            </Button>
           </div>
 
           <div className="flex items-center space-x-2">
