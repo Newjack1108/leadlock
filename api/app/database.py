@@ -21,21 +21,34 @@ def _resolve_database_url() -> str:
     return os.getenv("DATABASE_URL", "postgresql://user:password@localhost:5432/leadlock").strip()
 
 
-DATABASE_URL = _resolve_database_url()
-# Railway and some providers use postgres://; SQLAlchemy/psycopg2 expect postgresql://
-if DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = "postgresql://" + DATABASE_URL[9:]
-# Railway Postgres requires SSL for public proxy URLs; private *.railway.internal often works without it.
-_is_railway_internal = ".railway.internal" in DATABASE_URL
-if (
-    "localhost" not in DATABASE_URL
-    and "127.0.0.1" not in DATABASE_URL
-    and not _is_railway_internal
-):
-    if "sslmode=" not in DATABASE_URL and "?" not in DATABASE_URL:
-        DATABASE_URL = DATABASE_URL + "?sslmode=require"
-    elif "sslmode=" not in DATABASE_URL and "?" in DATABASE_URL:
-        DATABASE_URL = DATABASE_URL + "&sslmode=require"
+def _normalize_database_url(url: str) -> str:
+    """
+    Normalize a database URL for SQLAlchemy without mutating os.environ.
+
+    Railway and some providers use postgres://; SQLAlchemy expects postgresql://.
+    SQLAlchemy 2.1+ defaults bare postgresql:// to psycopg (v3). Keep psycopg2
+    so installs that only ship psycopg2-binary continue to start.
+    """
+    if url.startswith("postgres://"):
+        url = "postgresql://" + url[len("postgres://") :]
+    if url.startswith("postgresql://"):
+        url = "postgresql+psycopg2://" + url[len("postgresql://") :]
+    # Railway Postgres requires SSL for public proxy URLs; private *.railway.internal often works without it.
+    is_railway_internal = ".railway.internal" in url
+    if (
+        "localhost" not in url
+        and "127.0.0.1" not in url
+        and not is_railway_internal
+        and not url.startswith("sqlite")
+    ):
+        if "sslmode=" not in url and "?" not in url:
+            url = url + "?sslmode=require"
+        elif "sslmode=" not in url and "?" in url:
+            url = url + "&sslmode=require"
+    return url
+
+
+DATABASE_URL = _normalize_database_url(_resolve_database_url())
 
 _engine_kwargs: dict = {"echo": False, "pool_pre_ping": True}
 if not DATABASE_URL.startswith("sqlite"):
