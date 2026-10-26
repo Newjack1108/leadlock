@@ -68,12 +68,12 @@ export default function CompanySettingsPage() {
   const [specSheetExpanded, setSpecSheetExpanded] = useState(false);
   const [smsBotInstructionsExpanded, setSmsBotInstructionsExpanded] = useState(false);
   const defaultBotHours: BotWeekSchedule = {
-    mon: { enabled: true, start: '09:00', end: '17:00' },
-    tue: { enabled: true, start: '09:00', end: '17:00' },
-    wed: { enabled: true, start: '09:00', end: '17:00' },
-    thu: { enabled: true, start: '09:00', end: '17:00' },
-    fri: { enabled: true, start: '09:00', end: '17:00' },
-    sat: { enabled: false, start: '09:00', end: '17:00' },
+    mon: { enabled: true, start: '08:00', end: '17:00' },
+    tue: { enabled: true, start: '08:00', end: '17:00' },
+    wed: { enabled: true, start: '08:00', end: '17:00' },
+    thu: { enabled: true, start: '08:00', end: '17:00' },
+    fri: { enabled: true, start: '08:00', end: '15:00' },
+    sat: { enabled: true, start: '09:00', end: '14:00' },
     sun: { enabled: false, start: '09:00', end: '17:00' },
   };
   const [botSchedule, setBotSchedule] = useState<BotWeekSchedule>(defaultBotHours);
@@ -1675,12 +1675,20 @@ export default function CompanySettingsPage() {
                       onChange={(e) => setFormData({ ...formData, sms_bot_system_instructions: e.target.value })}
                       rows={6}
                       disabled={saving}
-                      placeholder="e.g. what you sell, tone, topics to hand off to a human…"
+                      placeholder={
+                        "You are Cheshire Sheds' out-of-hours SMS assistant. " +
+                        "Use only the opening hours and contact details from company context. " +
+                        "If you can fully answer the customer's question from those facts, answer it and stop — " +
+                        "do not say you have passed it on, named anyone, or that someone will call back. " +
+                        "Only for genuine handovers (pricing, quotes, discounts, complaints, bookings, or anything " +
+                        "outside known facts), say a team member (Wayne) will follow up on the next working day. " +
+                        "Never invent other staff names. Do not give quotes, discounts, installation dates, or handle complaints."
+                      }
                     />
                     <p className="text-sm text-muted-foreground">
                       Optional. When set, this is appended to the AI system prompt after built-in rules. Company name (trading
-                      name if set), phone, and website from this page are included automatically when filled in. Keep it
-                      concise. The bot still limits reply length and escalates pricing, complaints, and complex questions.
+                      name if set), phone, website, and opening hours from the schedule below are included automatically.
+                      Keep it concise. The bot still limits reply length and only hands over when it cannot fully answer.
                     </p>
                   </>
                 )}

@@ -16,14 +16,35 @@ from app.models import CompanySettings, Customer, SmsBotMode, SmsDirection, SmsM
 
 
 DEFAULT_BUSINESS_HOURS = {
-    "mon": {"enabled": True, "start": "09:00", "end": "17:00"},
-    "tue": {"enabled": True, "start": "09:00", "end": "17:00"},
-    "wed": {"enabled": True, "start": "09:00", "end": "17:00"},
-    "thu": {"enabled": True, "start": "09:00", "end": "17:00"},
-    "fri": {"enabled": True, "start": "09:00", "end": "17:00"},
-    "sat": {"enabled": False, "start": "09:00", "end": "17:00"},
+    "mon": {"enabled": True, "start": "08:00", "end": "17:00"},
+    "tue": {"enabled": True, "start": "08:00", "end": "17:00"},
+    "wed": {"enabled": True, "start": "08:00", "end": "17:00"},
+    "thu": {"enabled": True, "start": "08:00", "end": "17:00"},
+    "fri": {"enabled": True, "start": "08:00", "end": "15:00"},
+    "sat": {"enabled": True, "start": "09:00", "end": "14:00"},
     "sun": {"enabled": False, "start": "09:00", "end": "17:00"},
 }
+
+WEEKDAY_LABELS = {
+    "mon": "Monday",
+    "tue": "Tuesday",
+    "wed": "Wednesday",
+    "thu": "Thursday",
+    "fri": "Friday",
+    "sat": "Saturday",
+    "sun": "Sunday",
+}
+
+# Ready-to-paste text for Settings → SMS bot system instructions.
+RECOMMENDED_SMS_BOT_SYSTEM_INSTRUCTIONS = (
+    "You are Cheshire Sheds' out-of-hours SMS assistant. "
+    "Use only the opening hours and contact details from company context. "
+    "If you can fully answer the customer's question from those facts, answer it and stop — "
+    "do not say you have passed it on, named anyone, or that someone will call back. "
+    "Only for genuine handovers (pricing, quotes, discounts, complaints, bookings, or anything "
+    "outside known facts), say a team member (Wayne) will follow up on the next working day. "
+    "Never invent other staff names. Do not give quotes, discounts, installation dates, or handle complaints."
+)
 
 OPT_OUT_KEYWORDS = {"STOP", "PAUSE", "UNSUBSCRIBE", "CANCEL", "END", "QUIT", "STOPALL"}
 BOT_HANDOVER_PREFIX = "[BOT_HANDOVER]"
@@ -324,6 +345,64 @@ def backfill_stop_opt_out_customers(session: Session) -> int:
     return updated
 
 
+def _format_clock_for_prompt(value: str) -> str:
+    """Turn HH:MM into a short customer-facing time (e.g. 08:00 -> 8am)."""
+    raw = (value or "").strip()
+    try:
+        hour_s, minute_s = raw.split(":", 1)
+        hour = int(hour_s)
+        minute = int(minute_s)
+    except (TypeError, ValueError):
+        return raw
+    if hour < 0 or hour > 23 or minute < 0 or minute > 59:
+        return raw
+    suffix = "am" if hour < 12 else "pm"
+    hour12 = hour % 12
+    if hour12 == 0:
+        hour12 = 12
+    if minute == 0:
+        return f"{hour12}{suffix}"
+    return f"{hour12}:{minute:02d}{suffix}"
+
+
+def _day_schedule_key(day: dict) -> tuple:
+    enabled = bool(day.get("enabled", False))
+    if not enabled:
+        return (False, "", "")
+    return (True, str(day.get("start", "")), str(day.get("end", "")))
+
+
+def _format_opening_hours_lines(schedule: dict) -> list[str]:
+    """
+    Group consecutive weekdays that share the same open/closed window.
+    Example: Mon–Thu: 8am–5pm / Fri: 8am–3pm / Sat: 9am–2pm / Sun: closed
+    """
+    lines: list[str] = []
+    i = 0
+    while i < len(WEEKDAY_KEYS):
+        key = WEEKDAY_KEYS[i]
+        day = schedule.get(key) or {}
+        sig = _day_schedule_key(day)
+        j = i + 1
+        while j < len(WEEKDAY_KEYS):
+            next_day = schedule.get(WEEKDAY_KEYS[j]) or {}
+            if _day_schedule_key(next_day) != sig:
+                break
+            j += 1
+        start_label = WEEKDAY_LABELS[WEEKDAY_KEYS[i]]
+        end_label = WEEKDAY_LABELS[WEEKDAY_KEYS[j - 1]]
+        range_label = start_label if i == j - 1 else f"{start_label}–{end_label}"
+        enabled, start, end = sig
+        if not enabled:
+            lines.append(f"- {range_label}: closed")
+        else:
+            lines.append(
+                f"- {range_label}: {_format_clock_for_prompt(start)}–{_format_clock_for_prompt(end)}"
+            )
+        i = j
+    return lines
+
+
 def _build_company_context_block(settings: Optional[CompanySettings]) -> Optional[str]:
     if not settings:
         return None
@@ -337,6 +416,10 @@ def _build_company_context_block(settings: Optional[CompanySettings]) -> Optiona
         lines.append(f"- Phone: {phone}")
     if website:
         lines.append(f"- Website: {website}")
+    hours_lines = _format_opening_hours_lines(_parse_hours(settings))
+    if hours_lines:
+        lines.append("- Opening hours:")
+        lines.extend(f"  {line}" for line in hours_lines)
     if not lines:
         return None
     return "Company context (facts only; do not contradict):\n" + "\n".join(lines)
@@ -347,11 +430,14 @@ def _build_sms_bot_system_prompt(settings: Optional[CompanySettings]) -> str:
     guardrails = (
         "You are the company's out-of-hours SMS assistant. "
         "Reply in plain text under 320 characters. "
+        "Keep the tone warm, brief, and professional. "
+        "Only state opening hours, phone, website, and other facts from company context — never invent hours, staff names, addresses, prices, or promises. "
+        "If you can fully answer the customer's question from company context or instructions, answer it and stop. "
+        "Do not say you have passed the message on, named a person, or that someone will call back when the answer is complete. "
+        "Hand over only when you cannot complete the answer (pricing-specific, quotes, discounts, complaints, booking commitments, unclear requests, or anything outside known facts). "
         "If the customer is simply acknowledging, thanking you, or closing the conversation, do not reopen it or ask extra questions. "
         "If the customer says they will think about it or come back later, hand over once and avoid repeating the handover in follow-ups. "
-        "If the question is complex, pricing-specific, complaint-related, or unclear, politely hand over to a human for next business day. "
-        "Keep the tone warm, brief, and professional. "
-        "Do not invent facts or promise specific installation dates."
+        "Do not promise specific installation dates."
     )
     parts: list[str] = [guardrails]
     ctx = _build_company_context_block(settings)
