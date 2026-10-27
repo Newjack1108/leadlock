@@ -1,5 +1,4 @@
 """Auth routes: login, bootstrap, session cookie, and current user."""
-from datetime import timedelta
 import os
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
@@ -7,7 +6,6 @@ from sqlalchemy import func
 from sqlmodel import Session, select
 
 from app.auth import (
-    ACCESS_TOKEN_EXPIRE_MINUTES,
     verify_password,
     create_access_token,
     get_current_user,
@@ -15,6 +13,7 @@ from app.auth import (
     get_password_hash,
     has_configurator_access,
     effective_on_leave,
+    session_lifetime_for_user,
 )
 from app.auth_cookies import clear_auth_cookie, set_auth_cookie
 from app.database import DATABASE_URL, get_session
@@ -126,13 +125,18 @@ def login(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token_expires, long_lived = session_lifetime_for_user(user)
     access_token = create_access_token(
         data={"sub": user.email},
         expires_delta=access_token_expires,
         token_version=int(getattr(user, "token_version", 0) or 0),
+        long_lived=long_lived,
     )
-    set_auth_cookie(response, access_token, max_age_seconds=ACCESS_TOKEN_EXPIRE_MINUTES * 60)
+    set_auth_cookie(
+        response,
+        access_token,
+        max_age_seconds=int(access_token_expires.total_seconds()),
+    )
     return {"access_token": access_token, "token_type": "bearer"}
 
 

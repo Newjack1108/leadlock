@@ -18,6 +18,9 @@ _DEFAULT_SECRET_KEY = "your-secret-key-change-in-production"
 SECRET_KEY = os.getenv("SECRET_KEY", _DEFAULT_SECRET_KEY)
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "480"))
+LONG_LIVED_SESSION_CLAIM = "lls"
+_DEFAULT_LONG_LIVED_SESSION_EMAILS = "cheshirestables@gmail.com"
+_DEFAULT_LONG_LIVED_SESSION_DAYS = 30
 
 
 def assert_secret_key_configured() -> None:
@@ -69,6 +72,7 @@ def create_access_token(
     data: dict,
     expires_delta: Optional[timedelta] = None,
     token_version: int = 0,
+    long_lived: bool = False,
 ):
     to_encode = data.copy()
     if expires_delta:
@@ -76,8 +80,42 @@ def create_access_token(
     else:
         expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire, "tv": int(token_version)})
+    if long_lived:
+        to_encode[LONG_LIVED_SESSION_CLAIM] = True
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
+
+
+def _long_lived_session_emails() -> set[str]:
+    raw = os.getenv("LONG_LIVED_SESSION_EMAILS")
+    if raw is None:
+        raw = _DEFAULT_LONG_LIVED_SESSION_EMAILS
+    return {_normalize_email(item) for item in raw.split(",") if _normalize_email(item)}
+
+
+def _long_lived_session_days() -> int:
+    raw = (os.getenv("LONG_LIVED_SESSION_DAYS") or "").strip()
+    if not raw:
+        return _DEFAULT_LONG_LIVED_SESSION_DAYS
+    try:
+        days = int(raw)
+    except ValueError:
+        return _DEFAULT_LONG_LIVED_SESSION_DAYS
+    return max(1, days)
+
+
+def qualifies_for_long_lived_session(user: User) -> bool:
+    """True when this account may receive a multi-day browser session."""
+    if user.role != UserRole.VIEWER:
+        return False
+    return _normalize_email(user.email) in _long_lived_session_emails()
+
+
+def session_lifetime_for_user(user: User) -> tuple[timedelta, bool]:
+    """Return (expires_delta, long_lived) for a newly issued access token."""
+    if qualifies_for_long_lived_session(user):
+        return timedelta(days=_long_lived_session_days()), True
+    return timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES), False
 
 
 def bump_token_version(user: User, session: Session) -> User:
@@ -148,6 +186,7 @@ def get_current_user_base(
         if email is None:
             raise credentials_exception
         token_version = payload.get("tv")
+        long_lived = bool(payload.get(LONG_LIVED_SESSION_CLAIM))
     except JWTError:
         raise credentials_exception
 
@@ -160,6 +199,9 @@ def get_current_user_base(
     expected_tv = int(getattr(user, "token_version", 0) or 0)
     provided_tv = 0 if token_version is None else int(token_version)
     if provided_tv != expected_tv:
+        raise credentials_exception
+    # Long-lived tokens are only valid while the account remains VIEWER.
+    if long_lived and user.role != UserRole.VIEWER:
         raise credentials_exception
     # Expire leave before reporting status on /me
     effective_on_leave(user, session)
