@@ -1,13 +1,21 @@
 """
 UK postcode geocoding via postcodes.io; Haversine (straight-line) and OpenRouteService (road) distance.
 
-Crown Dependencies (Isle of Man IM*, Guernsey GY*, Jersey JE*) are recognised by
-postcodes.io but often return null latitude/longitude; we fall back to outcode centroids.
+postcodes.io serves the ONS postcode directory, which is narrower than the set of
+postcodes Google will geocode:
+
+- Retired postcodes come back as 404, with the old coordinates under ``terminated``.
+- Newer unit postcodes can be missing until the next ONS release; the outward code
+  (for example CW5) is usually already there, so we use that district centre.
+- Crown Dependencies often return a record with null latitude/longitude.
+- A few Royal Mail special postcodes (Gibraltar, Falklands, and similar) never
+  appear in postcodes.io at all.
 """
 import math
 import os
 import re
 from typing import List, Optional, Tuple
+from urllib.parse import quote
 
 import httpx
 
@@ -57,19 +65,95 @@ _CROWN_DEPENDENCY_DEFAULTS: dict[str, Tuple[float, float]] = {
 }
 
 _CROWN_OUTCODE_RE = re.compile(r"^(IM|GY|JE)(\d+[A-Z]?)", re.IGNORECASE)
+# Inward code is always one digit then two letters. Outward code is 2–4 characters.
+_INWARD_RE = re.compile(r"^\d[A-Z]{2}$")
+_FULL_POSTCODE_RE = re.compile(r"^[A-Z]{1,2}\d[A-Z\d]?\d[A-Z]{2}$")
+_OUTCODE_RE = re.compile(r"^[A-Z]{1,2}\d[A-Z\d]?$")
+
+# Royal Mail special postcodes. postcodes.io rejects the format; Google still geocodes them.
+_SPECIAL_OUTCODE_COORDS: dict[str, Tuple[float, float]] = {
+    "GX11": (36.1408, -5.3536),  # Gibraltar
+    "ASCN": (-7.9467, -14.3559),  # Ascension Island
+    "BBND": (-7.3195, 72.4229),  # British Indian Ocean Territory
+    "BIQQ": (-67.5684, -68.1258),  # British Antarctic Territory (Rothera)
+    "FIQQ": (-51.6977, -57.8516),  # Falkland Islands
+    "PCRN": (-25.0660, -130.1015),  # Pitcairn Islands
+    "SIQQ": (-54.2833, -36.4937),  # South Georgia
+    "STHL": (-15.9260, -5.7168),  # Saint Helena
+    "TDCU": (-37.0676, -12.3116),  # Tristan da Cunha
+    "TKCA": (21.4612, -71.1390),  # Turks and Caicos
+}
 
 
 def _normalise_postcode(postcode: str) -> str:
-    """Strip and uppercase. Returns compact form (no space) for validation."""
-    return (postcode or "").strip().upper().replace(" ", "")
+    """Uppercase compact form. Drops spaces, punctuation, and non-breaking spaces."""
+    raw = (postcode or "").strip().upper()
+    return "".join(ch for ch in raw if ch.isalnum())
 
 
-def _format_postcode_for_api(postcode: str) -> str:
-    """Format as OUTCODE INCODE (e.g. M1 1AA) for postcodes.io URL."""
-    compact = _normalise_postcode(postcode)
-    if len(compact) >= 4 and compact[-3:].isdigit() is False:
-        return f"{compact[:-3]} {compact[-3:]}"
-    return compact
+def _outcode_from_compact(compact: str) -> Optional[str]:
+    """Outward code from a full postcode (SW1A1AA → SW1A) or a bare outcode (CW5)."""
+    if _FULL_POSTCODE_RE.match(compact):
+        return compact[:-3]
+    if _OUTCODE_RE.match(compact):
+        return compact
+    return None
+
+
+def _special_coords(compact: str) -> Optional[Tuple[float, float]]:
+    """Coordinates for Royal Mail special postcodes, matched on the outward code."""
+    for outcode, coords in sorted(
+        _SPECIAL_OUTCODE_COORDS.items(),
+        key=lambda item: len(item[0]),
+        reverse=True,
+    ):
+        if compact == outcode:
+            return coords
+        remainder = compact[len(outcode) :]
+        if compact.startswith(outcode) and _INWARD_RE.match(remainder):
+            return coords
+    return None
+
+
+def _coord_pair(payload: object) -> Optional[Tuple[float, float]]:
+    if not isinstance(payload, dict):
+        return None
+    lat = payload.get("latitude")
+    lon = payload.get("longitude")
+    if lat is None or lon is None:
+        return None
+    try:
+        return (float(lat), float(lon))
+    except (TypeError, ValueError):
+        return None
+
+
+def _response_json(resp: httpx.Response) -> dict:
+    try:
+        data = resp.json()
+    except Exception:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _coords_from_postcodes_payload(data: object) -> Optional[Tuple[float, float]]:
+    """Live postcode coordinates, or the retired coordinates postcodes.io embeds in a 404."""
+    if not isinstance(data, dict):
+        return None
+    live = _coord_pair(data.get("result"))
+    if live is not None:
+        return live
+    return _coord_pair(data.get("terminated"))
+
+
+def _outcode_hint(result: object, compact: str) -> Optional[str]:
+    if isinstance(result, dict):
+        raw = result.get("outcode")
+        if isinstance(raw, str):
+            cleaned = "".join(ch for ch in raw.upper() if ch.isalnum())
+            if cleaned:
+                return cleaned
+    return _outcode_from_compact(compact)
 
 
 def _crown_dependency_fallback_coords(postcode: str) -> Optional[Tuple[float, float]]:
@@ -95,49 +179,65 @@ def _crown_dependency_fallback_coords(postcode: str) -> Optional[Tuple[float, fl
     return _CROWN_DEPENDENCY_DEFAULTS.get(territory)
 
 
+def _lookup_outcode_coordinates(client: httpx.Client, outcode: str) -> Optional[Tuple[float, float]]:
+    """District centre for an outward code such as CW5 or SW1A."""
+    url = f"{POSTCODES_IO_BASE}/outcodes/{quote(outcode, safe='')}"
+    resp = client.get(url)
+    return _coord_pair(_response_json(resp).get("result"))
+
+
+def _lookup_postcode_coordinates(client: httpx.Client, compact: str) -> Tuple[float, float]:
+    """
+    Resolve a normalised postcode.
+
+    Order: Royal Mail specials, live postcode, retired postcode coordinates,
+    Crown Dependency table, then the outward-code centre.
+    """
+    special = _special_coords(compact)
+    if special is not None:
+        return special
+
+    resp = client.get(f"{POSTCODES_IO_BASE}/postcodes/{quote(compact, safe='')}")
+    data = _response_json(resp)
+    coords = _coords_from_postcodes_payload(data)
+    if coords is not None:
+        return coords
+
+    crown = _crown_dependency_fallback_coords(compact)
+    if crown is not None:
+        return crown
+
+    result = data.get("result")
+    outcode = _outcode_hint(result, compact)
+    if outcode:
+        outcode_coords = _lookup_outcode_coordinates(client, outcode)
+        if outcode_coords is not None:
+            return outcode_coords
+
+    raise ValueError("Postcode not found")
+
+
 def get_postcode_coordinates(postcode: str) -> Tuple[float, float]:
     """
-    Resolve UK postcode to (latitude, longitude) via postcodes.io.
-    Falls back to Crown Dependency outcode centroids when lat/lng are missing.
-    Raises ValueError if postcode invalid or not found.
+    Resolve a UK postcode to (latitude, longitude).
+
+    Uses postcodes.io, including retired postcodes Google still recognises, and
+    falls back to the outward-code centre when the full postcode is not listed yet.
+    Raises ValueError if the postcode is empty or cannot be located.
     """
-    if not _normalise_postcode(postcode):
+    compact = _normalise_postcode(postcode)
+    if not compact:
         raise ValueError("Postcode is required")
-    formatted = _format_postcode_for_api(postcode)
-    url = f"{POSTCODES_IO_BASE}/postcodes/{formatted}"
+    special = _special_coords(compact)
+    if special is not None:
+        return special
     try:
         with httpx.Client(timeout=10.0) as client:
-            resp = client.get(url)
+            return _lookup_postcode_coordinates(client, compact)
     except httpx.TimeoutException:
         raise ValueError("Postcode lookup timed out. Please try again.")
     except httpx.RequestError as e:
         raise ValueError(f"Postcode lookup failed: {e!s}")
-
-    if resp.status_code != 200:
-        # postcodes.io may reject some crown-dependency forms; still try fallback
-        fallback = _crown_dependency_fallback_coords(postcode)
-        if fallback is not None:
-            return fallback
-        data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
-        if data.get("error") == "Invalid postcode":
-            raise ValueError("Postcode not found")
-        raise ValueError(data.get("error", "Postcode not found"))
-
-    data = resp.json()
-    result = data.get("result")
-    if not result:
-        fallback = _crown_dependency_fallback_coords(postcode)
-        if fallback is not None:
-            return fallback
-        raise ValueError("Postcode not found")
-    lat = result.get("latitude")
-    lon = result.get("longitude")
-    if lat is None or lon is None:
-        fallback = _crown_dependency_fallback_coords(postcode)
-        if fallback is not None:
-            return fallback
-        raise ValueError("Postcode not found")
-    return (float(lat), float(lon))
 
 
 BULK_BATCH_SIZE = 100
@@ -148,21 +248,22 @@ def bulk_geocode_postcodes(postcodes: List[str]) -> List[Optional[Tuple[float, f
     Bulk geocode UK postcodes via postcodes.io.
     Returns list of (lat, lng) or None for each input postcode (same order).
     Batches requests (max 100 per request).
-    Applies Crown Dependency outcode fallbacks when postcodes.io returns null coords.
+    Fills gaps for Crown Dependencies, retired postcodes, and outward-code centres.
     """
     if not postcodes:
         return []
-    formatted = []
+    formatted: List[Optional[str]] = []
     for pc in postcodes:
-        if not _normalise_postcode(pc):
-            formatted.append(None)
-        else:
-            formatted.append(_format_postcode_for_api(pc))
+        compact = _normalise_postcode(pc)
+        formatted.append(compact or None)
     valid_with_idx = [(i, f) for i, f in enumerate(formatted) if f is not None]
     if not valid_with_idx:
         return [None] * len(postcodes)
 
     results: List[Optional[Tuple[float, float]]] = [None] * len(postcodes)
+    # Indexes the bulk call actually answered. A failed batch must not fan out into
+    # one HTTP request per postcode.
+    answered_by_bulk: set[int] = set()
     for batch_start in range(0, len(valid_with_idx), BULK_BATCH_SIZE):
         batch = valid_with_idx[batch_start : batch_start + BULK_BATCH_SIZE]
         to_lookup = [f for _, f in batch]
@@ -180,6 +281,7 @@ def bulk_geocode_postcodes(postcodes: List[str]) -> List[Optional[Tuple[float, f
             continue
         api_results = data.get("result") or []
         for k, (orig_idx, _) in enumerate(batch):
+            answered_by_bulk.add(orig_idx)
             item = api_results[k] if k < len(api_results) else None
             if item and isinstance(item, dict):
                 inner = item.get("result")
@@ -189,10 +291,33 @@ def bulk_geocode_postcodes(postcodes: List[str]) -> List[Optional[Tuple[float, f
                     if lat is not None and lon is not None:
                         results[orig_idx] = (float(lat), float(lon))
 
-    # Fill gaps for Isle of Man / Channel Islands (and any failed lookups that match)
     for i, pc in enumerate(postcodes):
-        if results[i] is None:
-            results[i] = _crown_dependency_fallback_coords(pc)
+        if results[i] is not None:
+            continue
+        compact = _normalise_postcode(pc)
+        results[i] = _crown_dependency_fallback_coords(compact) or _special_coords(compact)
+
+    # Retired and newly issued unit postcodes are absent from the bulk payload.
+    # Look those up one by one; the single-postcode response includes old coordinates.
+    missing_indexes = []
+    for i in sorted(answered_by_bulk):
+        if results[i] is not None:
+            continue
+        compact = _normalise_postcode(postcodes[i])
+        if _outcode_from_compact(compact):
+            missing_indexes.append(i)
+    if missing_indexes:
+        try:
+            with httpx.Client(timeout=10.0) as client:
+                for i in missing_indexes:
+                    try:
+                        results[i] = _lookup_postcode_coordinates(
+                            client, _normalise_postcode(postcodes[i])
+                        )
+                    except (httpx.TimeoutException, httpx.RequestError, ValueError):
+                        results[i] = None
+        except (httpx.TimeoutException, httpx.RequestError):
+            pass
     return results
 
 
